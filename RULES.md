@@ -6,6 +6,7 @@
 - Prefer additive changes over breaking refactors.
 - Support target is WoW patch `12.0+` only.
 - Treat `<12.0` as unsupported/incompatible; do not add legacy compatibility code.
+- Keep RIO delta activation tied to delayed post-run refresh success (not immediate key-end event timing).
 
 ## Season Scope
 - This addon is locked to **Season 3 (S3)** dungeon/teleport data only.
