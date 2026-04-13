@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-04-13 - Version 0.9.158 (patch)
+
+- **Version bump:**
+  - The addon metadata, release stub, architecture baseline, and usecase baseline were aligned to `0.9.158`.
+
 ## 2026-04-13 - Version 0.9.157 (patch)
 
 - **Arkantine shortcut localization fix:**
