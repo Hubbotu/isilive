@@ -138,7 +138,7 @@ local SECOND_PANEL_UI_ENTRIES = {
       local getLocale = rawget(_G, "GetLocale")
       local clientLocale = type(getLocale) == "function" and getLocale() or ""
       if clientLocale == "deDE" then
-        return "/use Persoenlicher Schluessel zur Arkantine"
+        return "/use Persönlicher Schlüssel zur Arkantine"
       end
       return "/use Personal Key to the Arkantine"
     end,

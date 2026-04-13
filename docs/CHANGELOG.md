@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-13 - Version 0.9.157 (patch)
+
+- **Arkantine shortcut localization fix:**
+  - The ESC-menu Arkantine shortcut now uses the exact localized German item name again, so the secure `/use` macro resolves on deDE clients.
+  - Added regression coverage for the Arkantine shortcut macro text to prevent transliteration regressions.
+
 ## 2026-04-13 - Version 0.9.156 (patch)
 
 - **Shared teleport refresh wiring fix:**

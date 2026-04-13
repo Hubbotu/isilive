@@ -1313,6 +1313,47 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI second game-menu Arkantine shortcut uses the exact localized item name", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      GetLocale = function()
+        return "deDE"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({
+        gameMenuFrame = gameMenuFrame,
+      })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_ARKANATINE_KEY = "Arkantine",
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local arkanatineButton =
+        RequireValue(travelStrip.buttonsById.arkanatine_key, "arkantine shortcut button should exist")
+      Assert.Equal(
+        arkanatineButton:GetAttribute("macrotext1"),
+        "/use Persönlicher Schlüssel zur Arkantine",
+        "German Arkantine shortcut must use the exact localized item name"
+      )
+    end)
+  end)
+
   test("UI game-menu reload button refreshes secure click mode when panel UI is reused", function()
     local useKeyDown = false
     local createFrameStub = BuildCreateFrameStub()
