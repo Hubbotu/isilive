@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-13 - Version 0.9.155 (patch)
+
+- **LFG highlight visibility fix:**
+  - LFG-driven teleport updates now auto-open the main frame once when a concrete resolved teleport target exists, so invite/listing highlights remain visible instead of only updating a hidden UI.
+  - The auto-open only applies to invite/queue highlight updates, preserves the existing sound suppression, and stays gated by the normal frame visibility / combat rules.
+  - Added regression coverage for the hidden-frame invite highlight path.
+
 ## 2026-04-13 - Version 0.9.154 (patch)
 
 - **Late-wire LFG highlight hardening:**

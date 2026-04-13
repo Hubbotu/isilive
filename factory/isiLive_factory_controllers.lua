@@ -677,6 +677,19 @@ local function InitializeFactoryPrimaryControllers(ctx)
         resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedMapID)
       end
     end
+    if
+      resolvedSpellID
+      and (soundContext == "queue" or soundContext == "invite")
+      and type(ctx.mainFrame) == "table"
+      and type(ctx.mainFrame.IsShown) == "function"
+      and ctx.mainFrame:IsShown() ~= true
+      and type(ctx.SetMainFrameVisible) == "function"
+    then
+      ctx.SetMainFrameVisible(true, {
+        reason = "lfg-highlight",
+        skipShowCallbacks = true,
+      })
+    end
     ctx.teleportUIController.UpdateButtons(resolvedSpellID, soundContext)
   end
 
