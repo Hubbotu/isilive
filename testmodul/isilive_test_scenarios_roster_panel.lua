@@ -1947,6 +1947,98 @@ RegisterRosterRenderReadyCheckReapplyTest = function(test, Assert, WithGlobals, 
       )
     end)
   end)
+
+  test("Roster render accepts boolean ready-check state without calling it like a function", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local createdTextures = {}
+
+    WithGlobals({
+      GetReadyCheckStatus = function(unit)
+        if unit == "player" then
+          return "ready"
+        end
+        return nil
+      end,
+      RAID_CLASS_COLORS = {
+        WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
+      },
+      CreateColor = function(r, g, b)
+        return {
+          GenerateHexColor = function()
+            return string.format("ff%02x%02x%02x", math.floor(r * 255), math.floor(g * 255), math.floor(b * 255))
+          end,
+        }
+      end,
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      C_ChatInfo = { SendChatMessage = function() end },
+      print = function() end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua", "isiLive_roster.lua" })
+      local controller = BuildHiddenSettingTestController(addon, createdFontStrings, {
+        createdTextures = createdTextures,
+        buildOrderedRoster = function(currentRoster)
+          return {
+            {
+              unit = "player",
+              info = currentRoster and currentRoster.player or {},
+            },
+          }
+        end,
+        buildDisplayData = function(info, opts)
+          return addon.Roster.BuildDisplayData(info, opts)
+        end,
+        isReadyCheckActive = true,
+        getReadyCheckReadyUntil = function()
+          return nil
+        end,
+        getReadyCheckDeclinedUntil = function()
+          return nil
+        end,
+        getTime = function()
+          return 100
+        end,
+      })
+
+      controller.RenderRoster({
+        player = {
+          name = "TestPlayer",
+          class = "WARRIOR",
+          role = "DAMAGER",
+        },
+      })
+
+      local foundReadyBackground = false
+      for _, frame in ipairs(createdFrames) do
+        local textures = rawget(frame, "_textures")
+        if type(textures) == "table" then
+          for _, texture in ipairs(textures) do
+            if texture.color and texture.color[1] == 0.08 and texture.color[2] == 0.5 and texture.color[3] == 0.16 then
+              foundReadyBackground = true
+              break
+            end
+          end
+        end
+        if foundReadyBackground then
+          break
+        end
+      end
+
+      Assert.True(
+        foundReadyBackground,
+        "boolean ready-check state must render without attempting to call it as a function"
+      )
+    end)
+  end)
 end
 
 local function RegisterRosterPanelHiddenDisplayDefaultTests(test, Assert, WithGlobals, LoadAddonModules)

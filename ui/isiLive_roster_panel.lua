@@ -1840,6 +1840,20 @@ local function SetKickCellText(cell, info)
   cell:SetText("|cff666666-|r")
 end
 
+local function ResolveReadyCheckActive(state)
+  if type(state) ~= "table" then
+    return false
+  end
+
+  local value = state.isReadyCheckActive
+  if type(value) == "function" then
+    local ok, result = pcall(value)
+    return ok and result == true
+  end
+
+  return value == true
+end
+
 local RefreshReadyCheckStateImpl
 
 local function RenderRosterImpl(state, roster)
@@ -1854,7 +1868,7 @@ local function RenderRosterImpl(state, roster)
   local rolePriority = state.rolePriority
   local unitPriority = state.unitPriority
   local resolveActiveKeyOwnerUnit = state.resolveActiveKeyOwnerUnit
-  local isReadyCheckActive = state.isReadyCheckActive and state.isReadyCheckActive() or false
+  local isReadyCheckActive = ResolveReadyCheckActive(state)
   local resolveTargetMapID = state.resolveTargetMapID
   local buildDisplayData = state.buildDisplayData
   local truncateName = state.truncateName
@@ -2133,7 +2147,7 @@ RefreshReadyCheckStateImpl = function(state, roster)
   end
   local memberRows = state.memberRows or {}
   local orderedRoster = buildOrderedRoster(roster, state.rolePriority, state.unitPriority)
-  local isReadyCheckActive = state.isReadyCheckActive and state.isReadyCheckActive() or false
+  local isReadyCheckActive = ResolveReadyCheckActive(state)
   local targetMapID = state.resolveTargetMapID and state.resolveTargetMapID() or nil
 
   local index = 1
@@ -2192,7 +2206,10 @@ function RosterPanel.CreateController(opts)
   local getPlayerSyncSummary = type(opts.getPlayerSyncSummary) == "function" and opts.getPlayerSyncSummary or nil
   local resolveActiveKeyOwnerUnit = RequireFunction(opts.resolveActiveKeyOwnerUnit, "resolveActiveKeyOwnerUnit")
   local getRoster = RequireFunction(opts.getRoster, "getRoster")
-  local isReadyCheckActive = type(opts.isReadyCheckActive) == "function" and opts.isReadyCheckActive or nil
+  local isReadyCheckActive = opts.isReadyCheckActive
+  if type(isReadyCheckActive) ~= "function" and type(isReadyCheckActive) ~= "boolean" then
+    isReadyCheckActive = nil
+  end
   local getReadyCheckReadyUntil = type(opts.getReadyCheckReadyUntil) == "function" and opts.getReadyCheckReadyUntil
     or nil
   local getReadyCheckDeclinedUntil = type(opts.getReadyCheckDeclinedUntil) == "function"
