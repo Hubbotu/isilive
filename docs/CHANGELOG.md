@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-04-13 - Version 0.9.154 (patch)
+
+- **Late-wire LFG highlight hardening:**
+  - `LFGDetect.SetHighlightCallback()` now replays the current resolved highlight state once when the callback is wired after `detectedMapID` already exists, so the teleport UI cannot miss a valid invite/listing highlight because of callback ordering.
+  - Added deterministic coverage for the late-wire replay path so the visible portal state stays in sync even when the callback registration happens after the LFG confirmation event.
+
+- **Ready-check roster render fix:**
+  - `isiLive_roster_panel.lua` now resolves ready-check activity safely when the runtime provides either a boolean or a function, instead of calling a boolean like a callback.
+  - The roster panel controller preserves boolean ready-check state and the regression coverage now locks in the non-crashing boolean path.
+
 ## 2026-04-13 - Version 0.9.153 (patch)
 
 - **No-guess LFG hardening:**
