@@ -231,6 +231,40 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect replays an already resolved highlight when the callback is wired late", function()
+    local callbackSoundContexts = {}
+
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "resolved invite must keep detectedMapID even without callback"
+      )
+
+      addon.LFGDetect.SetHighlightCallback(function(soundContext)
+        table.insert(callbackSoundContexts, soundContext)
+      end)
+
+      Assert.Equal(#callbackSoundContexts, 1, "late callback wiring must replay the current highlight state once")
+      Assert.Equal(
+        callbackSoundContexts[1],
+        "queue",
+        "late replay must suppress portal sound the same way as other state-sync updates"
+      )
+    end)
+  end)
+
   -- ---------------------------------------------------------------------------
   -- Own listing flow (BUG-1)
   -- ---------------------------------------------------------------------------

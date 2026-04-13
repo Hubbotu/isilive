@@ -109,6 +109,11 @@ end
 -- Called once from InitializeFactoryPrimaryControllers to wire the callbacks.
 function LFGDetect.SetHighlightCallback(fn)
   highlightCallback = type(fn) == "function" and fn or nil
+  if highlightCallback and detectedMapID then
+    -- If the callback is wired after the LFG state was already resolved,
+    -- replay the current state once so the UI cannot miss the highlight.
+    TriggerHighlightUpdate("queue")
+  end
 end
 
 function LFGDetect.SetLocaleGetter(fn)
