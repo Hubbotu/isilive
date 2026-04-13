@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-13 - Version 0.9.156 (patch)
+
+- **Shared teleport refresh wiring fix:**
+  - Teleport column refreshes now route through the shared highlight updater instead of bypassing the LFG-aware path with a naked teleport-button refresh.
+  - Added deterministic architecture coverage so the factory keeps the teleport refresh on the shared highlight path.
+
 ## 2026-04-13 - Version 0.9.155 (patch)
 
 - **LFG highlight visibility fix:**

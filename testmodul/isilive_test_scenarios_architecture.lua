@@ -507,6 +507,31 @@ local function RegisterArchitectureQueueWiringTests(test, Assert)
   end)
 end
 
+local function RegisterArchitectureTeleportWiringTests(test, Assert)
+  test("Architecture teleport column refresh uses the shared teleport highlight path", function()
+    local factoryContent = ReadFile("isiLive_factory.lua")
+
+    AssertContains(
+      Assert,
+      factoryContent,
+      "onTeleportColumnsChange = function(_columns)",
+      "Factory settings callback must still expose the teleport column handler"
+    )
+    AssertContains(
+      Assert,
+      factoryContent,
+      "ctx.UpdateMPlusTeleportButton()",
+      "Teleport column refresh must route through the shared highlight updater"
+    )
+    AssertNotContains(
+      Assert,
+      factoryContent,
+      "ctx.teleportUIController.UpdateButtons(ctx.ResolveTeleportSpellID())",
+      "Teleport column refresh must not bypass the shared highlight updater"
+    )
+  end)
+end
+
 local function RegisterArchitectureReadyCheckWiringTests(test, Assert)
   test("Architecture ready check refresh stays wired through runtime setup and controller wiring", function()
     local wiringContent = ReadFile("isiLive_controller_wiring.lua")
@@ -1047,6 +1072,7 @@ end
 return function(test, ctx)
   RegisterArchitectureSourceBoundaryTests(test, ctx.assert)
   RegisterArchitectureQueueWiringTests(test, ctx.assert)
+  RegisterArchitectureTeleportWiringTests(test, ctx.assert)
   RegisterArchitectureReadyCheckWiringTests(test, ctx.assert)
   RegisterArchitectureLeaderMarkerWiringTests(test, ctx.assert)
   RegisterArchitectureAudioAndKickWiringTests(test, ctx.assert, ctx.with_globals, ctx.load_modules)

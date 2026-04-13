@@ -224,7 +224,7 @@ local function FinalizeFactorySettings(ctx)
       end,
       onTeleportColumnsChange = function(_columns)
         if ctx.teleportUIController and type(ctx.teleportUIController.UpdateButtons) == "function" then
-          ctx.teleportUIController.UpdateButtons(ctx.ResolveTeleportSpellID())
+          ctx.UpdateMPlusTeleportButton()
         end
       end,
       onLfgFlagsToggle = function(enabled)
