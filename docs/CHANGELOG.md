@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-14 - Version 0.9.164 (patch)
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.164`.
+  - Updated the documented validator baseline to `581` scenarios / tests over `43` modules.
+
 ## 2026-04-14 - Version 0.9.163 (patch)
 
 - **Documentation / release sync:**

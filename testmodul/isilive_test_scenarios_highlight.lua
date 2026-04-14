@@ -241,6 +241,41 @@ local function RegisterHighlightNormalizationTests(test, Assert, WithGlobals, Lo
 
     Assert.Equal(mapCalls, 0, "highlight must not query player map when UnitExists is false")
   end)
+
+  test("Highlight queue path ignores active challenge map before actual dungeon entry", function()
+    local currentMapID = 2441
+
+    WithGlobals({
+      UnitExists = function(unit)
+        return unit == "player"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 2442
+        end,
+      },
+      C_Map = {
+        GetBestMapForUnit = function(_unit)
+          return currentMapID
+        end,
+      },
+      C_LFGList = {
+        GetActiveEntryInfo = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_highlight.lua" })
+      local controller = BuildHighlightController(addon)
+
+      local spellID = controller.ResolveActiveTeleportSpellID(1001, nil)
+      Assert.Equal(
+        spellID,
+        367416,
+        "active challenge map must not suppress the pre-entry queue highlight while the player is still outside"
+      )
+    end)
+  end)
 end
 
 local function RegisterHighlightResolverTests(test, Assert, WithGlobals, LoadAddonModules)

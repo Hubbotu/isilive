@@ -111,13 +111,9 @@ local function IsExistingPlayerUnit()
 end
 
 local function ResolveCurrentMapID()
-  if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID then
-    local challengeMapID = C_ChallengeMode.GetActiveChallengeMapID()
-    if type(challengeMapID) == "number" and challengeMapID > 0 then
-      return challengeMapID
-    end
-  end
-
+  -- Only the live player map should suppress the highlight. The active
+  -- challenge map can become available before the player actually enters the
+  -- dungeon, which would otherwise clear the highlight too early.
   if IsExistingPlayerUnit() and C_Map and C_Map.GetBestMapForUnit then
     local mapID = C_Map.GetBestMapForUnit("player")
     if type(mapID) == "number" and mapID > 0 then
