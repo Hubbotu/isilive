@@ -234,8 +234,10 @@ end
 -- Full reset: called on group-leave and explicit factory reset where pending invite
 -- state is no longer relevant.
 local function ClearAllStateImpl()
-  local hadState =
-    detectedMapID ~= nil or lastQueueMapID ~= nil or next(pendingInvites) ~= nil or pendingAcceptedInviteMapID ~= nil
+  local hadState = detectedMapID ~= nil
+    or lastQueueMapID ~= nil
+    or next(pendingInvites) ~= nil
+    or pendingAcceptedInviteMapID ~= nil
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
