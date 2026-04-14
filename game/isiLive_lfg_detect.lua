@@ -92,6 +92,9 @@ local pendingInvites = {}
 local lastQueueMapID = nil
 -- mapID currently highlighted (invite or accepted invite, or own queue) — nil = none
 local detectedMapID = nil
+-- mapID from a just-accepted invite that is waiting for the roster to settle.
+-- This prevents a transient non-group roster update from clearing a valid highlight.
+local pendingAcceptedInviteMapID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -101,10 +104,6 @@ local highlightCallback = nil
 -- MINOR-1 fix: removes hardcoded German strings.
 local localeGetter = nil
 local TriggerHighlightUpdate
-
-function LFGDetect.GetDetectedMapID()
-  return detectedMapID
-end
 
 -- Called once from InitializeFactoryPrimaryControllers to wire the callbacks.
 function LFGDetect.SetHighlightCallback(fn)
@@ -169,6 +168,7 @@ local function OnInviteAccepted(searchResultID)
     pendingInvites[searchResultID] = nil
     if detectedMapID ~= mapID then
       detectedMapID = mapID
+      pendingAcceptedInviteMapID = mapID
       local L = localeGetter and localeGetter() or {}
       Print(string.format(L.LFG_DETECT_INVITE or "LFG invite detected: %s", GetDungeonName(mapID)))
       TriggerHighlightUpdate("invite")
@@ -216,13 +216,13 @@ end
 -- which calls ClearDetectedState when no active listing exists. If a player received
 -- an invite (no own listing) and the ticker fires before they accept, pendingInvites
 -- must survive so OnInviteAccepted can still resolve the mapID.
--- pendingInvites is only cleared in ClearAllState (group-leave / key-start).
+-- pendingInvites is only cleared in ClearAllState (group-leave or explicit factory reset).
 --
 -- BUG-LFG-4 fix: only clear state that the queue-listing path owns.
 -- lastQueueMapID is set exclusively by CheckActiveGroup when an active listing is
 -- found. Invite-set detectedMapID (lastQueueMapID == nil) must survive the 5s ticker
 -- so the portal highlight stays active until the player enters the dungeon or leaves
--- the group (both handled by ClearAllState).
+-- the group (both handled by ClearAllStateImpl).
 local function ClearDetectedState()
   if lastQueueMapID ~= nil then
     detectedMapID = nil
@@ -231,16 +231,26 @@ local function ClearDetectedState()
   end
 end
 
--- Full reset: called on group-leave and challenge-start where pending invite state
--- is no longer relevant.
-local function ClearAllState()
-  local hadState = detectedMapID ~= nil or lastQueueMapID ~= nil or next(pendingInvites) ~= nil
+-- Full reset: called on group-leave and explicit factory reset where pending invite
+-- state is no longer relevant.
+local function ClearAllStateImpl()
+  local hadState =
+    detectedMapID ~= nil or lastQueueMapID ~= nil or next(pendingInvites) ~= nil or pendingAcceptedInviteMapID ~= nil
   detectedMapID = nil
   lastQueueMapID = nil
+  pendingAcceptedInviteMapID = nil
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
   end
+end
+
+function LFGDetect.GetDetectedMapID()
+  return detectedMapID
+end
+
+function LFGDetect.ClearAllState()
+  ClearAllStateImpl()
 end
 
 local function CheckActiveGroup()
@@ -305,10 +315,17 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
     if not inGroup then
+      -- A just-accepted invite can briefly report "not in group" before the
+      -- roster settles. Keep the confirmed highlight alive until a real group
+      -- membership update arrives or the state is explicitly cleared elsewhere.
+      if pendingAcceptedInviteMapID then
+        return
+      end
       -- Left all groups — full reset including pending invites
-      ClearAllState()
+      ClearAllStateImpl()
       return
     end
+    pendingAcceptedInviteMapID = nil
     -- Joined a group: if we have a pending invite but detectedMapID was not set
     -- yet (e.g. inviteaccepted fired before GROUP_ROSTER_UPDATE settled),
     -- apply it now.
@@ -325,7 +342,7 @@ frame:SetScript("OnEvent", function(_self, event, ...)
       end
     end
   elseif event == "CHALLENGE_MODE_START" then
-    -- Key started — full reset, invite state no longer relevant
-    ClearAllState()
+    -- Keep invite state alive until the exact target map entry is confirmed.
+    -- The factory clears it once the player is actually inside the dungeon.
   end
 end)

@@ -222,12 +222,71 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
         "inviteaccepted callback must use soundContext='invite' to suppress portal sound"
       )
 
-      -- Key start clears all state and fires TriggerHighlightUpdate("queue")
+      -- Key start must not clear the confirmed invite highlight any more.
       fire("CHALLENGE_MODE_START")
 
-      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "CHALLENGE_MODE_START must clear detectedMapID")
-      Assert.Equal(#callbackSoundContexts, 2, "state clear must trigger a second callback")
-      Assert.Equal(callbackSoundContexts[2], "queue", "state-clear callback must pass soundContext='queue'")
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "CHALLENGE_MODE_START must not clear a confirmed invite highlight before dungeon entry"
+      )
+      Assert.Equal(#callbackSoundContexts, 1, "CHALLENGE_MODE_START must not retrigger the highlight")
+
+      addon.LFGDetect.ClearAllState()
+
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "explicit clear must still reset detectedMapID")
+      Assert.Equal(#callbackSoundContexts, 2, "explicit clear must trigger a second callback")
+      Assert.Equal(callbackSoundContexts[2], "queue", "explicit clear callback must pass soundContext='queue'")
+    end)
+  end)
+
+  test("Highlight invite-accepted state survives transient non-group roster updates", function()
+    local callbackSoundContexts = {}
+    local inGroup = false
+
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return inGroup
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetHighlightCallback(function(soundContext)
+        table.insert(callbackSoundContexts, soundContext)
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "inviteaccepted must set detectedMapID")
+      Assert.Equal(#callbackSoundContexts, 1, "inviteaccepted must trigger one highlight update")
+
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "transient not-in-group roster updates must not clear a confirmed invite highlight"
+      )
+      Assert.Equal(
+        #callbackSoundContexts,
+        1,
+        "transient not-in-group roster updates must not retrigger or clear the confirmed highlight"
+      )
+
+      inGroup = true
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "confirmed invite highlight must survive group join")
+      Assert.Equal(
+        #callbackSoundContexts,
+        1,
+        "group join settlement must not emit an extra highlight update for an unchanged invite target"
+      )
     end)
   end)
 
@@ -487,7 +546,7 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
     end)
   end)
 
-  test("LFGDetect CHALLENGE_MODE_START clears all state", function()
+  test("LFGDetect CHALLENGE_MODE_START keeps confirmed invite highlight until explicit clear", function()
     local globals, fire = BuildLFGDetectEnv({
       globals = {
         C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
@@ -503,7 +562,15 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
 
       fire("CHALLENGE_MODE_START")
 
-      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "CHALLENGE_MODE_START must clear all state via ClearAllState")
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "CHALLENGE_MODE_START must not clear the confirmed invite highlight"
+      )
+
+      addon.LFGDetect.ClearAllState()
+
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "explicit clear must still reset the confirmed invite highlight")
     end)
   end)
 

@@ -144,6 +144,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Highlight joined-key resolver requires activity-based map context
   - Highlight listing resolver requires unique activity map
   - Highlight queue fallback is disabled while not in group
+  - Highlight invite-accepted state survives transient non-group roster updates
+  - Factory target dungeon clear waits for actual player map entry
 
 ### RULE-QUEUEFLOW-CHALLENGE-UND-DEDUP
 - Regelnummer: 9

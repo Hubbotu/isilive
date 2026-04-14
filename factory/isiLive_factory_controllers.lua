@@ -1137,12 +1137,6 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
     end
 
     local currentMapID = nil
-    if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID then
-      local challengeMapID = C_ChallengeMode.GetActiveChallengeMapID()
-      if type(challengeMapID) == "number" and challengeMapID > 0 then
-        currentMapID = challengeMapID
-      end
-    end
     if not currentMapID and C_Map and C_Map.GetBestMapForUnit and type(UnitExists) == "function" then
       local okUnit, playerExists = pcall(UnitExists, "player")
       if okUnit and playerExists then
@@ -1157,6 +1151,10 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
     end
 
     if targetMapID and currentMapID == targetMapID then
+      local lfgDetect = addonTable.LFGDetect
+      if type(lfgDetect) == "table" and type(lfgDetect.ClearAllState) == "function" then
+        lfgDetect.ClearAllState()
+      end
       ctx.ClearLatestQueueTarget()
       ctx.UpdateMPlusTeleportButton()
       return
