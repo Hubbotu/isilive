@@ -3,7 +3,7 @@ return function(test, ctx)
   local WithGlobals = ctx.with_globals
   local LoadAddonModules = ctx.load_modules
 
-  local chunk, loadErr = loadfile("testmodul/isiLive_test_scenarios_factory_secondary.lua")
+  local chunk, loadErr = loadfile("testmodul/isilive_test_scenarios_factory_secondary.lua")
   if not chunk then
     error(string.format("cannot load factory secondary scenario helper: %s", tostring(loadErr)))
   end
