@@ -1,7 +1,12 @@
 # Changelog
 
-## 2026-04-14 - Version 0.9.162 (patch)
+## 2026-04-14 - Version 0.9.163 (patch)
 
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.163`.
+  - Updated the documented validator baseline to `579` scenarios / tests over `43` modules.
+
+## 2026-04-14 - Version 0.9.162 (patch)
 - **Share Keys no-op cooldown fix:**
   - Fixed the Share Keys button so the 30-second local cooldown starts only after a real effect happened: either the local key was announced or a `SHAREKEYS` addon sync request was successfully published.
   - `Sync.SendShareKeysRequest()` now returns an explicit success state instead of failing silently, which lets the roster UI keep the button usable when no addon sync channel exists.
