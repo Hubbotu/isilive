@@ -105,6 +105,25 @@ local highlightCallback = nil
 local localeGetter = nil
 local TriggerHighlightUpdate
 
+local function GetGroupMemberCount()
+  local getNumGroupMembers = rawget(_G, "GetNumGroupMembers")
+  if type(getNumGroupMembers) ~= "function" then
+    return nil
+  end
+
+  local ok, count = pcall(getNumGroupMembers)
+  if not ok then
+    return nil
+  end
+
+  count = tonumber(count)
+  if not count then
+    return nil
+  end
+
+  return math.max(0, math.floor(count))
+end
+
 -- Called once from InitializeFactoryPrimaryControllers to wire the callbacks.
 function LFGDetect.SetHighlightCallback(fn)
   highlightCallback = type(fn) == "function" and fn or nil
@@ -317,13 +336,21 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
     if not inGroup then
+      local groupMemberCount = GetGroupMemberCount()
+      if groupMemberCount and groupMemberCount > 0 then
+        return
+      end
+      if groupMemberCount == 0 then
+        -- Left all groups — full reset including pending invites.
+        ClearAllStateImpl()
+        return
+      end
       -- A just-accepted invite can briefly report "not in group" before the
       -- roster settles. Keep the confirmed highlight alive until a real group
       -- membership update arrives or the state is explicitly cleared elsewhere.
       if pendingAcceptedInviteMapID then
         return
       end
-      -- Left all groups — full reset including pending invites
       ClearAllStateImpl()
       return
     end

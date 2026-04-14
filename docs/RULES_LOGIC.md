@@ -145,6 +145,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Highlight listing resolver requires unique activity map
   - Highlight queue fallback is disabled while not in group
   - Highlight invite-accepted state survives transient non-group roster updates
+  - Highlight invite-accepted state survives late roster false negatives while group members are still present
   - Factory target dungeon clear waits for actual player map entry
 
 ### RULE-QUEUEFLOW-CHALLENGE-UND-DEDUP

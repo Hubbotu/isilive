@@ -178,7 +178,7 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 2. Verarbeitung: Der Status wird kleingeschrieben normalisiert; die Activity-zu-Map-Aufloesung nutzt nur exakte Aktivitaetsdaten. Namen, Tokens oder andere heuristische Fallbacks bleiben unresolved.
 3. Verarbeitung: Der Invite-Kontext bleibt bis zur exakten Bestaetigung per `inviteaccepted` pending; danach wird der erkannte Dungeon-Zielzustand gesetzt und das Portal-Highlight ohne Sound aktiviert. Wenn LFGDetect bereits einen konkreten Map-Kontext hat, hat dieser Vorrang vor peer-synced Highlight-Quellen. Die locale-injizierte Chatmeldung bleibt an den Invite-/Join-Confirm-Pfad gebunden.
 4. Regel: Eine eigene Queue-/Listing-Detektion triggert das Portal-Highlight ueber den injizierten Callback; Portal-Sound bleibt fuer Queue- und Invite-getriebene Updates unterdrueckt.
-5. Regel: `GROUP_ROSTER_UPDATE` ohne Gruppe loescht den gesamten LFG-Zustand inklusive pending invites; `CHALLENGE_MODE_START` allein loescht den Invite-Zustand nicht mehr, sondern erst der echte Dungeon-Eintritt ueber den finalen Map-Check.
+5. Regel: `GROUP_ROSTER_UPDATE` ohne Gruppe loescht den gesamten LFG-Zustand inklusive pending invites, aber nur beim echten Gruppenende (`GetNumGroupMembers() == 0`); `CHALLENGE_MODE_START` allein loescht den Invite-Zustand nicht mehr, sondern erst der echte Dungeon-Eintritt ueber den finalen Map-Check.
 6. Erfolgskriterium: Erkennungen erscheinen einmalig und lokalisiert, late `inviteaccepted`-Events bleiben korrekt aufloesbar, identische Listing-Updates erzeugen keinen inkonsistenten Highlight-State, und unbekannte Namen werden nie als Dungeon-Ziel geraten.
 
 ## Nichtfunktionale Regeln

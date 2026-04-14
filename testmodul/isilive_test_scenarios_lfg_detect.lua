@@ -34,6 +34,9 @@ local function BuildLFGDetectEnv(overrides)
     IsInRaid = overrides.IsInRaid or function()
       return false
     end,
+    GetNumGroupMembers = overrides.GetNumGroupMembers or function()
+      return 0
+    end,
   }
 
   -- Merge any extra globals the caller needs.
@@ -243,10 +246,14 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
   test("Highlight invite-accepted state survives transient non-group roster updates", function()
     local callbackSoundContexts = {}
     local inGroup = false
+    local groupMemberCount = 5
 
     local globals, fire = BuildLFGDetectEnv({
       IsInGroup = function()
         return inGroup
+      end,
+      GetNumGroupMembers = function()
+        return groupMemberCount
       end,
       globals = {
         C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
@@ -283,10 +290,69 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
 
       Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "confirmed invite highlight must survive group join")
       Assert.Equal(
+      #callbackSoundContexts,
+      1,
+      "group join settlement must not emit an extra highlight update for an unchanged invite target"
+      )
+    end)
+  end)
+
+  test("Highlight invite-accepted state survives late roster false negatives while group members are still present", function()
+    local callbackSoundContexts = {}
+    local inGroup = true
+    local groupMemberCount = 5
+
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return inGroup
+      end,
+      GetNumGroupMembers = function()
+        return groupMemberCount
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetHighlightCallback(function(soundContext)
+        table.insert(callbackSoundContexts, soundContext)
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "inviteaccepted must set detectedMapID")
+      Assert.Equal(#callbackSoundContexts, 1, "inviteaccepted must trigger one highlight update")
+
+      inGroup = false
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "late roster false negatives must not clear a confirmed invite while group members are still present"
+      )
+      Assert.Equal(
         #callbackSoundContexts,
         1,
-        "group join settlement must not emit an extra highlight update for an unchanged invite target"
+        "late roster false negatives must not retrigger or clear the confirmed highlight while group members remain"
       )
+
+      groupMemberCount = 0
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Nil(
+        addon.LFGDetect.GetDetectedMapID(),
+        "actual group leave must still clear the confirmed invite highlight"
+      )
+      Assert.Equal(
+        #callbackSoundContexts,
+        2,
+        "actual group leave must clear the confirmed highlight exactly once"
+      )
+      Assert.Equal(callbackSoundContexts[2], "queue", "group leave clear must keep sound suppression")
     end)
   end)
 
