@@ -39,7 +39,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_factory_primary.lua",
   "testmodul/isilive_test_scenarios_factory_highlight_priority.lua",
   "testmodul/isilive_test_scenarios_factory_secondary.lua",
-  "testmodul/isilive_test_scenarios_factory_secondary_target.lua",
+  "testmodul/isiLive_test_scenarios_factory_secondary_target.lua",
   "testmodul/isilive_test_scenarios_controller_init.lua",
   "testmodul/isilive_test_scenarios_lfg_detect.lua",
 }
