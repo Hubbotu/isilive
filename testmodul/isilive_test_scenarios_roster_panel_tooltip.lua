@@ -336,6 +336,22 @@ local function RegisterRosterPanelRowTooltipDpsTest(test, Assert, WithGlobals, L
   end)
 end
 
+local function RegisterRosterPanelRowTooltipAckVersionTest(test, Assert, WithGlobals, LoadAddonModules)
+  test("Roster row tooltip shows client version from ACK hello info", function()
+    RunTooltipScenario(WithGlobals, LoadAddonModules, Assert, {}, function(addon)
+      addon.Sync.SetPlayerHelloAckInfo("Buddy", "Realm", "0.9.36")
+    end, function(_addon, _controller, _rowFrame, tooltipLines)
+      local foundSyncVersion = false
+      for _, line in ipairs(tooltipLines) do
+        if line:find("Client version: 0.9.36", 1, true) then
+          foundSyncVersion = true
+        end
+      end
+      Assert.True(foundSyncVersion, "Tooltip should contain client version info from ACK fallback")
+    end)
+  end)
+end
+
 local function RegisterRosterPanelRowTooltipSyncDebugTest(test, Assert, WithGlobals, LoadAddonModules)
   test("Roster row tooltip shows sync debug field sources when shift is held", function()
     RunTooltipScenario(WithGlobals, LoadAddonModules, Assert, {
@@ -463,6 +479,7 @@ end
 local function RegisterRosterPanelRowTooltipHistoryAndDpsTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelRowTooltipNoHistoryTest(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelRowTooltipDpsTest(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterRosterPanelRowTooltipAckVersionTest(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelRowTooltipSyncDebugTest(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelRowTooltipFullKeyNameTest(test, Assert, WithGlobals, LoadAddonModules)
 end

@@ -1350,12 +1350,9 @@ local function CreateShareKeysButton(mainFrame, deps)
     if now and debounceSeconds > 0 and lastShareKeysClickAt and (now - lastShareKeysClickAt) < debounceSeconds then
       return
     end
-    if now then
-      lastShareKeysClickAt = now
-      StartCooldownDisplay(now + debounceSeconds)
-    end
 
     -- Post own key directly, then trigger all other isiLive group members to post theirs
+    local announcedOwnKey = false
     local ownLine = BuildOwnKeyAnnounceLine({
       getL = deps.getL,
       getRoster = deps.getRoster,
@@ -1366,12 +1363,22 @@ local function CreateShareKeysButton(mainFrame, deps)
         if not SendPartyChatMessage(ownLine) then
           print(ownLine)
         end
+        announcedOwnKey = true
       else
         print(ownLine)
+        announcedOwnKey = true
       end
     end
+    local requestedPeers = false
     if deps.isInGroup() and type(deps.sendShareKeysRequest) == "function" then
-      deps.sendShareKeysRequest()
+      requestedPeers = deps.sendShareKeysRequest() == true
+    end
+    if not announcedOwnKey and not requestedPeers then
+      return
+    end
+    if now then
+      lastShareKeysClickAt = now
+      StartCooldownDisplay(now + debounceSeconds)
     end
   end)
   AttachPanelButtonTooltip(deps.tooltipFrame, button, deps.getL, "BTN_SHARE_KEYS", "TOOLTIP_ANNOUNCE_KEYS", nil)

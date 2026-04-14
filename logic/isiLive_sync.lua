@@ -416,6 +416,41 @@ function Sync.SetPlayerHelloInfo(name, realm, addonVersion, protocolVersion, cap
   return true
 end
 
+function Sync.SetPlayerHelloAckInfo(name, realm, addonVersion)
+  local key = Sync.NormalizePlayerKey(name, realm)
+  if not key or key == "" then
+    return false
+  end
+
+  local normalizedAddonVersion = type(addonVersion) == "string" and addonVersion or tostring(addonVersion or "")
+  if normalizedAddonVersion == "" then
+    return false
+  end
+
+  local previous = helloInfoByPlayerKey[key]
+  local previousStamp = GetEntrySyncStamp(previous)
+
+  if previous then
+    local changed = previous.addonVersion ~= normalizedAddonVersion
+    previous.addonVersion = normalizedAddonVersion
+    previous.source = "ack"
+    previous.receivedAt = GetSyncTimestamp()
+    SetEntryPreviousSyncStamp(previous, previousStamp)
+    return changed
+  end
+
+  local nextValue = {
+    addonVersion = normalizedAddonVersion,
+    protocolVersion = nil,
+    capturedAt = nil,
+    source = "ack",
+    receivedAt = GetSyncTimestamp(),
+  }
+  SetEntryPreviousSyncStamp(nextValue, previousStamp)
+  helloInfoByPlayerKey[key] = nextValue
+  return true
+end
+
 function Sync.GetPlayerHelloInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -1125,16 +1160,17 @@ end
 
 function Sync.SendShareKeysRequest()
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
+    return false
   end
   if not IsSyncEnabled() then
-    return
+    return false
   end
   local channel = Sync.GetAddonSyncChannel()
   if not channel then
-    return
+    return false
   end
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel)
+  return true
 end
 
 local function ProcessLibKeystoneMessage(message, sender, localName, localRealm, channel)
@@ -1205,6 +1241,7 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   local senderKey = Sync.NormalizePlayerKey(sender)
   local selfKey = Sync.NormalizePlayerKey(localName, localRealm)
   local isHelloMessage = type(message) == "string" and message:find("^HELLO:")
+  local isAckMessage = type(message) == "string" and message:find("^ACK:")
   local shouldAck = isHelloMessage and senderKey ~= selfKey
   local shouldRequestRefresh = type(message) == "string" and message == "REQSYNC" and senderKey ~= selfKey
   local shouldShareKeys = type(message) == "string" and message == "SHAREKEYS" and senderKey ~= selfKey
@@ -1305,13 +1342,18 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   local peerProtocolVersion = nil
   local peerCapturedAt = nil
   local peerSource = nil
-  if isHelloMessage then
+  if isHelloMessage or isAckMessage then
     local parts = SplitPayload(message)
     peerAddonVersion = parts[2]
-    peerProtocolVersion = tonumber(parts[3])
-    peerCapturedAt = tonumber(parts[4])
-    peerSource = parts[5]
-    Sync.SetPlayerHelloInfo(sender, nil, peerAddonVersion, peerProtocolVersion, peerCapturedAt, peerSource)
+    if isHelloMessage then
+      peerProtocolVersion = tonumber(parts[3])
+      peerCapturedAt = tonumber(parts[4])
+      peerSource = parts[5]
+      Sync.SetPlayerHelloInfo(sender, nil, peerAddonVersion, peerProtocolVersion, peerCapturedAt, peerSource)
+    elseif peerAddonVersion and peerAddonVersion ~= "" then
+      peerSource = "ack"
+      Sync.SetPlayerHelloAckInfo(sender, nil, peerAddonVersion)
+    end
   end
 
   return {

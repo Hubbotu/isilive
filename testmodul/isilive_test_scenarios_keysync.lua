@@ -350,6 +350,29 @@ local function RegisterKeySyncOwnedKeyTests(test, Assert, WithGlobals, LoadAddon
     Assert.True(libKeystoneFound, "must also request LibKeystone party data")
   end)
 
+  test("KeySync SendIsiLiveHello allows hidden version sync", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync, {
+      isFrameVisible = function()
+        return false
+      end,
+      getAddonVersionRaw = function()
+        return "0.9.160"
+      end,
+    })
+
+    ctrl.SendIsiLiveHello(true, "group")
+
+    Assert.Equal(#sync.calls, 1, "must forward exactly one hello message")
+    Assert.Equal(sync.calls[1].fn, "SendHello", "must delegate to sync.SendHello")
+    Assert.True(sync.calls[1].opts.force, "must pass force flag through")
+    Assert.False(sync.calls[1].opts.isVisible, "hidden frame state must be forwarded")
+    Assert.True(sync.calls[1].opts.allowHidden, "hidden hello sync must stay enabled")
+    Assert.Equal(sync.calls[1].opts.version, "0.9.160", "hello payload must include addon version")
+    Assert.Equal(sync.calls[1].opts.protocolVersion, 2, "hello payload must include sync protocol version")
+    Assert.Equal(sync.calls[1].opts.source, "group", "hello payload must include sync source")
+  end)
+
   test("KeySync SendLibKeystonePartyData delegates current key and rio to sync", function()
     local sync = BuildMockSync()
     WithGlobals({

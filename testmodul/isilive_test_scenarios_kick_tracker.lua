@@ -121,6 +121,152 @@ local function RegisterBasicKickTests(test, Assert, WithGlobals, LoadAddonModule
   end)
 end
 
+local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("KickTracker resolves interrupt matrix for all mapped specs", function()
+    local mappedSpecs = {
+      { specID = 250, spellID = 47528, label = "Blood Death Knight" },
+      { specID = 251, spellID = 47528, label = "Frost Death Knight" },
+      { specID = 252, spellID = 47528, label = "Unholy Death Knight" },
+      { specID = 577, spellID = 183752, label = "Havoc Demon Hunter" },
+      { specID = 581, spellID = 183752, label = "Vengeance Demon Hunter" },
+      { specID = 1480, spellID = 183752, label = "Devourer Demon Hunter" },
+      { specID = 102, spellID = 78675, label = "Balance Druid" },
+      { specID = 103, spellID = 106839, label = "Feral Druid" },
+      { specID = 104, spellID = 106839, label = "Guardian Druid" },
+      { specID = 1467, spellID = 351338, label = "Devastation Evoker" },
+      { specID = 1468, spellID = 351338, label = "Preservation Evoker" },
+      { specID = 1473, spellID = 351338, label = "Augmentation Evoker" },
+      { specID = 253, spellID = 147362, label = "Beast Mastery Hunter" },
+      { specID = 254, spellID = 147362, label = "Marksmanship Hunter" },
+      { specID = 255, spellID = 187707, label = "Survival Hunter" },
+      { specID = 62, spellID = 2139, label = "Arcane Mage" },
+      { specID = 63, spellID = 2139, label = "Fire Mage" },
+      { specID = 64, spellID = 2139, label = "Frost Mage" },
+      { specID = 268, spellID = 116705, label = "Brewmaster Monk" },
+      { specID = 269, spellID = 116705, label = "Windwalker Monk" },
+      { specID = 270, spellID = 116705, label = "Mistweaver Monk" },
+      { specID = 65, spellID = 96231, label = "Holy Paladin" },
+      { specID = 66, spellID = 96231, label = "Protection Paladin" },
+      { specID = 70, spellID = 96231, label = "Retribution Paladin" },
+      { specID = 258, spellID = 15487, label = "Shadow Priest" },
+      { specID = 259, spellID = 1766, label = "Assassination Rogue" },
+      { specID = 260, spellID = 1766, label = "Outlaw Rogue" },
+      { specID = 261, spellID = 1766, label = "Subtlety Rogue" },
+      { specID = 262, spellID = 57994, label = "Elemental Shaman" },
+      { specID = 263, spellID = 57994, label = "Enhancement Shaman" },
+      { specID = 264, spellID = 57994, label = "Restoration Shaman" },
+      { specID = 265, spellID = 19647, label = "Affliction Warlock" },
+      { specID = 266, spellID = 89766, label = "Demonology Warlock" },
+      { specID = 267, spellID = 19647, label = "Destruction Warlock" },
+      { specID = 71, spellID = 6552, label = "Arms Warrior" },
+      { specID = 72, spellID = 6552, label = "Fury Warrior" },
+      { specID = 73, spellID = 6552, label = "Protection Warrior" },
+    }
+
+    for _, spec in ipairs(mappedSpecs) do
+      WithGlobals({
+        GetSpecialization = function()
+          return 1
+        end,
+        GetSpecializationInfo = function(index)
+          if index == 1 then
+            return spec.specID
+          end
+          return nil
+        end,
+        UnitExists = function(unit)
+          if unit == "pet" and (spec.specID == 265 or spec.specID == 266 or spec.specID == 267) then
+            return true
+          end
+          return false
+        end,
+        GetSpellBaseCooldown = function(spellID)
+          if spellID == spec.spellID then
+            if spellID == 89766 then
+              return 30000
+            end
+            if spellID == 78675 then
+              return 60000
+            end
+            if spellID == 351338 then
+              return 20000
+            end
+            if spellID == 147362 then
+              return 24000
+            end
+            if spellID == 15487 then
+              return 30000
+            end
+            if spellID == 57994 then
+              if spec.specID == 264 then
+                return 30000
+              end
+              return 12000
+            end
+            return 15000
+          end
+          return 0
+        end,
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+        local controller = addon.KickTracker.CreateController({
+          getTime = function()
+            return 100
+          end,
+        })
+        local kickController = RequireController(controller, spec.label .. " must produce kick info", Assert)
+        local info = kickController.GetKickInfo()
+        Assert.True(info.availabilityResolved, spec.label .. " kick availability must resolve")
+        Assert.True(info.hasKick, spec.label .. " must expose a kick")
+        Assert.Equal(info.spellID, spec.spellID, spec.label .. " must resolve the expected interrupt spell")
+        Assert.False(info.onCooldown, spec.label .. " must start ready")
+        Assert.Equal(info.cooldownRemain, 0, spec.label .. " must start with zero remaining cooldown")
+      end)
+    end
+  end)
+
+  test("KickTracker resolves exact no-kick matrix for supported specs", function()
+    local noKickSpecs = {
+      { specID = 105, label = "Restoration Druid" },
+      { specID = 256, label = "Discipline Priest" },
+      { specID = 257, label = "Holy Priest" },
+    }
+
+    for _, spec in ipairs(noKickSpecs) do
+      WithGlobals({
+        GetSpecialization = function()
+          return 1
+        end,
+        GetSpecializationInfo = function(index)
+          if index == 1 then
+            return spec.specID
+          end
+          return nil
+        end,
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+        local controller = addon.KickTracker.CreateController({
+          getTime = function()
+            return 100
+          end,
+        })
+        local kickController = RequireController(controller, spec.label .. " must still produce kick info", Assert)
+        local info = kickController.GetKickInfo()
+        local resolvedState = kickController.ResolveKickState()
+        Assert.True(info.availabilityResolved, spec.label .. " no-kick state must resolve exactly")
+        Assert.False(info.hasKick, spec.label .. " must stay in the exact no-kick state")
+        Assert.Nil(info.spellID, spec.label .. " must not invent an interrupt spell")
+        Assert.False(info.onCooldown, spec.label .. " must not appear on cooldown")
+        Assert.True(
+          resolvedState.availabilityResolved,
+          spec.label .. " ResolveKickState must preserve the exact no-kick state"
+        )
+        Assert.False(resolvedState.hasKick, spec.label .. " ResolveKickState must not invent a kick")
+      end)
+    end
+  end)
+end
+
 local function RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModules)
   test("KickTracker resolves Warlock pet-based Spell Lock for Affliction and Destruction", function()
     local warlockSpecs = { 265, 267 }
@@ -406,6 +552,94 @@ local function RegisterCooldownRecoveryTests(test, Assert, WithGlobals, LoadAddo
       "unreadable cooldown payloads must preserve the observed cooldown remain instead of guessing ready"
     )
   end)
+
+  test("KickTracker scans all talent trees for cooldown reductions", function()
+    local now = 100
+    ---@type KickController|nil
+    local controller = nil
+
+    WithGlobals({
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 71
+        end
+        return nil
+      end,
+      GetSpellBaseCooldown = function(spellID)
+        if spellID == 6552 then
+          return 15000
+        end
+        return 0
+      end,
+      C_ClassTalents = {
+        GetActiveConfigID = function()
+          return 42
+        end,
+      },
+      C_Traits = {
+        GetConfigInfo = function(configID)
+          if configID == 42 then
+            return {
+              treeIDs = { 1001, 1002 },
+            }
+          end
+          return nil
+        end,
+        GetTreeNodes = function(treeID)
+          if treeID == 1001 then
+            return { 11 }
+          end
+          if treeID == 1002 then
+            return { 22 }
+          end
+          return nil
+        end,
+        GetNodeInfo = function(_configID, nodeID)
+          if nodeID == 11 then
+            return nil
+          end
+          if nodeID == 22 then
+            return {
+              activeEntry = { entryID = 222 },
+              activeRank = 1,
+            }
+          end
+          return nil
+        end,
+        GetEntryInfo = function(_configID, entryID)
+          if entryID == 222 then
+            return { definitionID = 333 }
+          end
+          return nil
+        end,
+        GetDefinitionInfo = function(definitionID)
+          if definitionID == 333 then
+            return { spellID = 391271 }
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+      controller = addon.KickTracker.CreateController({
+        getTime = function()
+          return now
+        end,
+      })
+    end)
+
+    local kickController =
+      RequireController(controller, "kick info must exist while scanning multiple talent trees", Assert)
+    local observedKick = kickController.OnCast("player", 6552)
+    local info = kickController.GetKickInfo()
+
+    Assert.True(observedKick, "tracked warrior kick cast must still be observed")
+    Assert.True(info.onCooldown, "tracked warrior kick cast must still start cooldown")
+    Assert.Equal(info.cooldownRemain, 14, "cooldown reduction on a non-first talent tree must be applied exactly")
+  end)
 end
 
 return function(test, ctx)
@@ -414,6 +648,7 @@ return function(test, ctx)
   local LoadAddonModules = ctx.load_modules
 
   RegisterBasicKickTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCooldownRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
 end

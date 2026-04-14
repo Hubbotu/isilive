@@ -3,11 +3,10 @@ return function(test, ctx)
   local LoadAddonModules = ctx.load_modules
   local WithGlobals = ctx.with_globals
 
-  test("Factory primary highlight auto-opens hidden main frame on invite target", function()
-    local capturedButtonsUpdate = nil
-    local capturedShowArgs = nil
+  local function RunHighlightPriorityScenario(opts, assertFn)
+    local captured = { buttonsUpdate = nil }
 
-    local globals = {
+    WithGlobals({
       IsInGroup = function()
         return true
       end,
@@ -15,23 +14,17 @@ return function(test, ctx)
         return 0
       end,
       IsiLiveDB = {},
-    }
-
-    WithGlobals(globals, function()
+    }, function()
       local addon = LoadAddonModules({ "isiLive_factory_controllers.lua" })
 
       addon.LFGDetect = {
         GetDetectedMapID = function()
-          return 559
+          return opts.detectedMapID
         end,
         SetHighlightCallback = function(fn)
           addon._capturedHighlightCallback = fn
         end,
         SetLocaleGetter = function() end,
-      }
-
-      local state = {
-        mainFrameShown = false,
       }
 
       local factoryCtx = {
@@ -41,7 +34,7 @@ return function(test, ctx)
               return {
                 highlightController = {
                   ResolveActiveTeleportSpellID = function()
-                    return nil
+                    return opts.highlightSpellID
                   end,
                   ResolveJoinedKeyMapID = function()
                     return nil
@@ -69,7 +62,7 @@ return function(test, ctx)
                 },
                 teleportUIController = {
                   UpdateButtons = function(resolvedSpellID, soundContext)
-                    capturedButtonsUpdate = {
+                    captured.buttonsUpdate = {
                       resolvedSpellID = resolvedSpellID,
                       soundContext = soundContext,
                     }
@@ -115,10 +108,8 @@ return function(test, ctx)
           },
           teleport = {
             ResolveTeleportSpellIDByMapID = function(mapID)
-              if mapID == 559 then
-                return 1254563
-              end
-              return nil
+              local map = opts.teleportSpellForMapID or {}
+              return map[mapID]
             end,
             ResolveMapIDByActivityID = function()
               return nil
@@ -133,10 +124,10 @@ return function(test, ctx)
               return {}
             end,
             GetDungeonName = function()
-              return "Nexus-Point Xenas"
+              return ""
             end,
             GetDungeonShortCode = function()
-              return "NPX"
+              return ""
             end,
             GetTeleportInfoByMapID = function()
               return nil
@@ -180,17 +171,20 @@ return function(test, ctx)
           GetLatestQueueState = function()
             return nil, nil, nil, nil
           end,
+          GetActiveJoinedKeyMapID = function()
+            return nil
+          end,
         },
         locale = "enUS",
         GetUnitNameAndRealm = function()
           return nil, nil
         end,
         GetAddonVersionRaw = function()
-          return "0.9.154"
+          return "0.9.158"
         end,
         mainFrame = {
           IsShown = function()
-            return state.mainFrameShown == true
+            return true
           end,
         },
         mainUI = {},
@@ -258,40 +252,63 @@ return function(test, ctx)
         isSyncUserKnown = function()
           return false
         end,
-        SetMainFrameVisible = function(visible, opts)
-          state.mainFrameShown = visible == true
-          capturedShowArgs = { visible = visible, opts = opts }
+        SetMainFrameVisible = function()
           return true
         end,
       }
 
       addon._FactoryInternal.InitializeFactoryPrimaryControllers(factoryCtx)
+      assertFn(factoryCtx, captured)
+    end)
+  end
 
-      Assert.NotNil(addon._capturedHighlightCallback, "factory must wire the LFG highlight callback")
-
+  test("Factory primary highlight prefers LFG detected mapID over peer-synced resolver", function()
+    RunHighlightPriorityScenario({
+      detectedMapID = 559,
+      highlightSpellID = 424197,
+      teleportSpellForMapID = { [559] = 1254563 },
+    }, function(factoryCtx, captured)
       factoryCtx.UpdateMPlusTeleportButton("invite")
-
-      Assert.True(state.mainFrameShown, "invite highlight should auto-open the hidden main frame")
-      Assert.NotNil(capturedShowArgs, "invite highlight should request the main frame to be shown")
-      if capturedShowArgs then
-        Assert.Equal(capturedShowArgs.visible, true, "auto-open must request visible=true")
-        Assert.Equal(capturedShowArgs.opts.reason, "lfg-highlight", "auto-open must mark the lfg-highlight reason")
-        Assert.Equal(capturedShowArgs.opts.skipShowCallbacks, true, "auto-open must skip show callbacks")
-      end
-      Assert.NotNil(capturedButtonsUpdate, "highlight must still update the teleport buttons")
-      if capturedButtonsUpdate then
-        Assert.Equal(
-          capturedButtonsUpdate.resolvedSpellID,
-          1254563,
-          "invite highlight must resolve the matching teleport spell"
-        )
-        Assert.Equal(capturedButtonsUpdate.soundContext, "invite", "invite highlight must preserve sound suppression")
-      end
+      Assert.NotNil(captured.buttonsUpdate, "UpdateButtons must be called")
+      Assert.Equal(
+        captured.buttonsUpdate.resolvedSpellID,
+        1254563,
+        "LFG detected mapID must outrank peer-synced resolver spell"
+      )
+      Assert.Equal(captured.buttonsUpdate.soundContext, "invite", "soundContext must still propagate")
     end)
   end)
 
-  -- Builds a minimal factoryCtx + LFGDetect stub for highlight priority tests.
-  -- opts.detectedMapID            Ã¢â‚¬â€ value LFGDetect.GetDetectedMapID returns
-  -- opts.highlightSpellID         Ã¢â‚¬â€ value highlightController.ResolveActiveTeleportSpellID returns
-  -- opts.teleportSpellForMapID    Ã¢â‚¬â€ { [mapID] = spellID } for ResolveTeleportSpellIDByMapID
+  test("Factory primary highlight uses LFG detected mapID when no other resolver is active", function()
+    RunHighlightPriorityScenario({
+      detectedMapID = 557,
+      highlightSpellID = nil,
+      teleportSpellForMapID = { [557] = 445441 },
+    }, function(factoryCtx, captured)
+      factoryCtx.UpdateMPlusTeleportButton("invite")
+      Assert.NotNil(captured.buttonsUpdate, "UpdateButtons must be called")
+      Assert.Equal(
+        captured.buttonsUpdate.resolvedSpellID,
+        445441,
+        "LFG detected mapID must be the sole resolved spell when nothing else is active"
+      )
+    end)
+  end)
+
+  test("Factory primary highlight falls back to peer-synced resolver when LFGDetect is empty", function()
+    RunHighlightPriorityScenario({
+      detectedMapID = nil,
+      highlightSpellID = 445444,
+      teleportSpellForMapID = {},
+    }, function(factoryCtx, captured)
+      factoryCtx.UpdateMPlusTeleportButton("queue")
+      Assert.NotNil(captured.buttonsUpdate, "UpdateButtons must be called")
+      Assert.Equal(
+        captured.buttonsUpdate.resolvedSpellID,
+        445444,
+        "peer-synced resolver must still drive the highlight when no LFG target is detected"
+      )
+      Assert.Equal(captured.buttonsUpdate.soundContext, "queue", "soundContext must propagate on queue updates")
+    end)
+  end)
 end

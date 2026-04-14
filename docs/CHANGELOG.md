@@ -1,5 +1,48 @@
 # Changelog
 
+## 2026-04-14 - Version 0.9.162 (patch)
+
+- **Share Keys no-op cooldown fix:**
+  - Fixed the Share Keys button so the 30-second local cooldown starts only after a real effect happened: either the local key was announced or a `SHAREKEYS` addon sync request was successfully published.
+  - `Sync.SendShareKeysRequest()` now returns an explicit success state instead of failing silently, which lets the roster UI keep the button usable when no addon sync channel exists.
+  - Added deterministic coverage for the live `SendChatMessage` path, the no-op click path without chat or sync success, and the explicit sync-request failure contract.
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.162`.
+  - Updated the documented validator baseline to `577` scenarios / tests over `42` modules.
+
+## 2026-04-14 - Version 0.9.161 (patch)
+
+- **Kick tracker matrix and cooldown hardening:**
+  - Added deterministic interrupt coverage for the full mapped spec matrix, including the exact no-kick specs, so every supported class/spec path is now exercised explicitly instead of relying on a handful of spot checks.
+  - Fixed kick cooldown reduction scanning to walk all active talent trees instead of only the first tree, so reduced interrupt cooldowns are recognized and synced even when the reduction lives on another class/spec tree.
+  - Added deterministic coverage for the multi-tree cooldown-reduction path to prevent future regressions in interrupt remain sync.
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `RELEASE.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.161`.
+  - Updated the documented validator baseline to `574` scenarios / tests over `42` modules.
+
+## 2026-04-14 - Version 0.9.160 (patch)
+
+- **Sync version fallback fix:**
+  - `ACK` sync messages now persist the peer addon version as hello metadata, so the roster hover can still show the client version even when no full `HELLO` was observed beforehand.
+  - Hidden clients now keep sending their `HELLO` inside group sync, so version visibility no longer depends on whether the peer had the UI frame visible.
+  - Deterministic coverage now locks in the `ACK` parsing path, the hidden `HELLO` path, and tooltip version rendering from `ACK`-only hello info.
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `RELEASE.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.160`.
+  - Updated the documented validator baseline to `571` scenarios / tests over `42` modules.
+
+## 2026-04-14 - Version 0.9.159 (patch)
+
+- **Highlight priority hardening:**
+  - LFG-detected mapID now outranks peer-synced highlight resolution, so an accepted invite or own listing keeps the portal target aligned with the concrete LFG context instead of a stale synced target.
+  - Added deterministic coverage for the priority path in a dedicated factory highlight scenario module.
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `RELEASE.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.159`.
+  - Updated the documented validator baseline to `568` scenarios / tests over `42` modules.
+
 ## 2026-04-13 - Version 0.9.158 (patch)
 
 - **Version bump:**

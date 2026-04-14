@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.158`
-Zuletzt aktualisiert: `2026-04-13`
+Versionsbasis: `0.9.162`
+Zuletzt aktualisiert: `2026-04-14`
 
 ## Akteure
 
@@ -13,7 +13,7 @@ Zuletzt aktualisiert: `2026-04-13`
 
 1. Das Addon ist geladen und nicht im Zustand `stopped`.
 2. Das Season-Dataset wird ueber `ACTIVE_SEASON_ID` ausgewaehlt; aktuell `midnight_s1` mit dem live 8-Dungeon-Midnight-Season-1-Portalpool.
-3. Die relevante UI ist fuer Queue-Scanning und Rendering sichtbar; waehrend hidden duerfen Addon-Message-Sync und Roster-Updates im Hintergrund weiterlaufen, die UI darf durch frischen Gruppenjoin, Key-Ende, echten Dungeon-Entry-Transition-Flow oder UI-Reload waehrend bestehender Gruppe auto-openen, und explizite Refresh-Requests duerfen genau eine hidden Sync-Reply triggern, auch waehrend eines aktiven Mythic+-Runs; derselbe Refresh-Pfad darf zusaetzlich genau eine `LibKS`-Party-Anfrage an kompatible Nicht-`isiLive`-Peers senden. Nur stopped oder paused unterdruecken die hidden `isiLive`-Reply.
+3. Die relevante UI ist fuer Queue-Scanning und Rendering sichtbar; waehrend hidden duerfen Addon-Message-Sync und Roster-Updates im Hintergrund weiterlaufen, die UI darf durch frischen Gruppenjoin, Key-Ende, echten Dungeon-Entry-Transition-Flow oder UI-Reload waehrend bestehender Gruppe auto-openen, und explizite Refresh-Requests duerfen genau eine hidden Sync-Reply triggern, auch waehrend eines aktiven Mythic+-Runs; derselbe Refresh-Pfad darf zusaetzlich genau eine `LibKS`-Party-Anfrage an kompatible Nicht-`isiLive`-Peers senden. Wenn LFGDetect bereits einen konkreten Map-Kontext kennt, gewinnt dieser fuer das Portal-Highlight gegen peer-synced Zielkontext. Nur stopped oder paused unterdruecken die hidden `isiLive`-Reply.
 4. Nicht-`isiLive`-Spieler koennen nur dann `Key` und `RIO` beitragen, wenn auf ihrer Seite ein kompatibles `LibKeystone`-sprechendes Addon laeuft; ohne sendenden Addon-Code bleiben diese Daten unresolved.
 5. Raid-Gruppen sind ein eigener Hard-off-Zustand: UI aus und Background-Processing aus.
 6. Die optionalen `Esc`-Tooling- und Travel-Strips sind aktiv, solange der User sie nicht explizit in den Addon-Settings deaktiviert.
@@ -176,7 +176,7 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 
 1. Trigger: `LFG_LIST_APPLICATION_STATUS_UPDATED` meldet `invited` oder `inviteaccepted`, oder `LFG_LIST_ACTIVE_ENTRY_UPDATE` meldet eine eigene aktive Listing-Info.
 2. Verarbeitung: Der Status wird kleingeschrieben normalisiert; die Activity-zu-Map-Aufloesung nutzt nur exakte Aktivitaetsdaten. Namen, Tokens oder andere heuristische Fallbacks bleiben unresolved.
-3. Verarbeitung: Der Invite-Kontext bleibt bis zur exakten Bestaetigung per `inviteaccepted` pending; danach wird der erkannte Dungeon-Zielzustand gesetzt und das Portal-Highlight ohne Sound aktiviert. Die locale-injizierte Chatmeldung bleibt an den Invite-/Join-Confirm-Pfad gebunden.
+3. Verarbeitung: Der Invite-Kontext bleibt bis zur exakten Bestaetigung per `inviteaccepted` pending; danach wird der erkannte Dungeon-Zielzustand gesetzt und das Portal-Highlight ohne Sound aktiviert. Wenn LFGDetect bereits einen konkreten Map-Kontext hat, hat dieser Vorrang vor peer-synced Highlight-Quellen. Die locale-injizierte Chatmeldung bleibt an den Invite-/Join-Confirm-Pfad gebunden.
 4. Regel: Eine eigene Queue-/Listing-Detektion triggert das Portal-Highlight ueber den injizierten Callback; Portal-Sound bleibt fuer Queue- und Invite-getriebene Updates unterdrueckt.
 5. Regel: `GROUP_ROSTER_UPDATE` ohne Gruppe sowie `CHALLENGE_MODE_START` loeschen den gesamten LFG-Zustand inklusive pending invites.
 6. Erfolgskriterium: Erkennungen erscheinen einmalig und lokalisiert, late `inviteaccepted`-Events bleiben korrekt aufloesbar, identische Listing-Updates erzeugen keinen inkonsistenten Highlight-State, und unbekannte Namen werden nie als Dungeon-Ziel geraten.
@@ -204,7 +204,7 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `562` Szenarien ueber `41` Module.
+Aktuelle Validator-Baseline: `574` Szenarien ueber `42` Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -217,7 +217,7 @@ Aktuelle Validator-Baseline: `562` Szenarien ueber `41` Module.
 9. UC-11 und UC-12: Secure-World-Marker-Button-Konfiguration fuer M+Marker und Compact-Layout-Visibility-Logik fuer M/V/H.
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
 11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering und gesyncte Interrupt-Cooldown-Anzeige.
-12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening und Highlight-Dispatch.
+12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, concrete-LFG-Prioritaet und Highlight-Dispatch.
 
 ## Rueckverfolgbarkeit zu Quelldateien
 

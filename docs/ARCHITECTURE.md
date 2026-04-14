@@ -1,7 +1,7 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.158`
-Zuletzt aktualisiert: `2026-04-13`
+Versionsbasis: `0.9.162`
+Zuletzt aktualisiert: `2026-04-14`
 
 ## Zweck
 
@@ -103,14 +103,14 @@ Lokale Release-Qualitaet ist absichtlich in statische und Runtime-Gates aufgetei
    - `lua tools/validate_usecases.lua`
 3. `tools/validate_rules_logic.lua` validiert aktive Vertraege aus `RULES_LOGIC.md` gegen deterministische Testnamen.
 4. `tools/validate_architecture_rules.lua` validiert aktive Architekturvertraege aus `ARCHITECTURE_RULES.md` gegen deterministische Testnamen.
-5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 562 Szenarien ueber 41 Module ab; die Regelvalidatoren indizieren aktuell 562 deterministische Tests.
+5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 574 Szenarien ueber 42 Module ab; die Regelvalidatoren indizieren aktuell 574 deterministische Tests.
 
 Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte Einstiegspunkt fuer das statische Gate, weil sie `luacheck` ueber den repo-lokalen Windows-Shim routen, statt direkt das LuaRocks-Script aufzurufen.
 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.158 Open/Close CTRL-F9 [H][V][M][M2][L][X]|
+| isiLive                                                 v0.9.162 Open/Close CTRL-F9 [H][V][M][M2][L][X]|
 |---------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
 |---------------------------------------------------------------------------------------------------|
@@ -156,13 +156,13 @@ Zusaetzlich zum Main-Roster-Frame kann `isiLive_ui.lua` optionale Tooling- und T
 |---|---|---|
 | RuntimeState | Root-Orchestrierung und Controller-Callbacks | Zentraler mutierbarer Runtime-Snapshot (`roster`, Queue-Target, Flags, RIO-Baseline, Ready-Check-State, Layout-/Collapse-State) |
 | Group | Group-Roster-Events | Neu aufgebautes Roster-Modell, gespiegelter lokaler Leader-State pro Roster-Eintrag, Ghost-Retention/Pruning und Lifecycle-Transitions |
-| Highlight | Aktive Listings und Queue-Target | Aktiver Teleport-Spell und Highlight-State |
+| Highlight | Aktive Listings, Queue-Target und konkrete LFG-Map-Kontexte | Aktiver Teleport-Spell und Highlight-State |
 | KeySync | Sync-Messages, `LibKS`-Party-Messages und Owned-Snapshot-Daten | Roster-Backfill fuer Key/Stats/DPS/Location, `LibKeystone`-Party-Interop fuer Key/RIO, Key-Ownership und Sync-Marker |
 | Re-Sync | User-Refresh-Aktion | Erzwungener lokaler Snapshot, gruppenweiter Sync-Request, zusaetzliche `LibKS`-Party-Anfrage fuer kompatible Nicht-`isiLive`-Peers, Inspect-Refresh-Pipeline und sichtbarer 10s-Cooldown |
 | Share Keys | User-Chat-/Share-Aktion | Sofortiger eigener Key-Post in Party, gruppenweiter `SHAREKEYS`-Request an Peers, sichtbarer 30s lokaler Cooldown und remote getriggerter 30s-Cooldown-Lock auf allen Peer-Clients, die `SHAREKEYS` empfangen; ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt; der lokale Fallback bleibt auch ohne Owned-Link-API klickbar |
 | EventHandlersRuntime | Addon-, World-, Combat-, Inspect- und Sync-Events | Startup, Hidden-Mode-Sync, sofortige Full-State-Reply auf neues Peer-`HELLO`, hidden `LibKS`-Party-Antworten auf Requests, Forwarding von `UNIT_AURA`-Full-Updates fuer den CdTracker, Regen-Recovery fuer pending Visibility/Height und Inspect-Dispatch |
 | EventHandlersQueue | LFG-Queue-/Listing-Events | Sichtbare Queue-Capture, Erhalt von Pending-Join-Kontext auf negativen Follow-ups und Joined-Key-Tracking |
-| LFGDetect | LFG-Queue-/Invite-Events | Locale-aware Invite-/Listing-Hinweise, statische Activity-zu-Map-Aufloesung, Highlight-Dispatch ueber injected Callback und Full-Reset bei Group leave / Challenge start |
+| LFGDetect | LFG-Queue-/Invite-Events | Locale-aware Invite-/Listing-Hinweise, statische Activity-zu-Map-Aufloesung, Prioritaet fuer concrete LFG-Map-Kontexte, Highlight-Dispatch ueber injected Callback und Full-Reset bei Group leave / Challenge start |
 | EventHandlersChallenge | Challenge- und Ready-Check-Events | Run-Lifecycle, delayed Refresh, Raid-deferred Post-Run-Refresh-Resume, RIO-Delta-Aktivierung, Ready-Check-State, Declined-Hold-Tracking und dedizierter Ready-Check-UI-Refresh-Dispatch |
 | Stats | Completion-Signale fuer Challenge- und Non-Challenge-Party-Runs plus Blizzard-Damage-Meter-Session | Begrenzte Last-Run-DPS-Snapshots mit kurzem Delayed-Session-Retry; persistent nur fuer den passenden lokalen Character, fuer fremde Spieler nur sessionweit |
 | CdTracker | Battle-Res-Charges ueber `C_Spell.GetSpellCharges` mit Struct-Return, numerische Harmful-Lust-Aura-Scans, direkte lokale Lust-Spellcasts und `isFullUpdate`-Aura-Restore-Hydration | Live-Zeilenstate fuer BRes-Charges/Cooldown und Lust-Countdown mit zone-transition-sicherer Onset-Suppression |

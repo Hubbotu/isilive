@@ -1181,7 +1181,146 @@ local function RegisterRosterPanelRowInteractionTests(test, Assert, WithGlobals,
   end)
 end
 
-local function RegisterRosterPanelShareKeysLinkTests(test, Assert, WithGlobals, LoadAddonModules)
+local function RegisterRosterPanelShareKeysGlobalPathTest(test, Assert, WithGlobals, LoadAddonModules)
+  test("Roster panel share keys button uses the global SendChatMessage runtime path", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local sentMessages = {}
+    local shareKeyRequests = 0
+    local currentTime = 300
+
+    WithGlobals({
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      SendChatMessage = function(text, channel)
+        table.insert(sentMessages, {
+          text = text,
+          channel = channel,
+        })
+      end,
+      print = function() end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {}
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function(roster)
+          return {
+            { unit = "player", info = roster.player },
+          }
+        end,
+        hasFullSync = function()
+          return false
+        end,
+        buildDisplayData = function()
+          return {
+            colorHex = "ffffffff",
+            displayName = "Self",
+            languageDisplay = "EN",
+            specText = "",
+            ilvlText = "",
+            rioText = "",
+            keyText = "DB +10",
+            addonMarker = "",
+            atDungeonMarker = "",
+            readyCheckMarkup = "",
+            roleIconMarkup = "",
+          }
+        end,
+        truncateName = function(text)
+          return text
+        end,
+        getShortSpecLabel = function(text)
+          return text
+        end,
+        getLanguageFlagMarkup = function()
+          return ""
+        end,
+        getDungeonShortCode = function()
+          return "DB"
+        end,
+        resolveActiveKeyOwnerUnit = function()
+          return nil
+        end,
+        getRoster = function()
+          return {
+            player = {
+              name = "Self",
+              role = "DAMAGER",
+              keyMapID = 2662,
+              keyLevel = 10,
+            },
+          }
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = {
+          DAMAGER = 1,
+          NONE = 2,
+        },
+        unitPriority = {
+          player = 1,
+        },
+        getTime = function()
+          return currentTime
+        end,
+        shareKeysDebounceSeconds = 1,
+        sendShareKeysRequest = function()
+          shareKeyRequests = shareKeyRequests + 1
+          return true
+        end,
+      })
+
+      controller.RenderRoster({
+        player = {
+          name = "Self",
+          role = "DAMAGER",
+          keyMapID = 2662,
+          keyLevel = 10,
+        },
+      })
+
+      local shareKeysButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.pointY == -150 then
+          shareKeysButton = frame
+          break
+        end
+      end
+
+      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      ---@diagnostic disable: need-check-nil, undefined-field
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+
+      Assert.Equal(#sentMessages, 1, "share-keys should use the global SendChatMessage path in runtime")
+      Assert.Equal(sentMessages[1].channel, "PARTY", "share-keys global chat path should still announce to party chat")
+      Assert.Equal(shareKeyRequests, 1, "share-keys global chat path should still broadcast the sync request")
+    end)
+  end)
+end
+
+local function RegisterRosterPanelShareKeysDeterministicLinkTest(test, Assert, WithGlobals, LoadAddonModules)
   test("Roster panel share keys button builds a deterministic keystone link", function()
     local createdFrames = {}
     local createdFontStrings = {}
@@ -1340,7 +1479,9 @@ local function RegisterRosterPanelShareKeysLinkTests(test, Assert, WithGlobals, 
       Assert.Equal(shareKeyRequests, 1, "share-keys should still broadcast the sync request")
     end)
   end)
+end
 
+local function RegisterRosterPanelShareKeysFallbackLinkTest(test, Assert, WithGlobals, LoadAddonModules)
   test("Roster panel share keys button keeps the fallback keystone message clickable", function()
     local createdFrames = {}
     local createdFontStrings = {}
@@ -1501,6 +1642,12 @@ local function RegisterRosterPanelShareKeysLinkTests(test, Assert, WithGlobals, 
   end)
 end
 
+local function RegisterRosterPanelShareKeysLinkTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterRosterPanelShareKeysGlobalPathTest(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterRosterPanelShareKeysDeterministicLinkTest(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterRosterPanelShareKeysFallbackLinkTest(test, Assert, WithGlobals, LoadAddonModules)
+end
+
 local function RegisterRosterPanelShareKeysTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Roster panel share keys button debounces rapid clicks", function()
     local createdFrames = {}
@@ -1642,6 +1789,154 @@ local function RegisterRosterPanelShareKeysTests(test, Assert, WithGlobals, Load
       ---@diagnostic enable: need-check-nil, undefined-field
       Assert.Equal(#sentMessages, 2, "share-keys click should fire again after debounce window")
       Assert.Equal(shareKeyRequests, 2, "share-keys should send another sync request after the debounce window")
+    end)
+  end)
+
+  test("Roster panel share keys button ignores no-op clicks without chat or sync success", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local sentMessages = {}
+    local shareKeyRequests = 0
+    local currentTime = 500
+
+    WithGlobals({
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      C_ChatInfo = {},
+      print = function() end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {}
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function(roster)
+          return {
+            { unit = "player", info = roster.player },
+            { unit = "party1", info = roster.party1 },
+          }
+        end,
+        hasFullSync = function()
+          return false
+        end,
+        buildDisplayData = function(info)
+          return {
+            colorHex = "ffffffff",
+            displayName = info.name,
+            languageDisplay = "EN",
+            specText = "",
+            ilvlText = "",
+            rioText = "",
+            keyText = tonumber(info.keyLevel) and tonumber(info.keyLevel) > 0 and "DB +10" or "-",
+            addonMarker = "",
+            atDungeonMarker = "",
+            readyCheckMarkup = "",
+            roleIconMarkup = "",
+          }
+        end,
+        truncateName = function(text)
+          return text
+        end,
+        getShortSpecLabel = function(text)
+          return text
+        end,
+        getLanguageFlagMarkup = function()
+          return ""
+        end,
+        getDungeonShortCode = function()
+          return "DB"
+        end,
+        resolveActiveKeyOwnerUnit = function()
+          return nil
+        end,
+        getRoster = function()
+          return {
+            player = {
+              name = "Self",
+              role = "DAMAGER",
+              keyMapID = 0,
+              keyLevel = 0,
+            },
+            party1 = {
+              name = "Mate",
+              role = "DAMAGER",
+              keyMapID = 2441,
+              keyLevel = 10,
+            },
+          }
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = {
+          DAMAGER = 1,
+          NONE = 2,
+        },
+        unitPriority = {
+          player = 1,
+          party1 = 2,
+        },
+        getTime = function()
+          return currentTime
+        end,
+        shareKeysDebounceSeconds = 30,
+        sendShareKeysRequest = function()
+          shareKeyRequests = shareKeyRequests + 1
+          return false
+        end,
+      })
+
+      controller.RenderRoster({
+        player = {
+          name = "Self",
+          role = "DAMAGER",
+          keyMapID = 0,
+          keyLevel = 0,
+        },
+        party1 = {
+          name = "Mate",
+          role = "DAMAGER",
+          keyMapID = 2441,
+          keyLevel = 10,
+        },
+      })
+
+      local shareKeysButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.pointY == -150 then
+          shareKeysButton = frame
+          break
+        end
+      end
+
+      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      ---@cast shareKeysButton any
+      Assert.True(shareKeysButton.enabled, "foreign group keys should still make the button clickable")
+      ---@diagnostic disable: need-check-nil, undefined-field
+      shareKeysButton.OnClick()
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+      Assert.Equal(#sentMessages, 0, "no-op clicks must not emit chat output")
+      Assert.Equal(shareKeyRequests, 2, "failed no-op clicks must stay usable and not start the debounce lock")
+      Assert.True(shareKeysButton.enabled, "no-op clicks must leave the share-keys button enabled")
     end)
   end)
 

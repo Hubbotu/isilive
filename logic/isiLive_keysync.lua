@@ -80,6 +80,7 @@ local function SendIsiLiveHello(sync, isFrameVisible, getAddonVersionRaw, force,
   sync.SendHello({
     force = not not force,
     isVisible = isFrameVisible(),
+    allowHidden = true,
     version = getAddonVersionRaw(),
     protocolVersion = type(sync.GetProtocolVersion) == "function" and sync.GetProtocolVersion() or nil,
     source = source,

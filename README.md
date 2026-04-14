@@ -3,7 +3,7 @@
 WoW Mythic+ group helper addon focused on pre-key group overview and in-key tracking.
 
 Compatibility: WoW `12.0+` only.
-Current version: `0.9.158`.
+Current version: `0.9.162`.
 
 ---
 
@@ -53,7 +53,7 @@ Current version: `0.9.158`.
 - Short code rendered on icon when portal is ready; hidden during cooldown
 - Portal targets highlighted only from active listing or exact synced target data — never guessed
 - Portal-ready feedback uses `sounds/Portal.ogg` once when a teleport target becomes available
-- **LFG detection:** when the player receives an LFG group invite or creates their own LFG queue listing, the matching portal icon is highlighted automatically (gold border + glow animation) without the portal sound; the invite/listing notice is locale-aware and emitted once per recognized target change; highlight clears when the queue is cancelled, the group dissolves, or the key starts
+- **LFG detection:** when the player receives an LFG group invite or creates their own LFG queue listing, the matching portal icon is highlighted automatically (gold border + glow animation) without the portal sound; the invite/listing notice is locale-aware and emitted once per recognized target change; the concrete LFG-detected mapID takes precedence over peer-synced highlight resolution; highlight clears when the queue is cancelled, the group dissolves, or the key starts
 
 ### Addon Sync
 

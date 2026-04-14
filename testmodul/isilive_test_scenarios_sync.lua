@@ -777,6 +777,43 @@ local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonM
     end)
   end)
 
+  test("Sync ProcessAddonMessage stores ACK version as hello info", function()
+    WithGlobals({
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local ackResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "ACK:0.9.41", "AckPlayer-OtherRealm", "MyPlayer", "Realm")
+
+      Assert.NotNil(ackResult, "ACK must return result")
+      Assert.False(ackResult.shouldAck, "ACK must not request another ack")
+      Assert.Equal(ackResult.peerAddonVersion, "0.9.41", "ACK must expose the peer addon version")
+      Assert.Equal(ackResult.peerProtocolVersion, nil, "ACK must keep unknown protocol unresolved")
+      Assert.Equal(ackResult.peerCapturedAt, nil, "ACK must keep unknown capture timestamp unresolved")
+      Assert.Equal(ackResult.peerSource, "ack", "ACK must expose its sync source")
+
+      local helloInfo = addon.Sync.GetPlayerHelloInfo("AckPlayer", "OtherRealm")
+      Assert.NotNil(helloInfo, "ACK must populate hello info for tooltip version rendering")
+      Assert.Equal(helloInfo.addonVersion, "0.9.41", "stored hello info must keep ACK version")
+      Assert.Equal(helloInfo.protocolVersion, nil, "stored ACK hello info must not guess a protocol version")
+      Assert.Equal(helloInfo.capturedAt, nil, "stored ACK hello info must not guess a capture timestamp")
+      Assert.Equal(helloInfo.source, "ack", "stored hello info must preserve ACK source")
+    end)
+  end)
+
   test("Sync ProcessAddonMessage handles SHAREKEYS payloads", function()
     WithGlobals({
       strsplit = function(sep, str, max)
@@ -933,10 +970,40 @@ local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonM
     }, function()
       local addon = LoadAddonModules({ "isiLive_sync.lua" })
 
-      addon.Sync.SendShareKeysRequest()
+      local result = addon.Sync.SendShareKeysRequest()
 
+      Assert.True(result, "share-keys request should report success when the addon sync message is sent")
       Assert.Equal(#sentMessages, 1, "share-keys request should publish one addon message")
       Assert.Equal(sentMessages[1].message, "SHAREKEYS", "share-keys request must use SHAREKEYS payload")
+    end)
+  end)
+
+  test("Sync SendShareKeysRequest returns false without an addon sync channel", function()
+    local sentMessages = {}
+
+    WithGlobals({
+      IsInGroup = function(_category)
+        return false
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local result = addon.Sync.SendShareKeysRequest()
+
+      Assert.False(result, "share-keys request must report failure when no addon sync channel exists")
+      Assert.Equal(#sentMessages, 0, "share-keys request must not publish without an addon sync channel")
     end)
   end)
 

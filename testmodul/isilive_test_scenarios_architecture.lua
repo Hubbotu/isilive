@@ -530,6 +530,32 @@ local function RegisterArchitectureTeleportWiringTests(test, Assert)
       "Teleport column refresh must not bypass the shared highlight updater"
     )
   end)
+
+  test("Architecture ResolveLocalStatusTargetMapID prioritises LFG detected mapID", function()
+    local controllersContent = ReadFile("isiLive_factory_controllers.lua")
+
+    local resolverStart = controllersContent:find("ctx%.ResolveLocalStatusTargetMapID = function%(%)", 1, false)
+    Assert.True(resolverStart ~= nil, "ResolveLocalStatusTargetMapID must still be defined in factory controllers")
+    local resolverEnd = resolverStart and controllersContent:find("GetLatestQueueState", resolverStart, true)
+    Assert.True(
+      resolverEnd ~= nil,
+      "ResolveLocalStatusTargetMapID must still read queue state after LFGDetect priority"
+    )
+    local resolverBody = controllersContent:sub(resolverStart or 1, resolverEnd or -1)
+
+    AssertContains(
+      Assert,
+      resolverBody,
+      "addonTable.LFGDetect",
+      "ResolveLocalStatusTargetMapID must consult LFGDetect before queue/listing state"
+    )
+    AssertContains(
+      Assert,
+      resolverBody,
+      "lfgDetect.GetDetectedMapID()",
+      "ResolveLocalStatusTargetMapID must read detectedMapID via GetDetectedMapID"
+    )
+  end)
 end
 
 local function RegisterArchitectureReadyCheckWiringTests(test, Assert)

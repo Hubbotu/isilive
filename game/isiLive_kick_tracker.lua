@@ -505,28 +505,29 @@ function KickTracker.CreateController(opts)
     if not ok1 or not cfg or not cfg.treeIDs or #cfg.treeIDs == 0 then
       return
     end
-    local ok2, nodes = pcall(C_Traits_ref.GetTreeNodes, cfg.treeIDs[1])
-    if not ok2 or not nodes then
-      return
-    end
-    for _, nodeID in ipairs(nodes) do
-      local ok3, node = pcall(C_Traits_ref.GetNodeInfo, cid, nodeID)
-      if ok3 and node and node.activeEntry and node.activeRank and node.activeRank > 0 then
-        local ok4, entry = pcall(C_Traits_ref.GetEntryInfo, cid, node.activeEntry.entryID)
-        if ok4 and entry and entry.definitionID then
-          local ok5, def = pcall(C_Traits_ref.GetDefinitionInfo, entry.definitionID)
-          if ok5 and def and def.spellID then
-            local talent = CD_REDUCTION_DEFS[def.spellID]
-            if talent and talent.affects == watchedSpellID then
-              local base = watchedCd
-              if base and base > 0 then
-                local newCd
-                if talent.pctReduction then
-                  newCd = math.floor(base * (1 - talent.pctReduction / 100) + 0.5)
-                else
-                  newCd = base - talent.reduction
+    for _, treeID in ipairs(cfg.treeIDs) do
+      local ok2, nodes = pcall(C_Traits_ref.GetTreeNodes, treeID)
+      if ok2 and type(nodes) == "table" then
+        for _, nodeID in ipairs(nodes) do
+          local ok3, node = pcall(C_Traits_ref.GetNodeInfo, cid, nodeID)
+          if ok3 and node and node.activeEntry and node.activeRank and node.activeRank > 0 then
+            local ok4, entry = pcall(C_Traits_ref.GetEntryInfo, cid, node.activeEntry.entryID)
+            if ok4 and entry and entry.definitionID then
+              local ok5, def = pcall(C_Traits_ref.GetDefinitionInfo, entry.definitionID)
+              if ok5 and def and def.spellID then
+                local talent = CD_REDUCTION_DEFS[def.spellID]
+                if talent and talent.affects == watchedSpellID then
+                  local base = watchedCd
+                  if base and base > 0 then
+                    local newCd
+                    if talent.pctReduction then
+                      newCd = math.floor(base * (1 - talent.pctReduction / 100) + 0.5)
+                    else
+                      newCd = base - talent.reduction
+                    end
+                    watchedCd = math.max(1, newCd)
+                  end
                 end
-                watchedCd = math.max(1, newCd)
               end
             end
           end

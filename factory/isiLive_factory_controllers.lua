@@ -306,6 +306,22 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     return normalized
   end
   ctx.ResolveLocalStatusTargetMapID = function()
+    -- Priority 0: LFGDetect (invite accepted / own active listing). Keeps
+    -- status line, center notice and highlight target resolution aligned
+    -- so peers' synced target cannot surface a different dungeon than the
+    -- one the player just accepted.
+    local lfgDetect = addonTable.LFGDetect
+    local detectedMapID = type(lfgDetect) == "table"
+        and type(lfgDetect.GetDetectedMapID) == "function"
+        and lfgDetect.GetDetectedMapID()
+      or nil
+    if detectedMapID then
+      local numericDetected = tonumber(detectedMapID)
+      if numericDetected and numericDetected > 0 then
+        return numericDetected
+      end
+    end
+
     local _, latestQueueActivityID, _, latestQueueMapID = runtimeState.GetLatestQueueState()
     local activeMapID = tonumber(runtimeState.GetActiveJoinedKeyMapID())
     if activeMapID and activeMapID > 0 then
@@ -592,7 +608,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
     getTime = GetTime,
     shareKeysDebounceSeconds = 30,
     sendShareKeysRequest = function()
-      modules.sync.SendShareKeysRequest()
+      return modules.sync.SendShareKeysRequest()
     end,
     isSyncUserKnown = function(name, realm)
       return modules.sync.IsUserKnown(name, realm)
@@ -666,16 +682,21 @@ local function InitializeFactoryPrimaryControllers(ctx)
     return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID)
   end
   ctx.UpdateMPlusTeleportButton = function(soundContext)
-    local resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
+    -- Priority 1: LFGDetect (invite accepted / own active listing). This is
+    -- the strongest direct signal from the current LFG flow and must
+    -- outrank sync/queue/listing resolution, which can otherwise surface a
+    -- stale or peer-synced mapID that overrides the just-accepted invite.
+    local resolvedSpellID = nil
+    local lfgDetect = addonTable.LFGDetect
+    local detectedMapID = type(lfgDetect) == "table"
+        and type(lfgDetect.GetDetectedMapID) == "function"
+        and lfgDetect.GetDetectedMapID()
+      or nil
+    if detectedMapID then
+      resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedMapID)
+    end
     if not resolvedSpellID then
-      local lfgDetect = addonTable.LFGDetect
-      local detectedMapID = type(lfgDetect) == "table"
-          and type(lfgDetect.GetDetectedMapID) == "function"
-          and lfgDetect.GetDetectedMapID()
-        or nil
-      if detectedMapID then
-        resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedMapID)
-      end
+      resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
     end
     if
       resolvedSpellID
