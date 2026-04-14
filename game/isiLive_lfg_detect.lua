@@ -343,8 +343,5 @@ frame:SetScript("OnEvent", function(_self, event, ...)
         CheckActiveGroup()
       end
     end
-  elseif event == "CHALLENGE_MODE_START" then
-    -- Keep invite state alive until the exact target map entry is confirmed.
-    -- The factory clears it once the player is actually inside the dungeon.
   end
 end)
