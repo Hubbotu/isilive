@@ -1,3 +1,6 @@
+local _, addonTable = ...
+addonTable = addonTable or {}
+
 local function FindTicker(tickers, interval)
   for _, ticker in ipairs(tickers or {}) do
     if ticker.interval == interval then
@@ -395,6 +398,9 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
   return state
 end
 
+addonTable._FactorySecondaryTests = addonTable._FactorySecondaryTests or {}
+addonTable._FactorySecondaryTests.BuildFactorySecondaryControllerState = BuildFactorySecondaryControllerState
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -437,59 +443,6 @@ return function(test, ctx)
     Assert.Equal(state.cdRefreshes or 0, 1, "event-driven hidden CD refresh must still pre-render the CD row")
     Assert.Equal(state.readyCheckRefreshes or 0, 1, "event-driven hidden CD refresh must keep ready-check rows current")
     Assert.Equal(state.uiUpdates or 0, 1, "event-driven hidden CD refresh must keep the timer display current")
-  end)
-
-  test("Factory target dungeon clear waits for actual player map entry", function()
-    local clearCalls = 0
-    local updateCalls = 0
-    local latestQueueClears = 0
-    local currentMapID = nil
-
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = true,
-    })
-
-    state.ctx.addonTable.LFGDetect = {
-      ClearAllState = function()
-        clearCalls = clearCalls + 1
-      end,
-    }
-    state.ctx.ResolveStatusTargetMapID = function()
-      return 557
-    end
-    state.ctx.ClearLatestQueueTarget = function()
-      latestQueueClears = latestQueueClears + 1
-    end
-    state.ctx.UpdateMPlusTeleportButton = function()
-      updateCalls = updateCalls + 1
-    end
-
-    WithGlobals({
-      UnitExists = function()
-        return true
-      end,
-      C_Map = {
-        GetBestMapForUnit = function()
-          return currentMapID
-        end,
-      },
-      C_ChallengeMode = {
-        GetActiveChallengeMapID = function()
-          return 557
-        end,
-      },
-    }, function()
-      state.ctx.CheckIfEnteredTargetDungeon()
-      Assert.Equal(clearCalls, 0, "challenge map alone must not clear the target highlight")
-      Assert.Equal(latestQueueClears, 0, "challenge map alone must not clear the latest queue target")
-      Assert.Equal(updateCalls, 0, "challenge map alone must not refresh the teleport button")
-
-      currentMapID = 557
-      state.ctx.CheckIfEnteredTargetDungeon()
-      Assert.Equal(clearCalls, 1, "actual player map entry must clear the target highlight once")
-      Assert.Equal(latestQueueClears, 1, "actual player map entry must clear the latest queue target once")
-      Assert.Equal(updateCalls, 1, "actual player map entry must refresh the teleport button once")
-    end)
   end)
 
   test("Factory hidden kick ticker keeps syncing while frame is hidden", function()
