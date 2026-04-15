@@ -1,6 +1,21 @@
 # Changelog
 
+## 2026-04-15 - Version 0.9.165 (patch)
+
+- **Hidden sync test coverage:**
+  - Added deterministic coverage for hidden addon sync pre-rendering, hidden refresh replies, hidden LibKeystone replies, real sync parsing while hidden, and sparse hidden background snapshots.
+  - The new scenarios cover `Event handlers pre-render UI for hidden addon sync updates`, `Event handlers answer refresh requests while frame is hidden`, `Event handlers answer LibKeystone requests while frame is hidden`, `Event handlers process LibKeystone requests through the real sync parser and refresh hidden state`, `Event handlers process KEY through the real sync parser and apply roster key data`, `Event handlers process TARGET through the real sync parser and refresh target UI`, `Event handlers process STATS through the real sync parser and backfill roster stats`, `Event handlers process DPS through the real sync parser and backfill roster DPS`, `Event handlers process LOC through the real sync parser and backfill roster location`, `Event handlers answer SHAREKEYS requests while frame is hidden`, `Event handlers skip SHAREKEYS cooldown when no own key chat share was posted`, `Event handlers process SHAREKEYS through the real sync parser and trigger cooldown`, `Event handlers process REQSYNC through the real sync parser and answer hidden refreshes`, `Event handlers process KICK through the real sync parser and refresh hidden state`, `Event handlers process HELLO through the real sync parser and answer hidden onboarding`, and `Event handlers process ACK through the real sync parser and cache hello info`.
+
+- **Documentation / release sync:**
+  - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.165`.
+  - Updated the documented validator baseline to `602` scenarios / tests over `45` modules.
+  - No runtime behavior changed in this bump.
+
 ## 2026-04-14 - Version 0.9.164 (patch)
+
+- **Highlight / LFG hardening:**
+  - The queue highlight resolver now ignores `C_ChallengeMode.GetActiveChallengeMapID()` before actual dungeon entry and only suppresses against the live player map, so the portal highlight no longer clears too early while the player is still outside.
+  - Added deterministic coverage for the pre-entry queue highlight path and the late-roster false-negative invite-confirmation path.
 
 - **Documentation / release sync:**
   - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.164`.
@@ -10,6 +25,8 @@
 
 - **Documentation / release sync:**
   - Synced `README.md`, `ARCHITECTURE.md`, `USECASES.md`, `CHANGELOG_RELEASE.md`, and `isiLive.toc` to `0.9.163`.
+  - This was a pure version sync with no runtime or UI behavior change.
+  - No new deterministic test scenarios were added in this bump.
   - Updated the documented validator baseline to `579` scenarios / tests over `43` modules.
 
 ## 2026-04-14 - Version 0.9.162 (patch)
