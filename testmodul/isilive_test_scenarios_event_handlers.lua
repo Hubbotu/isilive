@@ -328,6 +328,113 @@ local function RegisterCombatStartupCVarAndWorldEntryTests(test, Assert, WithGlo
     )
   end)
 
+  test("Event handlers send real sync snapshots on PLAYER_ENTERING_WORLD after reload", function()
+    local sentMessages = {}
+    local rosterUpdates = 0
+
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+        end,
+      },
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          return 15
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          return 2649
+        end,
+      },
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 72, "Fury"
+        end
+        return nil
+      end,
+      C_Item = {
+        GetAverageItemLevel = function()
+          return 611.4, 615.2
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua", "isiLive_keysync.lua", "isiLive_event_handlers.lua" })
+      local keysync = addon.KeySync.CreateController({
+        sync = addon.Sync,
+        getUnitNameAndRealm = function(_unit)
+          return "Me", "Realm"
+        end,
+        getAddonVersionRaw = function()
+          return "1.0"
+        end,
+        getUnitRio = function(_unit)
+          return 3210
+        end,
+        isFrameVisible = function()
+          return false
+        end,
+      })
+      local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+        isInGroup = function()
+          return true
+        end,
+        isInPartyInstance = function()
+          return false
+        end,
+        isMainFrameShown = function()
+          return false
+        end,
+        timerAfter = function(_seconds, callback)
+          callback()
+        end,
+        handleGroupRosterUpdate = function()
+          rosterUpdates = rosterUpdates + 1
+        end,
+        sendOwnKeySnapshot = function(force, source, allowHidden)
+          return keysync.SendOwnKeySnapshot(force, source, allowHidden)
+        end,
+        sendOwnKickState = function(force)
+          return addon.Sync.SendKick({
+            force = force == true,
+            hasKick = false,
+            onCooldown = false,
+            cooldownRemain = 0,
+          })
+        end,
+      })
+
+      controller:Dispatch("PLAYER_ENTERING_WORLD")
+    end)
+
+    Assert.Equal(rosterUpdates, 1, "entering world after reload must rebuild the roster once")
+    Assert.Equal(#sentMessages, 5, "entering world must publish key, stats, dps, loc, and kick payloads")
+    Assert.Equal(sentMessages[1].message, "KEY:2649:15:100:world", "entering world must publish a forced KEY snapshot")
+    Assert.Equal(
+      sentMessages[2].message,
+      "STATS:72:615:3210:100:world",
+      "entering world must publish a forced STATS snapshot"
+    )
+    Assert.Equal(sentMessages[3].message, "DPS:0:100:world", "entering world must publish a forced DPS snapshot")
+    Assert.Equal(sentMessages[4].message, "LOC:0:100:world", "entering world must publish a forced LOC snapshot")
+    Assert.Equal(sentMessages[5].message, "KICK:-1:0", "entering world must publish a forced kick snapshot")
+  end)
+
   test("Event handlers auto-show main frame on PLAYER_LOGIN for startup login and reload", function()
     local showCalls = 0
     local lastVisible = nil
@@ -1199,201 +1306,6 @@ local function RegisterChallengeRetryTests(test, Assert, LoadAddonModules, Fixtu
   end)
 end
 
-local function RegisterHiddenFrameSyncAndBackgroundTests(test, Assert, LoadAddonModules, Fixtures)
-  test("Event handlers pre-render UI for hidden addon sync updates", function()
-    local counters = { uiUpdates = 0 }
-    local roster = {
-      { name = "Alpha", realm = "RealmA", hasIsiLive = false },
-    }
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      processAddonMessage = function(_prefix, _message, _sender)
-        return { shouldAck = false }
-      end,
-      forEachRosterInfo = function(visitor)
-        for _, info in ipairs(roster) do
-          visitor(info)
-        end
-      end,
-      isSyncUserKnown = function(name, _realm)
-        return name == "Alpha"
-      end,
-    })
-
-    controller:Dispatch("CHAT_MSG_ADDON", "ISI_SYNC", "hello", "PARTY", "Alpha-RealmA")
-
-    Assert.True(roster[1].hasIsiLive, "hidden sync handling must still update background roster state")
-    Assert.Equal(counters.uiUpdates, 1, "hidden sync handling should pre-render UI state once")
-  end)
-
-  test("Event handlers answer refresh requests while frame is hidden", function()
-    local counters = { uiUpdates = 0, refreshResponses = 0 }
-    local targetSnapshots = 0
-    local kickReplies = 0
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      processAddonMessage = function(_prefix, _message, _sender)
-        return { shouldAck = false, shouldRequestRefresh = true }
-      end,
-      sendOwnTargetSnapshot = function(force, source, allowHidden)
-        if force and source == "reqsync" and allowHidden == true then
-          targetSnapshots = targetSnapshots + 1
-        end
-      end,
-      sendOwnKickState = function()
-        kickReplies = kickReplies + 1
-      end,
-    })
-
-    controller:Dispatch("CHAT_MSG_ADDON", "ISI_SYNC", "REQSYNC", "PARTY", "Alpha-RealmA")
-
-    Assert.Equal(counters.refreshResponses, 1, "hidden refresh requests must trigger one sync response")
-    Assert.Equal(targetSnapshots, 1, "hidden refresh requests must also trigger one exact target snapshot")
-    Assert.Equal(kickReplies, 1, "hidden refresh requests must also trigger one kick-state snapshot")
-    Assert.Equal(counters.uiUpdates, 0, "answering a hidden refresh request must not force a UI redraw by itself")
-  end)
-
-  test("Event handlers answer LibKeystone requests while frame is hidden", function()
-    local counters = { uiUpdates = 0, refreshResponses = 0 }
-    local libKeystoneReplies = 0
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      processAddonMessage = function(_prefix, _message, _sender, _channel)
-        return { shouldReplyLibKeystone = true }
-      end,
-      sendLibKeystonePartyData = function(force)
-        if force == true then
-          libKeystoneReplies = libKeystoneReplies + 1
-          return true
-        end
-        return false
-      end,
-    })
-
-    controller:Dispatch("CHAT_MSG_ADDON", "LibKS", "R", "PARTY", "Alpha-RealmA")
-
-    Assert.Equal(libKeystoneReplies, 1, "hidden LibKeystone requests must trigger one party-key reply")
-    Assert.Equal(counters.refreshResponses, 0, "LibKeystone requests must not trigger isiLive refresh replies")
-    Assert.Equal(counters.uiUpdates, 0, "answering a hidden LibKeystone request must not force a UI redraw")
-  end)
-
-  test("Event handlers answer SHAREKEYS requests while frame is hidden", function()
-    local counters = { uiUpdates = 0, refreshResponses = 0 }
-    local keystoneChatShares = 0
-    local cooldownTriggers = 0
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      processAddonMessage = function(_prefix, _message, _sender)
-        return { shouldAck = false, shouldShareKeys = true }
-      end,
-      sendOwnKeystoneToChat = function()
-        keystoneChatShares = keystoneChatShares + 1
-        return true
-      end,
-      triggerShareKeysCooldown = function()
-        cooldownTriggers = cooldownTriggers + 1
-      end,
-    })
-
-    controller:Dispatch("CHAT_MSG_ADDON", "ISI_SYNC", "SHAREKEYS", "PARTY", "Alpha-RealmA")
-
-    Assert.Equal(keystoneChatShares, 1, "hidden SHAREKEYS must trigger one own-key chat announcement")
-    Assert.Equal(cooldownTriggers, 1, "SHAREKEYS must lock the local share-keys button on all clients")
-    Assert.Equal(counters.refreshResponses, 0, "SHAREKEYS must not trigger a refresh response")
-    Assert.Equal(counters.uiUpdates, 0, "hidden SHAREKEYS must not force a UI redraw by itself")
-  end)
-
-  test("Event handlers skip SHAREKEYS cooldown when no own key chat share was posted", function()
-    local counters = { uiUpdates = 0, refreshResponses = 0 }
-    local keystoneChatShares = 0
-    local cooldownTriggers = 0
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      processAddonMessage = function(_prefix, _message, _sender)
-        return { shouldAck = false, shouldShareKeys = true }
-      end,
-      sendOwnKeystoneToChat = function()
-        keystoneChatShares = keystoneChatShares + 1
-        return false
-      end,
-      triggerShareKeysCooldown = function()
-        cooldownTriggers = cooldownTriggers + 1
-      end,
-    })
-
-    controller:Dispatch("CHAT_MSG_ADDON", "ISI_SYNC", "SHAREKEYS", "PARTY", "Alpha-RealmA")
-
-    Assert.Equal(keystoneChatShares, 1, "hidden SHAREKEYS must still try one own-key chat announcement")
-    Assert.Equal(
-      cooldownTriggers,
-      0,
-      "SHAREKEYS must not lock the local share-keys button when no own party-key share was posted"
-    )
-    Assert.Equal(counters.refreshResponses, 0, "SHAREKEYS must not trigger a refresh response")
-    Assert.Equal(counters.uiUpdates, 0, "hidden SHAREKEYS must not force a UI redraw by itself")
-  end)
-
-  test("Event handlers send sparse background snapshot on hidden zone changes", function()
-    local counters = { uiUpdates = 0 }
-    local backgroundSources = {}
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      isMainFrameShown = function()
-        return false
-      end,
-      sendOwnBackgroundSnapshot = function(source)
-        table.insert(backgroundSources, source)
-      end,
-    })
-
-    controller:Dispatch("ZONE_CHANGED")
-
-    Assert.Equal(#backgroundSources, 1, "hidden zone changes must trigger one sparse background snapshot")
-    Assert.Equal(backgroundSources[1], "zone", "hidden zone changes must use the zone sync source")
-  end)
-
-  test("Event handlers send sparse background snapshot only for player-owned state changes", function()
-    local counters = { uiUpdates = 0 }
-    local backgroundSources = {}
-
-    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
-      sendOwnBackgroundSnapshot = function(source)
-        table.insert(backgroundSources, source)
-      end,
-    })
-
-    controller:Dispatch("PLAYER_SPECIALIZATION_CHANGED", "party1")
-    controller:Dispatch("PLAYER_SPECIALIZATION_CHANGED", "player")
-    controller:Dispatch("PLAYER_EQUIPMENT_CHANGED", 16, true)
-
-    Assert.Equal(#backgroundSources, 2, "only local player state changes must trigger sparse background sync")
-    Assert.Equal(backgroundSources[1], "player-state", "player specialization changes must use player-state sync")
-    Assert.Equal(backgroundSources[2], "player-state", "player equipment changes must use player-state sync")
-  end)
-end
-
 local function RegisterHiddenFrameRegenTests(test, Assert, LoadAddonModules, Fixtures)
   test("Event handlers keep non-UI regen recovery while frame is hidden", function()
     local applyHotkeyCalls = 0
@@ -1624,7 +1536,57 @@ local function RegisterHiddenFrameRegenTests(test, Assert, LoadAddonModules, Fix
     Assert.Equal(counters.backgroundSnapshots, 0, "raid mode must not run background refresh hooks")
   end)
 
-  RegisterHiddenFrameSyncAndBackgroundTests(test, Assert, LoadAddonModules, Fixtures)
+  test("Event handlers suppress addon sync messages while raid mode is active", function()
+    local counters = { uiUpdates = 0, refreshResponses = 0 }
+    local syncCalls = 0
+
+    local addon = LoadAddonModules({ "isiLive_sync.lua", "isiLive_event_handlers.lua" })
+    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, counters, {
+      isRaidGroup = function()
+        return true
+      end,
+      processAddonMessage = function()
+        syncCalls = syncCalls + 1
+        error("raid mode must stop addon sync before parsing")
+      end,
+      sendAck = function()
+        error("raid mode must suppress sync replies")
+      end,
+      sendIsiLiveHello = function()
+        error("raid mode must suppress sync replies")
+      end,
+      sendRefreshResponse = function()
+        error("raid mode must suppress sync replies")
+      end,
+      sendOwnTargetSnapshot = function()
+        error("raid mode must suppress sync replies")
+      end,
+      sendOwnKickState = function()
+        error("raid mode must suppress sync replies")
+      end,
+      sendLibKeystonePartyData = function()
+        error("raid mode must suppress libkeystone replies")
+      end,
+      sendOwnKeystoneToChat = function()
+        error("raid mode must suppress share-key replies")
+      end,
+      updateStatusLine = function()
+        error("raid mode must suppress statusline refresh")
+      end,
+      updateMPlusTeleportButton = function()
+        error("raid mode must suppress teleport refresh")
+      end,
+      updateUI = function()
+        error("raid mode must suppress UI refresh")
+      end,
+    })
+
+    controller:Dispatch("CHAT_MSG_ADDON", "ISI_SYNC", "HELLO:0.9.36:2:123:refresh", "PARTY", "Alpha-RealmA")
+
+    Assert.Equal(syncCalls, 0, "raid mode must stop addon sync before parsing")
+    Assert.Equal(counters.uiUpdates, 0, "raid mode must not force UI redraws")
+    Assert.Equal(counters.refreshResponses, 0, "raid mode must not trigger refresh responses")
+  end)
 end
 
 local function RegisterReadyCheckHoldAndRunRecordTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)

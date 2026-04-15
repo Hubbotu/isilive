@@ -719,7 +719,7 @@ local function RegisterKeySyncStatsTests(test, Assert, WithGlobals, LoadAddonMod
   RegisterPendingFallbackSyncTests(test, Assert, WithGlobals, LoadAddonModules)
 end
 
-local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonModules)
+local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Sync ProcessAddonMessage handles HELLO, REQSYNC, and KEY payloads", function()
     WithGlobals({
       strsplit = function(sep, str, max)
@@ -947,6 +947,79 @@ local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonM
     Assert.Equal(summary.kind, "hello", "latest summary kind must match the updated HELLO bucket")
     Assert.Equal(summary.intervalSeconds, 15, "summary must expose the previous-to-current sync interval")
   end)
+end
+
+local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Sync SendHello respects cooldown and force bypass", function()
+    local sentMessages = {}
+    local now = 100
+
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      addon.Sync.SendHello({
+        isVisible = true,
+        version = "1.0",
+        protocolVersion = 2,
+        source = "local",
+      })
+      Assert.Equal(#sentMessages, 1, "first hello must publish once")
+      Assert.Equal(
+        sentMessages[1].message,
+        "HELLO:1.0:2:100:local",
+        "hello payload must encode version, protocol, timestamp, and source"
+      )
+
+      now = 101
+      addon.Sync.SendHello({
+        isVisible = true,
+        version = "1.0",
+        protocolVersion = 2,
+        source = "local",
+      })
+      Assert.Equal(#sentMessages, 1, "duplicate hello within cooldown must be suppressed")
+
+      now = 109
+      addon.Sync.SendHello({
+        isVisible = true,
+        version = "1.0",
+        protocolVersion = 2,
+        source = "local",
+      })
+      Assert.Equal(#sentMessages, 2, "hello must resend after cooldown expires")
+      Assert.Equal(sentMessages[2].message, "HELLO:1.0:2:109:local", "resend must refresh hello timestamp")
+
+      now = 110
+      addon.Sync.SendHello({
+        force = true,
+        isVisible = true,
+        version = "1.0",
+        protocolVersion = 2,
+        source = "local",
+      })
+      Assert.Equal(#sentMessages, 3, "forced hello must bypass the cooldown")
+      Assert.Equal(sentMessages[3].message, "HELLO:1.0:2:110:local", "forced hello must still encode current metadata")
+    end)
+  end)
 
   test("Sync SendShareKeysRequest publishes SHAREKEYS to the addon sync channel", function()
     local sentMessages = {}
@@ -1086,6 +1159,11 @@ local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonM
       Assert.Equal(sentMessages[1].channel, "PARTY", "LibKeystone party data must use the party channel")
     end)
   end)
+end
+
+local function RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAddonModules)
 end
 
 local function RegisterDpsLocSyncTests(test, Assert, WithGlobals, LoadAddonModules)

@@ -3,6 +3,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_queue.lua",
   "testmodul/isilive_test_scenarios_highlight.lua",
   "testmodul/isilive_test_scenarios_event_handlers.lua",
+  "testmodul/isilive_test_scenarios_event_handlers_hidden_sync.lua",
   "testmodul/isilive_test_scenarios_queue_flow.lua",
   "testmodul/isilive_test_scenarios_spell_utils.lua",
   "testmodul/isilive_test_scenarios_teleport.lua",
