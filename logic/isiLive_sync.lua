@@ -147,6 +147,14 @@ function Sync.GetProtocolVersion()
   return ISILIVE_SYNC_PROTOCOL_VERSION
 end
 
+local function NormalizeCapturedAtAndSource(capturedAt, source)
+  local ts = tonumber(capturedAt)
+  if not ts or ts <= 0 then
+    ts = GetSyncTimestamp() or 0
+  end
+  return math.floor(ts), NormalizeSyncSource(source) or "local"
+end
+
 local function NormalizeKeyPayload(mapID, level, capturedAt, source)
   local numericLevel = tonumber(level)
   local numericMapID = tonumber(mapID)
@@ -160,21 +168,11 @@ local function NormalizeKeyPayload(mapID, level, capturedAt, source)
       nil,
       nil
   end
-  local normalizedCapturedAt = tonumber(capturedAt)
-  if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-    normalizedCapturedAt = GetSyncTimestamp() or 0
-  end
-  local normalizedSource = NormalizeSyncSource(source) or "local"
-  return string.format(
-    "KEY:%d:%d:%d:%s",
+  local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
+  return string.format("KEY:%d:%d:%d:%s", numericMapID, numericLevel, normalizedCapturedAt, normalizedSource),
     numericMapID,
     numericLevel,
-    math.floor(normalizedCapturedAt),
-    normalizedSource
-  ),
-    numericMapID,
-    numericLevel,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
 end
 
@@ -204,24 +202,19 @@ local function NormalizeStatsPayload(specID, ilvl, rio, capturedAt, source)
     end
   end
 
-  local normalizedCapturedAt = tonumber(capturedAt)
-  if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-    normalizedCapturedAt = GetSyncTimestamp() or 0
-  end
-  local normalizedSource = NormalizeSyncSource(source) or "local"
-
+  local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
   return string.format(
     "STATS:%d:%d:%d:%d:%s",
     numericSpecID,
     numericIlvl,
     numericRio,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
   ),
     numericSpecID,
     numericIlvl,
     numericRio,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
 end
 
@@ -232,55 +225,38 @@ local function NormalizeDpsPayload(dps, capturedAt, source)
   else
     numericDps = math.floor(numericDps + 0.5)
   end
-  local normalizedCapturedAt = tonumber(capturedAt)
-  if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-    normalizedCapturedAt = GetSyncTimestamp() or 0
-  end
-  local normalizedSource = NormalizeSyncSource(source) or "local"
-  return string.format("DPS:%d:%d:%s", numericDps, math.floor(normalizedCapturedAt), normalizedSource),
+  local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
+  return string.format("DPS:%d:%d:%s", numericDps, normalizedCapturedAt, normalizedSource),
     numericDps,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
 end
 
 local function NormalizeLocPayload(mapID, capturedAt, source)
   local numericMapID = tonumber(mapID)
+  local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
   if not numericMapID or numericMapID <= 0 then
-    local normalizedCapturedAt = tonumber(capturedAt)
-    if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-      normalizedCapturedAt = GetSyncTimestamp() or 0
-    end
-    local normalizedSource = NormalizeSyncSource(source) or "local"
-    return string.format("LOC:0:%d:%s", math.floor(normalizedCapturedAt), normalizedSource),
+    return string.format("LOC:0:%d:%s", normalizedCapturedAt, normalizedSource),
       nil,
-      math.floor(normalizedCapturedAt),
+      normalizedCapturedAt,
       normalizedSource
   end
   numericMapID = math.floor(numericMapID)
-  local normalizedCapturedAt = tonumber(capturedAt)
-  if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-    normalizedCapturedAt = GetSyncTimestamp() or 0
-  end
-  local normalizedSource = NormalizeSyncSource(source) or "local"
-  return string.format("LOC:%d:%d:%s", numericMapID, math.floor(normalizedCapturedAt), normalizedSource),
+  return string.format("LOC:%d:%d:%s", numericMapID, normalizedCapturedAt, normalizedSource),
     numericMapID,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
 end
 
 local function NormalizeTargetPayload(mapID, level, capturedAt, source)
   local numericMapID = tonumber(mapID)
   local numericLevel = tonumber(level)
+  local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
   if not numericMapID or numericMapID <= 0 then
-    local normalizedCapturedAt = tonumber(capturedAt)
-    if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-      normalizedCapturedAt = GetSyncTimestamp() or 0
-    end
-    local normalizedSource = NormalizeSyncSource(source) or "local"
-    return string.format("TARGET:0:0:%d:%s", math.floor(normalizedCapturedAt), normalizedSource),
+    return string.format("TARGET:0:0:%d:%s", normalizedCapturedAt, normalizedSource),
       nil,
       nil,
-      math.floor(normalizedCapturedAt),
+      normalizedCapturedAt,
       normalizedSource
   end
 
@@ -291,21 +267,10 @@ local function NormalizeTargetPayload(mapID, level, capturedAt, source)
     numericLevel = math.floor(numericLevel)
   end
 
-  local normalizedCapturedAt = tonumber(capturedAt)
-  if not normalizedCapturedAt or normalizedCapturedAt <= 0 then
-    normalizedCapturedAt = GetSyncTimestamp() or 0
-  end
-  local normalizedSource = NormalizeSyncSource(source) or "local"
-  return string.format(
-    "TARGET:%d:%d:%d:%s",
-    numericMapID,
-    numericLevel or 0,
-    math.floor(normalizedCapturedAt),
-    normalizedSource
-  ),
+  return string.format("TARGET:%d:%d:%d:%s", numericMapID, numericLevel or 0, normalizedCapturedAt, normalizedSource),
     numericMapID,
     numericLevel,
-    math.floor(normalizedCapturedAt),
+    normalizedCapturedAt,
     normalizedSource
 end
 

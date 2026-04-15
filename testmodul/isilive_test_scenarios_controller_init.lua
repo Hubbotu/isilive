@@ -8,6 +8,9 @@ return function(test, ctx)
     ---@type { getDungeonName: fun(id: number, locale: string): string }|nil
     local capturedTeleportOpts = nil
     local dragGripVisible = nil
+    local ownedKeystoneSnapshot = function()
+      return 2662, 10
+    end
 
     local addon = LoadAddonModules({ "isiLive_controller_init.lua" })
     local result = addon.ControllerInit.CreateControllers({
@@ -45,7 +48,7 @@ return function(test, ctx)
             SendIsiLiveHello = function() end,
             SendRefreshRequest = function() end,
             SendLibKeystonePartyData = function() end,
-            GetOwnedKeystoneSnapshot = function() end,
+            GetOwnedKeystoneSnapshot = ownedKeystoneSnapshot,
             SendOwnKeySnapshot = function() end,
             SendRefreshResponse = function() end,
             ApplyKnownKeyToRosterEntry = function()
@@ -217,6 +220,13 @@ return function(test, ctx)
         "Akademie von Algeth'ar",
         "controller init must pass getDungeonName through to the roster panel controller"
       )
+      local mapID, level = rosterOpts.getOwnedKeystoneSnapshot()
+      Assert.Equal(
+        mapID,
+        2662,
+        "controller init must forward the live owned keystone snapshot getter to the roster panel"
+      )
+      Assert.Equal(level, 10, "controller init must keep the owned keystone snapshot getter callable")
     end
     local teleportOpts = capturedTeleportOpts
     Assert.NotNil(teleportOpts, "teleport UI controller should receive an options table")

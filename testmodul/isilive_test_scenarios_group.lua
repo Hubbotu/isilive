@@ -374,6 +374,19 @@ local function RegisterGroupJoinLifecycleTests(test, Assert, LoadAddonModules, W
     end)
   end)
 
+  test("Group roster updates re-apply the teleport highlight while grouped", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      getNumGroupMembers = function()
+        return 5
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Equal(state.uiUpdates, 1, "group roster update should still refresh the roster UI once")
+    Assert.Equal(state.teleportUpdates, 1, "group roster update should also re-apply the teleport highlight")
+  end)
+
   test("Group roster stores current group leader flag for player and party units", function()
     local controller, state = BuildGroupController(LoadAddonModules, {
       getNumGroupMembers = function()

@@ -296,44 +296,79 @@ ScheduleReadyCheckHoldClear = function(ctx, holdUntil)
   end)
 end
 
-local function PromoteReadyCheckReadyUnitsToHold(ctx)
-  local readyUnits = ctx.readyCheckReadyUnits or {}
-  local hasReady = false
+local function PromoteReadyCheckUnitsToHold(ctx, unitsKey, clearFn, setUntilFn)
+  local units = ctx[unitsKey] or {}
+  local hasAny = false
   local holdUntil = (tonumber(ctx.getTime and ctx.getTime()) or 0) + READY_CHECK_DECLINED_HOLD_SECONDS
 
-  ctx.clearAllReadyCheckReady()
+  clearFn()
 
-  for unit, isReady in pairs(readyUnits) do
-    if isReady == true then
-      ctx.setReadyCheckReadyUntil(unit, holdUntil)
-      hasReady = true
+  for unit, isSet in pairs(units) do
+    if isSet == true then
+      setUntilFn(unit, holdUntil)
+      hasAny = true
     end
   end
-  ctx.readyCheckReadyUnits = {}
+  ctx[unitsKey] = {}
 
-  if hasReady then
+  if hasAny then
     ScheduleReadyCheckHoldClear(ctx, holdUntil)
   end
 end
 
+local function PromoteReadyCheckReadyUnitsToHold(ctx)
+  PromoteReadyCheckUnitsToHold(ctx, "readyCheckReadyUnits", ctx.clearAllReadyCheckReady, ctx.setReadyCheckReadyUntil)
+end
+
 local function PromoteDeclinedReadyCheckUnitsToHold(ctx)
+  PromoteReadyCheckUnitsToHold(
+    ctx,
+    "readyCheckDeclinedUnits",
+    ctx.clearAllReadyCheckDeclined,
+    ctx.setReadyCheckDeclinedUntil
+  )
+end
+
+local function IsReadyCheckRosterUnit(unit, info)
+  if type(unit) ~= "string" or unit == "" then
+    return false
+  end
+  if type(info) ~= "table" or info.isGhost then
+    return false
+  end
+
+  return unit == "player" or string.match(unit, "^party%d+$") ~= nil
+end
+
+local function PromoteUnansweredReadyCheckUnitsToDeclined(ctx)
+  local getRoster = type(ctx.getRoster) == "function" and ctx.getRoster or nil
+  if not getRoster then
+    return
+  end
+
+  local roster = getRoster()
+  if type(roster) ~= "table" then
+    return
+  end
+
+  local readyUnits = ctx.readyCheckReadyUnits or {}
   local declinedUnits = ctx.readyCheckDeclinedUnits or {}
-  local hasDeclined = false
-  local holdUntil = (tonumber(ctx.getTime and ctx.getTime()) or 0) + READY_CHECK_DECLINED_HOLD_SECONDS
+  ctx.readyCheckDeclinedUnits = declinedUnits
 
-  ctx.clearAllReadyCheckDeclined()
-
-  for unit, isDeclined in pairs(declinedUnits) do
-    if isDeclined == true then
-      ctx.setReadyCheckDeclinedUntil(unit, holdUntil)
-      hasDeclined = true
+  for unit, info in pairs(roster) do
+    if IsReadyCheckRosterUnit(unit, info) and readyUnits[unit] ~= true and declinedUnits[unit] ~= true then
+      declinedUnits[unit] = true
     end
   end
-  ctx.readyCheckDeclinedUnits = {}
+end
 
-  if hasDeclined then
-    ScheduleReadyCheckHoldClear(ctx, holdUntil)
-  end
+local function UpdateReadyCheckUnits(ctx, unit, readyValue, declinedValue)
+  local readyUnits = ctx.readyCheckReadyUnits or {}
+  ctx.readyCheckReadyUnits = readyUnits
+  readyUnits[unit] = readyValue
+  local declinedUnits = ctx.readyCheckDeclinedUnits or {}
+  ctx.readyCheckDeclinedUnits = declinedUnits
+  declinedUnits[unit] = declinedValue
 end
 
 IsRaidModeActive = function(ctx)
@@ -428,12 +463,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
 
       if status == "notready" then
         if ctx.isReadyCheckActive() then
-          local readyUnits = ctx.readyCheckReadyUnits or {}
-          ctx.readyCheckReadyUnits = readyUnits
-          readyUnits[unit] = nil
-          local declinedUnits = ctx.readyCheckDeclinedUnits or {}
-          ctx.readyCheckDeclinedUnits = declinedUnits
-          declinedUnits[unit] = true
+          UpdateReadyCheckUnits(ctx, unit, nil, true)
           LogReadyCheckTrace(ctx, "READY_CHECK_CONFIRM", unit, status, "active=1")
           RefreshReadyCheckUI(ctx)
         else
@@ -444,12 +474,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
 
       if status == "ready" then
         if ctx.isReadyCheckActive() then
-          local declinedUnits = ctx.readyCheckDeclinedUnits or {}
-          ctx.readyCheckDeclinedUnits = declinedUnits
-          declinedUnits[unit] = nil
-          local readyUnits = ctx.readyCheckReadyUnits or {}
-          ctx.readyCheckReadyUnits = readyUnits
-          readyUnits[unit] = true
+          UpdateReadyCheckUnits(ctx, unit, true, nil)
           LogReadyCheckTrace(ctx, "READY_CHECK_CONFIRM", unit, status, "active=1")
           RefreshReadyCheckUI(ctx)
         else
@@ -459,12 +484,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
       end
 
       if ctx.isReadyCheckActive() then
-        local readyUnits = ctx.readyCheckReadyUnits or {}
-        ctx.readyCheckReadyUnits = readyUnits
-        readyUnits[unit] = nil
-        local declinedUnits = ctx.readyCheckDeclinedUnits or {}
-        ctx.readyCheckDeclinedUnits = declinedUnits
-        declinedUnits[unit] = nil
+        UpdateReadyCheckUnits(ctx, unit, nil, nil)
         LogReadyCheckTrace(ctx, "READY_CHECK_CONFIRM", unit, status, "active=1")
         RefreshReadyCheckUI(ctx)
       end
@@ -473,6 +493,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
       if IsRaidModeActive(ctx) then
         return
       end
+      PromoteUnansweredReadyCheckUnitsToDeclined(ctx)
       LogReadyCheckTrace(ctx, "READY_CHECK_FINISHED", nil, nil, "promote_hold=1")
       ctx.setReadyCheckActive(false)
       PromoteReadyCheckReadyUnitsToHold(ctx)

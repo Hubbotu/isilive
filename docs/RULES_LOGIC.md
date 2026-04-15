@@ -54,7 +54,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 31. main ui auto-open bleibt bei gruppenbeitritt erhalten, ausser im Raidmodus; key-ende auto-open ist standardmaessig an, aber abschaltbar; automatisches schliessen bei key start ist standardmaessig aus.
 32. verlaesst ein gruppenmitglied die gruppe, bleibt es als "geist" (ausgegraut) in der liste, bis der slot neu besetzt wird oder ein reload erfolgt
 33. spieler, die sich bereits im zieldungeon befinden, werden mit einem portal-icon markiert
-34. waehrend eines ready-checks wird der name jedes spielers entsprechend dem status (bereit=gruen/nicht bereit=rot/wartend=gelb) eingefaerbt, danach auf die klassenfarbe zurueckgesetzt und ueber einen dedizierten Ready-Check-Refreshpfad aktualisiert, der keine Secure-Rollenbutton-Attribute neu schreibt.
+34. waehrend eines ready-checks bleibt die schrift in der roster-zeile unveraendert; stattdessen markiert ein statusfarbener zeilenhintergrund bereit=gruen, nicht bereit=rot und wartend=gelb. nach `READY_CHECK_FINISHED` bleiben bereit-antworten 20 sekunden gruen und sowohl explizit nicht bereite als auch unbeantwortete spieler 20 sekunden rot; die aktualisierung laeuft ueber einen dedizierten Ready-Check-Refreshpfad ohne Secure-Rollenbutton-Neuschreibung.
 35. die kompakten roster-datenspalten behalten ihr festes breitenbudget fuer spec, name, ilvl, key, rio, dps und flagge.
 36. roster-kurztexte bleiben kompakt und faktenbasiert: name max 12 zeichen, spec max 5 zeichen mit hunter-kurzlabels `MM`/`BM`, sprache nur flagge, key-code max 4 zeichen und kein numerischer mapID-Fallback.
 37. die wartungsdatei `WARTUNG.md` darf nicht im curseforge-paket landen.
@@ -73,7 +73,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 50. Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an; `ready` ist gruen, laufende Cooldowns zeigen rote Restsekunden, `-` steht fuer keinen verfuegbaren Kick oder fehlenden isiLive-Sync, und aktive Kick-Statusaenderungen werden spaetestens einmal pro Sekunde synchronisiert.
 51. Bei ausgeblendeter UI bleibt der komplette isiLive-Gruppensync aktiv; nur nicht-sync-bezogenes Polling wie Queue-Scanning bleibt deaktiviert. Im Raid ist diese Hintergrundverarbeitung komplett aus.
 52. Hidden-Clients senden weiterhin alle gruppenrelevanten isiLive-Sync-Buckets einschliesslich `KEY`, `STATS`, `DPS`, `LOC`, `TARGET` und `KICK`; sichtbarkeitsabhängige Unterdrückung ist nur ohne explizite Hidden-Freigabe erlaubt. Im Raid ist das deaktiviert.
-53. Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt; die Sperre gilt lokal nach eigenem Klick und wird auf allen anderen isiLive-Clients ausgeloest, sobald ein eingehender SHAREKEYS-Sync empfangen wird. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
+53. Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt; lokal startet die Sperre nur nach einem wirksamen Klick mit erfolgreichem eigenem Party-Post oder erfolgreichem `SHAREKEYS`-Sync, und empfangende isiLive-Clients sperren ihren Button nur dann, wenn der eingehende `SHAREKEYS`-Pfad tatsaechlich einen eigenen Party-Post ausloest. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
 54. Wenn fuer eine Runtime-Aufloesung keine eindeutige, belastbare Quelle vorliegt, muss das Ergebnis unresolved bleiben; fehlende oder mehrdeutige Laufzeitdaten duerfen nicht durch spekulative Fallbacks, Namens-/Token-Raten, heuristische Standardwerte oder synthetische Zustaende ersetzt werden.
 55. Die Main-UI kann ueber `lockMainFramePosition` gesperrt werden; bei aktivem Lock duerfen Frame und Drag-Handle keinen Positions-Drag starten und die gespeicherte Position bleibt unveraendert.
 
@@ -386,7 +386,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-ROSTER-READY-CHECK-INDICATOR
 - Regelnummer: 34
 - Status: aktiv
-- Zusammenfassung: waehrend eines ready-checks bleibt die schrift in der roster-zeile bei ihrer normalen farbe; stattdessen wird der zeilenhintergrund entsprechend dem status (bereit=gruen/nicht bereit=rot/wartend=gelb) eingefaerbt, wartende spieler erhalten zusaetzlich eine sanduhr vor dem namen, explizit bereit- und abgelehnte spieler bleiben nach `READY_CHECK_FINISHED` jeweils noch 20 sekunden in ihrer statusfarbe markiert und danach verschwindet diese sonderdarstellung wieder; die Events `READY_CHECK`, `READY_CHECK_CONFIRM` und `READY_CHECK_FINISHED` muessen dafuer den dedizierten Ready-Check-Refreshpfad nutzen, ohne den generischen Voll-Renderpfad zu verwenden oder Secure-Rollenbutton-Attribute neu zu schreiben.
+- Zusammenfassung: waehrend eines ready-checks bleibt die schrift in der roster-zeile bei ihrer normalen farbe; stattdessen wird der zeilenhintergrund entsprechend dem status (bereit=gruen/nicht bereit=rot/wartend=gelb) eingefaerbt, wartende spieler erhalten zusaetzlich eine sanduhr vor dem namen, explizit bereit-antworten bleiben nach `READY_CHECK_FINISHED` noch 20 sekunden gruen markiert und sowohl explizit nicht bereite als auch unbeantwortete spieler bleiben noch 20 sekunden rot markiert; danach verschwindet diese sonderdarstellung wieder. Die Events `READY_CHECK`, `READY_CHECK_CONFIRM` und `READY_CHECK_FINISHED` muessen dafuer den dedizierten Ready-Check-Refreshpfad nutzen, ohne den generischen Voll-Renderpfad zu verwenden oder Secure-Rollenbutton-Attribute neu zu schreiben.
 - Erforderliche Tests:
   - Roster ready check uses row backgrounds and waiting icon without recoloring text
   - Roster ready check stays green for 20 seconds after finish
@@ -395,6 +395,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Event handlers route ready check lifecycle through refreshReadyCheckUI without generic rerender
   - Event handlers keep ready-check rows green for 20 seconds after finish
   - Event handlers keep declined ready-check rows red for 20 seconds after finish
+  - Event handlers keep unanswered ready-check rows red for 20 seconds after finish
   - TAINT: Ready-check refresh preserves secure role button attributes
   - Architecture ready check refresh stays wired through runtime setup and controller wiring
 
@@ -619,13 +620,15 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-SHAREKEYS-SPAMSCHUTZ
 - Regelnummer: 53
 - Status: aktiv
-- Zusammenfassung: Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt. Die Sperre wird lokal nur nach einem wirksamen eigenen Klick gesetzt, also wenn dabei entweder der eigene Key-Announce oder ein erfolgreicher `SHAREKEYS`-Sync ausgeloest wurde, und zusaetzlich auf allen anderen isiLive-Clients ausgeloest, sobald ein eingehender SHAREKEYS-Sync empfangen wird. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
+- Zusammenfassung: Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt. Die Sperre wird lokal nur nach einem wirksamen eigenen Klick gesetzt, also wenn dabei entweder der eigene Key erfolgreich in `PARTY` angekuendigt oder ein erfolgreicher `SHAREKEYS`-Sync ausgeloest wurde; ein lokaler Print-Fallback zaehlt dafuer nicht als Chat-Share. Empfangende isiLive-Clients sperren ihren Button nur dann, wenn der eingehende `SHAREKEYS`-Pfad tatsaechlich einen eigenen `PARTY`-Post ausgeloest hat. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
 - Erforderliche Tests:
   - Roster panel share keys button debounces rapid clicks
+  - Roster panel share keys button does not treat the local print fallback as a successful party share
   - Roster panel share keys button ignores no-op clicks without chat or sync success
   - Roster panel share keys button locks on remote SHAREKEYS signal
   - Sync SendShareKeysRequest returns false without an addon sync channel
   - Event handlers answer SHAREKEYS requests while frame is hidden
+  - Event handlers skip SHAREKEYS cooldown when no own key chat share was posted
 
 ### RULE-NO-GUESS-LAUFZEITAUFLOESUNG
 - Regelnummer: 54

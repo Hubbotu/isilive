@@ -13,6 +13,32 @@ local function RequireTable(value, name)
   return addonTable.Validators.RequireTable(value, name, "ControllerWiring")
 end
 
+local function BuildTimerAfter()
+  return function(seconds, callback)
+    if C_Timer and C_Timer.After then
+      C_Timer.After(seconds, function()
+        local ok, err = xpcall(callback, function(e)
+          local debugLib = rawget(_G, "debug")
+          if type(debugLib) == "table" and type(debugLib.traceback) == "function" then
+            return debugLib.traceback(tostring(e), 2)
+          end
+          return tostring(e)
+        end)
+        if not ok then
+          -- Report callback crashes to WoW's global error handler so they stay visible.
+          local getEH = rawget(_G, "geterrorhandler")
+          if type(getEH) == "function" then
+            local h = getEH()
+            if type(h) == "function" then
+              pcall(h, err)
+            end
+          end
+        end
+      end)
+    end
+  end
+end
+
 local ContextHelpers = addonTable.ContextHelpers or {}
 
 function ControllerWiring.CreateGroupController(groupModule, deps)
@@ -140,28 +166,7 @@ local function BuildGroupControllerDepsFromContext(ctx)
     sendOwnKeySnapshot = ctx.sendOwnKeySnapshot,
     sendIsiLiveHello = ctx.sendIsiLiveHello,
     sendRefreshRequest = ctx.sendRefreshRequest,
-    timerAfter = function(seconds, callback)
-      if C_Timer and C_Timer.After then
-        C_Timer.After(seconds, function()
-          local ok, err = xpcall(callback, function(e)
-            local debugLib = rawget(_G, "debug")
-            if type(debugLib) == "table" and type(debugLib.traceback) == "function" then
-              return debugLib.traceback(tostring(e), 2)
-            end
-            return tostring(e)
-          end)
-          if not ok then
-            local getEH = rawget(_G, "geterrorhandler")
-            if type(getEH) == "function" then
-              local h = getEH()
-              if type(h) == "function" then
-                pcall(h, err)
-              end
-            end
-          end
-        end)
-      end
-    end,
+    timerAfter = BuildTimerAfter(),
     onGroupJoined = function() end,
     onMemberJoinedGroup = function()
       local soundUtils = addonTable.SoundUtils
@@ -296,29 +301,7 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
   end
   config.checkIfEnteredTargetDungeon =
     RequireFunction(callbacks.checkIfEnteredTargetDungeon, "callbacks.checkIfEnteredTargetDungeon")
-  config.timerAfter = function(seconds, callback)
-    if C_Timer and C_Timer.After then
-      C_Timer.After(seconds, function()
-        local ok, err = xpcall(callback, function(e)
-          local debugLib = rawget(_G, "debug")
-          if type(debugLib) == "table" and type(debugLib.traceback) == "function" then
-            return debugLib.traceback(tostring(e), 2)
-          end
-          return tostring(e)
-        end)
-        if not ok then
-          -- Report callback crashes to WoW's global error handler so they stay visible.
-          local getEH = rawget(_G, "geterrorhandler")
-          if type(getEH) == "function" then
-            local h = getEH()
-            if type(h) == "function" then
-              pcall(h, err)
-            end
-          end
-        end
-      end)
-    end
-  end
+  config.timerAfter = BuildTimerAfter()
   config.getPendingBindingApply = RequireFunction(state.getPendingBindingApply, "state.getPendingBindingApply")
   config.getPendingMainFrameHeight = function()
     return refs.mainUI.GetPendingHeight()
@@ -468,37 +451,58 @@ local function BuildEventHandlersDepsFromContext(ctx)
     sendOwnKeystoneToChat = function()
       local now = GetTime()
       if ctx._lastKeystoneChatAt and (now - ctx._lastKeystoneChatAt) < 30 then
-        return
+        return false
       end
-      local roster = ctx.GetRoster and ctx.GetRoster()
-      local playerInfo = roster and roster.player
-      if type(playerInfo) ~= "table" then
-        return
+
+      local line = type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function"
+        and ContextHelpers.BuildOwnKeystoneAnnounceLine({
+          getL = ctx.GetL,
+          getRoster = ctx.GetRoster,
+          getOwnedKeystoneSnapshot = ctx.GetOwnedKeystoneSnapshot,
+          getDungeonShortCode = function(mapID)
+            local db = rawget(_G, "IsiLiveDB")
+            local activeLocale = (db and db.locale) or ctx.locale
+            return ctx.modules
+              and ctx.modules.teleport
+              and ctx.modules.teleport.GetDungeonShortCode(mapID, activeLocale)
+          end,
+        })
+
+      if type(line) ~= "string" or line == "" then
+        return false
       end
-      local keyLevel = tonumber(playerInfo.keyLevel)
-      local keyMapID = tonumber(playerInfo.keyMapID)
-      if not keyLevel or keyLevel <= 0 or not keyMapID or keyMapID <= 0 then
-        return
-      end
-      local keyLink = ContextHelpers.BuildKeystoneChatLink(keyMapID, keyLevel)
-      if not keyLink then
-        local db = rawget(_G, "IsiLiveDB")
-        local activeLocale = (db and db.locale) or ctx.locale
-        local short = (
-          ctx.modules
-          and ctx.modules.teleport
-          and ctx.modules.teleport.GetDungeonShortCode(keyMapID, activeLocale)
-        ) or tostring(keyMapID)
-        keyLink =
-          ContextHelpers.BuildClickableKeystoneLink(keyMapID, keyLevel, string.format("%s +%d", short, keyLevel))
-      end
-      local L = ctx.GetL and ctx.GetL()
-      local announcePrefix = L and tostring(L.ANNOUNCE_PREFIX or "PartyKeys:"):gsub("%s+", "") or "PartyKeys:"
-      local line = string.format("[isiLive] %s %s", announcePrefix, keyLink)
-      local sendChatMessage = rawget(_G, "SendChatMessage")
-      if type(sendChatMessage) == "function" and ctx.isInGroup and ctx.isInGroup() then
-        pcall(sendChatMessage, line, "PARTY")
-        ctx._lastKeystoneChatAt = now
+
+      if ctx.isInGroup and ctx.isInGroup() then
+        local sent = false
+        if type(ContextHelpers.SendPartyChatMessage) == "function" then
+          sent = ContextHelpers.SendPartyChatMessage(line)
+        else
+          local sendChatMessage = rawget(_G, "SendChatMessage")
+          if type(sendChatMessage) == "function" then
+            sent = pcall(sendChatMessage, line, "PARTY")
+          end
+          if not sent then
+            local chatInfo = rawget(_G, "C_ChatInfo")
+            local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
+            if type(sendChatMessageCompat) == "function" then
+              sent = pcall(sendChatMessageCompat, line, "PARTY")
+            end
+          end
+        end
+        if sent then
+          ctx._lastKeystoneChatAt = now
+        end
+        return sent == true
+      else
+        local printFn = rawget(_G, "print")
+        local printed = false
+        if type(printFn) == "function" then
+          printed = pcall(printFn, line)
+        end
+        if printed then
+          ctx._lastKeystoneChatAt = now
+        end
+        return printed == true
       end
     end,
     ensureQueueDebugStorage = ctx.ensureQueueDebugStorage,

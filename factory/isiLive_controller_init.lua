@@ -66,6 +66,7 @@ local function CreateRosterPanelController(ctx, keySyncResult)
     getLanguageTooltipMarkup = ctx.getLanguageTooltipMarkup,
     getDungeonShortCode = ctx.getDungeonShortCode,
     getDungeonName = ctx.getDungeonName,
+    getOwnedKeystoneSnapshot = keySyncResult.getOwnedKeystoneSnapshot,
     getRioDelta = ctx.getRioDelta,
     getPlayerSyncSummary = ctx.getPlayerSyncSummary,
     resolveActiveKeyOwnerUnit = ctx.resolveActiveKeyOwnerUnit,

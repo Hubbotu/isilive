@@ -338,17 +338,15 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     if not inGroup then
       local groupMemberCount = GetGroupMemberCount()
       if groupMemberCount and groupMemberCount > 0 then
+        pendingAcceptedInviteMapID = nil
         return
       end
       if groupMemberCount == 0 then
+        if pendingAcceptedInviteMapID then
+          return
+        end
         -- Left all groups — full reset including pending invites.
         ClearAllStateImpl()
-        return
-      end
-      -- A just-accepted invite can briefly report "not in group" before the
-      -- roster settles. Keep the confirmed highlight alive until a real group
-      -- membership update arrives or the state is explicitly cleared elsewhere.
-      if pendingAcceptedInviteMapID then
         return
       end
       ClearAllStateImpl()

@@ -188,21 +188,15 @@ end
 
 function Locale.GetLanguageDisplayName(languageTag, localeTag)
   local tag = languageTag and tostring(languageTag):upper() or "??"
-  local displayLocale = Locale.ResolveLocaleTag(localeTag or (rawget(_G, "GetLocale") and GetLocale() or nil))
+  local displayLocale = Locale.ResolveLocaleTag(localeTag or (rawget(_G, "GetLocale") and GetLocale()))
   local localeNames = LANGUAGE_NAME_BY_LOCALE[displayLocale] or LANGUAGE_NAME_BY_LOCALE.enUS
   return localeNames[tag] or tag
 end
 
 function Locale.GetLanguageTooltipMarkup(languageTag, localeTag)
   local flagMarkup = Locale.GetLanguageFlagMarkup(languageTag)
-  local displayLocale = Locale.ResolveLocaleTag(localeTag or (rawget(_G, "GetLocale") and GetLocale() or nil))
+  local displayLocale = Locale.ResolveLocaleTag(localeTag or (rawget(_G, "GetLocale") and GetLocale()))
   local displayName = Locale.GetLanguageDisplayName(languageTag, displayLocale)
-  if displayName == "" then
-    return flagMarkup
-  end
-  if flagMarkup == "" then
-    return displayName
-  end
   return string.format("%s %s", flagMarkup, displayName)
 end
 

@@ -397,6 +397,7 @@ local function HandleGroupRosterUpdate(deps)
 
   deps.sendOwnKeySnapshot(joinedNow, "group")
   deps.updateUI()
+  deps.updateMPlusTeleportButton()
   deps.updateLeaderButtons()
   deps.sendIsiLiveHello(joinedNow, "group")
   if joinedNow then

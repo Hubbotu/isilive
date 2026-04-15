@@ -1646,6 +1646,156 @@ local function RegisterRosterPanelShareKeysLinkTests(test, Assert, WithGlobals, 
   RegisterRosterPanelShareKeysGlobalPathTest(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelShareKeysDeterministicLinkTest(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRosterPanelShareKeysFallbackLinkTest(test, Assert, WithGlobals, LoadAddonModules)
+  test("Roster panel share keys button prefers the live owned keystone snapshot over a stale roster cache", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local sentMessages = {}
+    local shareKeyRequests = 0
+    local currentTime = 300
+
+    WithGlobals({
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      C_ChatInfo = {
+        SendChatMessage = function(text, channel)
+          table.insert(sentMessages, {
+            text = text,
+            channel = channel,
+          })
+        end,
+      },
+      print = function() end,
+    }, function()
+      local addon = LoadAddonModules({
+        "core/isiLive_context_helpers.lua",
+        "isiLive_roster_panel.lua",
+      })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {}
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function(roster)
+          return {
+            { unit = "player", info = roster.player },
+          }
+        end,
+        hasFullSync = function()
+          return false
+        end,
+        buildDisplayData = function()
+          return {
+            colorHex = "ffffffff",
+            displayName = "Self",
+            languageDisplay = "EN",
+            specText = "",
+            ilvlText = "",
+            rioText = "",
+            keyText = "-",
+            addonMarker = "",
+            atDungeonMarker = "",
+            readyCheckMarkup = "",
+            roleIconMarkup = "",
+          }
+        end,
+        truncateName = function(text)
+          return text
+        end,
+        getShortSpecLabel = function(text)
+          return text
+        end,
+        getLanguageFlagMarkup = function()
+          return ""
+        end,
+        getDungeonShortCode = function()
+          return "MOTS"
+        end,
+        getOwnedKeystoneSnapshot = function()
+          return 2662, 10
+        end,
+        resolveActiveKeyOwnerUnit = function()
+          return nil
+        end,
+        getRoster = function()
+          return {
+            player = {
+              name = "Self",
+              role = "DAMAGER",
+              keyMapID = 0,
+              keyLevel = 0,
+            },
+          }
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = {
+          DAMAGER = 1,
+          NONE = 2,
+        },
+        unitPriority = {
+          player = 1,
+        },
+        getTime = function()
+          return currentTime
+        end,
+        shareKeysDebounceSeconds = 1,
+        sendShareKeysRequest = function()
+          shareKeyRequests = shareKeyRequests + 1
+          return true
+        end,
+      })
+
+      controller.RenderRoster({
+        player = {
+          name = "Self",
+          role = "DAMAGER",
+          keyMapID = 0,
+          keyLevel = 0,
+        },
+      })
+
+      local shareKeysButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.pointY == -150 then
+          shareKeysButton = frame
+          break
+        end
+      end
+
+      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      ---@cast shareKeysButton any
+      Assert.True(shareKeysButton.enabled, "live owned keystone data should keep the share-keys button available")
+      ---@diagnostic disable: need-check-nil, undefined-field
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+
+      Assert.Equal(#sentMessages, 1, "share-keys should announce the live owned keystone snapshot")
+      Assert.Equal(sentMessages[1].channel, "PARTY", "live owned keystone snapshot should still announce to party chat")
+      Assert.True(
+        sentMessages[1].text:find("|Hkeystone:180653:2662:10:0:0:0:0|h", 1, true) ~= nil,
+        "live owned keystone snapshot should build the outgoing keystone link"
+      )
+      Assert.Equal(shareKeyRequests, 1, "share-keys should still broadcast the peer sync request")
+    end)
+  end)
 end
 
 local function RegisterRosterPanelShareKeysTests(test, Assert, WithGlobals, LoadAddonModules)
@@ -1789,6 +1939,147 @@ local function RegisterRosterPanelShareKeysTests(test, Assert, WithGlobals, Load
       ---@diagnostic enable: need-check-nil, undefined-field
       Assert.Equal(#sentMessages, 2, "share-keys click should fire again after debounce window")
       Assert.Equal(shareKeyRequests, 2, "share-keys should send another sync request after the debounce window")
+    end)
+  end)
+
+  test("Roster panel share keys button does not treat the local print fallback as a successful party share", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local printedMessages = {}
+    local shareKeyRequests = 0
+    local currentTime = 700
+
+    WithGlobals({
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      SendChatMessage = function()
+        error("party chat blocked")
+      end,
+      print = function(message)
+        table.insert(printedMessages, tostring(message))
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {}
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function(roster)
+          return {
+            { unit = "player", info = roster.player },
+          }
+        end,
+        hasFullSync = function()
+          return false
+        end,
+        buildDisplayData = function()
+          return {
+            colorHex = "ffffffff",
+            displayName = "Self",
+            languageDisplay = "EN",
+            specText = "",
+            ilvlText = "",
+            rioText = "",
+            keyText = "DB +10",
+            addonMarker = "",
+            atDungeonMarker = "",
+            readyCheckMarkup = "",
+            roleIconMarkup = "",
+          }
+        end,
+        truncateName = function(text)
+          return text
+        end,
+        getShortSpecLabel = function(text)
+          return text
+        end,
+        getLanguageFlagMarkup = function()
+          return ""
+        end,
+        getDungeonShortCode = function()
+          return "DB"
+        end,
+        resolveActiveKeyOwnerUnit = function()
+          return nil
+        end,
+        getRoster = function()
+          return {
+            player = {
+              name = "Self",
+              role = "DAMAGER",
+              keyMapID = 2441,
+              keyLevel = 10,
+            },
+          }
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = {
+          DAMAGER = 1,
+          NONE = 2,
+        },
+        unitPriority = {
+          player = 1,
+        },
+        getTime = function()
+          return currentTime
+        end,
+        shareKeysDebounceSeconds = 30,
+        sendShareKeysRequest = function()
+          shareKeyRequests = shareKeyRequests + 1
+          return false
+        end,
+      })
+
+      controller.RenderRoster({
+        player = {
+          name = "Self",
+          role = "DAMAGER",
+          keyMapID = 2441,
+          keyLevel = 10,
+        },
+      })
+
+      local shareKeysButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.pointY == -150 then
+          shareKeysButton = frame
+          break
+        end
+      end
+
+      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      ---@cast shareKeysButton any
+      ---@diagnostic disable: need-check-nil, undefined-field
+      shareKeysButton.OnClick()
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+      Assert.Equal(#printedMessages, 2, "local print fallback should still run on every failed click attempt")
+      Assert.Equal(
+        shareKeyRequests,
+        2,
+        "failed party-chat sends must not start the share-keys cooldown when the sync request also fails"
+      )
+      Assert.True(shareKeysButton.enabled, "failed party-chat sends must leave the share-keys button usable")
     end)
   end)
 
@@ -2055,6 +2346,129 @@ local function RegisterRosterPanelShareKeysTests(test, Assert, WithGlobals, Load
       shareKeysButton.OnClick()
       ---@diagnostic enable: need-check-nil, undefined-field
       Assert.Equal(shareKeyRequests, 1, "local click must succeed once debounce window has passed")
+    end)
+  end)
+
+  test("Roster panel share keys remote cooldown survives a normal roster rerender", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local shareKeyRequests = 0
+    local currentTime = 200
+    local roster = {
+      player = { name = "Self", role = "DAMAGER", keyMapID = 2441, keyLevel = 10 },
+    }
+
+    WithGlobals({
+      CreateFrame = function()
+        return NewRecordedFrame(createdFrames, createdFontStrings)
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+      C_ChatInfo = { SendChatMessage = function() end },
+      print = function() end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {}
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function(currentRoster)
+          return { { unit = "player", info = currentRoster.player } }
+        end,
+        hasFullSync = function()
+          return false
+        end,
+        buildDisplayData = function()
+          return {
+            colorHex = "ffffffff",
+            displayName = "Self",
+            languageDisplay = "EN",
+            specText = "",
+            ilvlText = "",
+            rioText = "",
+            keyText = "DB +10",
+            addonMarker = "",
+            atDungeonMarker = "",
+            readyCheckMarkup = "",
+            roleIconMarkup = "",
+          }
+        end,
+        truncateName = function(text)
+          return text
+        end,
+        getShortSpecLabel = function(text)
+          return text
+        end,
+        getLanguageFlagMarkup = function()
+          return ""
+        end,
+        getDungeonShortCode = function()
+          return "DB"
+        end,
+        resolveActiveKeyOwnerUnit = function()
+          return nil
+        end,
+        getRoster = function()
+          return roster
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = { DAMAGER = 1, NONE = 2 },
+        unitPriority = { player = 1 },
+        getTime = function()
+          return currentTime
+        end,
+        shareKeysDebounceSeconds = 30,
+        sendShareKeysRequest = function()
+          shareKeyRequests = shareKeyRequests + 1
+          return true
+        end,
+      })
+
+      controller.RenderRoster(roster)
+
+      local shareKeysButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.pointY == -150 then
+          shareKeysButton = frame
+          break
+        end
+      end
+
+      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      ---@diagnostic disable: need-check-nil, undefined-field
+      controller.TriggerShareKeysCooldown()
+      controller.RenderRoster(roster)
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+
+      Assert.Equal(
+        shareKeyRequests,
+        0,
+        "normal roster rerenders must not drop the remotely triggered share-keys cooldown"
+      )
+
+      currentTime = 231
+      ---@diagnostic disable: need-check-nil, undefined-field
+      shareKeysButton.OnClick()
+      ---@diagnostic enable: need-check-nil, undefined-field
+      Assert.Equal(shareKeyRequests, 1, "share-keys should become usable again once the cooldown expires")
     end)
   end)
 end

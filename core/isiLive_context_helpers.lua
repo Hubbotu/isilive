@@ -27,7 +27,7 @@ function ContextHelpers.CreateRealmInfoGetter()
     else
       realmInfoLib = false
     end
-    return realmInfoLib or nil
+    return realmInfoLib
   end
 end
 
@@ -95,4 +95,78 @@ function ContextHelpers.BuildClickableKeystoneLink(mapID, level, label)
   end
 
   return string.format("|cffa335ee|Hkeystone:180653:%d:%d:0:0:0:0|h[%s]|h|r", numericMapID, numericLevel, linkLabel)
+end
+
+local function ResolveOwnedKeystoneSnapshot(opts)
+  opts = opts or {}
+
+  local getOwnedKeystoneSnapshot = type(opts.getOwnedKeystoneSnapshot) == "function" and opts.getOwnedKeystoneSnapshot
+    or nil
+  if getOwnedKeystoneSnapshot then
+    local mapID, level = getOwnedKeystoneSnapshot()
+    local numericMapID = tonumber(mapID)
+    local numericLevel = tonumber(level)
+    if numericMapID and numericMapID > 0 and numericLevel and numericLevel > 0 then
+      return math.floor(numericMapID), math.floor(numericLevel)
+    end
+  end
+
+  local getRoster = type(opts.getRoster) == "function" and opts.getRoster or nil
+  if getRoster then
+    local roster = getRoster()
+    local playerInfo = type(roster) == "table" and roster.player or nil
+    local numericMapID = tonumber(playerInfo and playerInfo.keyMapID)
+    local numericLevel = tonumber(playerInfo and playerInfo.keyLevel)
+    if numericMapID and numericMapID > 0 and numericLevel and numericLevel > 0 then
+      return math.floor(numericMapID), math.floor(numericLevel)
+    end
+  end
+
+  return nil, nil
+end
+
+function ContextHelpers.BuildOwnKeystoneAnnounceLine(opts)
+  opts = opts or {}
+
+  local keyMapID, keyLevel = ResolveOwnedKeystoneSnapshot(opts)
+  if not keyMapID or not keyLevel then
+    return nil
+  end
+
+  local keyLink = ContextHelpers.BuildKeystoneChatLink(keyMapID, keyLevel)
+  if not keyLink then
+    local shortCode = type(opts.getDungeonShortCode) == "function" and opts.getDungeonShortCode(keyMapID) or nil
+    local fallbackLabel = shortCode and string.format("%s +%d", tostring(shortCode), keyLevel)
+      or string.format("Keystone +%d", keyLevel)
+    keyLink = ContextHelpers.BuildClickableKeystoneLink(keyMapID, keyLevel, fallbackLabel) or fallbackLabel
+  end
+
+  local L = type(opts.getL) == "function" and opts.getL() or {}
+  local announcePrefix = tostring(L.ANNOUNCE_PREFIX or "PartyKeys:"):gsub("%s+", "")
+  return string.format("[isiLive] %s %s", announcePrefix, keyLink)
+end
+
+function ContextHelpers.SendPartyChatMessage(message)
+  if type(message) ~= "string" or message == "" then
+    return false
+  end
+
+  local sendChatMessage = rawget(_G, "SendChatMessage")
+  if type(sendChatMessage) == "function" then
+    local ok = pcall(sendChatMessage, message, "PARTY")
+    if ok then
+      return true
+    end
+  end
+
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
+  if type(sendChatMessageCompat) == "function" then
+    local ok = pcall(sendChatMessageCompat, message, "PARTY")
+    if ok then
+      return true
+    end
+  end
+
+  return false
 end

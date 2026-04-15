@@ -526,8 +526,8 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       ctx.sendOwnKickState()
     end
     if syncResult.shouldShareKeys then
-      ctx.sendOwnKeystoneToChat()
-      if type(ctx.triggerShareKeysCooldown) == "function" then
+      local didShareOwnKey = ctx.sendOwnKeystoneToChat() == true
+      if didShareOwnKey and type(ctx.triggerShareKeysCooldown) == "function" then
         ctx.triggerShareKeysCooldown()
       end
     end

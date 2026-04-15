@@ -155,17 +155,26 @@ local function RequireFunction(value, name)
 end
 
 local function SendPartyChatMessage(message)
+  if type(ContextHelpers.SendPartyChatMessage) == "function" then
+    return ContextHelpers.SendPartyChatMessage(message)
+  end
+
   if type(message) ~= "string" or message == "" then
     return false
   end
 
   local sendChatMessage = rawget(_G, "SendChatMessage")
-  if type(sendChatMessage) ~= "function" then
-    local chatInfo = rawget(_G, "C_ChatInfo")
-    sendChatMessage = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
-  end
   if type(sendChatMessage) == "function" then
     local ok = pcall(sendChatMessage, message, "PARTY")
+    if ok then
+      return true
+    end
+  end
+
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
+  if type(sendChatMessageCompat) == "function" then
+    local ok = pcall(sendChatMessageCompat, message, "PARTY")
     if ok then
       return true
     end
@@ -181,26 +190,51 @@ end
 
 local function BuildClickableKeystoneFallback(keyMapID, keyLevel, shortCode)
   local label = BuildKeystoneLinkText(shortCode, keyLevel)
-  local keyLink = ContextHelpers.BuildClickableKeystoneLink(keyMapID, keyLevel, label)
+  local buildClickableKeystoneLink = type(ContextHelpers.BuildClickableKeystoneLink) == "function"
+      and ContextHelpers.BuildClickableKeystoneLink
+    or nil
+  local keyLink = buildClickableKeystoneLink and buildClickableKeystoneLink(keyMapID, keyLevel, label) or nil
   if keyLink then
     return keyLink
   end
   return label
 end
 
-local function BuildOwnKeyAnnounceLine(opts)
+local function ResolveOwnedKeystoneSnapshot(opts)
+  if type(opts.getOwnedKeystoneSnapshot) == "function" then
+    local mapID, level = opts.getOwnedKeystoneSnapshot()
+    local numericMapID = tonumber(mapID)
+    local numericLevel = tonumber(level)
+    if numericMapID and numericMapID > 0 and numericLevel and numericLevel > 0 then
+      return math.floor(numericMapID), math.floor(numericLevel)
+    end
+  end
+
   local roster = opts.getRoster()
   local playerInfo = roster and roster.player
-  if type(playerInfo) ~= "table" then
-    return nil
+  local keyMapID = tonumber(playerInfo and playerInfo.keyMapID)
+  local keyLevel = tonumber(playerInfo and playerInfo.keyLevel)
+  if keyMapID and keyMapID > 0 and keyLevel and keyLevel > 0 then
+    return math.floor(keyMapID), math.floor(keyLevel)
   end
-  local keyMapID = tonumber(playerInfo.keyMapID)
-  local keyLevel = tonumber(playerInfo.keyLevel)
-  if not keyMapID or keyMapID <= 0 or not keyLevel or keyLevel <= 0 then
+
+  return nil, nil
+end
+
+local function BuildOwnKeyAnnounceLine(opts)
+  if type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function" then
+    return ContextHelpers.BuildOwnKeystoneAnnounceLine(opts)
+  end
+
+  local keyMapID, keyLevel = ResolveOwnedKeystoneSnapshot(opts)
+  if not keyMapID or not keyLevel then
     return nil
   end
 
-  local keyLink = ContextHelpers.BuildKeystoneChatLink(keyMapID, keyLevel)
+  local buildKeystoneChatLink = type(ContextHelpers.BuildKeystoneChatLink) == "function"
+      and ContextHelpers.BuildKeystoneChatLink
+    or nil
+  local keyLink = buildKeystoneChatLink and buildKeystoneChatLink(keyMapID, keyLevel) or nil
   if not keyLink then
     local short = opts.getDungeonShortCode(keyMapID)
     keyLink = BuildClickableKeystoneFallback(keyMapID, keyLevel, short)
@@ -1285,69 +1319,101 @@ local function CreateShareKeysButton(mainFrame, deps)
   local button = CreateFlatButton(mainFrame, 120, 24)
   button:SetPoint("TOPRIGHT", -10, -150)
   button._verticalY = -150
-  local lastShareKeysClickAt = nil
   local countdownTicker = nil
+  local cooldownEndAt = nil
+  local shareKeysAvailable = false
   local debounceSeconds = tonumber(deps.shareKeysDebounceSeconds) or 0
   if debounceSeconds < 0 then
     debounceSeconds = 0
   end
 
-  local function UpdateShareKeysButton(cooldownEnd)
-    local now = type(deps.getTime) == "function" and tonumber(deps.getTime()) or 0
-    local remaining = math.ceil(cooldownEnd - now)
-    if remaining > 0 then
-      button:SetEnabled(false)
-      button:SetAlpha(0.5)
+  local function GetCurrentTime()
+    return type(deps.getTime) == "function" and tonumber(deps.getTime()) or nil
+  end
+
+  local function IsCooldownActive(now)
+    if debounceSeconds <= 0 then
+      return false
+    end
+    if not now then
+      now = GetCurrentTime()
+    end
+    return now ~= nil and cooldownEndAt ~= nil and cooldownEndAt > now
+  end
+
+  local function RefreshShareKeysButton()
+    local now = GetCurrentTime()
+    local cooldownActive = IsCooldownActive(now)
+    if not cooldownActive then
+      cooldownEndAt = nil
+    end
+
+    if cooldownActive then
+      local remaining = math.max(1, math.ceil((cooldownEndAt or 0) - now))
       local label = button._baseText or button._fullText or ""
       button._baseText = label
-      local cooldownText = string.format("%s (%ds)", label, remaining)
-      button._fullText = cooldownText
-      SetFlatButtonText(button, cooldownText)
+      SetFlatButtonText(button, string.format("%s (%ds)", label, remaining))
     else
-      button:SetEnabled(true)
-      button:SetAlpha(1.0)
       if button._baseText then
         button._fullText = button._baseText
         button._baseText = nil
       end
       SetFlatButtonText(button, button._fullText or "")
-      if countdownTicker then
-        countdownTicker:Cancel()
-        countdownTicker = nil
-      end
+    end
+
+    local enabled = shareKeysAvailable and not cooldownActive
+    button:SetEnabled(enabled)
+    if cooldownActive then
+      button:SetAlpha(0.5)
+    else
+      button:SetAlpha(shareKeysAvailable and 1.0 or 0.45)
+    end
+
+    if not cooldownActive and countdownTicker then
+      countdownTicker:Cancel()
+      countdownTicker = nil
     end
   end
 
   local function StartCooldownDisplay(cooldownEnd)
+    if debounceSeconds <= 0 then
+      return
+    end
+    cooldownEndAt = cooldownEnd
     if countdownTicker then
       countdownTicker:Cancel()
       countdownTicker = nil
     end
     local C_Timer_ref = rawget(_G, "C_Timer")
     if not C_Timer_ref or type(C_Timer_ref.NewTicker) ~= "function" then
+      RefreshShareKeysButton()
       return
     end
     countdownTicker = C_Timer_ref.NewTicker(1.0, function()
-      UpdateShareKeysButton(cooldownEnd)
+      RefreshShareKeysButton()
     end, debounceSeconds)
-    UpdateShareKeysButton(cooldownEnd)
+    RefreshShareKeysButton()
   end
 
   function button.TriggerRemoteCooldown()
-    local now = type(deps.getTime) == "function" and tonumber(deps.getTime()) or nil
+    local now = GetCurrentTime()
     if not now or debounceSeconds <= 0 then
       return
     end
-    if lastShareKeysClickAt and (now - lastShareKeysClickAt) < debounceSeconds then
+    if IsCooldownActive(now) then
       return
     end
-    lastShareKeysClickAt = now
     StartCooldownDisplay(now + debounceSeconds)
   end
 
+  function button.SetShareKeysAvailable(isAvailable)
+    shareKeysAvailable = isAvailable == true
+    RefreshShareKeysButton()
+  end
+
   button:SetScript("OnClick", function()
-    local now = type(deps.getTime) == "function" and tonumber(deps.getTime()) or nil
-    if now and debounceSeconds > 0 and lastShareKeysClickAt and (now - lastShareKeysClickAt) < debounceSeconds then
+    local now = GetCurrentTime()
+    if IsCooldownActive(now) then
       return
     end
 
@@ -1356,14 +1422,16 @@ local function CreateShareKeysButton(mainFrame, deps)
     local ownLine = BuildOwnKeyAnnounceLine({
       getL = deps.getL,
       getRoster = deps.getRoster,
+      getOwnedKeystoneSnapshot = deps.getOwnedKeystoneSnapshot,
       getDungeonShortCode = deps.getDungeonShortCode,
     })
     if ownLine then
       if deps.isInGroup() then
-        if not SendPartyChatMessage(ownLine) then
+        local sentOwnKey = SendPartyChatMessage(ownLine)
+        if not sentOwnKey then
           print(ownLine)
         end
-        announcedOwnKey = true
+        announcedOwnKey = sentOwnKey == true
       else
         print(ownLine)
         announcedOwnKey = true
@@ -1376,8 +1444,7 @@ local function CreateShareKeysButton(mainFrame, deps)
     if not announcedOwnKey and not requestedPeers then
       return
     end
-    if now then
-      lastShareKeysClickAt = now
+    if now and debounceSeconds > 0 then
       StartCooldownDisplay(now + debounceSeconds)
     end
   end)
@@ -1877,6 +1944,8 @@ local function RenderRosterImpl(state, roster)
   local resolveActiveKeyOwnerUnit = state.resolveActiveKeyOwnerUnit
   local isReadyCheckActive = ResolveReadyCheckActive(state)
   local resolveTargetMapID = state.resolveTargetMapID
+  local getOwnedKeystoneSnapshot = type(state.getOwnedKeystoneSnapshot) == "function" and state.getOwnedKeystoneSnapshot
+    or nil
   local buildDisplayData = state.buildDisplayData
   local truncateName = state.truncateName
   local getShortSpecLabel = state.getShortSpecLabel
@@ -2110,6 +2179,15 @@ local function RenderRosterImpl(state, roster)
     index = index + 1
   end
 
+  if not hasAnyKey and getOwnedKeystoneSnapshot then
+    local ownKeyMapID, ownKeyLevel = getOwnedKeystoneSnapshot()
+    hasAnyKey = tonumber(ownKeyMapID)
+        and tonumber(ownKeyMapID) > 0
+        and tonumber(ownKeyLevel)
+        and tonumber(ownKeyLevel) > 0
+      or false
+  end
+
   if isReadyCheckActive or HasReadyCheckHoldInRoster(state, roster) then
     RefreshReadyCheckStateImpl({
       memberRows = memberRows,
@@ -2134,8 +2212,12 @@ local function RenderRosterImpl(state, roster)
     }, roster)
   end
 
-  shareKeysButton:SetEnabled(hasAnyKey)
-  shareKeysButton:SetAlpha(hasAnyKey and 1 or 0.45)
+  if type(shareKeysButton.SetShareKeysAvailable) == "function" then
+    shareKeysButton.SetShareKeysAvailable(hasAnyKey)
+  else
+    shareKeysButton:SetEnabled(hasAnyKey)
+    shareKeysButton:SetAlpha(hasAnyKey and 1 or 0.45)
+  end
 
   local cdTrackerExtra = IsMainHorizontalLayoutMode(layoutMode) and CD_TRACKER_ROW_HEIGHT or 0
   local desiredHeight = isCollapsed and GetFrameHeightForLayoutMode(layoutMode, minFrameHeight)
@@ -2209,6 +2291,8 @@ function RosterPanel.CreateController(opts)
   end
   local getDungeonShortCode = RequireFunction(opts.getDungeonShortCode, "getDungeonShortCode")
   local getDungeonName = type(opts.getDungeonName) == "function" and opts.getDungeonName or nil
+  local getOwnedKeystoneSnapshot = type(opts.getOwnedKeystoneSnapshot) == "function" and opts.getOwnedKeystoneSnapshot
+    or nil
   local getRioDelta = type(opts.getRioDelta) == "function" and opts.getRioDelta or nil
   local getPlayerSyncSummary = type(opts.getPlayerSyncSummary) == "function" and opts.getPlayerSyncSummary or nil
   local resolveActiveKeyOwnerUnit = RequireFunction(opts.resolveActiveKeyOwnerUnit, "resolveActiveKeyOwnerUnit")
@@ -2265,6 +2349,7 @@ function RosterPanel.CreateController(opts)
     rolePriority = rolePriority,
     unitPriority = unitPriority,
     getDungeonShortCode = getDungeonShortCode,
+    getOwnedKeystoneSnapshot = getOwnedKeystoneSnapshot,
     applyKnownKeyToRosterEntry = applyKnownKeyToRosterEntry,
     isInGroup = isInGroup,
     getTime = getTime,
@@ -2439,6 +2524,7 @@ function RosterPanel.CreateController(opts)
       getLanguageFlagMarkup = getLanguageFlagMarkup,
       getLanguageTooltipMarkup = getLanguageTooltipMarkup,
       getDungeonShortCode = getDungeonShortCode,
+      getOwnedKeystoneSnapshot = getOwnedKeystoneSnapshot,
       getDungeonName = getDungeonName,
       getRioDelta = getRioDelta,
       syncMarker = syncMarker,
