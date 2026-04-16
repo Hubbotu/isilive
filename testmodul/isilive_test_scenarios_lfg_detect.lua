@@ -738,6 +738,70 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect CheckActiveGroup keeps detectedMapID while grouped even when no active listing exists", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      GetNumGroupMembers = function()
+        return 5
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "setup: detectedMapID must be set before settle")
+
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "grouped no-listing checks must keep detectedMapID until dungeon entry or group leave"
+      )
+    end)
+  end)
+
+  test("LFGDetect GROUP_ROSTER_UPDATE emits diagnostic snapshot for group-settle highlight debugging", function()
+    local snapshots = {}
+
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      GetNumGroupMembers = function()
+        return 5
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetGroupRosterTraceLogger(function(snapshot)
+        table.insert(snapshots, snapshot)
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(#snapshots, 1, "group roster update must emit one diagnostic snapshot")
+      Assert.Equal(snapshots[1].event, "GROUP_ROSTER_UPDATE", "diagnostic snapshot must record the source event")
+      Assert.Equal(snapshots[1].members, 5, "diagnostic snapshot must record the settled group size")
+      Assert.Equal(snapshots[1].detectedBefore, 557, "diagnostic snapshot must capture detectedMapID before settle")
+      Assert.Equal(snapshots[1].detectedAfter, 557, "diagnostic snapshot must keep detectedMapID after settle")
+      Assert.Nil(snapshots[1].pendingAccept, "diagnostic snapshot must reflect the cleared pending accept")
+    end)
+  end)
+
   -- ---------------------------------------------------------------------------
   -- SetLocaleGetter injection (MINOR-1)
   -- ---------------------------------------------------------------------------

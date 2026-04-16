@@ -1804,6 +1804,7 @@ local function RegisterReadyCheckAndStatsTests(test, Assert, WithGlobals, LoadAd
     local readyCheckActive = false
     local now = 100
     local readyUntilByUnit = {}
+    local declinedUntilByUnit = {}
     local scheduledCallback = nil
     local logEntries = {}
 
@@ -1818,17 +1819,45 @@ local function RegisterReadyCheckAndStatsTests(test, Assert, WithGlobals, LoadAd
       getTime = function()
         return now
       end,
+      getRoster = function()
+        return {
+          party1 = { name = "ReadyOne" },
+          party2 = { name = "ReadyTwo" },
+        }
+      end,
       setReadyCheckReadyUntil = function(unit, value)
         readyUntilByUnit[unit] = value
       end,
+      getReadyCheckReadyUntil = function(unit)
+        return readyUntilByUnit[unit]
+      end,
       clearAllReadyCheckReady = function()
         readyUntilByUnit = {}
+      end,
+      setReadyCheckDeclinedUntil = function(unit, value)
+        declinedUntilByUnit[unit] = value
+      end,
+      getReadyCheckDeclinedUntil = function(unit)
+        return declinedUntilByUnit[unit]
+      end,
+      clearAllReadyCheckDeclined = function()
+        declinedUntilByUnit = {}
       end,
       clearExpiredReadyCheckReady = function(currentTime)
         local changed = false
         for unit, untilTime in pairs(readyUntilByUnit) do
           if untilTime <= currentTime then
             readyUntilByUnit[unit] = nil
+            changed = true
+          end
+        end
+        return changed
+      end,
+      clearExpiredReadyCheckDeclined = function(currentTime)
+        local changed = false
+        for unit, untilTime in pairs(declinedUntilByUnit) do
+          if untilTime <= currentTime then
+            declinedUntilByUnit[unit] = nil
             changed = true
           end
         end
@@ -1846,15 +1875,47 @@ local function RegisterReadyCheckAndStatsTests(test, Assert, WithGlobals, LoadAd
     controller:Dispatch("READY_CHECK_CONFIRM", "party1", "ready")
     controller:Dispatch("READY_CHECK_FINISHED")
 
-    Assert.Equal(#logEntries, 3, "ready check lifecycle should emit three trace entries before cleanup")
-    Assert.True(logEntries[1]:find("event=READY_CHECK", 1, true) ~= nil, "first trace entry must record READY_CHECK")
+    Assert.Equal(#logEntries, 7, "ready check lifecycle should emit seven trace entries before cleanup")
     Assert.True(
-      logEntries[2]:find("event=READY_CHECK_CONFIRM", 1, true) ~= nil,
-      "second trace entry must record READY_CHECK_CONFIRM"
+      logEntries[1]:find("[EVENT_DISPATCH] event=READY_CHECK handled=true", 1, true) ~= nil,
+      "first trace entry must record the READY_CHECK dispatch"
+    )
+    Assert.True(logEntries[2]:find("event=READY_CHECK", 1, true) ~= nil, "second trace entry must record READY_CHECK")
+    Assert.True(
+      logEntries[3]:find("[EVENT_DISPATCH] event=READY_CHECK_CONFIRM handled=true", 1, true) ~= nil,
+      "third trace entry must record the READY_CHECK_CONFIRM dispatch"
     )
     Assert.True(
-      logEntries[3]:find("event=READY_CHECK_FINISHED", 1, true) ~= nil,
-      "third trace entry must record READY_CHECK_FINISHED"
+      logEntries[4]:find("event=READY_CHECK_CONFIRM", 1, true) ~= nil,
+      "fourth trace entry must record READY_CHECK_CONFIRM"
+    )
+    Assert.True(
+      logEntries[5]:find("[EVENT_DISPATCH] event=READY_CHECK_FINISHED handled=true", 1, true) ~= nil,
+      "fifth trace entry must record the READY_CHECK_FINISHED dispatch"
+    )
+    Assert.True(
+      logEntries[6]:find("event=READY_CHECK_FINISHED", 1, true) ~= nil,
+      "sixth trace entry must record READY_CHECK_FINISHED"
+    )
+    Assert.True(
+      logEntries[7]:find("[RC_FINISH_HOLD]", 1, true) ~= nil,
+      "seventh trace entry must record the ready-check hold snapshot"
+    )
+    Assert.True(
+      logEntries[7]:find("ready_units=party1", 1, true) ~= nil,
+      "hold snapshot must record the explicitly ready unit"
+    )
+    Assert.True(
+      logEntries[7]:find("declined_units=party2", 1, true) ~= nil,
+      "hold snapshot must record unanswered units promoted to declined"
+    )
+    Assert.True(
+      logEntries[7]:find("ready_until_count=1", 1, true) ~= nil,
+      "hold snapshot must count ready hold entries"
+    )
+    Assert.True(
+      logEntries[7]:find("declined_until_count=1", 1, true) ~= nil,
+      "hold snapshot must count declined hold entries"
     )
 
     now = 120
@@ -1864,8 +1925,8 @@ local function RegisterReadyCheckAndStatsTests(test, Assert, WithGlobals, LoadAd
     end
     cleanupCallback()
 
-    Assert.Equal(#logEntries, 4, "cleanup callback should append a hold-clear trace entry")
-    Assert.True(logEntries[4]:find("event=HOLD_CLEAR", 1, true) ~= nil, "cleanup trace must record HOLD_CLEAR")
+    Assert.Equal(#logEntries, 8, "cleanup callback should append a hold-clear trace entry")
+    Assert.True(logEntries[8]:find("event=HOLD_CLEAR", 1, true) ~= nil, "cleanup trace must record HOLD_CLEAR")
   end)
 
   test("Event handlers route ready check lifecycle through refreshReadyCheckUI without generic rerender", function()

@@ -456,9 +456,9 @@ local function BuildEventHandlersDepsFromContext(ctx)
 
       local line = type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function"
         and ContextHelpers.BuildOwnKeystoneAnnounceLine({
-          getL = ctx.GetL,
-          getRoster = ctx.GetRoster,
-          getOwnedKeystoneSnapshot = ctx.GetOwnedKeystoneSnapshot,
+          getL = ctx.getL,
+          getRoster = ctx.getRoster,
+          getOwnedKeystoneSnapshot = ctx.getOwnedKeystoneSnapshot,
           getDungeonShortCode = function(mapID)
             local db = rawget(_G, "IsiLiveDB")
             local activeLocale = (db and db.locale) or ctx.locale

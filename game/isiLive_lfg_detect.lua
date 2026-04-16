@@ -32,7 +32,8 @@ local ACTIVITY_TO_MAP = {
 -- Resolve mapID from a single activityID.
 -- Resolution order:
 --   1. ACTIVITY_TO_MAP  — static, zero-latency, taint-safe (primary)
---   2. unresolved       — if no exact mapping exists, no guess is made
+--   2. C_LFGList.GetActivityInfoTable — dynamic fallback for IDs not in the static map;
+--      result is cached into ACTIVITY_TO_MAP so subsequent calls are free.
 local function MapIDFromActivityID(activityID)
   if not activityID then
     return nil
@@ -45,6 +46,19 @@ local function MapIDFromActivityID(activityID)
   -- 1. Static map: fast, taint-safe, reliable even when the API cache is cold
   if ACTIVITY_TO_MAP[numID] then
     return ACTIVITY_TO_MAP[numID]
+  end
+
+  -- 2. Dynamic fallback via WoW API (may be tainted/cold; protected by pcall)
+  local lfgList = rawget(_G, "C_LFGList")
+  if type(lfgList) == "table" and type(lfgList.GetActivityInfoTable) == "function" then
+    local ok, info = pcall(lfgList.GetActivityInfoTable, numID)
+    if ok and type(info) == "table" then
+      local mapID = tonumber(rawget(info, "mapID") or rawget(info, "mapId"))
+      if mapID and mapID > 0 then
+        ACTIVITY_TO_MAP[numID] = mapID -- cache for future calls
+        return mapID
+      end
+    end
   end
 
   return nil
@@ -67,7 +81,15 @@ end
 local function GetDungeonName(mapID)
   local SeasonData = addonTable.SeasonData
   if type(SeasonData) == "table" and type(SeasonData.GetDungeonName) == "function" then
-    local name = SeasonData.GetDungeonName(mapID)
+    local db = rawget(_G, "IsiLiveDB")
+    local localeTag = (type(db) == "table" and db.locale) or nil
+    if not localeTag then
+      local getLocale = rawget(_G, "GetLocale")
+      if type(getLocale) == "function" then
+        localeTag = getLocale()
+      end
+    end
+    local name = SeasonData.GetDungeonName(mapID, localeTag)
     if type(name) == "string" and name ~= "" then
       return name
     end
@@ -99,6 +121,7 @@ local pendingAcceptedInviteMapID = nil
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
 local highlightCallback = nil
+local groupRosterTraceLogger = nil
 
 -- Injected by the factory so chat messages follow the player's locale setting.
 -- MINOR-1 fix: removes hardcoded German strings.
@@ -136,6 +159,26 @@ end
 
 function LFGDetect.SetLocaleGetter(fn)
   localeGetter = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetGroupRosterTraceLogger(fn)
+  groupRosterTraceLogger = type(fn) == "function" and fn or nil
+end
+
+local function EmitGroupRosterTrace(inGroup, groupMemberCount, detectedBefore)
+  if type(groupRosterTraceLogger) ~= "function" then
+    return
+  end
+
+  groupRosterTraceLogger({
+    event = "GROUP_ROSTER_UPDATE",
+    inGroup = inGroup == true,
+    members = groupMemberCount,
+    detectedBefore = detectedBefore,
+    detectedAfter = detectedMapID,
+    pendingAccept = pendingAcceptedInviteMapID,
+    latestQueueMap = lastQueueMapID,
+  })
 end
 
 -- ---------------------------------------------------------------------------
@@ -282,8 +325,17 @@ local function CheckActiveGroup()
 
   local ok, info = pcall(C_LFGList_ref.GetActiveEntryInfo)
   if not ok or not info then
-    -- No active listing — clear all state
-    ClearDetectedState()
+    -- No active listing:
+    -- - while grouped, keep the current detected state so the highlight can
+    --   survive roster settling until the player actually enters the dungeon
+    --   or leaves the group.
+    -- - while not grouped, only clear queue-owned state.
+    local isInGroup = rawget(_G, "IsInGroup")
+    local isInRaid = rawget(_G, "IsInRaid")
+    local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
+    if not inGroup then
+      ClearDetectedState()
+    end
     return
   end
 
@@ -332,6 +384,7 @@ frame:SetScript("OnEvent", function(_self, event, ...)
   elseif event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" then
     CheckActiveGroup()
   elseif event == "GROUP_ROSTER_UPDATE" then
+    local detectedBefore = detectedMapID
     local isInGroup = rawget(_G, "IsInGroup")
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
@@ -339,19 +392,24 @@ frame:SetScript("OnEvent", function(_self, event, ...)
       local groupMemberCount = GetGroupMemberCount()
       if groupMemberCount and groupMemberCount > 0 then
         pendingAcceptedInviteMapID = nil
+        EmitGroupRosterTrace(false, groupMemberCount, detectedBefore)
         return
       end
       if groupMemberCount == 0 then
         if pendingAcceptedInviteMapID then
+          EmitGroupRosterTrace(false, groupMemberCount, detectedBefore)
           return
         end
         -- Left all groups — full reset including pending invites.
         ClearAllStateImpl()
+        EmitGroupRosterTrace(false, groupMemberCount, detectedBefore)
         return
       end
       ClearAllStateImpl()
+      EmitGroupRosterTrace(false, groupMemberCount, detectedBefore)
       return
     end
+    local groupMemberCount = GetGroupMemberCount()
     pendingAcceptedInviteMapID = nil
     -- Joined a group: if we have a pending invite but detectedMapID was not set
     -- yet (e.g. inviteaccepted fired before GROUP_ROSTER_UPDATE settled),
@@ -368,5 +426,6 @@ frame:SetScript("OnEvent", function(_self, event, ...)
         CheckActiveGroup()
       end
     end
+    EmitGroupRosterTrace(true, groupMemberCount, detectedBefore)
   end
 end)

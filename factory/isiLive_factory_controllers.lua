@@ -4,6 +4,50 @@ addonTable = addonTable or {}
 local FI = addonTable._FactoryInternal or {}
 addonTable._FactoryInternal = FI
 
+local function FormatTraceValue(value)
+  if value == nil then
+    return "nil"
+  end
+  return tostring(value)
+end
+
+local function BuildLFGGroupRosterTraceLogger(ctx, modules)
+  return function(snapshot)
+    local runtimeLogController = ctx.runtimeLogController
+    local logFn = runtimeLogController and runtimeLogController.Log or nil
+    if type(logFn) ~= "function" or type(snapshot) ~= "table" then
+      return
+    end
+
+    local resolvedSpellID = nil
+    local detectedAfter = tonumber(snapshot.detectedAfter)
+    if detectedAfter and modules.teleport and type(modules.teleport.ResolveTeleportSpellIDByMapID) == "function" then
+      resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedAfter)
+    end
+    if not resolvedSpellID and type(ctx.ResolveActiveTeleportSpellID) == "function" then
+      resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
+    end
+
+    local localTargetMapID = type(ctx.ResolveLocalStatusTargetMapID) == "function" and ctx.ResolveLocalStatusTargetMapID()
+      or nil
+    local now = tonumber(GetTime and GetTime()) or 0
+
+    logFn(string.format(
+      "[LFG_GROUP5] ts=%s event=%s in_group=%s members=%s detected_before=%s detected_after=%s pending_accept=%s latest_queue_map=%s local_target_map=%s resolved_spell=%s",
+      tostring(now),
+      FormatTraceValue(snapshot.event),
+      FormatTraceValue(snapshot.inGroup),
+      FormatTraceValue(snapshot.members),
+      FormatTraceValue(snapshot.detectedBefore),
+      FormatTraceValue(snapshot.detectedAfter),
+      FormatTraceValue(snapshot.pendingAccept),
+      FormatTraceValue(snapshot.latestQueueMap),
+      FormatTraceValue(localTargetMapID),
+      FormatTraceValue(resolvedSpellID)
+    ))
+  end
+end
+
 -- Sub-function: Game API safe wrappers and instance helpers.
 local function InitializeGameAPIHelpers(ctx, runtimeState)
   ctx.GetActiveChallengeMapID = function()
@@ -724,6 +768,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end
     if type(lfgDetect.SetLocaleGetter) == "function" then
       lfgDetect.SetLocaleGetter(ctx.GetL)
+    end
+    if type(lfgDetect.SetGroupRosterTraceLogger) == "function" then
+      lfgDetect.SetGroupRosterTraceLogger(BuildLFGGroupRosterTraceLogger(ctx, modules))
     end
   end
 end

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-16 - Version 0.9.166 (fix)
+
+- **ReadyCheck hold:** `CHALLENGE_MODE_START` no longer calls `ResetReadyCheckDeclinedTracking` — the 20-second ready/declined hold state now persists when the key starts immediately after a ready check instead of being wiped.
+- **Share Keys:** Fixed `sendOwnKeystoneToChat` in `isiLive_controller_wiring.lua` using `ctx.GetRoster`, `ctx.GetOwnedKeystoneSnapshot`, and `ctx.GetL` (capital G) — these keys do not exist on the runtime-setup dict; corrected to `ctx.getRoster`, `ctx.getOwnedKeystoneSnapshot`, and `ctx.getL`. Remote clients now post their keystone to party chat when a SHAREKEYS request is received. This was a regression introduced in v0.9.119.
+- **Dungeon name locale:** `GetDungeonName` in `isiLive_lfg_detect.lua` now passes the active locale tag (`IsiLiveDB.locale` or `GetLocale()` fallback) to `SeasonData.GetDungeonName`, fixing the English-only dungeon name in LFG detect chat output.
+- **LFG highlight reliability:** `MapIDFromActivityID` now falls back to `C_LFGList.GetActivityInfoTable` (pcall-protected) when an activity ID is not in the static `ACTIVITY_TO_MAP` table. The resolved mapID is cached for subsequent calls, fixing unreliable dungeon detection for dungeons whose activity IDs differ from the static entries.
+
 ## 2026-04-15 - Version 0.9.165 (patch)
 
 - **Hidden sync test coverage:**

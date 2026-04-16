@@ -80,6 +80,34 @@ local function CountReadyCheckUnits(units)
   return count
 end
 
+local function CollectMarkedReadyCheckUnits(units)
+  local out = {}
+  for unit, isMarked in pairs(units or {}) do
+    if isMarked == true and type(unit) == "string" and unit ~= "" then
+      out[#out + 1] = unit
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+local function CountReadyCheckHoldUnits(getUntil, roster, now)
+  if type(getUntil) ~= "function" or type(roster) ~= "table" then
+    return 0
+  end
+
+  local count = 0
+  for unit in pairs(roster) do
+    if type(unit) == "string" and unit ~= "" then
+      local untilTime = tonumber(getUntil(unit))
+      if untilTime and untilTime > now then
+        count = count + 1
+      end
+    end
+  end
+  return count
+end
+
 local function LogReadyCheckTrace(ctx, eventName, unit, status, extra)
   local logRuntimeTrace = type(ctx.logRuntimeTrace) == "function" and ctx.logRuntimeTrace or nil
   if not logRuntimeTrace then
@@ -109,6 +137,32 @@ local function LogReadyCheckTrace(ctx, eventName, unit, status, extra)
   end
 
   logRuntimeTrace("[READYCHECK] " .. table.concat(parts, " "))
+end
+
+local function LogReadyCheckFinishHold(ctx, activeBefore, readyUnits, declinedUnits)
+  local logRuntimeTrace = type(ctx.logRuntimeTrace) == "function" and ctx.logRuntimeTrace or nil
+  if not logRuntimeTrace then
+    return
+  end
+
+  local now = tonumber(ctx.getTime and ctx.getTime()) or 0
+  local roster = type(ctx.getRoster) == "function" and ctx.getRoster() or nil
+  local readyUntilCount = CountReadyCheckHoldUnits(ctx.getReadyCheckReadyUntil, roster, now)
+  local declinedUntilCount = CountReadyCheckHoldUnits(ctx.getReadyCheckDeclinedUntil, roster, now)
+  local readyList = #readyUnits > 0 and table.concat(readyUnits, ",") or "-"
+  local declinedList = #declinedUnits > 0 and table.concat(declinedUnits, ",") or "-"
+  local activeAfter = ctx.isReadyCheckActive and ctx.isReadyCheckActive() == true
+
+  logRuntimeTrace(string.format(
+    "[RC_FINISH_HOLD] ts=%s event=READY_CHECK_FINISHED active_before=%s active_after=%s ready_units=%s declined_units=%s ready_until_count=%d declined_until_count=%d",
+    tostring(now),
+    tostring(activeBefore),
+    tostring(activeAfter),
+    readyList,
+    declinedList,
+    readyUntilCount,
+    declinedUntilCount
+  ))
 end
 
 local function SetPendingPostChallengeRefresh(ctx, value)
@@ -404,7 +458,6 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.lastRecordedRunCaptured = false
     ctx.pendingRecordedRunRetrySignature = nil
     ctx.setReadyCheckActive(false)
-    ResetReadyCheckDeclinedTracking(ctx)
     ResetDamageMeterIfAvailable()
     ctx.captureRioBaselineSnapshot()
     ctx.setActiveJoinedKeyMapID(nil)
@@ -493,11 +546,15 @@ function ChallengeLifecycle.BuildHandlers(ctx)
       if IsRaidModeActive(ctx) then
         return
       end
+      local activeBefore = ctx.isReadyCheckActive and ctx.isReadyCheckActive() == true
       PromoteUnansweredReadyCheckUnitsToDeclined(ctx)
+      local readyUnits = CollectMarkedReadyCheckUnits(ctx.readyCheckReadyUnits)
+      local declinedUnits = CollectMarkedReadyCheckUnits(ctx.readyCheckDeclinedUnits)
       LogReadyCheckTrace(ctx, "READY_CHECK_FINISHED", nil, nil, "promote_hold=1")
       ctx.setReadyCheckActive(false)
       PromoteReadyCheckReadyUnitsToHold(ctx)
       PromoteDeclinedReadyCheckUnitsToHold(ctx)
+      LogReadyCheckFinishHold(ctx, activeBefore, readyUnits, declinedUnits)
       RefreshReadyCheckUI(ctx)
     end,
   }
