@@ -315,8 +315,12 @@ local function RegisterShareKeysDeterministicLinkTest()
       Assert.Equal(#sentMessages, 1, "share-keys should emit one chat message")
       Assert.Equal(sentMessages[1].channel, "PARTY", "share-keys should still announce to party chat")
       Assert.True(
-        sentMessages[1].text:find("|Hkeystone:180653:2662:10:0:0:0:0|h", 1, true) ~= nil,
-        "share-keys must build a full keystone hyperlink from the owned map ID and level"
+        sentMessages[1].text:find("|Hkeystone:", 1, true) == nil,
+        "share-keys fallback must not construct a manual keystone hyperlink (WoW silently drops those)"
+      )
+      Assert.True(
+        sentMessages[1].text:find("%+10", 1) ~= nil,
+        "share-keys fallback must still surface the keystone level in the plain-text announcement"
       )
       Assert.True(
         sentMessages[1].text:find("|Hitem:", 1, true) == nil,
@@ -633,8 +637,12 @@ local function RegisterShareKeysLiveSnapshotTest()
       Assert.Equal(#sentMessages, 1, "share-keys should announce the live owned keystone snapshot")
       Assert.Equal(sentMessages[1].channel, "PARTY", "live owned keystone snapshot should still announce to party chat")
       Assert.True(
-        sentMessages[1].text:find("|Hkeystone:180653:2662:10:0:0:0:0|h", 1, true) ~= nil,
-        "live owned keystone snapshot should build the outgoing keystone link"
+        sentMessages[1].text:find("|Hkeystone:", 1, true) == nil,
+        "live owned keystone snapshot must not emit a manual keystone hyperlink (WoW drops those)"
+      )
+      Assert.True(
+        sentMessages[1].text:find("%+10", 1) ~= nil,
+        "live owned keystone snapshot must still surface the keystone level in the plain-text announcement"
       )
       Assert.Equal(shareKeyRequests, 1, "share-keys should still broadcast the peer sync request")
     end)

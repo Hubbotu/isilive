@@ -79,7 +79,9 @@ function ContextHelpers.BuildKeystoneChatLink(mapID, level)
 
   local dungeonLabel = dungeonName and string.format("Keystone: %s +%d", dungeonName, numericLevel)
     or string.format("Keystone +%d", numericLevel)
-  return string.format("|cffa335ee|Hkeystone:180653:%d:%d:0:0:0:0|h[%s]|h|r", numericMapID, numericLevel, dungeonLabel)
+  -- Plain-text fallback: WoW silently drops manually constructed |Hkeystone:...|h hyperlinks
+  -- from the chat server. Colored text without a hyperlink is always accepted.
+  return string.format("|cffa335ee[%s]|r", dungeonLabel)
 end
 
 function ContextHelpers.BuildClickableKeystoneLink(mapID, level, label)
@@ -146,14 +148,32 @@ function ContextHelpers.BuildOwnKeystoneAnnounceLine(opts)
   return string.format("[isiLive] %s %s", announcePrefix, keyLink)
 end
 
+-- Returns the correct chat channel for the current group context.
+-- Instance groups (M+, LFG, dungeon finder) must use INSTANCE_CHAT — SendChatMessage
+-- silently drops PARTY messages when the player is in an instance group.
+function ContextHelpers.ResolveGroupChatChannel()
+  local isInGroup = rawget(_G, "IsInGroup")
+  if type(isInGroup) ~= "function" then
+    return "PARTY"
+  end
+  local instanceCategory = rawget(_G, "LE_PARTY_CATEGORY_INSTANCE") or 2
+  local okInstance, inInstance = pcall(isInGroup, instanceCategory)
+  if okInstance and inInstance then
+    return "INSTANCE_CHAT"
+  end
+  return "PARTY"
+end
+
 function ContextHelpers.SendPartyChatMessage(message)
   if type(message) ~= "string" or message == "" then
     return false
   end
 
+  local channel = ContextHelpers.ResolveGroupChatChannel()
+
   local sendChatMessage = rawget(_G, "SendChatMessage")
   if type(sendChatMessage) == "function" then
-    local ok = pcall(sendChatMessage, message, "PARTY")
+    local ok = pcall(sendChatMessage, message, channel)
     if ok then
       return true
     end
@@ -162,7 +182,7 @@ function ContextHelpers.SendPartyChatMessage(message)
   local chatInfo = rawget(_G, "C_ChatInfo")
   local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
   if type(sendChatMessageCompat) == "function" then
-    local ok = pcall(sendChatMessageCompat, message, "PARTY")
+    local ok = pcall(sendChatMessageCompat, message, channel)
     if ok then
       return true
     end
