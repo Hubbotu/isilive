@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-17 - Version 0.9.167 (patch)
+
+- **Runtime log expansion:**
+  - Added deterministic runtime-log trace coverage for ready-check events when logging is enabled.
+  - Added deterministic factory coverage for LFG group-settle diagnostics written into the runtime log.
+  - Split the oversized factory-primary and ready-check test blocks into smaller helpers so the new trace coverage stays within the metric limits.
+
+- **Documentation / release sync:**
+  - Synced `isiLive.toc` and `CHANGELOG_RELEASE.md` to `0.9.167`.
+  - Updated the documented validator baseline to `604` scenarios / tests over `45` modules.
+
 ## 2026-04-16 - Version 0.9.166 (fix)
 
 - **ReadyCheck hold:** `CHALLENGE_MODE_START` no longer calls `ResetReadyCheckDeclinedTracking` — the 20-second ready/declined hold state now persists when the key starts immediately after a ready check instead of being wiped.
