@@ -58,14 +58,34 @@ function ContextHelpers.BuildKeystoneChatLink(mapID, level)
   local mythicPlusApi = rawget(_G, "C_MythicPlus")
   if mythicPlusApi and type(mythicPlusApi.GetOwnedKeystoneLink) == "function" then
     local okLink, ownedLink = pcall(mythicPlusApi.GetOwnedKeystoneLink)
-    if
-      okLink
-      and type(ownedLink) == "string"
-      and ownedLink ~= ""
-      and ownedLink:find("|Hkeystone:", 1, true)
-      and not ownedLink:find("^|Hkeystone:[^|]+|h%[Keystone%]|h$")
-    then
+    if okLink and type(ownedLink) == "string" and ownedLink ~= "" and ownedLink:find("|Hkeystone:", 1, true) then
       return ownedLink
+    end
+  end
+
+  -- Fallback: GetOwnedKeystoneLink was removed in recent WoW retail.
+  -- Scan bags for the Mythic Keystone item (itemID 180653) and return its real link —
+  -- manually constructed |Hkeystone:...|h links are silently dropped by the chat server.
+  local containerApi = rawget(_G, "C_Container")
+  if
+    containerApi
+    and type(containerApi.GetContainerNumSlots) == "function"
+    and type(containerApi.GetContainerItemID) == "function"
+    and type(containerApi.GetContainerItemLink) == "function"
+  then
+    for bagID = 0, 5 do
+      local okSlots, numSlots = pcall(containerApi.GetContainerNumSlots, bagID)
+      if okSlots and type(numSlots) == "number" and numSlots > 0 then
+        for slotID = 1, numSlots do
+          local okID, itemID = pcall(containerApi.GetContainerItemID, bagID, slotID)
+          if okID and itemID == 180653 then
+            local okBagLink, bagLink = pcall(containerApi.GetContainerItemLink, bagID, slotID)
+            if okBagLink and type(bagLink) == "string" and bagLink:find("|Hkeystone:", 1, true) then
+              return bagLink
+            end
+          end
+        end
+      end
     end
   end
 
@@ -79,9 +99,9 @@ function ContextHelpers.BuildKeystoneChatLink(mapID, level)
 
   local dungeonLabel = dungeonName and string.format("Keystone: %s +%d", dungeonName, numericLevel)
     or string.format("Keystone +%d", numericLevel)
-  -- Plain-text fallback: WoW silently drops manually constructed |Hkeystone:...|h hyperlinks
-  -- from the chat server. Colored text without a hyperlink is always accepted.
-  return string.format("|cffa335ee[%s]|r", dungeonLabel)
+  -- Plain-text fallback: WoW drops addon-sent chat messages that contain |c...|r color codes
+  -- wrapping square brackets — the server treats them as fake item links. Send without color.
+  return string.format("[%s]", dungeonLabel)
 end
 
 function ContextHelpers.BuildClickableKeystoneLink(mapID, level, label)

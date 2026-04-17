@@ -1416,13 +1416,6 @@ local function CreateShareKeysButton(mainFrame, deps)
     if IsCooldownActive(now) then
       return
     end
-    local function trace(msg)
-      if type(deps.logRuntimeTrace) == "function" then
-        deps.logRuntimeTrace(msg)
-      end
-    end
-    trace("[UI] btn_click name=share_keys")
-    -- Post own key directly, then trigger all other isiLive group members to post theirs
     local announcedOwnKey = false
     local ownLine = BuildOwnKeyAnnounceLine({
       getL = deps.getL,
@@ -1431,41 +1424,9 @@ local function CreateShareKeysButton(mainFrame, deps)
       getDungeonShortCode = deps.getDungeonShortCode,
     })
     local inGroup = deps.isInGroup() == true
-    local linkSource = "none"
-    if type(ownLine) == "string" then
-      if ownLine:find("|Hkeystone:180653:", 1, true) then
-        linkSource = "manual_fallback"
-      elseif ownLine:find("|Hkeystone:", 1, true) then
-        linkSource = "blizz_api"
-      else
-        linkSource = "plain_text"
-      end
-    end
-    trace(
-      string.format(
-        "[UI] share_keys_own_line ownLine=%s inGroup=%s linkSource=%s len=%d",
-        ownLine and "present" or "nil",
-        tostring(inGroup),
-        linkSource,
-        type(ownLine) == "string" and #ownLine or 0
-      )
-    )
     if ownLine then
-      -- Sanitize for log readability: replace WoW color escape | with ^
-      local logPreview = type(ownLine) == "string" and ownLine:gsub("|", "^") or ""
-      trace(string.format("[UI] share_keys_own_line_raw msg=%s", logPreview))
       if inGroup then
-        local chatChannel = type(ContextHelpers.ResolveGroupChatChannel) == "function"
-            and ContextHelpers.ResolveGroupChatChannel()
-          or "PARTY"
         local sentOwnKey = SendPartyChatMessage(ownLine)
-        trace(
-          string.format(
-            "[UI] share_keys_send_own channel=%s sent=%s",
-            tostring(chatChannel),
-            tostring(sentOwnKey == true)
-          )
-        )
         if not sentOwnKey then
           print(ownLine)
         end
@@ -1479,13 +1440,6 @@ local function CreateShareKeysButton(mainFrame, deps)
     if inGroup and type(deps.sendShareKeysRequest) == "function" then
       requestedPeers = deps.sendShareKeysRequest() == true
     end
-    trace(
-      string.format(
-        "[UI] share_keys_request_peers inGroup=%s requestedPeers=%s",
-        tostring(inGroup),
-        tostring(requestedPeers)
-      )
-    )
     if not announcedOwnKey and not requestedPeers then
       return
     end

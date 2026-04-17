@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-18 - Version 0.9.169 (patch)
+
+- **Share-keys chat announcement fixed end-to-end:**
+  - Root cause 1: WoW silently drops addon-sent chat messages that wrap square brackets in `|cffXXXXXX...|r` color codes (server-side fake-item-link filter). The plain-text keystone fallback no longer emits a color code.
+  - Root cause 2: `C_MythicPlus.GetOwnedKeystoneLink` was removed in current WoW retail. `BuildKeystoneChatLink` now falls back to a bag scan for item `180653` and uses `C_Container.GetContainerItemLink` to obtain a real, server-accepted keystone link.
+  - Net effect: the "Keys teilen" button now posts a clickable keystone link to party chat that group members actually see.
+
+- **German locale:**
+  - Replaced `Schluessel` with `Key` / `Keys` across keystone-related UI strings (`COL_KEY`, `BTN_SHARE_KEYS`, `TOOLTIP_ANNOUNCE_KEYS`, `TOOLTIP_SYNC_DEBUG_KEY`, `ANNOUNCE_PREFIX`, `TESTALL_DUMMY_GROUP`). The Blizzard item name "Persönlicher Schlüssel zur Arkantine" stays unchanged.
+
+- **Cleanup:**
+  - Removed temporary share-keys diagnostic traces that were only needed to locate the chat-filter and API-removal root causes.
+
 ## 2026-04-17 - Version 0.9.168 (patch)
 
 - **Runtime-log noise reduction:**
