@@ -114,7 +114,8 @@ function RuntimeLog.CreateController(opts)
       deltaStr = string.format(" +%.3f", math.max(0, now - lastRawTime))
     end
     lastRawTime = now or lastRawTime
-    local entry = string.format("seq=%d t=%s%s %s", sequence, tostring(getTimestamp()), deltaStr, NormalizeRuntimeMessage(message))
+    local entry =
+      string.format("seq=%d t=%s%s %s", sequence, tostring(getTimestamp()), deltaStr, NormalizeRuntimeMessage(message))
     logBuffer.Append(EnsureStorage(), "", entry, maxEntries)
     if watchFn then
       watchFn(entry)

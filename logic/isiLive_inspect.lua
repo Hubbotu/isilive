@@ -318,9 +318,10 @@ function Inspect.CreateController(config)
   controller.inspectTimeout = tonumber(config and config.inspectTimeout) or 2
   controller.retryInterval = tonumber(config and config.retryInterval) or 5
   controller.inspectDelay = tonumber(config and config.inspectDelay) or 1
-  controller.logRuntimeTracef = type(config and config.logRuntimeTracef) == "function" and config.logRuntimeTracef or nil
+  controller.logRuntimeTracef = type(config and config.logRuntimeTracef) == "function" and config.logRuntimeTracef
+    or nil
   controller.logRuntimeTracefDeep = type(config and config.logRuntimeTracefDeep) == "function"
-    and config.logRuntimeTracefDeep
+      and config.logRuntimeTracefDeep
     or nil
 
   -- Local variable instead of a public controller field to prevent accidental

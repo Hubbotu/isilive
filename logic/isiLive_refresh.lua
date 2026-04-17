@@ -70,7 +70,10 @@ function Refresh.CreateController(opts)
     local challengeMapID = getActiveChallengeMapID()
     if challengeMapID then
       if logRuntimeTracef then
-        logRuntimeTracef("[REFRESH] run_full_refresh blocked reason=challenge_active mapID=%s", tostring(challengeMapID))
+        logRuntimeTracef(
+          "[REFRESH] run_full_refresh blocked reason=challenge_active mapID=%s",
+          tostring(challengeMapID)
+        )
       end
       return false
     end

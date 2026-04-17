@@ -89,7 +89,9 @@ local function SyncLogInternal(traceFn, event, formatText, ...)
   if argCount > 0 then
     data = string.format(tostring(formatText or ""), ...)
   end
-  if syncDebugLog then syncDebugLog(string.format("[SYNC] %s %s", event, data or "")) end
+  if syncDebugLog then
+    syncDebugLog(string.format("[SYNC] %s %s", event, data or ""))
+  end
 end
 
 local function SyncLog(event, formatText, ...)
@@ -884,7 +886,12 @@ function Sync.SendKey(opts)
   local dedupePayload = string.format("KEY:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
   local now = GetTime()
   if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastKeyPayloadSent then
-    SyncLogDeep("send_key_blocked", "reason=unchanged mapID=%s level=%s", tostring(numericMapID), tostring(numericLevel))
+    SyncLogDeep(
+      "send_key_blocked",
+      "reason=unchanged mapID=%s level=%s",
+      tostring(numericMapID),
+      tostring(numericLevel)
+    )
     return
   end
   if not opts.force and dedupePayload == lastKeyPayloadSent and (now - lastIsiLiveKeyAt) < ISILIVE_KEY_COOLDOWN then

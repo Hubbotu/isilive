@@ -202,7 +202,9 @@ local function LogInternal(traceFn, event, formatText, ...)
   if argCount > 0 then
     data = string.format(tostring(formatText or ""), ...)
   end
-  if debugLog then debugLog(string.format("[LFG] %s %s", event, data or "")) end
+  if debugLog then
+    debugLog(string.format("[LFG] %s %s", event, data or ""))
+  end
 end
 
 local function Log(event, formatText, ...)
@@ -456,12 +458,8 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
     local memberCount = GetGroupMemberCount()
-    local rosterSignature = string.format(
-      "%s|%s|%s",
-      tostring(inGroup),
-      tostring(memberCount),
-      tostring(pendingAcceptedInviteMapID)
-    )
+    local rosterSignature =
+      string.format("%s|%s|%s", tostring(inGroup), tostring(memberCount), tostring(pendingAcceptedInviteMapID))
     local rosterLogFn = rosterSignature == lastRosterUpdateSignature and LogDeep or Log
     lastRosterUpdateSignature = rosterSignature
     rosterLogFn(
