@@ -135,6 +135,10 @@ local function FinalizeFactorySettings(ctx)
         end
       end,
       onBgAlphaChange = function(val)
+        local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+        if logFn then
+          logFn(string.format("[SETTINGS] bg_alpha val=%s", tostring(val)))
+        end
         local uiCommon = ctx.addonTable and ctx.addonTable.UICommon
         if type(uiCommon) == "table" and type(uiCommon.Colors) == "table" then
           uiCommon.Colors.BG_PRIMARY[4] = val
@@ -155,6 +159,10 @@ local function FinalizeFactorySettings(ctx)
         end
       end,
       onUiScaleChange = function(val)
+        local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+        if logFn then
+          logFn(string.format("[SETTINGS] ui_scale val=%s", tostring(val)))
+        end
         if ctx.mainFrame and type(ctx.mainFrame.SetScale) == "function" then
           ctx.mainFrame:SetScale(val)
         end
@@ -277,6 +285,7 @@ local function FinalizeFactoryRuntime(ctx)
     retryInterval = ctx.RETRY_INTERVAL,
     inspectDelay = ctx.INSPECT_DELAY,
     sendOwnKeySnapshot = ctx.SendOwnKeySnapshot,
+    logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
   })
   ctx.OnEvent = function(self, event, ...)
     ctx.eventHandlersController.Dispatch(self, event, ...)
@@ -502,6 +511,22 @@ local function FinalizeFactoryRuntime(ctx)
 
   ctx.eventHandlersController = runtimeSetupResult.eventHandlersController
   ctx.Print(string.format(ctx.L.LOADED_HINT, ctx.GetAddonVersionRaw()))
+
+  if ctx.runtimeLogController and ctx.runtimeLogController.IsEnabled and ctx.runtimeLogController.IsEnabled() then
+    local db = rawget(_G, "IsiLiveDB") or {}
+    ctx.runtimeLogController.Log(
+      string.format(
+        "[INIT] addon_loaded version=%s locale=%s syncEnabled=%s "
+          .. "autoOpenOnQueue=%s autoCloseMainFrame=%s autoShowOnStartup=%s",
+        tostring(ctx.GetAddonVersionRaw()),
+        tostring(db.locale or "default"),
+        tostring(db.syncEnabled),
+        tostring(db.autoOpenOnQueue),
+        tostring(db.autoCloseMainFrame),
+        tostring(db.autoShowMainFrameOnStartup)
+      )
+    )
+  end
 
   FinalizeFactorySettings(ctx)
 end

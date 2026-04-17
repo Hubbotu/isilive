@@ -28,23 +28,28 @@ local function BuildLFGGroupRosterTraceLogger(ctx, modules)
       resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
     end
 
-    local localTargetMapID = type(ctx.ResolveLocalStatusTargetMapID) == "function" and ctx.ResolveLocalStatusTargetMapID()
+    local localTargetMapID = type(ctx.ResolveLocalStatusTargetMapID) == "function"
+        and ctx.ResolveLocalStatusTargetMapID()
       or nil
     local now = tonumber(GetTime and GetTime()) or 0
 
-    logFn(string.format(
-      "[LFG_GROUP5] ts=%s event=%s in_group=%s members=%s detected_before=%s detected_after=%s pending_accept=%s latest_queue_map=%s local_target_map=%s resolved_spell=%s",
-      tostring(now),
-      FormatTraceValue(snapshot.event),
-      FormatTraceValue(snapshot.inGroup),
-      FormatTraceValue(snapshot.members),
-      FormatTraceValue(snapshot.detectedBefore),
-      FormatTraceValue(snapshot.detectedAfter),
-      FormatTraceValue(snapshot.pendingAccept),
-      FormatTraceValue(snapshot.latestQueueMap),
-      FormatTraceValue(localTargetMapID),
-      FormatTraceValue(resolvedSpellID)
-    ))
+    logFn(
+      string.format(
+        "[LFG_GROUP5] ts=%s event=%s in_group=%s members=%s "
+          .. "detected_before=%s detected_after=%s pending_accept=%s "
+          .. "latest_queue_map=%s local_target_map=%s resolved_spell=%s",
+        tostring(now),
+        FormatTraceValue(snapshot.event),
+        FormatTraceValue(snapshot.inGroup),
+        FormatTraceValue(snapshot.members),
+        FormatTraceValue(snapshot.detectedBefore),
+        FormatTraceValue(snapshot.detectedAfter),
+        FormatTraceValue(snapshot.pendingAccept),
+        FormatTraceValue(snapshot.latestQueueMap),
+        FormatTraceValue(localTargetMapID),
+        FormatTraceValue(resolvedSpellID)
+      )
+    )
   end
 end
 
@@ -277,7 +282,11 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     runtimeState.SetPendingQueueJoinInfo(nil)
   end
   ctx.CaptureQueueJoinCandidate = function(...)
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
     if ctx.GetActiveChallengeMapID() then
+      if logFn then
+        logFn("[QUEUE_FLOW] capture_candidate blocked reason=challenge_active")
+      end
       return
     end
 
@@ -304,6 +313,9 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
 
     if not runtimeState.GetPendingQueueJoinInfo() then
       if not groupName then
+        if logFn then
+          logFn("[QUEUE_FLOW] capture_candidate skipped reason=no_group_name")
+        end
         return
       end
 
@@ -312,6 +324,16 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
         capturedAt = GetTime()
       end
 
+      if logFn then
+        logFn(
+          string.format(
+            "[QUEUE_FLOW] capture_candidate groupName=%s capturedAt=%s isInGroup=%s",
+            tostring(groupName),
+            tostring(capturedAt),
+            tostring(IsInGroup())
+          )
+        )
+      end
       runtimeState.SetPendingQueueJoinInfo({
         groupName = groupName,
         capturedAt = capturedAt,
@@ -657,8 +679,12 @@ local function InitializeFactoryPrimaryControllers(ctx)
     isSyncUserKnown = function(name, realm)
       return modules.sync.IsUserKnown(name, realm)
     end,
+    logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
   })
 
+  if type(modules.sync.SetLogger) == "function" then
+    modules.sync.SetLogger(ctx.runtimeLogController and ctx.runtimeLogController.Log or nil)
+  end
   ctx.keySyncController = initResult.keySyncController
   ctx.MarkIsiLiveUser = initResult.markIsiLiveUser
   ctx.UnitHasIsiLive = initResult.unitHasIsiLive
@@ -726,6 +752,10 @@ local function InitializeFactoryPrimaryControllers(ctx)
     return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID)
   end
   ctx.UpdateMPlusTeleportButton = function(soundContext)
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[TP] update_button_called soundContext=%s", tostring(soundContext)))
+    end
     -- Priority 1: LFGDetect (invite accepted / own active listing). This is
     -- the strongest direct signal from the current LFG flow and must
     -- outrank sync/queue/listing resolution, which can otherwise surface a
@@ -736,11 +766,36 @@ local function InitializeFactoryPrimaryControllers(ctx)
         and type(lfgDetect.GetDetectedMapID) == "function"
         and lfgDetect.GetDetectedMapID()
       or nil
+    if logFn then
+      logFn(string.format("[TP] lfg_detected_map detectedMapID=%s", tostring(detectedMapID)))
+    end
     if detectedMapID then
       resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedMapID)
+      if logFn then
+        logFn(
+          string.format(
+            "[TP] spell_from_lfg mapID=%s resolvedSpellID=%s",
+            tostring(detectedMapID),
+            tostring(resolvedSpellID)
+          )
+        )
+      end
     end
     if not resolvedSpellID then
       resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
+      if logFn then
+        logFn(string.format("[TP] spell_from_active resolvedSpellID=%s", tostring(resolvedSpellID)))
+      end
+    end
+    if logFn then
+      logFn(
+        string.format(
+          "[TP] frame_show_check spellFound=%s soundContext=%s frameShown=%s",
+          tostring(resolvedSpellID ~= nil),
+          tostring(soundContext),
+          tostring(ctx.mainFrame and ctx.mainFrame:IsShown())
+        )
+      )
     end
     if
       resolvedSpellID
@@ -754,6 +809,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
         reason = "lfg-highlight",
         skipShowCallbacks = true,
       })
+    end
+    if logFn then
+      logFn(string.format("[TP] update_buttons_called resolvedSpellID=%s", tostring(resolvedSpellID)))
     end
     ctx.teleportUIController.UpdateButtons(resolvedSpellID, soundContext)
   end
@@ -771,6 +829,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end
     if type(lfgDetect.SetGroupRosterTraceLogger) == "function" then
       lfgDetect.SetGroupRosterTraceLogger(BuildLFGGroupRosterTraceLogger(ctx, modules))
+    end
+    if type(lfgDetect.SetLogger) == "function" then
+      lfgDetect.SetLogger(ctx.runtimeLogController and ctx.runtimeLogController.Log or nil)
     end
   end
 end
@@ -856,6 +917,10 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
   end)
 
   local function SetProcessingActive(isActive)
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[UI] processing_active isActive=%s", tostring(isActive)))
+    end
     if isActive then
       ctx.mainFrame:SetScript("OnUpdate", ctx.InspectLoop)
       return
@@ -964,6 +1029,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     getActiveChallengeMapID = ctx.GetActiveChallengeMapID,
     getTime = GetTime,
     refreshDebounceSeconds = 10,
+    logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
   }))
 
   local RESYNC_COOLDOWN = 10
@@ -1013,6 +1079,10 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     local now = GetTime and GetTime() or 0
     if now < resyncCooldownEnd then
       return
+    end
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn("[UI] btn_click name=refresh")
     end
     ctx.refreshController.RunFullRefresh()
     resyncCooldownEnd = now + RESYNC_COOLDOWN
@@ -1125,16 +1195,32 @@ local function InitializeFactorySecondaryTestModeAndBindings(ctx, modules, runti
   }))
 
   ctx.EnterFullDummyPreview = function()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn("[TESTMODE] enter_full_dummy_preview")
+    end
     ctx.testModeController.EnterFullDummyPreview()
   end
   ctx.ExitTestMode = function()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn("[TESTMODE] exit")
+    end
     ctx.testModeController.ExitTestMode()
   end
   ctx.ToggleStandardTestMode = function()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn("[TESTMODE] toggle_standard")
+    end
     ctx.testModeController.ToggleStandardTestMode()
   end
   ctx.ToggleDemoMode = function()
     local wasTestMode = runtimeState.IsTestMode() or runtimeState.IsTestAllMode()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[TESTMODE] toggle_demo wasTestMode=%s", tostring(wasTestMode)))
+    end
     ctx.testModeController.ToggleDemoMode()
     -- After demo exit, pretend we just left a group so HandleNoGroup rebuilds
     -- the player entry correctly even when the player is solo.
@@ -1154,6 +1240,10 @@ end
 local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
   ctx.SetLanguage = function(tag)
     local resolved = modules.locale.ResolveLocaleTag(tag)
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[SETTINGS] set_language tag=%s resolved=%s", tostring(tag), tostring(resolved)))
+    end
     ctx.L = ctx.locales[resolved] or ctx.locales.enUS
     if IsiLiveDB then
       IsiLiveDB.locale = resolved
@@ -1178,6 +1268,7 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
     ctx.inspectController.EnqueueInspect(unit, ctx.GetRoster())
   end
   ctx.CheckIfEnteredTargetDungeon = function()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
     local targetMapID = ctx.ResolveStatusTargetMapID()
     if not targetMapID then
       return
@@ -1197,6 +1288,16 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
       return
     end
 
+    if logFn then
+      logFn(
+        string.format(
+          "[STATE] check_entered_target_dungeon targetMapID=%s currentMapID=%s match=%s",
+          tostring(targetMapID),
+          tostring(currentMapID),
+          tostring(currentMapID == targetMapID)
+        )
+      )
+    end
     if targetMapID and currentMapID == targetMapID then
       local lfgDetect = addonTable.LFGDetect
       if type(lfgDetect) == "table" and type(lfgDetect.ClearAllState) == "function" then
@@ -1612,6 +1713,10 @@ local function CreateFactoryMinimapButton(ctx)
 
   btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   btn:SetScript("OnClick", function(_, mouseButton)
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[UI] btn_click name=minimap mouseButton=%s", tostring(mouseButton)))
+    end
     if mouseButton == "RightButton" then
       local blizzardSettings = rawget(_G, "Settings")
       if type(blizzardSettings) == "table" and type(blizzardSettings.OpenToCategory) == "function" then

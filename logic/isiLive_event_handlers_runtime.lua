@@ -378,11 +378,32 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
     local playerName, playerRealm = ctx.getUnitNameAndRealm("player")
     ctx.markIsiLiveUser(playerName, playerRealm)
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace(
+        string.format(
+          "[RUNTIME] player_login playerName=%s playerRealm=%s",
+          tostring(playerName),
+          tostring(playerRealm)
+        )
+      )
+    end
   end
 
   local function HandlePlayerEnteringWorldEvent(_self)
+    local inPartyInstance = ctx.isInPartyInstance() == true
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace(
+        string.format(
+          "[RUNTIME] player_entering_world isRaid=%s inPartyInstance=%s isInGroup=%s isInChallenge=%s",
+          tostring(IsRaidModeActive(ctx)),
+          tostring(inPartyInstance),
+          tostring(ctx.isInGroup()),
+          tostring(ctx.isInChallengeMode())
+        )
+      )
+    end
     if IsRaidModeActive(ctx) then
-      ctx.wasInPartyInstance = ctx.isInPartyInstance() == true
+      ctx.wasInPartyInstance = inPartyInstance
       return
     end
     ctx.updateCdTracker()
@@ -395,7 +416,6 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     ctx.updateStatusLine()
     ctx.checkIfEnteredTargetDungeon()
 
-    local inPartyInstance = ctx.isInPartyInstance() == true
     local wasInPartyInstance = ctx.wasInPartyInstance
     ctx.wasInPartyInstance = inPartyInstance
 
@@ -412,10 +432,16 @@ function RuntimeLifecycle.BuildHandlers(ctx)
   end
 
   local function HandlePlayerRegenDisabledEvent(_self)
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace("[RUNTIME] player_regen_disabled")
+    end
     ApplyCombatFade(ctx, 0)
   end
 
   local function HandlePlayerRegenEnabledEvent(_self)
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace("[RUNTIME] player_regen_enabled")
+    end
     if ctx.getPendingBindingApply() then
       ctx.applyHotkeyBindings()
     end

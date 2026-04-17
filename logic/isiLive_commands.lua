@@ -55,6 +55,7 @@ local function BuildDeps(opts)
       return {}
     end,
     resetDB = opts.resetDB or function() end,
+    logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
   }
 end
 
@@ -317,6 +318,9 @@ local function ExecuteSlashCommand(ctx, msg)
   local L = ctx.getL() or {}
   local state = ctx.getState() or {}
   local cmd = string.lower(strtrim(msg or ""))
+  if ctx.logRuntimeTrace then
+    ctx.logRuntimeTrace(string.format("[CMD] execute cmd=%s", tostring(cmd)))
+  end
 
   if TryHandleTestCommands(ctx, L, state, cmd) then
     return

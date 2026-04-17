@@ -95,7 +95,7 @@ local function CreateFactoryContext(addonName, tbl)
   end
 
   ctx.runtimeLogController = modules.runtimeLog.CreateController({
-    maxEntries = 800,
+    maxEntries = 10000,
   })
 
   ctx.queueDebugController = modules.queueDebug.CreateController({
@@ -115,7 +115,13 @@ local function CreateFactoryContext(addonName, tbl)
   })
 
   if modules.queue and modules.queue.SetDebugLogger then
-    modules.queue.SetDebugLogger(ctx.queueDebugController.Log)
+    modules.queue.SetDebugLogger(function(msg)
+      ctx.queueDebugController.Log(msg)
+      local runtimeLog = ctx.runtimeLogController
+      if runtimeLog then
+        runtimeLog.Log(msg)
+      end
+    end)
   end
 
   local runtimeState = isiLiveRuntimeState.CreateController()
@@ -419,9 +425,23 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.SetMainFrameVisible = function(visible, reasonOrOpts)
     local opts = type(reasonOrOpts) == "table" and reasonOrOpts or {}
     local reason = type(reasonOrOpts) == "string" and reasonOrOpts or opts.reason
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(
+        string.format(
+          "[FRAME] set_visible visible=%s reason=%s skipShowCallbacks=%s",
+          tostring(visible),
+          tostring(reason),
+          tostring(opts.skipShowCallbacks)
+        )
+      )
+    end
     if visible and reason == "queue" then
       local dbRef = rawget(_G, "IsiLiveDB")
       if dbRef and dbRef.autoOpenOnQueue == false then
+        if logFn then
+          logFn("[FRAME] blocked reason=autoOpenOnQueue_disabled")
+        end
         return false
       end
     end
@@ -436,6 +456,10 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.ToggleMainFrameVisibility = function()
     frameBridgeContext.ToggleMainFrameVisibility()
     local isNowVisible = frameBridgeContext.IsMainFrameVisible and frameBridgeContext.IsMainFrameVisible()
+    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    if logFn then
+      logFn(string.format("[UI] toggle_main_frame isNowVisible=%s", tostring(isNowVisible)))
+    end
     if not isNowVisible and type(ctx.ExitTestMode) == "function" then
       ctx.ExitTestMode()
     end

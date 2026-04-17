@@ -90,6 +90,7 @@ local function BuildDeps(opts)
       return "hide"
     end,
     autoCloseMainFrame = opts.autoCloseMainFrame or emptyfn,
+    logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or emptyfn,
   }
 end
 
@@ -107,10 +108,17 @@ local SetIfNotNil
 local UpdatePlayerEntry
 
 local function HandleNoGroup(deps, wasInGroupBefore)
+  local leftGroupNow = wasInGroupBefore and not deps.isInGroup()
+  deps.logRuntimeTrace(
+    string.format(
+      "[GROUP] handle_no_group wasInGroupBefore=%s leftGroupNow=%s",
+      tostring(wasInGroupBefore),
+      tostring(leftGroupNow)
+    )
+  )
   deps.setWasGroupLeader(nil)
   deps.setWasRaidGroup(false)
   deps.clearRioBaselineSnapshot()
-  local leftGroupNow = wasInGroupBefore and not deps.isInGroup()
   if leftGroupNow then
     deps.clearLatestQueueTarget()
     deps.clearKnownUsers()
@@ -249,6 +257,13 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
     conversion.info.isLeader = false
     roster[conversion.ghostKey] = conversion.info
     roster[conversion.partyUnit] = nil
+    deps.logRuntimeTrace(
+      string.format(
+        "[ROSTER] member_left unit=%s name=%s",
+        tostring(conversion.partyUnit),
+        tostring(conversion.info.name)
+      )
+    )
   end
 
   -- 3. Update slots with current group data (preserving data across slot shifts)
@@ -317,6 +332,14 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
         shouldPlayJoinSound = not existing or existing.isGhost == true
       end
       if shouldPlayJoinSound then
+        deps.logRuntimeTrace(
+          string.format(
+            "[ROSTER] member_joined unit=%s name=%s class=%s",
+            tostring(unit),
+            tostring(memberName),
+            tostring(memberClass)
+          )
+        )
         callbacks.onMemberJoinedGroup()
       end
 
@@ -337,6 +360,14 @@ local function HandleGroupRosterUpdate(deps)
   local wasInGroupBefore = deps.getWasInGroup() == true
   local inGroupNow = deps.isInGroup() == true
   local joinedNow = inGroupNow and not wasInGroupBefore
+  deps.logRuntimeTrace(
+    string.format(
+      "[GROUP] roster_update wasInGroup=%s inGroupNow=%s joinedNow=%s",
+      tostring(wasInGroupBefore),
+      tostring(inGroupNow),
+      tostring(joinedNow)
+    )
+  )
   deps.setWasInGroup(inGroupNow)
 
   if deps.getActiveChallengeMapID() then

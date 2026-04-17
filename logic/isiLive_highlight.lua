@@ -212,34 +212,91 @@ local function ResolveActiveListingTarget(deps, entryInfo)
 end
 
 local function ResolveActiveTeleportSpellID(deps, getActiveListingTarget, latestQueueActivityID, latestQueueMapID)
+  local log = deps.logRuntimeTrace
   local currentMapID = ResolveCurrentMapID()
+  if log then
+    log(
+      string.format(
+        "[HIGHLIGHT] resolve_spell_id currentMapID=%s queueActivityID=%s queueMapID=%s",
+        tostring(currentMapID),
+        tostring(latestQueueActivityID),
+        tostring(latestQueueMapID)
+      )
+    )
+  end
 
   local activeTarget = getActiveListingTarget()
   if type(activeTarget) == "table" and activeTarget.mapID and activeTarget.spellID then
     if not currentMapID or currentMapID ~= activeTarget.mapID then
+      if log then
+        log(
+          string.format(
+            "[HIGHLIGHT] spell_from_active_target mapID=%s spellID=%s",
+            tostring(activeTarget.mapID),
+            tostring(activeTarget.spellID)
+          )
+        )
+      end
       return activeTarget.spellID
+    end
+    if log then
+      log(
+        string.format(
+          "[HIGHLIGHT] blocked_already_in_dungeon currentMapID=%s targetMapID=%s",
+          tostring(currentMapID),
+          tostring(activeTarget.mapID)
+        )
+      )
     end
     return nil
   end
 
   if not deps.isInGroup() then
+    if log then
+      log("[HIGHLIGHT] blocked_not_in_group")
+    end
     return nil
   end
 
   local queueMapID = tonumber(latestQueueMapID)
   if not queueMapID then
     queueMapID = ResolveMapIDFromActivityID(deps, latestQueueActivityID)
+    if log then
+      log(
+        string.format(
+          "[HIGHLIGHT] queue_map_from_activity activityID=%s resolved=%s",
+          tostring(latestQueueActivityID),
+          tostring(queueMapID)
+        )
+      )
+    end
   end
 
   if not queueMapID then
+    if log then
+      log("[HIGHLIGHT] blocked_no_queue_map")
+    end
     return nil
   end
 
   if currentMapID and currentMapID == queueMapID then
+    if log then
+      log(
+        string.format(
+          "[HIGHLIGHT] blocked_already_in_dungeon currentMapID=%s queueMapID=%s",
+          tostring(currentMapID),
+          tostring(queueMapID)
+        )
+      )
+    end
     return nil
   end
 
-  return deps.resolveTeleportSpellIDByMapID(queueMapID)
+  local spellID = deps.resolveTeleportSpellIDByMapID(queueMapID)
+  if log then
+    log(string.format("[HIGHLIGHT] spell_from_queue mapID=%s spellID=%s", tostring(queueMapID), tostring(spellID)))
+  end
+  return spellID
 end
 
 function Highlight.CreateController(opts)
@@ -255,6 +312,7 @@ function Highlight.CreateController(opts)
     resolveMapIDByActivityID = opts.resolveMapIDByActivityID or function(_activityID)
       return nil
     end,
+    logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
   }
 
   local controller = {}

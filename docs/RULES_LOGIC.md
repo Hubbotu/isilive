@@ -392,7 +392,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Roster ready check stays green for 20 seconds after finish
   - Roster declined ready check stays red for 20 seconds after finish
   - Ready-check dedicated refresh clears declined row background after hold expiry
-  - Event handlers route ready check lifecycle through refreshReadyCheckUI without generic rerender
+  - Event handlers toggle ready check state and refresh UI on ready check events
+  - Event handlers write ready check trace entries when runtime logging is available
   - Event handlers keep ready-check rows green for 20 seconds after finish
   - Event handlers keep declined ready-check rows red for 20 seconds after finish
   - Event handlers keep unanswered ready-check rows red for 20 seconds after finish

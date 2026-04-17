@@ -1416,7 +1416,9 @@ local function CreateShareKeysButton(mainFrame, deps)
     if IsCooldownActive(now) then
       return
     end
-
+    if type(deps.logRuntimeTrace) == "function" then
+      deps.logRuntimeTrace("[UI] btn_click name=share_keys")
+    end
     -- Post own key directly, then trigger all other isiLive group members to post theirs
     local announcedOwnKey = false
     local ownLine = BuildOwnKeyAnnounceLine({
@@ -1463,6 +1465,9 @@ local function CreatePanelButtons(mainFrame, deps)
     if not isPlayerLeader() then
       return
     end
+    if type(deps.logRuntimeTrace) == "function" then
+      deps.logRuntimeTrace("[UI] btn_click name=readycheck")
+    end
     local doReadyCheck = _G.DoReadyCheck
     if type(doReadyCheck) == "function" then
       pcall(doReadyCheck)
@@ -1477,7 +1482,9 @@ local function CreatePanelButtons(mainFrame, deps)
     if not isPlayerLeader() then
       return
     end
-
+    if type(deps.logRuntimeTrace) == "function" then
+      deps.logRuntimeTrace("[UI] btn_click name=countdown")
+    end
     local partyInfo = rawget(_G, "C_PartyInfo")
     local doCountdown = partyInfo and partyInfo.DoCountdown or nil
     if type(doCountdown) == "function" then
@@ -2331,6 +2338,7 @@ function RosterPanel.CreateController(opts)
   end
   local sendShareKeysRequest = type(opts.sendShareKeysRequest) == "function" and opts.sendShareKeysRequest or nil
   local getPlayerLastRunDps = type(opts.getPlayerLastRunDps) == "function" and opts.getPlayerLastRunDps or nil
+  local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
   local showRosterColumnGuides = type(opts.showRosterColumnGuides) == "function" and opts.showRosterColumnGuides
     or function()
       return false
@@ -2357,6 +2365,7 @@ function RosterPanel.CreateController(opts)
     sendShareKeysRequest = sendShareKeysRequest,
     isRaidGroup = isRaidGroup,
     showRosterColumnGuides = showRosterColumnGuides,
+    logRuntimeTrace = logRuntimeTrace,
   })
 
   local readyCheckButton = ui.readyCheckButton

@@ -153,16 +153,20 @@ local function LogReadyCheckFinishHold(ctx, activeBefore, readyUnits, declinedUn
   local declinedList = #declinedUnits > 0 and table.concat(declinedUnits, ",") or "-"
   local activeAfter = ctx.isReadyCheckActive and ctx.isReadyCheckActive() == true
 
-  logRuntimeTrace(string.format(
-    "[RC_FINISH_HOLD] ts=%s event=READY_CHECK_FINISHED active_before=%s active_after=%s ready_units=%s declined_units=%s ready_until_count=%d declined_until_count=%d",
-    tostring(now),
-    tostring(activeBefore),
-    tostring(activeAfter),
-    readyList,
-    declinedList,
-    readyUntilCount,
-    declinedUntilCount
-  ))
+  logRuntimeTrace(
+    string.format(
+      "[RC_FINISH_HOLD] ts=%s event=READY_CHECK_FINISHED active_before=%s "
+        .. "active_after=%s ready_units=%s declined_units=%s "
+        .. "ready_until_count=%d declined_until_count=%d",
+      tostring(now),
+      tostring(activeBefore),
+      tostring(activeAfter),
+      readyList,
+      declinedList,
+      readyUntilCount,
+      declinedUntilCount
+    )
+  )
 end
 
 local function SetPendingPostChallengeRefresh(ctx, value)
@@ -450,6 +454,9 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     if IsRaidModeActive(ctx) then
       return
     end
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace("[RC] challenge_mode_start state_set var=readyCheckActive val=false")
+    end
     SetPendingPostChallengeRefresh(ctx, nil)
     if type(ctx.resetKickStats) == "function" then
       ctx.resetKickStats()
@@ -460,6 +467,9 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.setReadyCheckActive(false)
     ResetDamageMeterIfAvailable()
     ctx.captureRioBaselineSnapshot()
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace("[STATE] set_active_joined_key_map_id value=nil reason=challenge_start")
+    end
     ctx.setActiveJoinedKeyMapID(nil)
     ctx.checkIfEnteredTargetDungeon()
     if ctx.shouldAutoCloseMainFrame() and not ctx.isRosterCollapsed() then
@@ -474,7 +484,18 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     if IsRaidModeActive(ctx) then
       return
     end
-    TryRecordCompletedRun(ctx, ResolveCompletedRunInfo(), POST_RUN_CAPTURE_RETRIES)
+    local runInfo = ResolveCompletedRunInfo()
+    if type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace(
+        string.format(
+          "[RC] challenge_mode_end mapID=%s level=%s onTime=%s",
+          tostring(runInfo and runInfo.mapID),
+          tostring(runInfo and runInfo.level),
+          tostring(runInfo and runInfo.onTime)
+        )
+      )
+    end
+    TryRecordCompletedRun(ctx, runInfo, POST_RUN_CAPTURE_RETRIES)
 
     if ctx.isInGroup() and ctx.shouldAutoOpenMainFrameOnKeyEnd() then
       ctx.setMainFrameVisible(true)

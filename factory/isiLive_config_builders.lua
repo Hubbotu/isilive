@@ -66,6 +66,7 @@ function ConfigBuilders.BuildLeaderWatchControllerOpts(ctx)
     printFn = ctx.printFn,
     getL = ctx.getL,
     updateLeaderButtons = ctx.updateLeaderButtons,
+    logRuntimeTrace = ctx.logRuntimeTrace,
   }
 end
 
@@ -154,6 +155,7 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     queueDebugController = ctx.queueDebugController,
     runtimeLogController = ctx.runtimeLogController,
     resetDB = ctx.resetDB,
+    logRuntimeTrace = ctx.logRuntimeTrace,
   }
 end
 

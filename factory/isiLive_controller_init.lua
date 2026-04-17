@@ -15,6 +15,7 @@ local function CreateKeySyncController(ctx)
     canRespondToRefreshRequest = ctx.canRespondToRefreshRequest,
     getPlayerLastRunDps = ctx.getPlayerLastRunDps,
     getPlayerSyncSummary = ctx.getPlayerSyncSummary,
+    logRuntimeTrace = ctx.logRuntimeTrace,
   })
   return {
     keySyncController = controller,
@@ -37,6 +38,7 @@ local function CreateHighlightController(ctx)
     isInGroup = ctx.isInGroup,
     resolveTeleportSpellIDByMapID = ctx.resolveTeleportSpellIDByMapID,
     resolveMapIDByActivityID = ctx.resolveMapIDByActivityID,
+    logRuntimeTrace = ctx.logRuntimeTrace,
   })
 end
 
@@ -102,6 +104,7 @@ local function CreateRosterPanelController(ctx, keySyncResult)
       local db = rawget(_G, "IsiLiveDB")
       return type(db) == "table" and db.showRosterColumnGuides == true
     end,
+    logRuntimeTrace = ctx.logRuntimeTrace,
   })
 
   return {

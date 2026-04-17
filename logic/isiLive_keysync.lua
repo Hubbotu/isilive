@@ -451,6 +451,7 @@ function KeySync.CreateController(opts)
     return true
   end
   local getPlayerLastRunDps = opts.getPlayerLastRunDps or nil
+  local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
   assert(type(sync.MarkUser) == "function", "isiLive: KeySync requires sync.MarkUser")
   assert(type(sync.IsUnitKnown) == "function", "isiLive: KeySync requires sync.IsUnitKnown")
   assert(type(sync.RegisterPrefix) == "function", "isiLive: KeySync requires sync.RegisterPrefix")
@@ -531,7 +532,19 @@ function KeySync.CreateController(opts)
   end
 
   function controller.ApplyKnownKeyToRosterEntry(info)
-    return ApplyKnownKeyToRosterEntry(sync, info)
+    local changed = ApplyKnownKeyToRosterEntry(sync, info)
+    if changed and logRuntimeTrace then
+      local keyInfo = type(info) == "table" and sync.GetPlayerKeyInfo(info.name, info.realm)
+      logRuntimeTrace(
+        string.format(
+          "[KEYSYNC] applied unit=%s mapID=%s level=%s",
+          tostring(info and info.name or "?"),
+          tostring(keyInfo and keyInfo.mapID or "nil"),
+          tostring(keyInfo and keyInfo.level or "nil")
+        )
+      )
+    end
+    return changed
   end
 
   function controller.RefreshLocalPlayerKey(roster)
