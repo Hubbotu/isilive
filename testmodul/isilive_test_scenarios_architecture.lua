@@ -1129,6 +1129,42 @@ local function RegisterArchitectureModuleApiTests(test, Assert, LoadAddonModules
   end)
 end
 
+local function RegisterArchitectureGuardsSyncTests(test, Assert)
+  test("Architecture Guards required modules are registered in test harness FILE_PATHS", function()
+    local guardsContent = ReadFile("isiLive_guards.lua")
+    local harnessContent = ReadFile("testmodul/isilive_test_harness.lua")
+
+    local seenAny = false
+    for fileName in string.gmatch(guardsContent, 'file = "(isiLive_[%w_]+%.lua)"') do
+      seenAny = true
+      AssertContains(
+        Assert,
+        harnessContent,
+        string.format('["%s"]', fileName),
+        string.format("test harness FILE_PATHS must register %s (required by Guards)", fileName)
+      )
+    end
+    Assert.True(seenAny, "Guards REQUIRED_MODULES parse must yield at least one file entry")
+  end)
+
+  test("Architecture Guards required modules are covered by guards test scenario list", function()
+    local guardsContent = ReadFile("isiLive_guards.lua")
+    local guardsTestContent = ReadFile("testmodul/isilive_test_scenarios_guards.lua")
+
+    local seenAny = false
+    for fileName in string.gmatch(guardsContent, 'file = "(isiLive_[%w_]+%.lua)"') do
+      seenAny = true
+      AssertContains(
+        Assert,
+        guardsTestContent,
+        string.format('"%s"', fileName),
+        string.format("guards scenario REQUIRED_MODULES must list %s (required by Guards)", fileName)
+      )
+    end
+    Assert.True(seenAny, "Guards REQUIRED_MODULES parse must yield at least one file entry")
+  end)
+end
+
 return function(test, ctx)
   RegisterArchitectureSourceBoundaryTests(test, ctx.assert)
   RegisterArchitectureQueueWiringTests(test, ctx.assert)
@@ -1139,4 +1175,5 @@ return function(test, ctx)
   RegisterArchitectureNoticeTypographyTests(test, ctx.assert)
   RegisterArchitectureWorkflowTests(test, ctx.assert)
   RegisterArchitectureModuleApiTests(test, ctx.assert, ctx.load_modules)
+  RegisterArchitectureGuardsSyncTests(test, ctx.assert)
 end
