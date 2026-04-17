@@ -66,18 +66,16 @@ local function IsRaidModeActive(ctx)
 end
 
 function QueueLifecycle.BuildHandlers(ctx)
-  local log = type(ctx.logRuntimeTrace) == "function" and ctx.logRuntimeTrace or nil
+  local logf = type(ctx.logRuntimeTracef) == "function" and ctx.logRuntimeTracef or nil
   return {
     LFG_LIST_APPLICATION_STATUS_UPDATED = function(_self, ...)
       local args = { ... }
-      if log then
-        log(
-          string.format(
-            "[QUEUE] application_status_updated searchResultID=%s status=%s inChallenge=%s",
-            tostring(args[1]),
-            tostring(args[2]),
-            tostring(ctx.isInChallengeMode())
-          )
+      if logf then
+        logf(
+          "[QUEUE] application_status_updated searchResultID=%s status=%s inChallenge=%s",
+          tostring(args[1]),
+          tostring(args[2]),
+          tostring(ctx.isInChallengeMode())
         )
       end
       if ctx.isInChallengeMode() or IsRaidModeActive(ctx) then
@@ -88,14 +86,8 @@ function QueueLifecycle.BuildHandlers(ctx)
       end
       if ctx.isNegativeApplicationStatusEvent(...) then
         local preserve = ShouldPreservePendingQueueJoinInfoOnNegativeStatus(ctx)
-        if log then
-          log(
-            string.format(
-              "[QUEUE] negative_status searchResultID=%s preservePending=%s",
-              tostring(args[1]),
-              tostring(preserve)
-            )
-          )
+        if logf then
+          logf("[QUEUE] negative_status searchResultID=%s preservePending=%s", tostring(args[1]), tostring(preserve))
         end
         if not preserve then
           ctx.setPendingQueueJoinInfo(nil)
@@ -111,13 +103,11 @@ function QueueLifecycle.BuildHandlers(ctx)
     end,
     LFG_LIST_SEARCH_RESULT_UPDATED = function(_self, ...)
       local args = { ... }
-      if log then
-        log(
-          string.format(
-            "[QUEUE] search_result_updated searchResultID=%s inChallenge=%s",
-            tostring(args[1]),
-            tostring(ctx.isInChallengeMode())
-          )
+      if logf then
+        logf(
+          "[QUEUE] search_result_updated searchResultID=%s inChallenge=%s",
+          tostring(args[1]),
+          tostring(ctx.isInChallengeMode())
         )
       end
       if ctx.isInChallengeMode() or IsRaidModeActive(ctx) then
@@ -135,23 +125,21 @@ function QueueLifecycle.BuildHandlers(ctx)
           and (entryInfo.activityID or (type(entryInfo.activityIDs) == "table" and next(entryInfo.activityIDs)))
         or nil
       local mapID = type(entryInfo) == "table" and entryInfo.mapID or nil
-      if log then
-        log(
-          string.format(
-            "[QUEUE] active_entry_update hasListing=%s activityID=%s mapID=%s hadActiveJoinedKey=%s",
-            tostring(HasActiveListing(entryInfo)),
-            tostring(activityID),
-            tostring(mapID),
-            tostring(hadActiveJoinedKey)
-          )
+      if logf then
+        logf(
+          "[QUEUE] active_entry_update hasListing=%s activityID=%s mapID=%s hadActiveJoinedKey=%s",
+          tostring(HasActiveListing(entryInfo)),
+          tostring(activityID),
+          tostring(mapID),
+          tostring(hadActiveJoinedKey)
         )
       end
       if HasActiveListing(entryInfo) then
         if ctx.isTestMode() or ctx.isTestAllMode() then
           ctx.exitTestMode()
         end
-        if log then
-          log("[STATE] set_active_joined_key_map_id value=nil reason=active_entry_update")
+        if type(ctx.logRuntimeTrace) == "function" then
+          ctx.logRuntimeTrace("[STATE] set_active_joined_key_map_id value=nil reason=active_entry_update")
         end
         ctx.setActiveJoinedKeyMapID(nil)
       end

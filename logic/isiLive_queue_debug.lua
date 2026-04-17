@@ -70,7 +70,7 @@ function QueueDebug.CreateController(opts)
   end
 
   function controller.GetLogCount()
-    return #EnsureStorage()
+    return logBuffer.Count(EnsureStorage())
   end
 
   function controller.GetLogTail(limit)

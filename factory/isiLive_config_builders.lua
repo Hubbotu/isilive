@@ -156,6 +156,7 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     runtimeLogController = ctx.runtimeLogController,
     resetDB = ctx.resetDB,
     logRuntimeTrace = ctx.logRuntimeTrace,
+    logRuntimeTracef = ctx.logRuntimeTracef,
   }
 end
 

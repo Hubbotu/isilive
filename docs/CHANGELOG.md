@@ -6,10 +6,17 @@
   - Added deterministic runtime-log trace coverage for ready-check events when logging is enabled.
   - Added deterministic factory coverage for LFG group-settle diagnostics written into the runtime log.
   - Split the oversized factory-primary and ready-check test blocks into smaller helpers so the new trace coverage stays within the metric limits.
+  - Added lazy runtime-log formatting via `Logf`, lazy trace builders via `Trace`, and a ring-buffer-backed log store so disabled logging avoids expensive message construction and active logging avoids per-entry array shifting after the cap is reached.
+  - Added stable runtime-log sequence numbers, precise `GetTime`-based timestamps, and normalized `[TAG] event=<action>` formatting for trace readability.
+  - Added a runtime-log session header when logging is enabled, `/isilive log level normal|deep` controls, and Deep-only trace paths for high-volume UI/teleport diagnostics.
+  - Wired Sync and LFG diagnostics through lazy trace builders so runtime-log formatting stays deferred until the enabled logger actually consumes the trace.
+  - Added Deep trace coverage for roster render decisions, leader-button decisions, teleport UI visibility, teleport button decisions, and high-detail teleport resolution flow.
+  - Extended the rule validator so split scenario files referenced via `dofile` and `require` are indexed from the scenario manifest.
+  - Added deterministic 2,000-entry burst coverage for runtime-log, Sync, and Group/Roster trace paths to prove capped storage and stable tail order.
 
 - **Documentation / release sync:**
   - Synced `isiLive.toc` and `CHANGELOG_RELEASE.md` to `0.9.167`.
-  - Updated the documented validator baseline to `604` scenarios / tests over `45` modules.
+  - Updated the documented validator baseline to `619` scenarios / `619` indexed tests over `45` modules.
 
 ## 2026-04-16 - Version 0.9.166 (fix)
 

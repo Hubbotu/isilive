@@ -47,6 +47,7 @@ local function BuildCommandState(overrides)
     languageSet = nil,
     rosterUpdates = 0,
     runtimeLogEnabled = false,
+    runtimeLogLevel = overrides and overrides.runtimeLogLevel or "normal",
     runtimeLogs = {},
     lockMainFramePosition = true,
     uiScale = 1.25,
@@ -145,6 +146,12 @@ local function BuildCommandDeps(state, L)
     end,
     getRuntimeLogEnabled = function()
       return state.runtimeLogEnabled
+    end,
+    setRuntimeLogLevel = function(level)
+      state.runtimeLogLevel = level
+    end,
+    getRuntimeLogLevel = function()
+      return state.runtimeLogLevel
     end,
     clearRuntimeLog = function()
       state.runtimeLogs = {}
@@ -286,6 +293,26 @@ local function RegisterCommandRuntimeLogTests(test, Assert, WithGlobals, LoadAdd
 
     state._execute("log clear")
     Assert.Equal(#state.runtimeLogs, 0, "log clear must wipe runtime log storage")
+  end)
+
+  test("Commands runtime log level command switches normal and deep", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+
+    state._execute("log level")
+    Assert.True(
+      state.prints[#state.prints]:find("Runtime log level: normal", 1, true) ~= nil,
+      "level must default to normal"
+    )
+
+    state._execute("log level deep")
+    Assert.Equal(state.runtimeLogLevel, "deep", "log level deep must set deep tracing")
+    Assert.True(
+      state.prints[#state.prints]:find("Runtime log level: deep", 1, true) ~= nil,
+      "level output must report deep"
+    )
+
+    state._execute("log normal")
+    Assert.Equal(state.runtimeLogLevel, "normal", "log normal shortcut must set normal tracing")
   end)
 end
 

@@ -378,28 +378,24 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
     local playerName, playerRealm = ctx.getUnitNameAndRealm("player")
     ctx.markIsiLiveUser(playerName, playerRealm)
-    if type(ctx.logRuntimeTrace) == "function" then
-      ctx.logRuntimeTrace(
-        string.format(
-          "[RUNTIME] player_login playerName=%s playerRealm=%s",
-          tostring(playerName),
-          tostring(playerRealm)
-        )
+    if type(ctx.logRuntimeTracef) == "function" then
+      ctx.logRuntimeTracef(
+        "[RUNTIME] player_login playerName=%s playerRealm=%s",
+        tostring(playerName),
+        tostring(playerRealm)
       )
     end
   end
 
   local function HandlePlayerEnteringWorldEvent(_self)
     local inPartyInstance = ctx.isInPartyInstance() == true
-    if type(ctx.logRuntimeTrace) == "function" then
-      ctx.logRuntimeTrace(
-        string.format(
-          "[RUNTIME] player_entering_world isRaid=%s inPartyInstance=%s isInGroup=%s isInChallenge=%s",
-          tostring(IsRaidModeActive(ctx)),
-          tostring(inPartyInstance),
-          tostring(ctx.isInGroup()),
-          tostring(ctx.isInChallengeMode())
-        )
+    if type(ctx.logRuntimeTracef) == "function" then
+      ctx.logRuntimeTracef(
+        "[RUNTIME] player_entering_world isRaid=%s inPartyInstance=%s isInGroup=%s isInChallenge=%s",
+        tostring(IsRaidModeActive(ctx)),
+        tostring(inPartyInstance),
+        tostring(ctx.isInGroup()),
+        tostring(ctx.isInChallengeMode())
       )
     end
     if IsRaidModeActive(ctx) then

@@ -47,6 +47,10 @@ local function BuildDeps(opts)
     getRuntimeLogEnabled = opts.getRuntimeLogEnabled or function()
       return false
     end,
+    setRuntimeLogLevel = opts.setRuntimeLogLevel or function(_level) end,
+    getRuntimeLogLevel = opts.getRuntimeLogLevel or function()
+      return "normal"
+    end,
     clearRuntimeLog = opts.clearRuntimeLog or function() end,
     getRuntimeLogCount = opts.getRuntimeLogCount or function()
       return 0
@@ -56,6 +60,7 @@ local function BuildDeps(opts)
     end,
     resetDB = opts.resetDB or function() end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
+    logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
   }
 end
 
@@ -75,11 +80,31 @@ local ARG_OFF = { off = true, ["0"] = true, ["false"] = true }
 
 -- Generic handler for debug log sub-commands (shared by "log" and "qdebug").
 -- cfg fields: prefix, label, extraOn (table), extraOff (table),
---             getEnabled, setEnabled, clearLog, getCount, getTail, usageStr
+--             getEnabled, setEnabled, getLevel, setLevel, clearLog, getCount,
+--             getTail, usageStr
 local function HandleDebugLogCommand(ctx, cmd, cfg)
-  local arg, numText = cmd:match("^" .. cfg.prefix .. "%s+(%S+)%s*(%d*)$")
+  local arg, restText = cmd:match("^" .. cfg.prefix .. "%s+(%S+)%s*(.-)%s*$")
   if not arg or arg == "status" then
-    ctx.printFn(cfg.label .. ": " .. (cfg.getEnabled() and "ON" or "OFF") .. " | entries: " .. tostring(cfg.getCount()))
+    local levelText = cfg.getLevel and (" | level: " .. tostring(cfg.getLevel())) or ""
+    ctx.printFn(
+      cfg.label
+        .. ": "
+        .. (cfg.getEnabled() and "ON" or "OFF")
+        .. levelText
+        .. " | entries: "
+        .. tostring(cfg.getCount())
+    )
+    return
+  end
+
+  if cfg.setLevel and cfg.getLevel and (arg == "level" or arg == "normal" or arg == "deep") then
+    local requestedLevel = arg == "level" and tostring(restText or "") or arg
+    if requestedLevel == "normal" or requestedLevel == "deep" then
+      cfg.setLevel(requestedLevel)
+      ctx.printFn(cfg.label .. " level: " .. tostring(cfg.getLevel()))
+      return
+    end
+    ctx.printFn(cfg.label .. " level: " .. tostring(cfg.getLevel()))
     return
   end
 
@@ -100,7 +125,7 @@ local function HandleDebugLogCommand(ctx, cmd, cfg)
   end
 
   if arg == "tail" or arg == "dump" then
-    local limit = tonumber(numText) or 20
+    local limit = tonumber(restText) or 20
     if limit < 1 then
       limit = 1
     elseif limit > 100 then
@@ -125,10 +150,12 @@ local function HandleLogCommand(ctx, cmd)
     extraOff = { stop = true },
     getEnabled = ctx.getRuntimeLogEnabled,
     setEnabled = ctx.setRuntimeLogEnabled,
+    getLevel = ctx.getRuntimeLogLevel,
+    setLevel = ctx.setRuntimeLogLevel,
     clearLog = ctx.clearRuntimeLog,
     getCount = ctx.getRuntimeLogCount,
     getTail = ctx.getRuntimeLogTail,
-    usageStr = "Usage: /isilive log [on|off|start|stop|status|clear|tail [n]]",
+    usageStr = "Usage: /isilive log [on|off|start|stop|status|level normal|deep|clear|tail [n]]",
   })
 end
 
@@ -318,8 +345,8 @@ local function ExecuteSlashCommand(ctx, msg)
   local L = ctx.getL() or {}
   local state = ctx.getState() or {}
   local cmd = string.lower(strtrim(msg or ""))
-  if ctx.logRuntimeTrace then
-    ctx.logRuntimeTrace(string.format("[CMD] execute cmd=%s", tostring(cmd)))
+  if ctx.logRuntimeTracef then
+    ctx.logRuntimeTracef("[CMD] execute cmd=%s", tostring(cmd))
   end
 
   if TryHandleTestCommands(ctx, L, state, cmd) then

@@ -105,6 +105,7 @@ local function CreateRosterPanelController(ctx, keySyncResult)
       return type(db) == "table" and db.showRosterColumnGuides == true
     end,
     logRuntimeTrace = ctx.logRuntimeTrace,
+    logRuntimeTraceDeep = ctx.logRuntimeTraceDeep,
   })
 
   return {
@@ -133,6 +134,7 @@ local function CreateTeleportUIController(ctx)
     getDungeonShortCode = ctx.getDungeonShortCode,
     getDungeonName = ctx.getDungeonName,
     getEmptyStateText = ctx.getTeleportEmptyStateText,
+    logRuntimeTraceDeep = ctx.logRuntimeTraceDeep,
     layoutMode = ctx.rosterPanelController
         and type(ctx.rosterPanelController.GetLayoutMode) == "function"
         and ctx.rosterPanelController.GetLayoutMode()

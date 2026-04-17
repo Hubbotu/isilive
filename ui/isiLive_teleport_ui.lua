@@ -356,6 +356,7 @@ function TeleportUI.CreateController(opts)
     isInCombat = opts.isInCombat or function()
       return InCombatLockdown and InCombatLockdown()
     end,
+    logRuntimeTraceDeep = type(opts.logRuntimeTraceDeep) == "function" and opts.logRuntimeTraceDeep or nil,
     layoutMode = NormalizeLayoutMode(opts.layoutMode or LAYOUT_MODE_EXPANDED),
   }
 
@@ -530,6 +531,11 @@ function TeleportUI.CreateController(opts)
 
   function controller.SetVisible(visible)
     isVisible = visible and true or false
+    if deps.logRuntimeTraceDeep then
+      deps.logRuntimeTraceDeep(function()
+        return string.format("[TP_UI] set_visible visible=%s buttonCount=%s", tostring(isVisible), tostring(#buttons))
+      end)
+    end
     if isVisible then
       UpdateEmptyState(deps.getEntries())
     end
@@ -537,6 +543,18 @@ function TeleportUI.CreateController(opts)
   end
 
   function controller.UpdateButtons(resolvedSpellID, soundContext)
+    if deps.logRuntimeTraceDeep then
+      deps.logRuntimeTraceDeep(function()
+        return string.format(
+          "[TP_UI] update_buttons resolvedSpellID=%s soundContext=%s visible=%s buttonCount=%s combat=%s",
+          tostring(resolvedSpellID),
+          tostring(soundContext),
+          tostring(isVisible),
+          tostring(#buttons),
+          tostring(deps.isInCombat())
+        )
+      end)
+    end
     if not isVisible then
       ApplyVisibility()
       return
@@ -556,6 +574,18 @@ function TeleportUI.CreateController(opts)
       local wasActiveTarget = button._lastObservedActiveTarget == true
       button.isActiveTarget = (resolvedSpellID and button.spellID == resolvedSpellID) and true or false
       button.cooldownRemainingSeconds = tonumber(deps.getTeleportCooldownRemaining(button.spellID)) or 0
+      if deps.logRuntimeTraceDeep and button.isActiveTarget then
+        deps.logRuntimeTraceDeep(function()
+          return string.format(
+            "[TP_UI] button_decision spellID=%s known=%s active=%s cooldown=%s soundContext=%s",
+            tostring(button.spellID),
+            tostring(known),
+            tostring(button.isActiveTarget),
+            tostring(button.cooldownRemainingSeconds),
+            tostring(soundContext)
+          )
+        end)
+      end
 
       if button.cooldownRemainingSeconds > 0 then
         local start, duration, enabled = deps.getSpellCooldownSafe(button.spellID)

@@ -11,6 +11,7 @@ addonTable = addonTable or {}
 
 local LFGDetect = {}
 addonTable.LFGDetect = LFGDetect
+local Unpack = rawget(_G, "unpack") or rawget(table, "unpack")
 
 -- Static map: LFG activity ID -> challenge map ID for all active-season dungeons.
 -- Primary fast path: zero-latency, no API call, taint-safe.
@@ -127,6 +128,7 @@ local groupRosterTraceLogger = nil
 -- MINOR-1 fix: removes hardcoded German strings.
 local localeGetter = nil
 local debugLog = nil
+local debugTrace = nil
 local TriggerHighlightUpdate
 
 local function GetGroupMemberCount()
@@ -170,9 +172,29 @@ function LFGDetect.SetLogger(fn)
   debugLog = type(fn) == "function" and fn or nil
 end
 
-local function Log(event, data)
-  if not debugLog then
+function LFGDetect.SetTraceLogger(fn)
+  debugTrace = type(fn) == "function" and fn or nil
+end
+
+local function Log(event, formatText, ...)
+  if not debugLog and not debugTrace then
     return
+  end
+  local argCount = select("#", ...)
+  if debugTrace then
+    local args = { ... }
+    debugTrace(function()
+      local data = formatText
+      if argCount > 0 then
+        data = string.format(tostring(formatText or ""), Unpack(args))
+      end
+      return string.format("[LFG] %s %s", event, data or "")
+    end)
+    return
+  end
+  local data = formatText
+  if argCount > 0 then
+    data = string.format(tostring(formatText or ""), ...)
   end
   debugLog(string.format("[LFG] %s %s", event, data or ""))
 end
@@ -225,26 +247,21 @@ local function OnInvited(searchResultID)
 
   Log(
     "invite_received",
-    string.format(
-      "searchResultID=%s activityID=%s mapID=%s",
-      tostring(searchResultID),
-      tostring(info and info.activityID),
-      tostring(mapID)
-    )
+    "searchResultID=%s activityID=%s mapID=%s",
+    tostring(searchResultID),
+    tostring(info and info.activityID),
+    tostring(mapID)
   )
   if mapID then
     pendingInvites[searchResultID] = mapID
-    Log("state_set", string.format("var=pendingInvites[%s] val=%s", tostring(searchResultID), tostring(mapID)))
+    Log("state_set", "var=pendingInvites[%s] val=%s", tostring(searchResultID), tostring(mapID))
   end
 end
 
 -- BUG-1 fix: soundContext propagated so own-queue and invite updates suppress the portal sound.
 -- ARCH-1 fix: uses the injected highlightCallback instead of reaching into _factoryCtx.
 TriggerHighlightUpdate = function(soundContext)
-  Log(
-    "highlight_trigger",
-    string.format("soundContext=%s detectedMapID=%s", tostring(soundContext), tostring(detectedMapID))
-  )
+  Log("highlight_trigger", "soundContext=%s detectedMapID=%s", tostring(soundContext), tostring(detectedMapID))
   if type(highlightCallback) == "function" then
     highlightCallback(soundContext)
   end
@@ -252,14 +269,14 @@ end
 
 local function OnInviteAccepted(searchResultID)
   local mapID = pendingInvites[searchResultID]
-  Log("invite_accepted", string.format("searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID)))
+  Log("invite_accepted", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
   if mapID then
     pendingInvites[searchResultID] = nil
     if detectedMapID ~= mapID then
-      Log("state_set", string.format("var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID)))
+      Log("state_set", "var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID))
       detectedMapID = mapID
       pendingAcceptedInviteMapID = mapID
-      Log("state_set", string.format("var=pendingAcceptedInviteMapID val=%s", tostring(mapID)))
+      Log("state_set", "var=pendingAcceptedInviteMapID val=%s", tostring(mapID))
       local L = localeGetter and localeGetter() or {}
       Print(string.format(L.LFG_DETECT_INVITE or "LFG invite detected: %s", GetDungeonName(mapID)))
       TriggerHighlightUpdate("invite")
@@ -269,7 +286,7 @@ end
 
 local function OnInviteDeclined(searchResultID)
   local mapID = pendingInvites[searchResultID]
-  Log("invite_declined", string.format("searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID)))
+  Log("invite_declined", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
   pendingInvites[searchResultID] = nil
   if mapID and detectedMapID == mapID then
     detectedMapID = nil
@@ -317,7 +334,7 @@ end
 -- the group (both handled by ClearAllStateImpl).
 local function ClearDetectedState()
   if lastQueueMapID ~= nil then
-    Log("clear_detected_state", string.format("path=queue_ticker lastQueueMapID=%s", tostring(lastQueueMapID)))
+    Log("clear_detected_state", "path=queue_ticker lastQueueMapID=%s", tostring(lastQueueMapID))
     detectedMapID = nil
     lastQueueMapID = nil
     TriggerHighlightUpdate("queue")
@@ -331,7 +348,7 @@ local function ClearAllStateImpl()
     or lastQueueMapID ~= nil
     or next(pendingInvites) ~= nil
     or pendingAcceptedInviteMapID ~= nil
-  Log("clear_all_state", string.format("hadState=%s", tostring(hadState)))
+  Log("clear_all_state", "hadState=%s", tostring(hadState))
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
@@ -381,14 +398,11 @@ local function CheckActiveGroup()
   end
 
   if mapID and mapID ~= lastQueueMapID then
-    Log(
-      "queue_listing_detected",
-      string.format("mapID=%s lastQueueMapID=%s", tostring(mapID), tostring(lastQueueMapID))
-    )
+    Log("queue_listing_detected", "mapID=%s lastQueueMapID=%s", tostring(mapID), tostring(lastQueueMapID))
     lastQueueMapID = mapID
     detectedMapID = mapID
-    Log("state_set", string.format("var=lastQueueMapID val=%s", tostring(mapID)))
-    Log("state_set", string.format("var=detectedMapID val=%s", tostring(mapID)))
+    Log("state_set", "var=lastQueueMapID val=%s", tostring(mapID))
+    Log("state_set", "var=detectedMapID val=%s", tostring(mapID))
     local L = localeGetter and localeGetter() or {}
     Print(string.format(L.LFG_DETECT_QUEUE or "LFG listing detected: %s", GetDungeonName(mapID)))
     TriggerHighlightUpdate("queue") -- BUG-1: own listing → suppress portal sound
@@ -429,12 +443,10 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
     Log(
       "group_roster_update",
-      string.format(
-        "inGroup=%s memberCount=%s pendingAccept=%s",
-        tostring(inGroup),
-        tostring(GetGroupMemberCount()),
-        tostring(pendingAcceptedInviteMapID)
-      )
+      "inGroup=%s memberCount=%s pendingAccept=%s",
+      tostring(inGroup),
+      tostring(GetGroupMemberCount()),
+      tostring(pendingAcceptedInviteMapID)
     )
     if not inGroup then
       local groupMemberCount = GetGroupMemberCount()

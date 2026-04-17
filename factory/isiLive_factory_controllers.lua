@@ -680,10 +680,14 @@ local function InitializeFactoryPrimaryControllers(ctx)
       return modules.sync.IsUserKnown(name, realm)
     end,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTraceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil,
   })
 
+  if type(modules.sync.SetTraceLogger) == "function" then
+    modules.sync.SetTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.Trace or nil)
+  end
   if type(modules.sync.SetLogger) == "function" then
-    modules.sync.SetLogger(ctx.runtimeLogController and ctx.runtimeLogController.Log or nil)
+    modules.sync.SetLogger(nil)
   end
   ctx.keySyncController = initResult.keySyncController
   ctx.MarkIsiLiveUser = initResult.markIsiLiveUser
@@ -752,9 +756,10 @@ local function InitializeFactoryPrimaryControllers(ctx)
     return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID)
   end
   ctx.UpdateMPlusTeleportButton = function(soundContext)
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[TP] update_button_called soundContext=%s", tostring(soundContext)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    local traceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil
+    if logf then
+      logf("[TP] update_button_called soundContext=%s", tostring(soundContext))
     end
     -- Priority 1: LFGDetect (invite accepted / own active listing). This is
     -- the strongest direct signal from the current LFG flow and must
@@ -766,36 +771,40 @@ local function InitializeFactoryPrimaryControllers(ctx)
         and type(lfgDetect.GetDetectedMapID) == "function"
         and lfgDetect.GetDetectedMapID()
       or nil
-    if logFn then
-      logFn(string.format("[TP] lfg_detected_map detectedMapID=%s", tostring(detectedMapID)))
+    if traceDeep then
+      traceDeep(function()
+        return string.format("[TP] lfg_detected_map detectedMapID=%s", tostring(detectedMapID))
+      end)
     end
     if detectedMapID then
       resolvedSpellID = modules.teleport.ResolveTeleportSpellIDByMapID(detectedMapID)
-      if logFn then
-        logFn(
-          string.format(
+      if traceDeep then
+        traceDeep(function()
+          return string.format(
             "[TP] spell_from_lfg mapID=%s resolvedSpellID=%s",
             tostring(detectedMapID),
             tostring(resolvedSpellID)
           )
-        )
+        end)
       end
     end
     if not resolvedSpellID then
       resolvedSpellID = ctx.ResolveActiveTeleportSpellID()
-      if logFn then
-        logFn(string.format("[TP] spell_from_active resolvedSpellID=%s", tostring(resolvedSpellID)))
+      if traceDeep then
+        traceDeep(function()
+          return string.format("[TP] spell_from_active resolvedSpellID=%s", tostring(resolvedSpellID))
+        end)
       end
     end
-    if logFn then
-      logFn(
-        string.format(
+    if traceDeep then
+      traceDeep(function()
+        return string.format(
           "[TP] frame_show_check spellFound=%s soundContext=%s frameShown=%s",
           tostring(resolvedSpellID ~= nil),
           tostring(soundContext),
           tostring(ctx.mainFrame and ctx.mainFrame:IsShown())
         )
-      )
+      end)
     end
     if
       resolvedSpellID
@@ -810,8 +819,10 @@ local function InitializeFactoryPrimaryControllers(ctx)
         skipShowCallbacks = true,
       })
     end
-    if logFn then
-      logFn(string.format("[TP] update_buttons_called resolvedSpellID=%s", tostring(resolvedSpellID)))
+    if traceDeep then
+      traceDeep(function()
+        return string.format("[TP] update_buttons_called resolvedSpellID=%s", tostring(resolvedSpellID))
+      end)
     end
     ctx.teleportUIController.UpdateButtons(resolvedSpellID, soundContext)
   end
@@ -830,8 +841,11 @@ local function InitializeFactoryPrimaryControllers(ctx)
     if type(lfgDetect.SetGroupRosterTraceLogger) == "function" then
       lfgDetect.SetGroupRosterTraceLogger(BuildLFGGroupRosterTraceLogger(ctx, modules))
     end
+    if type(lfgDetect.SetTraceLogger) == "function" then
+      lfgDetect.SetTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.Trace or nil)
+    end
     if type(lfgDetect.SetLogger) == "function" then
-      lfgDetect.SetLogger(ctx.runtimeLogController and ctx.runtimeLogController.Log or nil)
+      lfgDetect.SetLogger(nil)
     end
   end
 end
@@ -917,9 +931,9 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
   end)
 
   local function SetProcessingActive(isActive)
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[UI] processing_active isActive=%s", tostring(isActive)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf("[UI] processing_active isActive=%s", tostring(isActive))
     end
     if isActive then
       ctx.mainFrame:SetScript("OnUpdate", ctx.InspectLoop)
@@ -1217,9 +1231,9 @@ local function InitializeFactorySecondaryTestModeAndBindings(ctx, modules, runti
   end
   ctx.ToggleDemoMode = function()
     local wasTestMode = runtimeState.IsTestMode() or runtimeState.IsTestAllMode()
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[TESTMODE] toggle_demo wasTestMode=%s", tostring(wasTestMode)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf("[TESTMODE] toggle_demo wasTestMode=%s", tostring(wasTestMode))
     end
     ctx.testModeController.ToggleDemoMode()
     -- After demo exit, pretend we just left a group so HandleNoGroup rebuilds
@@ -1240,9 +1254,9 @@ end
 local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
   ctx.SetLanguage = function(tag)
     local resolved = modules.locale.ResolveLocaleTag(tag)
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[SETTINGS] set_language tag=%s resolved=%s", tostring(tag), tostring(resolved)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf("[SETTINGS] set_language tag=%s resolved=%s", tostring(tag), tostring(resolved))
     end
     ctx.L = ctx.locales[resolved] or ctx.locales.enUS
     if IsiLiveDB then
@@ -1713,9 +1727,9 @@ local function CreateFactoryMinimapButton(ctx)
 
   btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   btn:SetScript("OnClick", function(_, mouseButton)
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[UI] btn_click name=minimap mouseButton=%s", tostring(mouseButton)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf("[UI] btn_click name=minimap mouseButton=%s", tostring(mouseButton))
     end
     if mouseButton == "RightButton" then
       local blizzardSettings = rawget(_G, "Settings")

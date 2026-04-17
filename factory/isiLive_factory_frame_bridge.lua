@@ -96,6 +96,16 @@ local function CreateFactoryContext(addonName, tbl)
 
   ctx.runtimeLogController = modules.runtimeLog.CreateController({
     maxEntries = 10000,
+    buildSessionHeader = function()
+      local db = rawget(_G, "IsiLiveDB")
+      return string.format(
+        "version=%s locale=%s level=%s maxEntries=%s",
+        tostring(ctx.GetAddonVersionRaw and ctx.GetAddonVersionRaw() or "unknown"),
+        tostring(db and db.locale or ctx.locale or "unknown"),
+        tostring(db and db.runtimeLogLevel or "normal"),
+        "10000"
+      )
+    end,
   })
 
   ctx.queueDebugController = modules.queueDebug.CreateController({
@@ -425,22 +435,20 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.SetMainFrameVisible = function(visible, reasonOrOpts)
     local opts = type(reasonOrOpts) == "table" and reasonOrOpts or {}
     local reason = type(reasonOrOpts) == "string" and reasonOrOpts or opts.reason
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(
-        string.format(
-          "[FRAME] set_visible visible=%s reason=%s skipShowCallbacks=%s",
-          tostring(visible),
-          tostring(reason),
-          tostring(opts.skipShowCallbacks)
-        )
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf(
+        "[FRAME] set_visible visible=%s reason=%s skipShowCallbacks=%s",
+        tostring(visible),
+        tostring(reason),
+        tostring(opts.skipShowCallbacks)
       )
     end
     if visible and reason == "queue" then
       local dbRef = rawget(_G, "IsiLiveDB")
       if dbRef and dbRef.autoOpenOnQueue == false then
-        if logFn then
-          logFn("[FRAME] blocked reason=autoOpenOnQueue_disabled")
+        if ctx.runtimeLogController and ctx.runtimeLogController.Log then
+          ctx.runtimeLogController.Log("[FRAME] blocked reason=autoOpenOnQueue_disabled")
         end
         return false
       end
@@ -456,9 +464,9 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.ToggleMainFrameVisibility = function()
     frameBridgeContext.ToggleMainFrameVisibility()
     local isNowVisible = frameBridgeContext.IsMainFrameVisible and frameBridgeContext.IsMainFrameVisible()
-    local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if logFn then
-      logFn(string.format("[UI] toggle_main_frame isNowVisible=%s", tostring(isNowVisible)))
+    local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    if logf then
+      logf("[UI] toggle_main_frame isNowVisible=%s", tostring(isNowVisible))
     end
     if not isNowVisible and type(ctx.ExitTestMode) == "function" then
       ctx.ExitTestMode()

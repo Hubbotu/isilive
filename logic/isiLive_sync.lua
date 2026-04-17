@@ -6,6 +6,7 @@ local Sync = {}
 addonTable.Sync = Sync
 local SeasonData = addonTable.SeasonData or {}
 local StringUtils = addonTable.StringUtils
+local Unpack = rawget(_G, "unpack") or rawget(table, "unpack")
 
 local ISILIVE_SYNC_PREFIX = "ISILIVE"
 local LIBKEYSTONE_SYNC_PREFIX = "LibKS"
@@ -53,14 +54,35 @@ local locInfoByPlayerKey = {}
 local targetInfoByPlayerKey = {}
 local kickInfoByPlayerKey = {}
 local syncDebugLog = nil
+local syncDebugTrace = nil
 
 function Sync.SetLogger(fn)
   syncDebugLog = type(fn) == "function" and fn or nil
 end
 
-local function SyncLog(event, data)
-  if not syncDebugLog then
+function Sync.SetTraceLogger(fn)
+  syncDebugTrace = type(fn) == "function" and fn or nil
+end
+
+local function SyncLog(event, formatText, ...)
+  if not syncDebugLog and not syncDebugTrace then
     return
+  end
+  local argCount = select("#", ...)
+  if syncDebugTrace then
+    local args = { ... }
+    syncDebugTrace(function()
+      local data = formatText
+      if argCount > 0 then
+        data = string.format(tostring(formatText or ""), Unpack(args))
+      end
+      return string.format("[SYNC] %s %s", event, data or "")
+    end)
+    return
+  end
+  local data = formatText
+  if argCount > 0 then
+    data = string.format(tostring(formatText or ""), ...)
   end
   syncDebugLog(string.format("[SYNC] %s %s", event, data or ""))
 end
@@ -819,12 +841,10 @@ function Sync.SendHello(opts)
   )
   SyncLog(
     "send_hello",
-    string.format(
-      "version=%s channel=%s source=%s",
-      tostring(opts.version or "?"),
-      tostring(channel),
-      tostring(opts.source or "local")
-    )
+    "version=%s channel=%s source=%s",
+    tostring(opts.version or "?"),
+    tostring(channel),
+    tostring(opts.source or "local")
   )
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
@@ -851,29 +871,21 @@ function Sync.SendKey(opts)
   local dedupePayload = string.format("KEY:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
   local now = GetTime()
   if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastKeyPayloadSent then
-    SyncLog(
-      "send_key_blocked",
-      string.format("reason=unchanged mapID=%s level=%s", tostring(numericMapID), tostring(numericLevel))
-    )
+    SyncLog("send_key_blocked", "reason=unchanged mapID=%s level=%s", tostring(numericMapID), tostring(numericLevel))
     return
   end
   if not opts.force and dedupePayload == lastKeyPayloadSent and (now - lastIsiLiveKeyAt) < ISILIVE_KEY_COOLDOWN then
     SyncLog(
       "send_key_blocked",
-      string.format(
-        "reason=cooldown mapID=%s level=%s remain=%.1f",
-        tostring(numericMapID),
-        tostring(numericLevel),
-        ISILIVE_KEY_COOLDOWN - (now - lastIsiLiveKeyAt)
-      )
+      "reason=cooldown mapID=%s level=%s remain=%.1f",
+      tostring(numericMapID),
+      tostring(numericLevel),
+      ISILIVE_KEY_COOLDOWN - (now - lastIsiLiveKeyAt)
     )
     return
   end
 
-  SyncLog(
-    "send_key",
-    string.format("mapID=%s level=%s channel=%s", tostring(numericMapID), tostring(numericLevel), tostring(channel))
-  )
+  SyncLog("send_key", "mapID=%s level=%s channel=%s", tostring(numericMapID), tostring(numericLevel), tostring(channel))
   lastIsiLiveKeyAt = now
   lastKeyPayloadSent = dedupePayload
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
@@ -915,13 +927,11 @@ function Sync.SendStats(opts)
 
   SyncLog(
     "send_stats",
-    string.format(
-      "specID=%s ilvl=%s rio=%s channel=%s",
-      tostring(numericSpecID),
-      tostring(numericIlvl),
-      tostring(numericRio),
-      tostring(channel)
-    )
+    "specID=%s ilvl=%s rio=%s channel=%s",
+    tostring(numericSpecID),
+    tostring(numericIlvl),
+    tostring(numericRio),
+    tostring(channel)
   )
   lastIsiLiveStatsAt = now
   lastStatsPayloadSent = dedupePayload
@@ -956,7 +966,7 @@ function Sync.SendDps(opts)
     return
   end
 
-  SyncLog("send_dps", string.format("dps=%s channel=%s", tostring(numericDps), tostring(channel)))
+  SyncLog("send_dps", "dps=%s channel=%s", tostring(numericDps), tostring(channel))
   lastIsiLiveDpsAt = now
   lastDpsPayloadSent = dedupePayload
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
@@ -1007,13 +1017,11 @@ function Sync.SendKick(opts)
   end
   SyncLog(
     "send_kick",
-    string.format(
-      "hasKick=%s onCooldown=%s remain=%s channel=%s",
-      tostring(hasKick),
-      tostring(onCooldown),
-      tostring(remain),
-      tostring(channel)
-    )
+    "hasKick=%s onCooldown=%s remain=%s channel=%s",
+    tostring(hasKick),
+    tostring(onCooldown),
+    tostring(remain),
+    tostring(channel)
   )
   lastIsiLiveKickAt = now
   lastKickPayloadSent = payload
@@ -1048,7 +1056,7 @@ function Sync.SendLoc(opts)
     return
   end
 
-  SyncLog("send_loc", string.format("mapID=%s channel=%s", tostring(numericMapID), tostring(channel)))
+  SyncLog("send_loc", "mapID=%s channel=%s", tostring(numericMapID), tostring(channel))
   lastIsiLiveLocAt = now
   lastLocPayloadSent = dedupePayload
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
@@ -1086,7 +1094,10 @@ function Sync.SendTarget(opts)
 
   SyncLog(
     "send_target",
-    string.format("mapID=%s level=%s channel=%s", tostring(numericMapID), tostring(numericLevel), tostring(channel))
+    "mapID=%s level=%s channel=%s",
+    tostring(numericMapID),
+    tostring(numericLevel),
+    tostring(channel)
   )
   lastIsiLiveTargetAt = now
   lastTargetPayloadSent = dedupePayload
@@ -1112,7 +1123,7 @@ function Sync.SendRefreshRequest(opts)
     return
   end
 
-  SyncLog("send_reqsync", string.format("channel=%s", tostring(channel)))
+  SyncLog("send_reqsync", "channel=%s", tostring(channel))
   lastIsiLiveRefreshRequestAt = now
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "REQSYNC", channel)
 end
@@ -1199,7 +1210,7 @@ function Sync.SendShareKeysRequest()
   if not channel then
     return false
   end
-  SyncLog("send_sharekeys", string.format("channel=%s", tostring(channel)))
+  SyncLog("send_sharekeys", "channel=%s", tostring(channel))
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel)
   return true
 end
@@ -1215,10 +1226,7 @@ local function ProcessLibKeystoneMessage(message, sender, localName, localRealm,
   local senderKey = Sync.NormalizePlayerKey(sender)
   local selfKey = Sync.NormalizePlayerKey(localName, localRealm)
   if type(message) == "string" and message == "R" then
-    SyncLog(
-      "libkeystone_request",
-      string.format("sender=%s shouldReply=%s", tostring(sender), tostring(senderKey ~= selfKey))
-    )
+    SyncLog("libkeystone_request", "sender=%s shouldReply=%s", tostring(sender), tostring(senderKey ~= selfKey))
     return {
       sender = sender,
       shouldReplyLibKeystone = senderKey ~= selfKey,
@@ -1242,13 +1250,11 @@ local function ProcessLibKeystoneMessage(message, sender, localName, localRealm,
 
   SyncLog(
     "libkeystone_received",
-    string.format(
-      "sender=%s mapID=%s level=%s rio=%s",
-      tostring(sender),
-      tostring(keyMapID),
-      tostring(keyLevel),
-      tostring(playerRating)
-    )
+    "sender=%s mapID=%s level=%s rio=%s",
+    tostring(sender),
+    tostring(keyMapID),
+    tostring(keyLevel),
+    tostring(playerRating)
   )
   local keyUpdated = Sync.SetPlayerKeyInfo(sender, nil, keyMapID, keyLevel, nil, LIBKEYSTONE_SOURCE)
   local previousStats = Sync.GetPlayerStatsInfo(sender, nil)
@@ -1283,11 +1289,9 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
 
   SyncLog(
     "message_received",
-    string.format(
-      "sender=%s type=%s",
-      tostring(sender),
-      tostring(type(message) == "string" and message:match("^(%a+)") or "unknown")
-    )
+    "sender=%s type=%s",
+    tostring(sender),
+    tostring(type(message) == "string" and message:match("^(%a+)") or "unknown")
   )
   Sync.MarkUser(sender)
 
@@ -1411,18 +1415,16 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
 
   SyncLog(
     "message_applied",
-    string.format(
-      "sender=%s key=%s stats=%s dps=%s loc=%s target=%s kick=%s ack=%s reqsync=%s",
-      tostring(sender),
-      tostring(keyUpdated),
-      tostring(statsUpdated),
-      tostring(dpsUpdated),
-      tostring(locUpdated),
-      tostring(targetUpdated),
-      tostring(kickUpdated),
-      tostring(shouldAck),
-      tostring(shouldRequestRefresh)
-    )
+    "sender=%s key=%s stats=%s dps=%s loc=%s target=%s kick=%s ack=%s reqsync=%s",
+    tostring(sender),
+    tostring(keyUpdated),
+    tostring(statsUpdated),
+    tostring(dpsUpdated),
+    tostring(locUpdated),
+    tostring(targetUpdated),
+    tostring(kickUpdated),
+    tostring(shouldAck),
+    tostring(shouldRequestRefresh)
   )
   return {
     shouldAck = shouldAck and true or false,

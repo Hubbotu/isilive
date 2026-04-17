@@ -802,6 +802,31 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect runtime trace logger passes a lazy builder to runtime logging", function()
+    local capturedBuilder = nil
+
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({}, { activityID = 1542 }),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetTraceLogger(function(builder)
+        capturedBuilder = capturedBuilder or builder
+      end)
+
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+
+      Assert.Equal(type(capturedBuilder), "function", "LFG trace logger must receive a lazy message builder")
+      Assert.True(
+        capturedBuilder():find("%[LFG%] queue_listing_detected mapID=557 lastQueueMapID=nil") ~= nil,
+        "LFG trace builder must format on demand"
+      )
+    end)
+  end)
+
   -- ---------------------------------------------------------------------------
   -- SetLocaleGetter injection (MINOR-1)
   -- ---------------------------------------------------------------------------

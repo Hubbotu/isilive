@@ -28,6 +28,7 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 4. `RuntimeState` bleibt die zentrale API fuer gemeinsam genutzten, mutierbaren Runtime-State.
 5. `ControllerWiring` exportiert Context-Factories fuer Group- und Event-Controller.
 6. `ConfigBuilders` bleibt fokussiert und fuehrt keine Legacy-Builder fuer Group-/Event-Handler-Dependencies wieder ein.
+7. Der Rule-Validator muss Testdateien aus dem Szenario-Manifest sowie statisch eingebundene Split-Dateien aus `dofile` und `require` indizieren.
 
 ## Regelbloecke
 
@@ -72,3 +73,10 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 - Zusammenfassung: `ConfigBuilders` bleibt fokussiert und fuehrt keine Legacy-Builder fuer Group-/Event-Handler-Dependencies wieder ein.
 - Erforderliche Tests:
   - Architecture config builders omit legacy event and group dependency builders
+
+### RULE-ARCH-RULE-VALIDATOR-SPLIT-SCENARIOS
+- Regelnummer: 7
+- Status: aktiv
+- Zusammenfassung: Der Rule-Validator muss Testdateien aus dem Szenario-Manifest sowie statisch eingebundene Split-Dateien aus `dofile` und `require` indizieren.
+- Erforderliche Tests:
+  - Architecture rules validator indexes split scenario files from dofile and require

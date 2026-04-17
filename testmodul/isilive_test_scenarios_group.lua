@@ -171,6 +171,8 @@ local function BuildGroupControllerOptions(state, overrides)
       state.autoCloseCalls = state.autoCloseCalls + 1
       state.mainFrameVisible = false
     end,
+    logRuntimeTrace = overrides.logRuntimeTrace,
+    logRuntimeTracef = overrides.logRuntimeTracef,
   }
 end
 
@@ -179,6 +181,14 @@ local function BuildGroupController(loadAddonModules, overrides)
   local addon = loadAddonModules({ "isiLive_group.lua" })
   local controller = addon.Group.CreateController(BuildGroupControllerOptions(state, overrides))
   return controller, state
+end
+
+local function CountRosterEntries(roster)
+  local count = 0
+  for _ in pairs(roster or {}) do
+    count = count + 1
+  end
+  return count
 end
 
 local function RegisterGroupJoinLifecycleTests(test, Assert, LoadAddonModules, WithGlobals)
@@ -403,6 +413,45 @@ local function RegisterGroupJoinLifecycleTests(test, Assert, LoadAddonModules, W
     Assert.False(state.roster.party1.isLeader == true, "non-leader party member must not be marked as leader")
     Assert.True(state.roster.party2.isLeader == true, "party leader must be marked on the roster entry")
     Assert.False(state.roster.party3.isLeader == true, "other party members must remain non-leaders")
+  end)
+
+  test("Group roster runtime logger stays capped across 2000 roster burst", function()
+    WithGlobals({
+      IsiLiveDB = {},
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua", "isiLive_group.lua" })
+      local runtimeLog = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "1000.000"
+        end,
+        maxEntries = 100,
+      })
+      runtimeLog.SetEnabled(true)
+
+      local state = BuildGroupState({
+        wasInGroup = false,
+      })
+      local controller = addon.Group.CreateController(BuildGroupControllerOptions(state, {
+        getNumGroupMembers = function()
+          return 5
+        end,
+        logRuntimeTracef = runtimeLog.Logf,
+      }))
+
+      for _ = 1, 2000 do
+        controller.HandleGroupRosterUpdate()
+      end
+
+      local tail = runtimeLog.GetLogTail(100)
+      Assert.Equal(runtimeLog.GetLogCount(), 100, "roster burst trace must stay capped")
+      Assert.Equal(#tail, 100, "roster burst tail must stay capped")
+      Assert.Equal(CountRosterEntries(state.roster), 5, "roster burst must keep only player plus party entries")
+      Assert.Equal(state.snapshotCalls, 2000, "roster burst must complete all snapshot sends")
+      Assert.True(
+        tail[#tail]:find("%[GROUP%] event=roster_update wasInGroup=true inGroupNow=true joinedNow=false") ~= nil,
+        "roster burst tail must include normalized group trace"
+      )
+    end)
   end)
 end
 

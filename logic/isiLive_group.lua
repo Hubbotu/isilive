@@ -91,6 +91,7 @@ local function BuildDeps(opts)
     end,
     autoCloseMainFrame = opts.autoCloseMainFrame or emptyfn,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or emptyfn,
+    logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or emptyfn,
   }
 end
 
@@ -109,12 +110,10 @@ local UpdatePlayerEntry
 
 local function HandleNoGroup(deps, wasInGroupBefore)
   local leftGroupNow = wasInGroupBefore and not deps.isInGroup()
-  deps.logRuntimeTrace(
-    string.format(
-      "[GROUP] handle_no_group wasInGroupBefore=%s leftGroupNow=%s",
-      tostring(wasInGroupBefore),
-      tostring(leftGroupNow)
-    )
+  deps.logRuntimeTracef(
+    "[GROUP] handle_no_group wasInGroupBefore=%s leftGroupNow=%s",
+    tostring(wasInGroupBefore),
+    tostring(leftGroupNow)
   )
   deps.setWasGroupLeader(nil)
   deps.setWasRaidGroup(false)
@@ -257,12 +256,10 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
     conversion.info.isLeader = false
     roster[conversion.ghostKey] = conversion.info
     roster[conversion.partyUnit] = nil
-    deps.logRuntimeTrace(
-      string.format(
-        "[ROSTER] member_left unit=%s name=%s",
-        tostring(conversion.partyUnit),
-        tostring(conversion.info.name)
-      )
+    deps.logRuntimeTracef(
+      "[ROSTER] member_left unit=%s name=%s",
+      tostring(conversion.partyUnit),
+      tostring(conversion.info.name)
     )
   end
 
@@ -332,13 +329,11 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
         shouldPlayJoinSound = not existing or existing.isGhost == true
       end
       if shouldPlayJoinSound then
-        deps.logRuntimeTrace(
-          string.format(
-            "[ROSTER] member_joined unit=%s name=%s class=%s",
-            tostring(unit),
-            tostring(memberName),
-            tostring(memberClass)
-          )
+        deps.logRuntimeTracef(
+          "[ROSTER] member_joined unit=%s name=%s class=%s",
+          tostring(unit),
+          tostring(memberName),
+          tostring(memberClass)
         )
         callbacks.onMemberJoinedGroup()
       end
@@ -360,13 +355,11 @@ local function HandleGroupRosterUpdate(deps)
   local wasInGroupBefore = deps.getWasInGroup() == true
   local inGroupNow = deps.isInGroup() == true
   local joinedNow = inGroupNow and not wasInGroupBefore
-  deps.logRuntimeTrace(
-    string.format(
-      "[GROUP] roster_update wasInGroup=%s inGroupNow=%s joinedNow=%s",
-      tostring(wasInGroupBefore),
-      tostring(inGroupNow),
-      tostring(joinedNow)
-    )
+  deps.logRuntimeTracef(
+    "[GROUP] roster_update wasInGroup=%s inGroupNow=%s joinedNow=%s",
+    tostring(wasInGroupBefore),
+    tostring(inGroupNow),
+    tostring(joinedNow)
   )
   deps.setWasInGroup(inGroupNow)
 

@@ -2339,6 +2339,7 @@ function RosterPanel.CreateController(opts)
   local sendShareKeysRequest = type(opts.sendShareKeysRequest) == "function" and opts.sendShareKeysRequest or nil
   local getPlayerLastRunDps = type(opts.getPlayerLastRunDps) == "function" and opts.getPlayerLastRunDps or nil
   local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
+  local logRuntimeTraceDeep = type(opts.logRuntimeTraceDeep) == "function" and opts.logRuntimeTraceDeep or nil
   local showRosterColumnGuides = type(opts.showRosterColumnGuides) == "function" and opts.showRosterColumnGuides
     or function()
       return false
@@ -2502,6 +2503,11 @@ function RosterPanel.CreateController(opts)
 
   function controller.UpdateLeaderButtons()
     local enabled = isPlayerLeader()
+    if logRuntimeTraceDeep then
+      logRuntimeTraceDeep(function()
+        return string.format("[ROSTER_UI] leader_buttons enabled=%s", tostring(enabled))
+      end)
+    end
     readyCheckButton:SetEnabled(enabled)
     countdownButton:SetEnabled(enabled)
     countdownCancelButton:SetEnabled(enabled)
@@ -2514,6 +2520,21 @@ function RosterPanel.CreateController(opts)
 
   function controller.RenderRoster(roster)
     MaybeRescanCdTrackerForVisibleRender()
+    if logRuntimeTraceDeep then
+      logRuntimeTraceDeep(function()
+        local count = 0
+        for _ in pairs(roster or {}) do
+          count = count + 1
+        end
+        return string.format(
+          "[ROSTER_UI] render_roster entries=%s frameShown=%s layout=%s raid=%s",
+          tostring(count),
+          tostring(IsMainFrameShown()),
+          tostring(ui.layoutMode),
+          tostring(isRaidGroup())
+        )
+      end)
+    end
     RenderRosterImpl({
       memberRows = memberRows,
       mainFrame = mainFrame,

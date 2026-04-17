@@ -183,6 +183,7 @@ local function BuildGroupControllerDepsFromContext(ctx)
     shouldAutoCloseMainFrame = ctx.shouldAutoCloseMainFrame,
     autoCloseMainFrame = ctx.autoCloseMainFrame,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
   }
 end
 
@@ -452,36 +453,40 @@ local function BuildEventHandlersDepsFromContext(ctx)
     triggerShareKeysCooldown = ctx.TriggerShareKeysCooldown,
     sendOwnKeystoneToChat = function()
       local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+      local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+      local traceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil
       local now = GetTime()
-      if logFn then
-        logFn(string.format("[KEYSTONE] share_triggered isInGroup=%s", tostring(ctx.isInGroup and ctx.isInGroup())))
+      if logf then
+        logf("[KEYSTONE] share_triggered isInGroup=%s", tostring(ctx.isInGroup and ctx.isInGroup()))
       end
       if ctx._lastKeystoneChatAt and (now - ctx._lastKeystoneChatAt) < 30 then
-        if logFn then
-          logFn(
-            string.format(
+        if traceDeep then
+          traceDeep(function()
+            return string.format(
               "[KEYSTONE] aborted reason=cooldown remaining=%s",
               tostring(30 - (now - ctx._lastKeystoneChatAt))
             )
-          )
+          end)
         end
         return false
       end
 
       local roster = ctx.getRoster and ctx.getRoster()
-      if logFn then
-        logFn(string.format("[KEYSTONE] roster_resolved memberCount=%s", tostring(roster and #roster or "nil")))
+      if traceDeep then
+        traceDeep(function()
+          return string.format("[KEYSTONE] roster_resolved memberCount=%s", tostring(roster and #roster or "nil"))
+        end)
       end
 
       local snapshot = ctx.getOwnedKeystoneSnapshot and ctx.getOwnedKeystoneSnapshot()
-      if logFn then
-        logFn(
-          string.format(
+      if traceDeep then
+        traceDeep(function()
+          return string.format(
             "[KEYSTONE] snapshot_resolved mapID=%s level=%s",
             tostring(snapshot and snapshot.mapID or "nil"),
             tostring(snapshot and snapshot.level or "nil")
           )
-        )
+        end)
       end
 
       local line = type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function"
@@ -524,8 +529,10 @@ local function BuildEventHandlersDepsFromContext(ctx)
         end
         if sent then
           ctx._lastKeystoneChatAt = now
-          if logFn then
-            logFn(string.format("[KEYSTONE] chat_sent msg=%s", tostring(line)))
+          if traceDeep then
+            traceDeep(function()
+              return string.format("[KEYSTONE] chat_sent msg=%s", tostring(line))
+            end)
           end
         else
           if logFn then
@@ -541,8 +548,10 @@ local function BuildEventHandlersDepsFromContext(ctx)
         end
         if printed then
           ctx._lastKeystoneChatAt = now
-          if logFn then
-            logFn(string.format("[KEYSTONE] chat_sent msg=%s", tostring(line)))
+          if traceDeep then
+            traceDeep(function()
+              return string.format("[KEYSTONE] chat_sent msg=%s", tostring(line))
+            end)
           end
         end
         return printed == true
@@ -553,6 +562,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     ensureRuntimeLogStorage = ctx.ensureRuntimeLogStorage,
     setRuntimeLogEnabled = ctx.setRuntimeLogEnabled,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
     registerIsiLiveSyncPrefix = ctx.registerIsiLiveSyncPrefix,
     applyHotkeyBindings = ctx.applyHotkeyBindings,
     startBindingWatchdog = ctx.startBindingWatchdog,

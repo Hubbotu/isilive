@@ -123,6 +123,84 @@ local function RegisterKnownUserAndKeyTests(test, Assert, WithGlobals, LoadAddon
   end)
 end
 
+local function RegisterSyncRuntimeLogBurstTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Sync runtime logger keeps capped trace across 2000 message burst", function()
+    WithGlobals({
+      IsiLiveDB = {},
+      GetTime = function()
+        return 1000
+      end,
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua", "isiLive_sync.lua" })
+      local runtimeLog = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "1000.000"
+        end,
+        maxEntries = 100,
+      })
+      runtimeLog.SetEnabled(true)
+      addon.Sync.SetTraceLogger(runtimeLog.Trace)
+
+      for i = 1, 2000 do
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KEY:2649:" .. tostring(i), "Peer-Realm", "Me", "Realm")
+      end
+
+      local keyInfo = addon.Sync.GetPlayerKeyInfo("Peer", "Realm")
+      local tail = runtimeLog.GetLogTail(100)
+      Assert.Equal(runtimeLog.GetLogCount(), 100, "sync burst trace must stay capped")
+      Assert.Equal(#tail, 100, "sync burst tail must stay capped")
+      Assert.NotNil(keyInfo, "sync burst must keep applying latest key state")
+      Assert.Equal(keyInfo.level, 2000, "sync burst must retain latest applied key level")
+      Assert.True(
+        tail[#tail]:find("%[SYNC%] event=message_applied sender=Peer%-Realm") ~= nil,
+        "tail must include applied sync trace"
+      )
+    end)
+  end)
+
+  test("Sync runtime trace logger passes a lazy builder to runtime logging", function()
+    WithGlobals({
+      IsiLiveDB = {},
+      GetTime = function()
+        return 1000
+      end,
+      IsInGroup = function()
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+      local capturedBuilder = nil
+
+      addon.Sync.SetTraceLogger(function(builder)
+        capturedBuilder = builder
+      end)
+      addon.Sync.SendRefreshRequest({ force = true })
+
+      Assert.Equal(type(capturedBuilder), "function", "sync trace logger must receive a lazy message builder")
+      Assert.Equal(capturedBuilder(), "[SYNC] send_reqsync channel=PARTY", "sync trace builder must format on demand")
+    end)
+  end)
+end
+
 local function RegisterStatsSyncTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Sync ProcessAddonMessage stores STATS payload and exposes synced stats", function()
     WithGlobals({
@@ -1716,6 +1794,7 @@ return function(test, ctx)
 
   RegisterNormalizeKeyTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterKnownUserAndKeyTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterSyncRuntimeLogBurstTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterStatsSyncTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterKeySyncStatsTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonModules)

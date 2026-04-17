@@ -966,6 +966,38 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
     )
   end)
 
+  test("Architecture rules validator indexes split scenario files from dofile and require", function()
+    local validatorChunk, validatorErr = loadfile("tools/rules_logic_validator.lua")
+    if not validatorChunk then
+      error(string.format("cannot load rules validator: %s", tostring(validatorErr)))
+    end
+    local scenarioChunk, scenarioErr = loadfile("tools/usecase_scenarios.lua")
+    if not scenarioChunk then
+      error(string.format("cannot load scenario manifest: %s", tostring(scenarioErr)))
+    end
+
+    local validator = validatorChunk()
+    local ok, result = validator.Run({
+      rulesPath = "docs/RULES_LOGIC.md",
+      scenarioFiles = scenarioChunk(),
+      printFn = function() end,
+    })
+
+    Assert.True(ok == true, "rules validator must pass with the live rule set")
+    local expanded = {}
+    for _, path in ipairs(result.expandedScenarioFiles or {}) do
+      expanded[path] = true
+    end
+    Assert.True(
+      expanded["testmodul/isilive_test_scenarios_factory_primary_part1.lua"] == true,
+      "rules validator must index dofile-based split scenario files"
+    )
+    Assert.True(
+      expanded["testmodul/isilive_test_scenarios_factory_primary_part2.lua"] == true,
+      "rules validator must index require-based split scenario files"
+    )
+  end)
+
   test("Architecture local CI wrapper forwards directly into the preflight script", function()
     local wrapperContent = ReadFile("tools/run_local_ci.ps1")
 

@@ -60,10 +60,13 @@ function Bootstrap.RegisterSlashCommands(opts)
     getQueueDebugLogTail = queueDebugController.GetLogTail,
     setRuntimeLogEnabled = runtimeLogController.SetEnabled,
     getRuntimeLogEnabled = runtimeLogController.IsEnabled,
+    setRuntimeLogLevel = runtimeLogController.SetLevel,
+    getRuntimeLogLevel = runtimeLogController.GetLevel,
     clearRuntimeLog = runtimeLogController.ClearLog,
     getRuntimeLogCount = runtimeLogController.GetLogCount,
     getRuntimeLogTail = runtimeLogController.GetLogTail,
     resetDB = resetDB,
+    logRuntimeTracef = runtimeLogController.Logf,
   })
 end
 

@@ -56,6 +56,49 @@ local function NormalizeSummarySignature(value)
   return normalized
 end
 
+local function NormalizePath(path)
+  local normalized = tostring(path or ""):gsub("\\", "/")
+  local parts = {}
+  for part in normalized:gmatch("[^/]+") do
+    if part == ".." then
+      if #parts > 0 then
+        table.remove(parts)
+      end
+    elseif part ~= "." and part ~= "" then
+      parts[#parts + 1] = part
+    end
+  end
+  return table.concat(parts, "/")
+end
+
+local function Dirname(path)
+  local normalized = NormalizePath(path)
+  return normalized:match("^(.*)/[^/]+$") or ""
+end
+
+local function ResolveRelativePath(baseFile, childPath)
+  local normalizedChild = NormalizePath(childPath)
+  if normalizedChild:match("^%a:") or normalizedChild:sub(1, 1) == "/" then
+    return normalizedChild
+  end
+  if normalizedChild:match("^[%w_%-]+/") then
+    return normalizedChild
+  end
+  local baseDir = Dirname(baseFile)
+  if baseDir == "" then
+    return normalizedChild
+  end
+  return NormalizePath(baseDir .. "/" .. normalizedChild)
+end
+
+local function ResolveRequirePath(moduleName)
+  local normalized = tostring(moduleName or ""):gsub("%.", "/")
+  if normalized:sub(-4) ~= ".lua" then
+    normalized = normalized .. ".lua"
+  end
+  return NormalizePath(normalized)
+end
+
 local function ParseRulesFile(path)
   local file, openErr = io.open(path, "rb")
   if not file then
@@ -143,8 +186,17 @@ end
 local function CollectDeterministicTests(scenarioFiles)
   local testsByName = {}
   local errors = {}
+  local visitedFiles = {}
+  local expandedScenarioFiles = {}
 
-  for _, scenarioPath in ipairs(scenarioFiles) do
+  local function ScanScenarioFile(scenarioPath)
+    scenarioPath = NormalizePath(scenarioPath)
+    if visitedFiles[scenarioPath] then
+      return
+    end
+    visitedFiles[scenarioPath] = true
+    expandedScenarioFiles[#expandedScenarioFiles + 1] = scenarioPath
+
     local scenarioFile, openErr = io.open(scenarioPath, "rb")
     if not scenarioFile then
       table.insert(
@@ -156,6 +208,15 @@ local function CollectDeterministicTests(scenarioFiles)
       local pendingTestCall = nil
       for line in scenarioFile:lines() do
         lineNumber = lineNumber + 1
+        local dofilePath = line:match('dofile%(%s*"(.-)"%s*%)') or line:match("dofile%(%s*'(.-)'%s*%)")
+        if dofilePath then
+          ScanScenarioFile(ResolveRelativePath(scenarioPath, dofilePath))
+        end
+        local requirePath = line:match('require%(%s*"(.-)"%s*%)') or line:match("require%(%s*'(.-)'%s*%)")
+        if requirePath then
+          ScanScenarioFile(ResolveRequirePath(requirePath))
+        end
+
         local testName = line:match('^%s*test%(%s*"(.-)"%s*,')
         if not testName then
           testName = line:match("^%s*test%(%s*'(.-)'%s*,")
@@ -205,7 +266,11 @@ local function CollectDeterministicTests(scenarioFiles)
     end
   end
 
-  return testsByName, errors
+  for _, scenarioPath in ipairs(scenarioFiles) do
+    ScanScenarioFile(scenarioPath)
+  end
+
+  return testsByName, errors, expandedScenarioFiles
 end
 
 local function CountIndexedTests(testsByName)
@@ -443,7 +508,7 @@ function Validator.Run(opts)
     scenarioFiles = {}
   end
 
-  local testsByName, testErrors = CollectDeterministicTests(scenarioFiles)
+  local testsByName, testErrors, expandedScenarioFiles = CollectDeterministicTests(scenarioFiles)
   for _, err in ipairs(testErrors) do
     table.insert(errors, err)
   end
@@ -473,7 +538,10 @@ function Validator.Run(opts)
   end
 
   printFn("Rules logic validation passed.")
-  return true
+  return true, {
+    indexedTests = indexedTests,
+    expandedScenarioFiles = expandedScenarioFiles,
+  }
 end
 
 return Validator

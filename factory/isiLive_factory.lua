@@ -135,9 +135,9 @@ local function FinalizeFactorySettings(ctx)
         end
       end,
       onBgAlphaChange = function(val)
-        local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-        if logFn then
-          logFn(string.format("[SETTINGS] bg_alpha val=%s", tostring(val)))
+        local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+        if logf then
+          logf("[SETTINGS] bg_alpha val=%s", tostring(val))
         end
         local uiCommon = ctx.addonTable and ctx.addonTable.UICommon
         if type(uiCommon) == "table" and type(uiCommon.Colors) == "table" then
@@ -159,9 +159,9 @@ local function FinalizeFactorySettings(ctx)
         end
       end,
       onUiScaleChange = function(val)
-        local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-        if logFn then
-          logFn(string.format("[SETTINGS] ui_scale val=%s", tostring(val)))
+        local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+        if logf then
+          logf("[SETTINGS] ui_scale val=%s", tostring(val))
         end
         if ctx.mainFrame and type(ctx.mainFrame.SetScale) == "function" then
           ctx.mainFrame:SetScale(val)
