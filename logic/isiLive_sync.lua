@@ -55,6 +55,7 @@ local targetInfoByPlayerKey = {}
 local kickInfoByPlayerKey = {}
 local syncDebugLog = nil
 local syncDebugTrace = nil
+local syncDebugTraceDeep = nil
 
 function Sync.SetLogger(fn)
   syncDebugLog = type(fn) == "function" and fn or nil
@@ -64,14 +65,18 @@ function Sync.SetTraceLogger(fn)
   syncDebugTrace = type(fn) == "function" and fn or nil
 end
 
-local function SyncLog(event, formatText, ...)
-  if not syncDebugLog and not syncDebugTrace then
+function Sync.SetDeepTraceLogger(fn)
+  syncDebugTraceDeep = type(fn) == "function" and fn or nil
+end
+
+local function SyncLogInternal(traceFn, event, formatText, ...)
+  if not traceFn and not syncDebugLog then
     return
   end
   local argCount = select("#", ...)
-  if syncDebugTrace then
+  if traceFn then
     local args = { ... }
-    syncDebugTrace(function()
+    traceFn(function()
       local data = formatText
       if argCount > 0 then
         data = string.format(tostring(formatText or ""), Unpack(args))
@@ -85,6 +90,14 @@ local function SyncLog(event, formatText, ...)
     data = string.format(tostring(formatText or ""), ...)
   end
   if syncDebugLog then syncDebugLog(string.format("[SYNC] %s %s", event, data or "")) end
+end
+
+local function SyncLog(event, formatText, ...)
+  SyncLogInternal(syncDebugTrace, event, formatText, ...)
+end
+
+local function SyncLogDeep(event, formatText, ...)
+  SyncLogInternal(syncDebugTraceDeep, event, formatText, ...)
 end
 
 local function GetSyncTimestamp()
@@ -871,11 +884,11 @@ function Sync.SendKey(opts)
   local dedupePayload = string.format("KEY:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
   local now = GetTime()
   if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastKeyPayloadSent then
-    SyncLog("send_key_blocked", "reason=unchanged mapID=%s level=%s", tostring(numericMapID), tostring(numericLevel))
+    SyncLogDeep("send_key_blocked", "reason=unchanged mapID=%s level=%s", tostring(numericMapID), tostring(numericLevel))
     return
   end
   if not opts.force and dedupePayload == lastKeyPayloadSent and (now - lastIsiLiveKeyAt) < ISILIVE_KEY_COOLDOWN then
-    SyncLog(
+    SyncLogDeep(
       "send_key_blocked",
       "reason=cooldown mapID=%s level=%s remain=%.1f",
       tostring(numericMapID),
@@ -1413,7 +1426,16 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     end
   end
 
-  SyncLog(
+  local anyFlag = keyUpdated
+    or statsUpdated
+    or dpsUpdated
+    or locUpdated
+    or targetUpdated
+    or kickUpdated
+    or shouldAck
+    or shouldRequestRefresh
+  local logFn = anyFlag and SyncLog or SyncLogDeep
+  logFn(
     "message_applied",
     "sender=%s key=%s stats=%s dps=%s loc=%s target=%s kick=%s ack=%s reqsync=%s",
     tostring(sender),

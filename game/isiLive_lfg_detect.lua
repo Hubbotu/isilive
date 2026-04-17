@@ -129,6 +129,8 @@ local groupRosterTraceLogger = nil
 local localeGetter = nil
 local debugLog = nil
 local debugTrace = nil
+local debugTraceDeep = nil
+local lastRosterUpdateSignature = nil
 local TriggerHighlightUpdate
 
 local function GetGroupMemberCount()
@@ -176,14 +178,18 @@ function LFGDetect.SetTraceLogger(fn)
   debugTrace = type(fn) == "function" and fn or nil
 end
 
-local function Log(event, formatText, ...)
-  if not debugLog and not debugTrace then
+function LFGDetect.SetDeepTraceLogger(fn)
+  debugTraceDeep = type(fn) == "function" and fn or nil
+end
+
+local function LogInternal(traceFn, event, formatText, ...)
+  if not traceFn and not debugLog then
     return
   end
   local argCount = select("#", ...)
-  if debugTrace then
+  if traceFn then
     local args = { ... }
-    debugTrace(function()
+    traceFn(function()
       local data = formatText
       if argCount > 0 then
         data = string.format(tostring(formatText or ""), Unpack(args))
@@ -197,6 +203,14 @@ local function Log(event, formatText, ...)
     data = string.format(tostring(formatText or ""), ...)
   end
   if debugLog then debugLog(string.format("[LFG] %s %s", event, data or "")) end
+end
+
+local function Log(event, formatText, ...)
+  LogInternal(debugTrace, event, formatText, ...)
+end
+
+local function LogDeep(event, formatText, ...)
+  LogInternal(debugTraceDeep, event, formatText, ...)
 end
 
 local function EmitGroupRosterTrace(inGroup, groupMemberCount, detectedBefore)
@@ -441,11 +455,20 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     local isInGroup = rawget(_G, "IsInGroup")
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
-    Log(
+    local memberCount = GetGroupMemberCount()
+    local rosterSignature = string.format(
+      "%s|%s|%s",
+      tostring(inGroup),
+      tostring(memberCount),
+      tostring(pendingAcceptedInviteMapID)
+    )
+    local rosterLogFn = rosterSignature == lastRosterUpdateSignature and LogDeep or Log
+    lastRosterUpdateSignature = rosterSignature
+    rosterLogFn(
       "group_roster_update",
       "inGroup=%s memberCount=%s pendingAccept=%s",
       tostring(inGroup),
-      tostring(GetGroupMemberCount()),
+      tostring(memberCount),
       tostring(pendingAcceptedInviteMapID)
     )
     if not inGroup then

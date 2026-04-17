@@ -79,8 +79,9 @@ local function EnqueueInspect(controller, unit, roster)
     and rosterEntry
     and (forceRefreshQueued or not rosterEntry.ilvl or not rosterEntry.rio or not rosterEntry.spec)
   then
-    if controller.logRuntimeTracef then
-      controller.logRuntimeTracef(
+    local logFn = forceRefreshQueued and controller.logRuntimeTracef or controller.logRuntimeTracefDeep
+    if logFn then
+      logFn(
         "[INSPECT] enqueue unit=%s forceRefresh=%s hasIlvl=%s hasRio=%s hasSpec=%s",
         tostring(unit),
         tostring(forceRefreshQueued),
@@ -318,6 +319,9 @@ function Inspect.CreateController(config)
   controller.retryInterval = tonumber(config and config.retryInterval) or 5
   controller.inspectDelay = tonumber(config and config.inspectDelay) or 1
   controller.logRuntimeTracef = type(config and config.logRuntimeTracef) == "function" and config.logRuntimeTracef or nil
+  controller.logRuntimeTracefDeep = type(config and config.logRuntimeTracefDeep) == "function"
+    and config.logRuntimeTracefDeep
+    or nil
 
   -- Local variable instead of a public controller field to prevent accidental
   -- external overwrites.

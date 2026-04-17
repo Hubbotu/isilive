@@ -12,10 +12,15 @@ local function FormatTraceValue(value)
 end
 
 local function BuildLFGGroupRosterTraceLogger(ctx, modules)
+  local lastSignature = nil
   return function(snapshot)
     local runtimeLogController = ctx.runtimeLogController
     local logFn = runtimeLogController and runtimeLogController.Log or nil
-    if type(logFn) ~= "function" or type(snapshot) ~= "table" then
+    local logDeepFn = runtimeLogController and runtimeLogController.LogDeep or nil
+    if type(snapshot) ~= "table" then
+      return
+    end
+    if type(logFn) ~= "function" and type(logDeepFn) ~= "function" then
       return
     end
 
@@ -33,7 +38,26 @@ local function BuildLFGGroupRosterTraceLogger(ctx, modules)
       or nil
     local now = tonumber(GetTime and GetTime()) or 0
 
-    logFn(
+    local signature = string.format(
+      "%s|%s|%s|%s|%s|%s|%s|%s|%s",
+      FormatTraceValue(snapshot.event),
+      FormatTraceValue(snapshot.inGroup),
+      FormatTraceValue(snapshot.members),
+      FormatTraceValue(snapshot.detectedBefore),
+      FormatTraceValue(snapshot.detectedAfter),
+      FormatTraceValue(snapshot.pendingAccept),
+      FormatTraceValue(snapshot.latestQueueMap),
+      FormatTraceValue(localTargetMapID),
+      FormatTraceValue(resolvedSpellID)
+    )
+    local isDuplicate = signature == lastSignature
+    lastSignature = signature
+    local targetLogFn = isDuplicate and logDeepFn or logFn
+    if type(targetLogFn) ~= "function" then
+      return
+    end
+
+    targetLogFn(
       string.format(
         "[LFG_GROUP5] ts=%s event=%s in_group=%s members=%s "
           .. "detected_before=%s detected_after=%s pending_accept=%s "
@@ -687,6 +711,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
   if type(modules.sync.SetTraceLogger) == "function" then
     modules.sync.SetTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.Trace or nil)
   end
+  if type(modules.sync.SetDeepTraceLogger) == "function" then
+    modules.sync.SetDeepTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil)
+  end
   if type(modules.sync.SetLogger) == "function" then
     modules.sync.SetLogger(nil)
   end
@@ -758,9 +785,12 @@ local function InitializeFactoryPrimaryControllers(ctx)
   end
   ctx.UpdateMPlusTeleportButton = function(soundContext)
     local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+    local logfDeep = ctx.runtimeLogController and ctx.runtimeLogController.LogfDeep or nil
     local traceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil
-    if logf then
+    if soundContext and logf then
       logf("[TP] update_button_called soundContext=%s", tostring(soundContext))
+    elseif logfDeep then
+      logfDeep("[TP] update_button_called soundContext=%s", tostring(soundContext))
     end
     -- Priority 1: LFGDetect (invite accepted / own active listing). This is
     -- the strongest direct signal from the current LFG flow and must
@@ -844,6 +874,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end
     if type(lfgDetect.SetTraceLogger) == "function" then
       lfgDetect.SetTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.Trace or nil)
+    end
+    if type(lfgDetect.SetDeepTraceLogger) == "function" then
+      lfgDetect.SetDeepTraceLogger(ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil)
     end
     if type(lfgDetect.SetLogger) == "function" then
       lfgDetect.SetLogger(nil)
@@ -1285,6 +1318,7 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
   end
   ctx.CheckIfEnteredTargetDungeon = function()
     local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
+    local logDeepFn = ctx.runtimeLogController and ctx.runtimeLogController.LogDeep or nil
     local targetMapID = ctx.ResolveStatusTargetMapID()
     if not targetMapID then
       return
@@ -1304,13 +1338,15 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
       return
     end
 
-    if logFn then
-      logFn(
+    local matched = currentMapID == targetMapID
+    local logTarget = matched and logFn or logDeepFn
+    if logTarget then
+      logTarget(
         string.format(
           "[STATE] check_entered_target_dungeon targetMapID=%s currentMapID=%s match=%s",
           tostring(targetMapID),
           tostring(currentMapID),
-          tostring(currentMapID == targetMapID)
+          tostring(matched)
         )
       )
     end

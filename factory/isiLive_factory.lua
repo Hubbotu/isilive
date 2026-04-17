@@ -287,6 +287,7 @@ local function FinalizeFactoryRuntime(ctx)
     sendOwnKeySnapshot = ctx.SendOwnKeySnapshot,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
     logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
+    logRuntimeTracefDeep = ctx.runtimeLogController and ctx.runtimeLogController.LogfDeep or nil,
   })
   ctx.OnEvent = function(self, event, ...)
     ctx.eventHandlersController.Dispatch(self, event, ...)

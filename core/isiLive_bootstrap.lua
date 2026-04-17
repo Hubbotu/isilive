@@ -34,6 +34,7 @@ function Bootstrap.RegisterSlashCommands(opts)
     assert(opts.queueDebugController, "isiLive: Bootstrap.RegisterSlashCommands requires queueDebugController")
   local runtimeLogController =
     assert(opts.runtimeLogController, "isiLive: Bootstrap.RegisterSlashCommands requires runtimeLogController")
+  local traceChatFrameController = opts.traceChatFrameController
   local resetDB = RequireFunction(opts.resetDB, "resetDB")
 
   commands.RegisterSlashCommands({
@@ -68,6 +69,10 @@ function Bootstrap.RegisterSlashCommands(opts)
     getRuntimeLogTailFiltered = runtimeLogController.GetLogTailFiltered,
     setRuntimeLogWatch = runtimeLogController.SetWatchFn,
     getRuntimeLogWatchActive = runtimeLogController.IsWatchActive,
+    openTraceChatFrame = traceChatFrameController and traceChatFrameController.Open or nil,
+    closeTraceChatFrame = traceChatFrameController and traceChatFrameController.Close or nil,
+    isTraceChatFrameOpen = traceChatFrameController and traceChatFrameController.IsOpen or nil,
+    addTraceChatFrameMessage = traceChatFrameController and traceChatFrameController.AddMessage or nil,
     resetDB = resetDB,
     logRuntimeTracef = runtimeLogController.Logf,
   })

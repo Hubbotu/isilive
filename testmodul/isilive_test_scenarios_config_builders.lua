@@ -107,6 +107,7 @@ return function(test, ctx)
       teleportDebugController = MakeSentinel("teleportDebugController"),
       queueDebugController = MakeSentinel("queueDebugController"),
       runtimeLogController = MakeSentinel("runtimeLogController"),
+      traceChatFrameController = MakeSentinel("traceChatFrameController"),
     }
     local result = builders.BuildSlashCommandsOpts(ctx_input)
     for key, val in pairs(ctx_input) do

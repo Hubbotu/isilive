@@ -23,6 +23,7 @@ local function BuildFactoryModules(tbl)
     teleport = tbl and tbl.Teleport,
     teleportUI = tbl and tbl.TeleportUI,
     teleportDebug = tbl and tbl.TeleportDebug,
+    traceChatFrame = tbl and tbl.TraceChatFrame,
     notice = tbl and tbl.Notice,
     status = tbl and tbl.Status,
     units = tbl and tbl.Units,
@@ -107,6 +108,10 @@ local function CreateFactoryContext(addonName, tbl)
       )
     end,
   })
+
+  if modules.traceChatFrame and type(modules.traceChatFrame.CreateController) == "function" then
+    ctx.traceChatFrameController = modules.traceChatFrame.CreateController()
+  end
 
   ctx.queueDebugController = modules.queueDebug.CreateController({
     printFn = ctx.Print,

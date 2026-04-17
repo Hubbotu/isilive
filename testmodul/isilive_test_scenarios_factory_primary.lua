@@ -1,3 +1,4 @@
+---@diagnostic disable-next-line: undefined-global
 local RegisterFactoryPrimaryHighlightTests = dofile("testmodul/isilive_test_scenarios_factory_primary_part1.lua")
 
 return function(test, ctx)
@@ -6,5 +7,6 @@ return function(test, ctx)
   local WithGlobals = ctx.with_globals
 
   RegisterFactoryPrimaryHighlightTests(test, Assert, LoadAddonModules, WithGlobals)
+  ---@diagnostic disable-next-line: undefined-global
   require("testmodul.isilive_test_scenarios_factory_primary_part2")(test, ctx)
 end

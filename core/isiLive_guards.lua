@@ -25,6 +25,7 @@ local REQUIRED_MODULES = {
   { key = "Teleport", file = "isiLive_teleport.lua" },
   { key = "TeleportUI", file = "isiLive_teleport_ui.lua" },
   { key = "TeleportDebug", file = "isiLive_teleport_debug.lua" },
+  { key = "TraceChatFrame", file = "isiLive_trace_chat_frame.lua" },
   { key = "Notice", file = "isiLive_notice.lua" },
   { key = "Status", file = "isiLive_status.lua" },
   { key = "Units", file = "isiLive_units.lua" },
@@ -151,6 +152,7 @@ local REQUIRED_FUNCTIONS = {
   },
   { path = { "TeleportUI", "CreateController" }, message = "isiLive: TeleportUI.CreateController missing" },
   { path = { "TeleportDebug", "CreateController" }, message = "isiLive: TeleportDebug.CreateController missing" },
+  { path = { "TraceChatFrame", "CreateController" }, message = "isiLive: TraceChatFrame.CreateController missing" },
 }
 
 local function ResolvePath(root, path)

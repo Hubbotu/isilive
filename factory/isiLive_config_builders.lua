@@ -154,6 +154,7 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     setLanguage = ctx.setLanguage,
     teleportDebugController = ctx.teleportDebugController,
     queueDebugController = ctx.queueDebugController,
+    traceChatFrameController = ctx.traceChatFrameController,
     runtimeLogController = ctx.runtimeLogController,
     getRuntimeLogEnabled = ctx.getRuntimeLogEnabled,
     setRuntimeLogEnabled = ctx.setRuntimeLogEnabled,

@@ -63,6 +63,11 @@ local function BuildDeps(opts)
     setRuntimeLogWatch = type(opts.setRuntimeLogWatch) == "function" and opts.setRuntimeLogWatch or nil,
     getRuntimeLogWatchActive = type(opts.getRuntimeLogWatchActive) == "function" and opts.getRuntimeLogWatchActive
       or nil,
+    openTraceChatFrame = type(opts.openTraceChatFrame) == "function" and opts.openTraceChatFrame or nil,
+    closeTraceChatFrame = type(opts.closeTraceChatFrame) == "function" and opts.closeTraceChatFrame or nil,
+    isTraceChatFrameOpen = type(opts.isTraceChatFrameOpen) == "function" and opts.isTraceChatFrameOpen or nil,
+    addTraceChatFrameMessage = type(opts.addTraceChatFrameMessage) == "function" and opts.addTraceChatFrameMessage
+      or nil,
     resetDB = opts.resetDB or function() end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
@@ -163,12 +168,35 @@ local function HandleDebugLogCommand(ctx, cmd, cfg)
     end
     if cfg.getWatchActive and cfg.getWatchActive() then
       cfg.setWatchFn(nil)
+      if cfg.closeTraceChatFrame then
+        cfg.closeTraceChatFrame()
+      end
       ctx.printFn(cfg.label .. ": watch OFF")
     else
+      local inWatch = false
+      local rawPrint = rawget(_G, "print") or print
+      local sink
+      if cfg.openTraceChatFrame and cfg.addTraceChatFrameMessage then
+        cfg.openTraceChatFrame()
+        sink = cfg.addTraceChatFrameMessage
+        ctx.printFn(cfg.label .. ": watch ON (entries stream to trace chat tab)")
+      else
+        sink = function(entry)
+          rawPrint("[watch] " .. tostring(entry))
+        end
+        ctx.printFn(cfg.label .. ": watch ON (new entries will be printed live)")
+      end
       cfg.setWatchFn(function(entry)
-        ctx.printFn("[watch] " .. tostring(entry))
+        if inWatch then
+          return
+        end
+        inWatch = true
+        local ok, err = pcall(sink, entry)
+        inWatch = false
+        if not ok then
+          rawPrint("isiLive watch sink error: " .. tostring(err))
+        end
       end)
-      ctx.printFn(cfg.label .. ": watch ON (new entries will be printed live)")
     end
     return
   end
@@ -192,6 +220,9 @@ local function HandleLogCommand(ctx, cmd)
     getFilteredTail = ctx.getRuntimeLogTailFiltered,
     setWatchFn = ctx.setRuntimeLogWatch,
     getWatchActive = ctx.getRuntimeLogWatchActive,
+    openTraceChatFrame = ctx.openTraceChatFrame,
+    closeTraceChatFrame = ctx.closeTraceChatFrame,
+    addTraceChatFrameMessage = ctx.addTraceChatFrameMessage,
     usageStr = "Usage: /isilive log [on|off|start|stop|status|level normal|deep|clear|tail [n [TAG]]|watch]",
   })
 end

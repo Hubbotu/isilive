@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-04-17 - Version 0.9.168 (patch)
+
+- **Runtime-log noise reduction:**
+  - `[SYNC] send_key_blocked` (unchanged / cooldown) moved to Deep-level: redundant same-tick key-send guards no longer spam the normal log. New `Sync.SetDeepTraceLogger` wires `runtimeLogController.TraceDeep`.
+  - `[SYNC] message_applied` now logs at Normal level only when at least one flag (`key/stats/dps/loc/target/kick/ack/reqsync`) is true; all-false applies (pure duplicate peer traffic) go to Deep.
+  - `[TP] update_button_called` with `soundContext=nil` moved to Deep; explicit trigger contexts (`queue`, `invite`, …) remain on Normal.
+  - `[STATE] check_entered_target_dungeon` now logs on Normal only when `match=true`; `match=false` polls go to Deep.
+  - `[INSPECT] enqueue` stays on Normal only when `forceRefresh=true`; routine post-roster re-enqueues go to Deep. New inspect-controller option `logRuntimeTracefDeep`.
+  - `[LFG] group_roster_update` deduped against its previous signature (inGroup/members/pendingAccept); identical repeats go to Deep. New `LFGDetect.SetDeepTraceLogger`.
+  - `[LFG_GROUP5]` trace deduped against its previous signature (event/inGroup/members/detected_before/detected_after/pendingAccept/latestQueueMap/localTargetMapID/resolvedSpell); identical repeats go to Deep.
+  - These changes shorten observed group-run logs by roughly half without removing any information — Deep level (`/isilive log level deep`) surfaces every suppressed entry again for debugging.
+
+- **Documentation / release sync:**
+  - Synced `isiLive.toc`, `README.md`, `ARCHITECTURE.md`, `USECASES.md`, and `CHANGELOG_RELEASE.md` to `0.9.168`.
+
 ## 2026-04-17 - Version 0.9.167 (patch)
 
 - **Runtime log expansion:**

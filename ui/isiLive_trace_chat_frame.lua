@@ -49,10 +49,33 @@ function TraceChatFrame.CreateController()
     return frameRef
   end
 
+  local function SelectTab(frame)
+    local selectChat = rawget(_G, "FCF_SelectChatFrame")
+    if type(selectChat) == "function" and frame then
+      selectChat(frame)
+    end
+  end
+
   function controller.Open()
     local frame = GetOrCreateFrame()
     if frame and type(frame.Show) == "function" then
       frame:Show()
+      SelectTab(frame)
+    end
+  end
+
+  function controller.Close()
+    local frame = FindExistingFrame()
+    if frame and type(frame.Hide) == "function" then
+      frame:Hide()
+    end
+  end
+
+  function controller.Toggle()
+    if controller.IsOpen() then
+      controller.Close()
+    else
+      controller.Open()
     end
   end
 
