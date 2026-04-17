@@ -196,6 +196,7 @@ local function RegisterSyncRuntimeLogBurstTests(test, Assert, WithGlobals, LoadA
       addon.Sync.SendRefreshRequest({ force = true })
 
       Assert.Equal(type(capturedBuilder), "function", "sync trace logger must receive a lazy message builder")
+      ---@diagnostic disable-next-line: need-check-nil
       Assert.Equal(capturedBuilder(), "[SYNC] send_reqsync channel=PARTY", "sync trace builder must format on demand")
     end)
   end)

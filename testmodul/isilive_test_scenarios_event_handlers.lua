@@ -1869,6 +1869,9 @@ local function RegisterReadyCheckLifecycleTests(test, Assert, _WithGlobals, Load
       logRuntimeTrace = function(message)
         table.insert(logEntries, message)
       end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(logEntries, string.format(fmt, ...))
+      end,
     })
 
     controller:Dispatch("READY_CHECK")

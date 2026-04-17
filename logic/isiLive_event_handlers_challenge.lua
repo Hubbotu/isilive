@@ -485,14 +485,12 @@ function ChallengeLifecycle.BuildHandlers(ctx)
       return
     end
     local runInfo = ResolveCompletedRunInfo()
-    if type(ctx.logRuntimeTrace) == "function" then
-      ctx.logRuntimeTrace(
-        string.format(
-          "[RC] challenge_mode_end mapID=%s level=%s onTime=%s",
-          tostring(runInfo and runInfo.mapID),
-          tostring(runInfo and runInfo.level),
-          tostring(runInfo and runInfo.onTime)
-        )
+    if type(ctx.logRuntimeTracef) == "function" then
+      ctx.logRuntimeTracef(
+        "[RC] challenge_mode_end mapID=%s level=%s onTime=%s",
+        tostring(runInfo and runInfo.mapID),
+        tostring(runInfo and runInfo.level),
+        tostring(runInfo and runInfo.onTime)
       )
     end
     TryRecordCompletedRun(ctx, runInfo, POST_RUN_CAPTURE_RETRIES)

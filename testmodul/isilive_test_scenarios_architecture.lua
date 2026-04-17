@@ -967,10 +967,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
   end)
 
   test("Architecture rules validator indexes split scenario files from dofile and require", function()
+    ---@diagnostic disable-next-line: undefined-global
     local validatorChunk, validatorErr = loadfile("tools/rules_logic_validator.lua")
     if not validatorChunk then
       error(string.format("cannot load rules validator: %s", tostring(validatorErr)))
     end
+    ---@diagnostic disable-next-line: undefined-global
     local scenarioChunk, scenarioErr = loadfile("tools/usecase_scenarios.lua")
     if not scenarioChunk then
       error(string.format("cannot load scenario manifest: %s", tostring(scenarioErr)))

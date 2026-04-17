@@ -65,6 +65,9 @@ function Bootstrap.RegisterSlashCommands(opts)
     clearRuntimeLog = runtimeLogController.ClearLog,
     getRuntimeLogCount = runtimeLogController.GetLogCount,
     getRuntimeLogTail = runtimeLogController.GetLogTail,
+    getRuntimeLogTailFiltered = runtimeLogController.GetLogTailFiltered,
+    setRuntimeLogWatch = runtimeLogController.SetWatchFn,
+    getRuntimeLogWatchActive = runtimeLogController.IsWatchActive,
     resetDB = resetDB,
     logRuntimeTracef = runtimeLogController.Logf,
   })

@@ -54,6 +54,7 @@ function Refresh.CreateController(opts)
     refreshDebounceSeconds = 0
   end
   local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
+  local logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil
   local lastRefreshAt = nil
   local pendingPostChallengeSync = false
 
@@ -61,31 +62,25 @@ function Refresh.CreateController(opts)
 
   function controller.RunFullRefresh()
     if isStopped() or isPaused() then
-      if logRuntimeTrace then
-        logRuntimeTrace(
-          string.format("[REFRESH] run_full_refresh blocked reason=%s", isStopped() and "stopped" or "paused")
-        )
+      if logRuntimeTracef then
+        logRuntimeTracef("[REFRESH] run_full_refresh blocked reason=%s", isStopped() and "stopped" or "paused")
       end
       return false
     end
     local challengeMapID = getActiveChallengeMapID()
     if challengeMapID then
-      if logRuntimeTrace then
-        logRuntimeTrace(
-          string.format("[REFRESH] run_full_refresh blocked reason=challenge_active mapID=%s", tostring(challengeMapID))
-        )
+      if logRuntimeTracef then
+        logRuntimeTracef("[REFRESH] run_full_refresh blocked reason=challenge_active mapID=%s", tostring(challengeMapID))
       end
       return false
     end
 
     local now = tonumber(getTime())
     if now and refreshDebounceSeconds > 0 and lastRefreshAt and (now - lastRefreshAt) < refreshDebounceSeconds then
-      if logRuntimeTrace then
-        logRuntimeTrace(
-          string.format(
-            "[REFRESH] run_full_refresh blocked reason=debounce remain=%.1f",
-            refreshDebounceSeconds - (now - lastRefreshAt)
-          )
+      if logRuntimeTracef then
+        logRuntimeTracef(
+          "[REFRESH] run_full_refresh blocked reason=debounce remain=%.1f",
+          refreshDebounceSeconds - (now - lastRefreshAt)
         )
       end
       return false
@@ -101,13 +96,11 @@ function Refresh.CreateController(opts)
       return refreshTestModeRoster()
     end
 
-    if logRuntimeTrace then
-      logRuntimeTrace(
-        string.format(
-          "[REFRESH] run_full_refresh isInGroup=%s isRosterEmpty=%s",
-          tostring(isInGroup()),
-          tostring(isRosterEmpty())
-        )
+    if logRuntimeTracef then
+      logRuntimeTracef(
+        "[REFRESH] run_full_refresh isInGroup=%s isRosterEmpty=%s",
+        tostring(isInGroup()),
+        tostring(isRosterEmpty())
       )
     end
 
@@ -133,13 +126,11 @@ function Refresh.CreateController(opts)
 
   function controller.HandleOwnedKeyRefresh()
     local changed = refreshLocalPlayerKey()
-    if logRuntimeTrace then
-      logRuntimeTrace(
-        string.format(
-          "[REFRESH] handle_owned_key_refresh changed=%s pendingPostChallenge=%s",
-          tostring(changed),
-          tostring(pendingPostChallengeSync)
-        )
+    if logRuntimeTracef then
+      logRuntimeTracef(
+        "[REFRESH] handle_owned_key_refresh changed=%s pendingPostChallenge=%s",
+        tostring(changed),
+        tostring(pendingPostChallengeSync)
       )
     end
     if changed then

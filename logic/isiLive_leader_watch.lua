@@ -21,7 +21,7 @@ function LeaderWatch.CreateController(opts)
   local printFn = RequireFunction(opts.printFn, "printFn")
   local getL = RequireFunction(opts.getL, "getL")
   local updateLeaderButtons = RequireFunction(opts.updateLeaderButtons, "updateLeaderButtons")
-  local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
+  local logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil
 
   local controller = {}
 
@@ -69,13 +69,13 @@ function LeaderWatch.CreateController(opts)
     if isLeader ~= wasGroupLeader then
       local L = getL()
       if isLeader then
-        if logRuntimeTrace then
-          logRuntimeTrace(string.format("[LEADER] gained isLeader=%s", tostring(isLeader)))
+        if logRuntimeTracef then
+          logRuntimeTracef("[LEADER] gained isLeader=%s", tostring(isLeader))
         end
         HandleLeaderGain(true)
       else
-        if logRuntimeTrace then
-          logRuntimeTrace(string.format("[LEADER] lost isLeader=%s", tostring(isLeader)))
+        if logRuntimeTracef then
+          logRuntimeTracef("[LEADER] lost isLeader=%s", tostring(isLeader))
         end
         printFn(L.LEAD_LOST)
       end

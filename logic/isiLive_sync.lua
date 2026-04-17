@@ -84,7 +84,7 @@ local function SyncLog(event, formatText, ...)
   if argCount > 0 then
     data = string.format(tostring(formatText or ""), ...)
   end
-  syncDebugLog(string.format("[SYNC] %s %s", event, data or ""))
+  if syncDebugLog then syncDebugLog(string.format("[SYNC] %s %s", event, data or "")) end
 end
 
 local function GetSyncTimestamp()

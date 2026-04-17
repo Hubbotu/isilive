@@ -40,6 +40,14 @@ function RuntimeLog.CreateController(opts)
       return date and date("%H:%M:%S") or "0.000"
     end
 
+  local getRawTime = opts.getRawTime
+    or function()
+      if type(GetTime) == "function" then
+        return tonumber(GetTime())
+      end
+      return nil
+    end
+
   local maxEntries = tonumber(opts.maxEntries) or 800
   if maxEntries < 1 then
     maxEntries = 1
@@ -50,6 +58,8 @@ function RuntimeLog.CreateController(opts)
 
   local controller = {}
   local sequence = 0
+  local lastRawTime = nil
+  local watchFn = nil
 
   function controller.EnsureStorage()
     return EnsureStorage()
@@ -98,12 +108,17 @@ function RuntimeLog.CreateController(opts)
 
   function controller.AppendLog(message)
     sequence = sequence + 1
-    logBuffer.Append(
-      EnsureStorage(),
-      "",
-      string.format("seq=%d t=%s %s", sequence, tostring(getTimestamp()), NormalizeRuntimeMessage(message)),
-      maxEntries
-    )
+    local now = type(getRawTime) == "function" and tonumber(getRawTime()) or nil
+    local deltaStr = ""
+    if now and lastRawTime then
+      deltaStr = string.format(" +%.3f", math.max(0, now - lastRawTime))
+    end
+    lastRawTime = now or lastRawTime
+    local entry = string.format("seq=%d t=%s%s %s", sequence, tostring(getTimestamp()), deltaStr, NormalizeRuntimeMessage(message))
+    logBuffer.Append(EnsureStorage(), "", entry, maxEntries)
+    if watchFn then
+      watchFn(entry)
+    end
   end
 
   function controller.Log(message)
@@ -166,9 +181,40 @@ function RuntimeLog.CreateController(opts)
     controller.TraceAt(DEEP_LEVEL, buildMessage)
   end
 
+  function controller.SetWatchFn(fn)
+    watchFn = type(fn) == "function" and fn or nil
+  end
+
+  function controller.IsWatchActive()
+    return watchFn ~= nil
+  end
+
+  function controller.GetLogTailFiltered(limit, filter)
+    local clampedLimit = math.max(1, math.min(tonumber(limit) or 20, 100))
+    local filterText = type(filter) == "string" and filter ~= "" and filter:upper() or nil
+    if not filterText then
+      return controller.GetLogTail(clampedLimit)
+    end
+    local fetchCount = math.min(maxEntries, 500)
+    local all = logBuffer.GetTail(EnsureStorage(), fetchCount, fetchCount, fetchCount)
+    local filtered = {}
+    for _, line in ipairs(all) do
+      if tostring(line):upper():find(filterText, 1, true) then
+        filtered[#filtered + 1] = line
+      end
+    end
+    local result = {}
+    local start = math.max(1, #filtered - clampedLimit + 1)
+    for i = start, #filtered do
+      result[#result + 1] = filtered[i]
+    end
+    return result, #filtered
+  end
+
   function controller.ClearLog()
     wipe(EnsureStorage())
     sequence = 0
+    lastRawTime = nil
   end
 
   function controller.GetLogCount()

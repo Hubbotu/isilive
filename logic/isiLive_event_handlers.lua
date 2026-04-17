@@ -226,11 +226,9 @@ function EventHandlers.CreateController(opts)
   function controller.Dispatch(self, event, ...)
     local handler = eventHandlers[event]
     if event == "READY_CHECK" or event == "READY_CHECK_CONFIRM" or event == "READY_CHECK_FINISHED" then
-      local logRuntimeTrace = type(ctx.logRuntimeTrace) == "function" and ctx.logRuntimeTrace or nil
-      if logRuntimeTrace then
-        logRuntimeTrace(
-          string.format("[EVENT_DISPATCH] event=%s handled=%s", tostring(event), tostring(handler ~= nil))
-        )
+      local logf = type(ctx.logRuntimeTracef) == "function" and ctx.logRuntimeTracef or nil
+      if logf then
+        logf("[EVENT_DISPATCH] event=%s handled=%s", tostring(event), tostring(handler ~= nil))
       end
     end
     if handler then

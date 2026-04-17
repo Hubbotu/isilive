@@ -196,7 +196,7 @@ local function Log(event, formatText, ...)
   if argCount > 0 then
     data = string.format(tostring(formatText or ""), ...)
   end
-  debugLog(string.format("[LFG] %s %s", event, data or ""))
+  if debugLog then debugLog(string.format("[LFG] %s %s", event, data or "")) end
 end
 
 local function EmitGroupRosterTrace(inGroup, groupMemberCount, detectedBefore)

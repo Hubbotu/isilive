@@ -58,6 +58,11 @@ local function BuildDeps(opts)
     getRuntimeLogTail = opts.getRuntimeLogTail or function(_limit)
       return {}
     end,
+    getRuntimeLogTailFiltered = type(opts.getRuntimeLogTailFiltered) == "function" and opts.getRuntimeLogTailFiltered
+      or nil,
+    setRuntimeLogWatch = type(opts.setRuntimeLogWatch) == "function" and opts.setRuntimeLogWatch or nil,
+    getRuntimeLogWatchActive = type(opts.getRuntimeLogWatchActive) == "function" and opts.getRuntimeLogWatchActive
+      or nil,
     resetDB = opts.resetDB or function() end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
@@ -125,16 +130,45 @@ local function HandleDebugLogCommand(ctx, cmd, cfg)
   end
 
   if arg == "tail" or arg == "dump" then
-    local limit = tonumber(restText) or 20
+    local limitStr, tagFilter = (restText or ""):match("^(%S*)%s*(.-)%s*$")
+    local limit = tonumber(limitStr) or 20
     if limit < 1 then
       limit = 1
     elseif limit > 100 then
       limit = 100
     end
-    local lines = cfg.getTail(limit)
-    ctx.printFn(cfg.label .. " tail: " .. tostring(#lines) .. "/" .. tostring(cfg.getCount()) .. " entries")
+    local lines, totalFiltered
+    if cfg.getFilteredTail and tagFilter and tagFilter ~= "" then
+      lines, totalFiltered = cfg.getFilteredTail(limit, tagFilter)
+    else
+      lines = cfg.getTail(limit)
+    end
+    local header = cfg.label .. " tail: " .. tostring(#lines)
+    if totalFiltered then
+      header = header .. "/" .. tostring(totalFiltered) .. " (filter=" .. tagFilter .. ")"
+    else
+      header = header .. "/" .. tostring(cfg.getCount()) .. " entries"
+    end
+    ctx.printFn(header)
     for _, line in ipairs(lines) do
       ctx.printFn(tostring(line))
+    end
+    return
+  end
+
+  if arg == "watch" then
+    if not cfg.setWatchFn then
+      ctx.printFn(cfg.label .. ": watch not supported")
+      return
+    end
+    if cfg.getWatchActive and cfg.getWatchActive() then
+      cfg.setWatchFn(nil)
+      ctx.printFn(cfg.label .. ": watch OFF")
+    else
+      cfg.setWatchFn(function(entry)
+        ctx.printFn("[watch] " .. tostring(entry))
+      end)
+      ctx.printFn(cfg.label .. ": watch ON (new entries will be printed live)")
     end
     return
   end
@@ -155,7 +189,10 @@ local function HandleLogCommand(ctx, cmd)
     clearLog = ctx.clearRuntimeLog,
     getCount = ctx.getRuntimeLogCount,
     getTail = ctx.getRuntimeLogTail,
-    usageStr = "Usage: /isilive log [on|off|start|stop|status|level normal|deep|clear|tail [n]]",
+    getFilteredTail = ctx.getRuntimeLogTailFiltered,
+    setWatchFn = ctx.setRuntimeLogWatch,
+    getWatchActive = ctx.getRuntimeLogWatchActive,
+    usageStr = "Usage: /isilive log [on|off|start|stop|status|level normal|deep|clear|tail [n [TAG]]|watch]",
   })
 end
 

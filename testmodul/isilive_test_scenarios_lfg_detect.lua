@@ -821,7 +821,8 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
 
       Assert.Equal(type(capturedBuilder), "function", "LFG trace logger must receive a lazy message builder")
       Assert.True(
-        capturedBuilder():find("%[LFG%] queue_listing_detected mapID=557 lastQueueMapID=nil") ~= nil,
+        ---@diagnostic disable-next-line: need-check-nil
+        (capturedBuilder() or ""):find("%[LFG%] queue_listing_detected mapID=557 lastQueueMapID=nil") ~= nil,
         "LFG trace builder must format on demand"
       )
     end)

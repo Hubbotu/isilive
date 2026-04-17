@@ -79,16 +79,14 @@ local function EnqueueInspect(controller, unit, roster)
     and rosterEntry
     and (forceRefreshQueued or not rosterEntry.ilvl or not rosterEntry.rio or not rosterEntry.spec)
   then
-    if controller.logRuntimeTrace then
-      controller.logRuntimeTrace(
-        string.format(
-          "[INSPECT] enqueue unit=%s forceRefresh=%s hasIlvl=%s hasRio=%s hasSpec=%s",
-          tostring(unit),
-          tostring(forceRefreshQueued),
-          tostring(rosterEntry.ilvl ~= nil),
-          tostring(rosterEntry.rio ~= nil),
-          tostring(rosterEntry.spec ~= nil)
-        )
+    if controller.logRuntimeTracef then
+      controller.logRuntimeTracef(
+        "[INSPECT] enqueue unit=%s forceRefresh=%s hasIlvl=%s hasRio=%s hasSpec=%s",
+        tostring(unit),
+        tostring(forceRefreshQueued),
+        tostring(rosterEntry.ilvl ~= nil),
+        tostring(rosterEntry.rio ~= nil),
+        tostring(rosterEntry.spec ~= nil)
       )
     end
     table.insert(controller.inspectQueue, unit)
@@ -188,18 +186,16 @@ local function OnInspectReady(controller, guid, roster, getUnitRio, getInspectSp
   controller.lastInspectTime = GetTime()
 
   local dataChanged = ilvlChanged or rioChanged or specChanged
-  if controller.logRuntimeTrace then
-    controller.logRuntimeTrace(
-      string.format(
-        "[INSPECT] result unit=%s ilvl=%s rio=%s spec=%s ilvlChanged=%s rioChanged=%s specChanged=%s",
-        tostring(inspectedUnit),
-        tostring(ilvl),
-        tostring(rio),
-        tostring(specName),
-        tostring(ilvlChanged),
-        tostring(rioChanged),
-        tostring(specChanged)
-      )
+  if controller.logRuntimeTracef then
+    controller.logRuntimeTracef(
+      "[INSPECT] result unit=%s ilvl=%s rio=%s spec=%s ilvlChanged=%s rioChanged=%s specChanged=%s",
+      tostring(inspectedUnit),
+      tostring(ilvl),
+      tostring(rio),
+      tostring(specName),
+      tostring(ilvlChanged),
+      tostring(rioChanged),
+      tostring(specChanged)
     )
   end
   if inspectedUnit == "player" and dataChanged and controller.TriggerOwnKeySnapshot then
@@ -210,13 +206,11 @@ local function OnInspectReady(controller, guid, roster, getUnitRio, getInspectSp
 end
 
 local function OnInspectTimeout(controller, now)
-  if controller.logRuntimeTrace then
-    controller.logRuntimeTrace(
-      string.format(
-        "[INSPECT] timeout unit=%s retryIn=%s",
-        tostring(controller.isInspecting),
-        tostring(controller.retryInterval)
-      )
+  if controller.logRuntimeTracef then
+    controller.logRuntimeTracef(
+      "[INSPECT] timeout unit=%s retryIn=%s",
+      tostring(controller.isInspecting),
+      tostring(controller.retryInterval)
     )
   end
   table.insert(controller.retryQueue, {
@@ -263,22 +257,22 @@ local function TryDispatchInspect(controller, now)
 
   local unit = table.remove(controller.inspectQueue, 1)
   if IsUnitInspectable(unit) then
-    if controller.logRuntimeTrace then
-      controller.logRuntimeTrace(
-        string.format("[INSPECT] dispatch unit=%s queueRemaining=%d", tostring(unit), #controller.inspectQueue)
+    if controller.logRuntimeTracef then
+      controller.logRuntimeTracef(
+        "[INSPECT] dispatch unit=%s queueRemaining=%d",
+        tostring(unit),
+        #controller.inspectQueue
       )
     end
     controller.isInspecting = unit
     controller.lastInspectTime = now
     NotifyInspect(unit)
   else
-    if controller.logRuntimeTrace then
-      controller.logRuntimeTrace(
-        string.format(
-          "[INSPECT] dispatch_skipped unit=%s not_inspectable retryIn=%s",
-          tostring(unit),
-          tostring(controller.retryInterval)
-        )
+    if controller.logRuntimeTracef then
+      controller.logRuntimeTracef(
+        "[INSPECT] dispatch_skipped unit=%s not_inspectable retryIn=%s",
+        tostring(unit),
+        tostring(controller.retryInterval)
       )
     end
     table.insert(controller.retryQueue, { unit = unit, nextRetry = now + controller.retryInterval })
@@ -323,7 +317,7 @@ function Inspect.CreateController(config)
   controller.inspectTimeout = tonumber(config and config.inspectTimeout) or 2
   controller.retryInterval = tonumber(config and config.retryInterval) or 5
   controller.inspectDelay = tonumber(config and config.inspectDelay) or 1
-  controller.logRuntimeTrace = type(config and config.logRuntimeTrace) == "function" and config.logRuntimeTrace or nil
+  controller.logRuntimeTracef = type(config and config.logRuntimeTracef) == "function" and config.logRuntimeTracef or nil
 
   -- Local variable instead of a public controller field to prevent accidental
   -- external overwrites.

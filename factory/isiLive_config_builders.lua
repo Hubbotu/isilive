@@ -66,7 +66,8 @@ function ConfigBuilders.BuildLeaderWatchControllerOpts(ctx)
     printFn = ctx.printFn,
     getL = ctx.getL,
     updateLeaderButtons = ctx.updateLeaderButtons,
-    logRuntimeTrace = ctx.logRuntimeTrace,
+    logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
   }
 end
 
@@ -154,6 +155,16 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     teleportDebugController = ctx.teleportDebugController,
     queueDebugController = ctx.queueDebugController,
     runtimeLogController = ctx.runtimeLogController,
+    getRuntimeLogEnabled = ctx.getRuntimeLogEnabled,
+    setRuntimeLogEnabled = ctx.setRuntimeLogEnabled,
+    getRuntimeLogLevel = ctx.getRuntimeLogLevel,
+    setRuntimeLogLevel = ctx.setRuntimeLogLevel,
+    clearRuntimeLog = ctx.clearRuntimeLog,
+    getRuntimeLogCount = ctx.getRuntimeLogCount,
+    getRuntimeLogTail = ctx.getRuntimeLogTail,
+    getRuntimeLogTailFiltered = ctx.getRuntimeLogTailFiltered,
+    setRuntimeLogWatch = ctx.setRuntimeLogWatch,
+    getRuntimeLogWatchActive = ctx.getRuntimeLogWatchActive,
     resetDB = ctx.resetDB,
     logRuntimeTrace = ctx.logRuntimeTrace,
     logRuntimeTracef = ctx.logRuntimeTracef,

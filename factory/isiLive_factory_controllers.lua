@@ -680,6 +680,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
       return modules.sync.IsUserKnown(name, realm)
     end,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
     logRuntimeTraceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil,
   })
 
@@ -1044,6 +1045,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     getTime = GetTime,
     refreshDebounceSeconds = 10,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
+    logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
   }))
 
   local RESYNC_COOLDOWN = 10
