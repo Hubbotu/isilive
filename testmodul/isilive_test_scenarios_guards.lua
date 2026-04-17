@@ -42,6 +42,7 @@ local REQUIRED_MODULES = {
   "isiLive_teleport.lua",
   "isiLive_teleport_ui.lua",
   "isiLive_teleport_debug.lua",
+  "isiLive_trace_chat_frame.lua",
   "isiLive_notice.lua",
   "isiLive_status.lua",
   "isiLive_units.lua",
