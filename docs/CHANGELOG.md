@@ -2,6 +2,16 @@
 
 ## 2026-04-18 - Version 0.9.170 (patch)
 
+- **Factory load-order guard:**
+  - Added `isiLive_factory_kick_tracker.lua` and `isiLive_factory_minimap.lua` to `IMPLICIT_DEPENDENCIES["isiLive_factory.lua"]`, and `isiLive_factory_kick_tracker.lua` to `IMPLICIT_DEPENDENCIES["isiLive_factory_controllers.lua"]`, so tests that load either umbrella file automatically pull in the split submodules at runtime.
+  - Reordered `isiLive.toc` so `factory_kick_tracker.lua` loads before `factory_controllers.lua`, matching the runtime call direction (controllers invokes `FI.InitializeFactorySecondaryKickTracker`).
+  - Added three architecture tests (`RegisterArchitectureLoadOrderTests` in `testmodul/isilive_test_scenarios_architecture.lua`) that verify every `IMPLICIT_DEPENDENCIES` key/value is listed in `isiLive.toc`, that each dependency appears before its dependent in load order, and that both sides are registered in the harness `FILE_PATHS` — regression guard for future splits.
+
+- **UI scenario split:**
+  - `testmodul/isilive_test_scenarios_ui.lua` was sitting at 3139/3200 lines (61 below the hard file cap). Extracted the ~430 lines of WoW frame stub helpers (`CreateTextureStub`, `CreateFontStringStub`, `CreateAnimationGroupStub`, `ApplyFrameMethods`, `BuildCreateFrameStub`, `FindCombatRetryFrame`, `RequireValue`) into the new `testmodul/isilive_test_ui_helpers.lua` module, loaded via `loadfile` from any scenario that needs them.
+  - Moved the five SettingsPanel test groups (`RegisterSettingsPanelResetActionTests`, `RegisterSettingsPanelTests`, `RegisterSettingsPanelBehaviorTests`, `RegisterSettingsPanelAdvancedTests`, `RegisterSettingsPanelSoundAndLegacyTests`) into the new sibling file `testmodul/isilive_test_scenarios_ui_settings.lua` and registered it in `tools/usecase_scenarios.lua`.
+  - Both scenario files now sit under 1400 lines, leaving comfortable headroom for new tests, and the helpers are reusable if more UI scenario files are added in the future.
+
 - **Roster-Panel refactor (Phase 1):**
   - Extracted CdTracker row creation/update (`CreateCdTrackerRow`, `UpdateCdTrackerRow`) into `ui/isiLive_roster_panel_cd_row.lua`.
   - Extracted KillTrack row creation/update (`CreateKillTrackRow`, `UpdateKillTrackRow`) into `ui/isiLive_roster_panel_kill_row.lua`.
