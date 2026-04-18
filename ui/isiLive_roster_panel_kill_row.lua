@@ -181,6 +181,5 @@ local function UpdateKillTrackRow(row)
   end
 end
 
-
 RI.CreateKillTrackRow = CreateKillTrackRow
 RI.UpdateKillTrackRow = UpdateKillTrackRow

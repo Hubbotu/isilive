@@ -1358,7 +1358,6 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
   end)
 end
 
-
 return function(test, ctx)
   local Assert = RequireValue(ctx.assert, "UI settings scenario ctx.assert should exist")
   local WithGlobals = RequireValue(ctx.with_globals, "UI settings scenario ctx.with_globals should exist")

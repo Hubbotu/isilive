@@ -547,7 +547,6 @@ local function RegisterRosterPanelRestoreDefaultLayoutTests(test, Assert, WithGl
   end)
 end
 
-
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals

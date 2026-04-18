@@ -281,7 +281,6 @@ local function RegisterChallengeRaidResumeTests(test, Assert, LoadAddonModules, 
   end)
 end
 
-
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals

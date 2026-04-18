@@ -272,7 +272,6 @@ local function CreateCdTrackerRow(mainFrame)
   return row
 end
 
-
 local function UpdateCdTrackerRow(row, cdController)
   if not row then
     return
@@ -389,7 +388,6 @@ local function UpdateCdTrackerRow(row, cdController)
     end
   end
 end
-
 
 RI.CreateCdTrackerRow = CreateCdTrackerRow
 RI.UpdateCdTrackerRow = UpdateCdTrackerRow
