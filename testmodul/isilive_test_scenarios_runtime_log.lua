@@ -291,7 +291,10 @@ return function(test, ctx)
       local tail = controller.GetLogTail(1)
 
       Assert.Equal(#tail, 1, "sanitizing test should produce one log entry")
-      Assert.True(tail[1]:find("abcxyz", 1, true) ~= nil, "non-ASCII bytes must be removed from stored log text")
+      Assert.True(
+        tail[1]:find("abc?xyz", 1, true) ~= nil,
+        "non-ASCII UTF-8 sequence must collapse to a single ? in stored log text"
+      )
     end)
   end)
 
@@ -346,5 +349,77 @@ return function(test, ctx)
         "tail must preserve normalized newest burst entry"
       )
     end)
+  end)
+
+  test("LogBuffer Append and GetTail behave correctly at cap=1", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = {}
+
+    addon.LogBuffer.Append(logs, "t1", "one", 1)
+    Assert.Equal(addon.LogBuffer.Count(logs), 1, "cap=1: first append must yield count 1")
+    local tail = addon.LogBuffer.GetTail(logs, 5, 5, 10)
+    Assert.Equal(#tail, 1, "cap=1: tail must return exactly one entry")
+    Assert.True(tail[1]:find("one", 1, true) ~= nil, "cap=1: tail must contain newest entry")
+
+    addon.LogBuffer.Append(logs, "t2", "two", 1)
+    Assert.Equal(addon.LogBuffer.Count(logs), 1, "cap=1: second append must still yield count 1")
+    tail = addon.LogBuffer.GetTail(logs, 5, 5, 10)
+    Assert.Equal(#tail, 1, "cap=1: overwrite must not grow tail")
+    Assert.True(tail[1]:find("two", 1, true) ~= nil, "cap=1: tail must reflect overwritten entry")
+
+    addon.LogBuffer.Append(logs, "t3", "three", 1)
+    tail = addon.LogBuffer.GetTail(logs, 5, 5, 10)
+    Assert.Equal(#tail, 1, "cap=1: third append must keep tail length 1")
+    Assert.True(tail[1]:find("three", 1, true) ~= nil, "cap=1: tail must reflect newest overwrite")
+  end)
+
+  test("LogBuffer recovers from corrupted _count larger than cap", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = { "a", "b", "c", _count = 999, _head = 1 }
+
+    local tail = addon.LogBuffer.GetTail(logs, 10, 10, 50)
+    Assert.Equal(#tail, 3, "GetTail must clamp corrupted _count to actual cap")
+    Assert.True(tail[3]:find("c", 1, true) ~= nil, "GetTail must keep newest entry after normalization")
+    Assert.Equal(logs._count, 3, "NormalizeRing must rewrite _count to cap")
+  end)
+
+  test("LogBuffer recovers from missing _count and _head metadata", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = { "x", "y", "z" }
+
+    local tail = addon.LogBuffer.GetTail(logs, 10, 10, 50)
+    Assert.Equal(#tail, 3, "GetTail must read legacy arrays without _count/_head")
+    Assert.True(tail[1]:find("x", 1, true) ~= nil, "legacy array: first tail entry must be x")
+    Assert.True(tail[3]:find("z", 1, true) ~= nil, "legacy array: last tail entry must be z")
+    Assert.Equal(logs._count, 3, "NormalizeRing must seed _count for legacy arrays")
+    Assert.Equal(logs._head, 1, "NormalizeRing must seed _head for legacy arrays")
+  end)
+
+  test("LogBuffer recovers from _head out of range", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = { "one", "two", "three", _count = 3, _head = 99 }
+
+    local tail = addon.LogBuffer.GetTail(logs, 10, 10, 50)
+    Assert.Equal(#tail, 3, "GetTail must tolerate _head outside [1, cap]")
+    Assert.Equal(logs._head, 1, "NormalizeRing must reset invalid _head to 1")
+  end)
+
+  test("LogBuffer Append after corruption recovery uses normalized state", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = { "a", "b", "c", _count = -5, _head = 0 }
+
+    addon.LogBuffer.Append(logs, "t", "new", 3)
+    Assert.Equal(addon.LogBuffer.Count(logs), 3, "Append after corruption must fill up to cap")
+    local tail = addon.LogBuffer.GetTail(logs, 10, 10, 50)
+    Assert.Equal(#tail, 3, "tail after corruption recovery must contain cap entries")
+    Assert.True(tail[#tail]:find("new", 1, true) ~= nil, "newest entry must land at the tail")
+  end)
+
+  test("LogBuffer GetTail returns empty for empty ring", function()
+    local addon = LoadAddonModules({ "isiLive_log_buffer.lua" })
+    local logs = {}
+
+    local tail = addon.LogBuffer.GetTail(logs, 10, 10, 50)
+    Assert.Equal(#tail, 0, "empty ring must produce empty tail")
   end)
 end

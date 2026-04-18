@@ -71,7 +71,11 @@ end
 function LogBuffer.SanitizeMessage(message)
   local text = tostring(message or "")
   -- Keep SavedVariables debug logs ASCII-friendly for easier external parsing.
-  return text:gsub("[\128-\255]", "")
+  -- Collapse each full UTF-8 multi-byte sequence into a single "?" first so a
+  -- single character does not become multiple "?"s. Any remaining high bytes
+  -- (invalid / stray) also get replaced with "?".
+  local sanitized = text:gsub("[\194-\244][\128-\191]+", "?"):gsub("[\128-\255]", "?")
+  return sanitized
 end
 
 function LogBuffer.Append(logs, timestamp, message, maxEntries)
@@ -105,21 +109,21 @@ end
 function LogBuffer.GetTail(logs, limit, defaultLimit, maxLimit)
   assert(type(logs) == "table", "isiLive: LogBuffer.GetTail requires logs table")
 
+  local cap = #logs
+  if cap < 1 then
+    return {}
+  end
+
+  -- Normalize before reading so we tolerate SavedVariables corruption
+  -- (missing _count/_head, or values outside the expected range).
+  local total, head = NormalizeRing(logs, cap)
   local count = ClampLimit(limit, tonumber(defaultLimit) or 20, 1, tonumber(maxLimit) or 100)
-  local total = LogBuffer.Count(logs)
-  local startIndex = total - count + 1
-  if startIndex < 1 then
-    startIndex = 1
+  if count > total then
+    count = total
   end
 
   local out = {}
-  local cap = #logs
-  if cap < 1 then
-    return out
-  end
-
-  local head = tonumber(logs._head) or 1
-  for offset = startIndex - 1, total - 1 do
+  for offset = total - count, total - 1 do
     out[#out + 1] = logs[RingIndex(head, offset, cap)]
   end
   return out
