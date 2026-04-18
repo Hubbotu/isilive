@@ -887,7 +887,8 @@ end
 -- Used to compute approximate sync intervals for tooltip display.
 -- @param name string Player name.
 -- @param realm string|nil Realm name.
--- @return table|nil {kind, capturedAt, receivedAt, previousSyncStamp, intervalSeconds, source, addonVersion, protocolVersion}
+-- @return table|nil {kind, capturedAt, receivedAt, previousSyncStamp,
+--   intervalSeconds, source, addonVersion, protocolVersion}
 function Sync.GetPlayerSyncSummary(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -966,7 +967,8 @@ end
 
 --- Broadcasts a HELLO announcement to the group.
 -- Rate-limited by ISILIVE_HELLO_COOLDOWN (8 s). Suppressed when isVisible==false unless allowHidden==true.
--- @param opts table {version:string, protocolVersion:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean}
+-- @param opts table {version:string, protocolVersion:number, source:string,
+--   isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendHello(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1010,7 +1012,8 @@ end
 
 --- Broadcasts the local player's keystone to the group.
 -- Deduplicated (onlyIfChanged) and rate-limited by ISILIVE_KEY_COOLDOWN (5 s).
--- @param opts table {mapID:number, level:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
+-- @param opts table {mapID:number, level:number, capturedAt:number, source:string,
+--   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendKey(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1060,7 +1063,8 @@ end
 
 --- Broadcasts the local player's stats (spec/ilvl/rio) to the group.
 -- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
--- @param opts table {specID:number, ilvl:number, rio:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
+-- @param opts table {specID:number, ilvl:number, rio:number, capturedAt:number,
+--   source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendStats(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1110,7 +1114,8 @@ end
 
 --- Broadcasts the local player's last-run DPS to the group.
 -- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
--- @param opts table {dps:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
+-- @param opts table {dps:number, capturedAt:number, source:string,
+--   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendDps(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1206,7 +1211,8 @@ end
 
 --- Broadcasts the local player's current dungeon/zone map ID to the group.
 -- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
--- @param opts table {mapID:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
+-- @param opts table {mapID:number, capturedAt:number, source:string,
+--   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendLoc(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1243,7 +1249,8 @@ end
 
 --- Broadcasts the local player's target keystone (desired dungeon/level) to the group.
 -- Deduplicated and rate-limited by ISILIVE_TARGET_COOLDOWN (5 s).
--- @param opts table {mapID:number, level:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean}
+-- @param opts table {mapID:number, level:number, capturedAt:number, source:string,
+--   isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendTarget(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
