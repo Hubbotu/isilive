@@ -297,10 +297,14 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
         return
       end
     end
-    controllers.status.MaybeShowNonMythicDungeonEntryNotice()
+    if controllers.status then
+      controllers.status.MaybeShowNonMythicDungeonEntryNotice()
+    end
   end
   config.maybeShowPortalNavigatorNotice = function()
-    controllers.status.MaybeShowPortalNavigatorNotice()
+    if controllers.status then
+      controllers.status.MaybeShowPortalNavigatorNotice()
+    end
   end
   config.checkIfEnteredTargetDungeon =
     RequireFunction(callbacks.checkIfEnteredTargetDungeon, "callbacks.checkIfEnteredTargetDungeon")
@@ -331,15 +335,22 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
     end
   end
   config.handleOwnedKeyRefresh = function()
-    controllers.refresh.HandleOwnedKeyRefresh()
+    if controllers.refresh then
+      controllers.refresh.HandleOwnedKeyRefresh()
+    end
   end
   config.notifyPostChallengeSync = function()
-    controllers.refresh.NotifyPostChallengeSync()
+    if controllers.refresh then
+      controllers.refresh.NotifyPostChallengeSync()
+    end
   end
   config.isMainFrameShown = function()
     return refs.mainFrame:IsShown()
   end
   config.onInspectReady = function(guid)
+    if not controllers.inspect then
+      return
+    end
     return controllers.inspect.OnInspectReady(
       guid,
       state.getRoster(),
