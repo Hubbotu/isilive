@@ -67,5 +67,6 @@ ui/isiLive_settings.lua
 core/isiLive_guards.lua
 factory/isiLive_factory_frame_bridge.lua
 factory/isiLive_factory_controllers.lua
+factory/isiLive_factory_minimap.lua
 factory/isiLive_factory.lua
 isiLive.lua
