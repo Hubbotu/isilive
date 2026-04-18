@@ -395,6 +395,8 @@ local function BuildCreateFrameStub(opts)
 
   return CreateFrameStub, createdFrames
 end
+
+local RegisterCenterNoticeTeleportTooltipTests
 local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Center notice close button hides center notice directly", function()
     local now = 0
@@ -560,6 +562,10 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
     end)
   end)
 
+  RegisterCenterNoticeTeleportTooltipTests(test, Assert, WithGlobals, LoadAddonModules)
+end
+
+RegisterCenterNoticeTeleportTooltipTests = function(test, Assert, WithGlobals, LoadAddonModules)
   test("Center notice teleport button uses isolated top-anchored tooltip", function()
     local now = 0
     local createFrameStub, createdFrames = BuildCreateFrameStub()

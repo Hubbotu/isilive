@@ -404,163 +404,7 @@ end
 addonTable._FactorySecondaryTests = addonTable._FactorySecondaryTests or {}
 addonTable._FactorySecondaryTests.BuildFactorySecondaryControllerState = BuildFactorySecondaryControllerState
 
-return function(test, ctx)
-  local Assert = ctx.assert
-  local WithGlobals = ctx.with_globals
-  local LoadAddonModules = ctx.load_modules
-
-  test("Factory hidden CD ticker skips polling while frame is hidden", function()
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = false,
-      mplusTimerData = {
-        running = true,
-      },
-    })
-
-    local ticker = FindTicker(state.tickers, 1.0)
-    Assert.NotNil(ticker, "secondary controller init must register the CD tracker ticker")
-    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
-      return
-    end
-
-    ticker.callback()
-
-    Assert.Equal(state.cdScans or 0, 0, "hidden CD ticker must not keep polling the CD tracker")
-    Assert.Equal(state.cdRefreshes or 0, 0, "hidden CD ticker must not refresh the CD row")
-    Assert.Equal(state.readyCheckRefreshes or 0, 0, "hidden CD ticker must not refresh ready-check rows")
-    Assert.Equal(state.uiUpdates or 0, 0, "hidden CD ticker must not rerender the UI for active timers")
-  end)
-
-  test("Factory hidden explicit CD refresh keeps pre-rendered state current", function()
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = false,
-      readyCheckActive = true,
-      mplusTimerData = {
-        running = true,
-      },
-    })
-
-    state.ctx.UpdateCdTracker()
-
-    Assert.Equal(state.cdScans or 0, 1, "event-driven hidden CD refresh must still scan the CD tracker")
-    Assert.Equal(state.cdRefreshes or 0, 1, "event-driven hidden CD refresh must still pre-render the CD row")
-    Assert.Equal(state.readyCheckRefreshes or 0, 1, "event-driven hidden CD refresh must keep ready-check rows current")
-    Assert.Equal(state.uiUpdates or 0, 1, "event-driven hidden CD refresh must keep the timer display current")
-  end)
-
-  test("Factory hidden kick ticker keeps syncing while frame is hidden", function()
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = false,
-      kickInfo = {
-        spellID = 6552,
-        hasKick = true,
-        onCooldown = false,
-        cooldownRemain = 0,
-      },
-    })
-
-    local ticker = FindTicker(state.tickers, 0.5)
-    Assert.NotNil(ticker, "secondary controller init must register the kick ticker")
-    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
-      return
-    end
-
-    ticker.callback()
-
-    Assert.Equal(state.kickScans or 0, 1, "hidden kick ticker must still scan the local kick state")
-    Assert.Equal(#state.sentKick, 1, "hidden kick ticker must keep syncing kick state for peers")
-    Assert.NotNil(state.lastSetKickInfo, "hidden kick ticker must still update the local kick sync cache")
-    Assert.Equal(state.kickRefreshes or 0, 0, "hidden kick ticker must avoid polling-driven UI refreshes")
-  end)
-
-  test("Factory raid kick tracker suppresses sync until raid ends and then recovers", function()
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = true,
-      isRaidGroup = true,
-      kickInfo = {
-        spellID = 6552,
-        hasKick = true,
-        onCooldown = false,
-        cooldownRemain = 0,
-      },
-    })
-
-    local ticker = FindTicker(state.tickers, 0.5)
-    Assert.NotNil(ticker, "secondary controller init must register the kick ticker")
-    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
-      return
-    end
-    local castFrame = state.createdFrames[1]
-    Assert.NotNil(castFrame, "kick tracker init must create a dedicated cast frame")
-    if
-      type(castFrame) ~= "table"
-      or type(castFrame.scripts) ~= "table"
-      or type(castFrame.scripts.OnEvent) ~= "function"
-    then
-      return
-    end
-
-    ticker.callback()
-    castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
-
-    Assert.Equal(#state.sentKick, 0, "raid mode must suppress outgoing kick sync")
-    Assert.Nil(state.lastSetKickInfo, "raid mode must not mutate the local kick sync cache")
-    Assert.Equal(state.kickOnCastCalls or 0, 0, "raid mode must ignore dedicated kick cast events")
-    Assert.Equal(state.kickRefreshes or 0, 0, "raid mode must not refresh the kick column")
-
-    state.isRaidGroup = false
-    ticker.callback()
-
-    Assert.Equal(state.kickResolveCalls or 0, 1, "kick tracker must recover spell resolution after leaving raid")
-    Assert.Equal(state.kickCacheCalls or 0, 1, "kick tracker must refresh cooldown data after leaving raid")
-    Assert.Equal(#state.sentKick, 1, "kick tracker must resume syncing once raid hard-off ends")
-    Assert.NotNil(state.lastSetKickInfo, "kick tracker must restore the local kick sync cache after raid exit")
-    Assert.Equal(state.kickRefreshes or 0, 1, "visible raid exit recovery must refresh the kick column once")
-  end)
-
-  test("Factory explicit kick sync reply uses recovered cooldown state instead of stale ready state", function()
-    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
-      mainFrameShown = false,
-      isRaidGroup = true,
-      kickInfo = {
-        spellID = 6552,
-        hasKick = true,
-        onCooldown = false,
-        cooldownRemain = 0,
-      },
-      onKickCacheCooldown = function(info)
-        info.onCooldown = true
-        info.cooldownRemain = 11
-      end,
-    })
-
-    local sentInRaid = state.ctx.SendOwnKickState()
-    Assert.False(sentInRaid, "explicit kick sync replies must stay suppressed while raid hard-off is active")
-    Assert.Equal(#state.sentKick, 0, "raid hard-off must suppress explicit kick sync replies")
-
-    state.isRaidGroup = false
-    local sentAfterRaid = state.ctx.SendOwnKickState()
-
-    Assert.True(sentAfterRaid, "first explicit kick sync reply after raid exit must succeed")
-    Assert.Equal(
-      state.kickResolveCalls or 0,
-      1,
-      "post-raid explicit reply must recover spell resolution before sending"
-    )
-    Assert.Equal(
-      state.kickCacheCalls or 0,
-      1,
-      "post-raid explicit reply must refresh exact cooldown state before sending"
-    )
-    Assert.Equal(#state.sentKick, 1, "post-raid explicit reply must emit exactly one kick sync packet")
-    Assert.True(state.sentKick[1].onCooldown, "post-raid explicit reply must send the recovered active cooldown state")
-    Assert.Equal(
-      state.sentKick[1].cooldownRemain,
-      11,
-      "post-raid explicit reply must send the recovered cooldown remain"
-    )
-  end)
-
+local function RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Factory post-raid kick reply stays unresolved until exact recovery succeeds", function()
     local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
       mainFrameShown = true,
@@ -796,4 +640,163 @@ return function(test, ctx)
       "the restored kick sync packet must carry the observed cooldown remain"
     )
   end)
+end
+
+return function(test, ctx)
+  local Assert = ctx.assert
+  local WithGlobals = ctx.with_globals
+  local LoadAddonModules = ctx.load_modules
+
+  test("Factory hidden CD ticker skips polling while frame is hidden", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = false,
+      mplusTimerData = {
+        running = true,
+      },
+    })
+
+    local ticker = FindTicker(state.tickers, 1.0)
+    Assert.NotNil(ticker, "secondary controller init must register the CD tracker ticker")
+    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
+      return
+    end
+
+    ticker.callback()
+
+    Assert.Equal(state.cdScans or 0, 0, "hidden CD ticker must not keep polling the CD tracker")
+    Assert.Equal(state.cdRefreshes or 0, 0, "hidden CD ticker must not refresh the CD row")
+    Assert.Equal(state.readyCheckRefreshes or 0, 0, "hidden CD ticker must not refresh ready-check rows")
+    Assert.Equal(state.uiUpdates or 0, 0, "hidden CD ticker must not rerender the UI for active timers")
+  end)
+
+  test("Factory hidden explicit CD refresh keeps pre-rendered state current", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = false,
+      readyCheckActive = true,
+      mplusTimerData = {
+        running = true,
+      },
+    })
+
+    state.ctx.UpdateCdTracker()
+
+    Assert.Equal(state.cdScans or 0, 1, "event-driven hidden CD refresh must still scan the CD tracker")
+    Assert.Equal(state.cdRefreshes or 0, 1, "event-driven hidden CD refresh must still pre-render the CD row")
+    Assert.Equal(state.readyCheckRefreshes or 0, 1, "event-driven hidden CD refresh must keep ready-check rows current")
+    Assert.Equal(state.uiUpdates or 0, 1, "event-driven hidden CD refresh must keep the timer display current")
+  end)
+
+  test("Factory hidden kick ticker keeps syncing while frame is hidden", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = false,
+      kickInfo = {
+        spellID = 6552,
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+      },
+    })
+
+    local ticker = FindTicker(state.tickers, 0.5)
+    Assert.NotNil(ticker, "secondary controller init must register the kick ticker")
+    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
+      return
+    end
+
+    ticker.callback()
+
+    Assert.Equal(state.kickScans or 0, 1, "hidden kick ticker must still scan the local kick state")
+    Assert.Equal(#state.sentKick, 1, "hidden kick ticker must keep syncing kick state for peers")
+    Assert.NotNil(state.lastSetKickInfo, "hidden kick ticker must still update the local kick sync cache")
+    Assert.Equal(state.kickRefreshes or 0, 0, "hidden kick ticker must avoid polling-driven UI refreshes")
+  end)
+
+  test("Factory raid kick tracker suppresses sync until raid ends and then recovers", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = true,
+      isRaidGroup = true,
+      kickInfo = {
+        spellID = 6552,
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+      },
+    })
+
+    local ticker = FindTicker(state.tickers, 0.5)
+    Assert.NotNil(ticker, "secondary controller init must register the kick ticker")
+    if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
+      return
+    end
+    local castFrame = state.createdFrames[1]
+    Assert.NotNil(castFrame, "kick tracker init must create a dedicated cast frame")
+    if
+      type(castFrame) ~= "table"
+      or type(castFrame.scripts) ~= "table"
+      or type(castFrame.scripts.OnEvent) ~= "function"
+    then
+      return
+    end
+
+    ticker.callback()
+    castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
+
+    Assert.Equal(#state.sentKick, 0, "raid mode must suppress outgoing kick sync")
+    Assert.Nil(state.lastSetKickInfo, "raid mode must not mutate the local kick sync cache")
+    Assert.Equal(state.kickOnCastCalls or 0, 0, "raid mode must ignore dedicated kick cast events")
+    Assert.Equal(state.kickRefreshes or 0, 0, "raid mode must not refresh the kick column")
+
+    state.isRaidGroup = false
+    ticker.callback()
+
+    Assert.Equal(state.kickResolveCalls or 0, 1, "kick tracker must recover spell resolution after leaving raid")
+    Assert.Equal(state.kickCacheCalls or 0, 1, "kick tracker must refresh cooldown data after leaving raid")
+    Assert.Equal(#state.sentKick, 1, "kick tracker must resume syncing once raid hard-off ends")
+    Assert.NotNil(state.lastSetKickInfo, "kick tracker must restore the local kick sync cache after raid exit")
+    Assert.Equal(state.kickRefreshes or 0, 1, "visible raid exit recovery must refresh the kick column once")
+  end)
+
+  test("Factory explicit kick sync reply uses recovered cooldown state instead of stale ready state", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = false,
+      isRaidGroup = true,
+      kickInfo = {
+        spellID = 6552,
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+      },
+      onKickCacheCooldown = function(info)
+        info.onCooldown = true
+        info.cooldownRemain = 11
+      end,
+    })
+
+    local sentInRaid = state.ctx.SendOwnKickState()
+    Assert.False(sentInRaid, "explicit kick sync replies must stay suppressed while raid hard-off is active")
+    Assert.Equal(#state.sentKick, 0, "raid hard-off must suppress explicit kick sync replies")
+
+    state.isRaidGroup = false
+    local sentAfterRaid = state.ctx.SendOwnKickState()
+
+    Assert.True(sentAfterRaid, "first explicit kick sync reply after raid exit must succeed")
+    Assert.Equal(
+      state.kickResolveCalls or 0,
+      1,
+      "post-raid explicit reply must recover spell resolution before sending"
+    )
+    Assert.Equal(
+      state.kickCacheCalls or 0,
+      1,
+      "post-raid explicit reply must refresh exact cooldown state before sending"
+    )
+    Assert.Equal(#state.sentKick, 1, "post-raid explicit reply must emit exactly one kick sync packet")
+    Assert.True(state.sentKick[1].onCooldown, "post-raid explicit reply must send the recovered active cooldown state")
+    Assert.Equal(
+      state.sentKick[1].cooldownRemain,
+      11,
+      "post-raid explicit reply must send the recovered cooldown remain"
+    )
+  end)
+  RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
 end

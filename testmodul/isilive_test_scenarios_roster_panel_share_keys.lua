@@ -26,6 +26,7 @@ end
 local NewRecordedFrame
 local NewRecordedMainFrame
 local test, Assert, WithGlobals, LoadAddonModules
+local RegisterShareKeysRemoteCooldownTests
 
 local function RegisterShareKeysGlobalPathTest()
   test("Roster panel share keys button uses the global SendChatMessage runtime path", function()
@@ -1084,6 +1085,10 @@ local function RegisterShareKeysNoOpAndRemoteTests()
     end)
   end)
 
+  RegisterShareKeysRemoteCooldownTests()
+end
+
+RegisterShareKeysRemoteCooldownTests = function()
   test("Roster panel share keys button locks on remote SHAREKEYS signal", function()
     local createdFrames = {}
     local createdFontStrings = {}
