@@ -469,6 +469,16 @@ local function ApplySingleStructFallback(values, state)
   end
 end
 
+-- Extracts a normalized snapshot from C_LFGList.GetApplicationInfo results or event args.
+--
+-- State-machine (runs in order):
+--   1. SeedSnapshotFromSingleStruct  — single-table form: parse all fields upfront
+--   2. AccumulateStatusFlags(appStatus) — positional status arg at values[2]
+--   3. ScanApplicationTupleValues   — iterate all positional args for status, activityID, IDs
+--   4. ApplySingleStructFallback    — last-resort activityIDs list scan if still unresolved
+--
+-- Field priority: struct-parsed > event-arg resolved > direct activityID fallback.
+-- Calls updatePendingQueueJoin() only when isInviteLike == true and pendingStatus is nil.
 local function ExtractApplicationSnapshot(values, resolveTeleportSpellIDByActivityID, opts)
   opts = opts or {}
   local state = {

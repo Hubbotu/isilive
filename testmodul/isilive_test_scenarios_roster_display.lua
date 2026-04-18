@@ -214,4 +214,120 @@ return function(test, ctx)
       end)
     end)
   end)
+
+  test.describe("Roster.HasFullSync", function()
+    local function loadRoster(modules)
+      return LoadAddonModules(modules or { "isiLive_roster.lua" }).Roster
+    end
+
+    test.it("HasFullSync returns true when all non-ghost members have isiLive", function()
+      local Roster = loadRoster()
+      local roster = {
+        p1 = { isGhost = false, hasIsiLive = true },
+        p2 = { isGhost = false, hasIsiLive = true },
+        p3 = { isGhost = true, hasIsiLive = false },
+      }
+      Assert.True(Roster.HasFullSync(roster), "all living members synced must return true")
+    end)
+
+    test.it("HasFullSync returns false when any non-ghost member lacks isiLive", function()
+      local Roster = loadRoster()
+      local roster = {
+        p1 = { isGhost = false, hasIsiLive = true },
+        p2 = { isGhost = false, hasIsiLive = false },
+      }
+      Assert.False(Roster.HasFullSync(roster), "one unsynced living member must return false")
+    end)
+
+    test.it("HasFullSync returns false when fewer than 2 living members exist", function()
+      local Roster = loadRoster()
+      local roster = {
+        p1 = { isGhost = false, hasIsiLive = true },
+      }
+      Assert.False(Roster.HasFullSync(roster), "single member group must return false")
+    end)
+
+    test.it("HasFullSync returns false for empty roster", function()
+      local Roster = loadRoster()
+      Assert.False(Roster.HasFullSync({}), "empty roster must return false")
+      Assert.False(Roster.HasFullSync(nil), "nil roster must return false")
+    end)
+
+    test.it("HasFullSync ignores ghost players even when they have isiLive", function()
+      local Roster = loadRoster()
+      local roster = {
+        p1 = { isGhost = false, hasIsiLive = true },
+        ghost = { isGhost = true, hasIsiLive = true },
+      }
+      Assert.False(Roster.HasFullSync(roster), "ghost members must not count toward living member threshold")
+    end)
+  end)
+
+  test.describe("Roster.BuildOrderedRoster", function()
+    local rolePriority = { TANK = 1, HEALER = 2, DPS = 3, NONE = 99 }
+
+    local function loadRoster()
+      return LoadAddonModules({ "isiLive_roster.lua" }).Roster
+    end
+
+    test.it("BuildOrderedRoster places living members before ghosts", function()
+      local Roster = loadRoster()
+      local roster = {
+        ghost = { isGhost = true, role = "TANK" },
+        alive = { isGhost = false, role = "DPS" },
+      }
+      local unitPriority = { ghost = 1, alive = 2 }
+      local result = Roster.BuildOrderedRoster(roster, rolePriority, unitPriority)
+      Assert.Equal(result[1].unit, "alive", "living member must come before ghost")
+      Assert.Equal(result[2].unit, "ghost", "ghost must come last")
+    end)
+
+    test.it("BuildOrderedRoster sorts by role priority (TANK > HEALER > DPS)", function()
+      local Roster = loadRoster()
+      local roster = {
+        dps = { isGhost = false, role = "DPS" },
+        healer = { isGhost = false, role = "HEALER" },
+        tank = { isGhost = false, role = "TANK" },
+      }
+      local unitPriority = { dps = 1, healer = 2, tank = 3 }
+      local result = Roster.BuildOrderedRoster(roster, rolePriority, unitPriority)
+      Assert.Equal(result[1].unit, "tank", "tank must be first")
+      Assert.Equal(result[2].unit, "healer", "healer must be second")
+      Assert.Equal(result[3].unit, "dps", "dps must be third")
+    end)
+
+    test.it("BuildOrderedRoster breaks role ties with unitPriority", function()
+      local Roster = loadRoster()
+      local roster = {
+        dps_c = { isGhost = false, role = "DPS" },
+        dps_a = { isGhost = false, role = "DPS" },
+        dps_b = { isGhost = false, role = "DPS" },
+      }
+      local unitPriority = { dps_a = 1, dps_b = 2, dps_c = 3 }
+      local result = Roster.BuildOrderedRoster(roster, rolePriority, unitPriority)
+      Assert.Equal(result[1].unit, "dps_a", "lowest unitPriority index must come first")
+      Assert.Equal(result[2].unit, "dps_b")
+      Assert.Equal(result[3].unit, "dps_c")
+    end)
+
+    test.it("BuildOrderedRoster treats missing role as NONE priority (99)", function()
+      local Roster = loadRoster()
+      local roster = {
+        unknown = { isGhost = false, role = nil },
+        tank = { isGhost = false, role = "TANK" },
+      }
+      local unitPriority = { tank = 1, unknown = 2 }
+      local result = Roster.BuildOrderedRoster(roster, rolePriority, unitPriority)
+      Assert.Equal(result[1].unit, "tank", "tank must come before nil-role member")
+      Assert.Equal(result[2].unit, "unknown", "nil-role member must get NONE fallback priority")
+    end)
+
+    test.it("BuildOrderedRoster returns empty table for nil or empty roster", function()
+      local Roster = loadRoster()
+      local resultNil = Roster.BuildOrderedRoster(nil, rolePriority, {})
+      local resultEmpty = Roster.BuildOrderedRoster({}, rolePriority, {})
+      Assert.Equal(#resultNil, 0, "nil roster must return empty table")
+      Assert.Equal(#resultEmpty, 0, "empty roster must return empty table")
+    end)
+  end)
 end

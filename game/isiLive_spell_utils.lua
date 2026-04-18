@@ -22,15 +22,12 @@ function SpellUtils.GetSpellCooldownSafe(spellID)
   -- "SecretValue" types in some builds that bypass normal Lua type checks.
   -- issecretvalue() detects these and replaces them with safe defaults.
   if _G.issecretvalue then
-    ---@diagnostic disable-next-line: param-type-mismatch
     if _G.issecretvalue(enabled) then
       enabled = true
     end
-    ---@diagnostic disable-next-line: param-type-mismatch
     if _G.issecretvalue(start) then
       start = 0
     end
-    ---@diagnostic disable-next-line: param-type-mismatch
     if _G.issecretvalue(duration) then
       duration = 0
     end

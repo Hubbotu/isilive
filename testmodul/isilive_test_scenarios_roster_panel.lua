@@ -1006,14 +1006,14 @@ local function RegisterRosterPanelLeaderInteractionTests(test, Assert, WithGloba
       Assert.NotNil(readyCheckButton, "ready-check button should exist")
       Assert.NotNil(countdownButton, "countdown button should exist")
       Assert.NotNil(countdownCancelButton, "countdown-cancel button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.False(readyCheckButton.enabled, "ready-check button should be disabled for non-leaders")
       Assert.False(countdownButton.enabled, "countdown button should be disabled for non-leaders")
       Assert.False(countdownCancelButton.enabled, "countdown-cancel button should be disabled for non-leaders")
       Assert.Equal(readyCheckButton.alpha, 0.45, "ready-check button should be dimmed for non-leaders")
       Assert.Equal(countdownButton.alpha, 0.45, "countdown button should be dimmed for non-leaders")
       Assert.Equal(countdownCancelButton.alpha, 0.45, "countdown-cancel button should be dimmed for non-leaders")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 end
@@ -1182,7 +1182,6 @@ local function RegisterRosterPanelRowInteractionTests(test, Assert, WithGlobals,
       local rowFrame = FindInteractiveRosterRow(createdFrames)
       Assert.NotNil(rowFrame, "interactive roster row should exist")
 
-      ---@diagnostic disable-next-line: need-check-nil
       rowFrame.OnMouseUp(nil, "LeftButton")
       Assert.Equal(targetCalls, 0, "left-click must not invoke protected targeting from the roster row")
     end)
@@ -1631,12 +1630,12 @@ local function RegisterRosterPanelHiddenDisplayDefaultTests(test, Assert, WithGl
       end
 
       Assert.NotNil(dpsHeader, "DPS header should exist")
-      ---@diagnostic disable-next-line: need-check-nil, undefined-field
+      ---@diagnostic disable-next-line: undefined-field
       Assert.True(dpsHeader:IsShown(), "hidden settings must keep the DPS header visible")
       Assert.NotNil(rowDps, "row DPS cell should exist")
-      ---@diagnostic disable-next-line: need-check-nil, undefined-field
+      ---@diagnostic disable-next-line: undefined-field
       Assert.True(rowDps:IsShown(), "hidden settings must keep row DPS values visible")
-      ---@diagnostic disable-next-line: need-check-nil, undefined-field
+      ---@diagnostic disable-next-line: undefined-field
       Assert.Equal(rowDps.text, "-", "row DPS cell should still render the placeholder value")
     end)
   end)
@@ -1885,9 +1884,9 @@ local function RegisterRosterPanelMainLayoutVisibilityTests(test, Assert, WithGl
 
       Assert.NotNil(combatLoggingToggle, "combat logging toggle should exist in the main panel")
       Assert.NotNil(damageMeterResetToggle, "damage-meter reset toggle should exist in the main panel")
-      ---@diagnostic disable-next-line: need-check-nil, undefined-field
+      ---@diagnostic disable-next-line: undefined-field
       Assert.False(combatLoggingToggle:IsShown(), "combat logging toggle should stay hidden in the main panel")
-      ---@diagnostic disable-next-line: need-check-nil, undefined-field
+      ---@diagnostic disable-next-line: undefined-field
       Assert.False(damageMeterResetToggle:IsShown(), "DM reset toggle should stay hidden in the main panel")
     end)
   end)

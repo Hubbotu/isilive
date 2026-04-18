@@ -155,9 +155,9 @@ local function RegisterShareKeysGlobalPathTest()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(#sentMessages, 1, "share-keys should use the global SendChatMessage path in runtime")
       Assert.Equal(sentMessages[1].channel, "PARTY", "share-keys global chat path should still announce to party chat")
@@ -308,9 +308,9 @@ local function RegisterShareKeysDeterministicLinkTest()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(#sentMessages, 1, "share-keys should emit one chat message")
       Assert.Equal(sentMessages[1].channel, "PARTY", "share-keys should still announce to party chat")
@@ -473,9 +473,9 @@ local function RegisterShareKeysFallbackLinkTest()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(#sentMessages, 1, "share-keys should still emit one chat message")
       Assert.Equal(sentMessages[1].channel, "PARTY", "fallback share-keys message should still announce to party chat")
@@ -630,9 +630,9 @@ local function RegisterShareKeysLiveSnapshotTest()
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
       Assert.True(shareKeysButton.enabled, "live owned keystone data should keep the share-keys button available")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(#sentMessages, 1, "share-keys should announce the live owned keystone snapshot")
       Assert.Equal(sentMessages[1].channel, "PARTY", "live owned keystone snapshot should still announce to party chat")
@@ -778,7 +778,7 @@ local function RegisterShareKeysDebounceTests()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       shareKeysButton.OnClick()
       Assert.Equal(#sentMessages, 1, "rapid repeated share-keys clicks should be debounced")
@@ -787,7 +787,7 @@ local function RegisterShareKeysDebounceTests()
 
       currentTime = 101.5
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
       Assert.Equal(#sentMessages, 2, "share-keys click should fire again after debounce window")
       Assert.Equal(shareKeyRequests, 2, "share-keys should send another sync request after the debounce window")
     end)
@@ -920,10 +920,10 @@ local function RegisterShareKeysDebounceTests()
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
       Assert.Equal(#printedMessages, 2, "local print fallback should still run on every failed click attempt")
       Assert.Equal(
         shareKeyRequests,
@@ -1074,10 +1074,10 @@ local function RegisterShareKeysNoOpAndRemoteTests()
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
       Assert.True(shareKeysButton.enabled, "foreign group keys should still make the button clickable")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
       Assert.Equal(#sentMessages, 0, "no-op clicks must not emit chat output")
       Assert.Equal(shareKeyRequests, 2, "failed no-op clicks must stay usable and not start the debounce lock")
       Assert.True(shareKeysButton.enabled, "no-op clicks must leave the share-keys button enabled")
@@ -1185,7 +1185,7 @@ local function RegisterShareKeysNoOpAndRemoteTests()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
 
       controller.TriggerShareKeysCooldown()
 
@@ -1194,7 +1194,7 @@ local function RegisterShareKeysNoOpAndRemoteTests()
 
       currentTime = 231
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
       Assert.Equal(shareKeyRequests, 1, "local click must succeed once debounce window has passed")
     end)
   end)
@@ -1302,11 +1302,11 @@ local function RegisterShareKeysNoOpAndRemoteTests()
       end
 
       Assert.NotNil(shareKeysButton, "share-keys button should exist")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       controller.TriggerShareKeysCooldown()
       controller.RenderRoster(roster)
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(
         shareKeyRequests,
@@ -1315,9 +1315,9 @@ local function RegisterShareKeysNoOpAndRemoteTests()
       )
 
       currentTime = 231
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
       Assert.Equal(shareKeyRequests, 1, "share-keys should become usable again once the cooldown expires")
     end)
   end)

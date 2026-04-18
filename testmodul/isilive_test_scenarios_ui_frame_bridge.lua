@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, need-check-nil
+---@diagnostic disable: undefined-global
 
 local function RequireValue(value, message)
   if value == nil then

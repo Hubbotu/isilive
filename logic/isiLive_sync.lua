@@ -57,14 +57,20 @@ local syncDebugLog = nil
 local syncDebugTrace = nil
 local syncDebugTraceDeep = nil
 
+--- Sets the primary debug logger for sync events.
+-- @param fn function|nil Receives a formatted string. Pass nil to disable.
 function Sync.SetLogger(fn)
   syncDebugLog = type(fn) == "function" and fn or nil
 end
 
+--- Sets the trace logger for sync send/receive events.
+-- @param fn function|nil Receives a lazy builder function; call it to materialise the string. Pass nil to disable.
 function Sync.SetTraceLogger(fn)
   syncDebugTrace = type(fn) == "function" and fn or nil
 end
 
+--- Sets the deep-trace logger for high-frequency suppression events (e.g. cooldown blocks).
+-- @param fn function|nil Same lazy-builder contract as SetTraceLogger. Pass nil to disable.
 function Sync.SetDeepTraceLogger(fn)
   syncDebugTraceDeep = type(fn) == "function" and fn or nil
 end
@@ -150,9 +156,14 @@ local function NormalizeSyncProtocolVersion(protocolVersion)
   return math.floor(numericVersion)
 end
 
+local MAX_PAYLOAD_FIELDS = 10
+
 local function SplitPayload(message)
   local parts = {}
   for part in tostring(message or ""):gmatch("([^:]+)") do
+    if #parts >= MAX_PAYLOAD_FIELDS then
+      break
+    end
     parts[#parts + 1] = part
   end
   return parts
@@ -163,6 +174,13 @@ local function IsSyncEnabled()
   return not db or db.syncEnabled ~= false
 end
 
+--- Normalizes a name/realm pair into a stable, case-insensitive lookup key.
+-- Handles combined "Name-Realm" form and falls back to GetRealmName() when realm is empty.
+-- Realm normalization strips spaces, dashes, dots, parens, and quotes.
+-- @param name string Player name, or "Name-Realm" combined form.
+-- @param realm string|nil Realm name; optional when name already contains "-Realm".
+-- @return string Lowercase key of the form "name-realm".
+-- @see StringUtils.NormalizeRealmName
 -- Realm normalization is identical to NormalizeName() in isiLive_stats.lua:
 -- both strip spaces, dashes, dots, parens, and quotes from the realm.
 function Sync.NormalizePlayerKey(name, realm)
@@ -188,10 +206,14 @@ function Sync.NormalizePlayerKey(name, realm)
   return key
 end
 
+--- Returns the ISILIVE addon message prefix used for all sync payloads.
+-- @return string
 function Sync.GetPrefix()
   return ISILIVE_SYNC_PREFIX
 end
 
+--- Returns the current sync protocol version number (currently 2).
+-- @return number
 function Sync.GetProtocolVersion()
   return ISILIVE_SYNC_PROTOCOL_VERSION
 end
@@ -323,6 +345,9 @@ local function NormalizeTargetPayload(mapID, level, capturedAt, source)
     normalizedSource
 end
 
+--- Records that a player has sent at least one sync message this session.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
 function Sync.MarkUser(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if key and key ~= "" then
@@ -330,11 +355,19 @@ function Sync.MarkUser(name, realm)
   end
 end
 
+--- Returns whether a player is a known sync peer (has sent at least one message this session).
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return boolean
 function Sync.IsUserKnown(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   return key and isiLiveUsersByKey[key] == true
 end
 
+--- Returns whether the given WoW unit belongs to a known sync peer.
+-- @param getUnitNameAndRealm function Callback returning (name, realm) for a unit token.
+-- @param unit string WoW unit token (e.g. "party1").
+-- @return boolean
 function Sync.IsUnitKnown(getUnitNameAndRealm, unit)
   if type(getUnitNameAndRealm) ~= "function" then
     return false
@@ -343,6 +376,9 @@ function Sync.IsUnitKnown(getUnitNameAndRealm, unit)
   return Sync.IsUserKnown(name, realm)
 end
 
+--- Resets all session-wide sync state: known users, per-player caches, send cooldowns, and dedup trackers.
+-- Called on group disband to ensure a clean slate for the next group.
+-- @see isiLive_controller_wiring.lua, isiLive_keysync.lua
 function Sync.ClearKnownUsers()
   isiLiveUsersByKey = {}
   helloInfoByPlayerKey = {}
@@ -393,6 +429,14 @@ local function SetEntryPreviousSyncStamp(entry, previousStamp)
   end
 end
 
+--- Stores a received HELLO payload for a peer.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param addonVersion string Peer's addon version string.
+-- @param protocolVersion number|nil Peer's declared protocol version.
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label (e.g. "refresh", "local").
+-- @return boolean true if this is the first HELLO from this peer; false if updated in-place.
 function Sync.SetPlayerHelloInfo(name, realm, addonVersion, protocolVersion, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -430,6 +474,11 @@ function Sync.SetPlayerHelloInfo(name, realm, addonVersion, protocolVersion, cap
   return true
 end
 
+--- Stores a received ACK (version-only hello acknowledgement) for a peer.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param addonVersion string Peer's addon version string.
+-- @return boolean true if the stored version changed; false if unchanged or empty.
 function Sync.SetPlayerHelloAckInfo(name, realm, addonVersion)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -465,6 +514,10 @@ function Sync.SetPlayerHelloAckInfo(name, realm, addonVersion)
   return true
 end
 
+--- Returns stored HELLO/ACK info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {addonVersion, protocolVersion, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerHelloInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -473,6 +526,14 @@ function Sync.GetPlayerHelloInfo(name, realm)
   return helloInfoByPlayerKey[key]
 end
 
+--- Stores a received keystone payload for a peer. Clears the entry when mapID or level is invalid.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param mapID number|nil Dungeon map ID; 0 or nil clears the entry.
+-- @param level number|nil Key level; 0 or nil clears the entry.
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label.
+-- @return boolean true if the stored key changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerKeyInfo(name, realm, mapID, level, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -509,6 +570,10 @@ function Sync.SetPlayerKeyInfo(name, realm, mapID, level, capturedAt, source)
   return true
 end
 
+--- Returns stored keystone info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerKeyInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -517,6 +582,15 @@ function Sync.GetPlayerKeyInfo(name, realm)
   return keyInfoByPlayerKey[key]
 end
 
+--- Stores a received stats payload (spec/ilvl/rio) for a peer. Clears the entry when all fields are invalid.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param specID number|nil Specialization ID (0 treated as missing).
+-- @param ilvl number|nil Average item level (<=0 treated as missing).
+-- @param rio number|nil Mythic+ rating (<0 treated as missing).
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label.
+-- @return boolean true if stored stats changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerStatsInfo(name, realm, specID, ilvl, rio, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -560,6 +634,10 @@ function Sync.SetPlayerStatsInfo(name, realm, specID, ilvl, rio, capturedAt, sou
   return true
 end
 
+--- Returns stored stats info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {specID, ilvl, rio, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerStatsInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -568,6 +646,13 @@ function Sync.GetPlayerStatsInfo(name, realm)
   return statsInfoByPlayerKey[key]
 end
 
+--- Stores a received DPS payload for a peer. Clears the entry when dps <= 0.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param dps number Damage per second (rounded to nearest integer).
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label.
+-- @return boolean true if stored DPS changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerDpsInfo(name, realm, dps, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -602,6 +687,10 @@ function Sync.SetPlayerDpsInfo(name, realm, dps, capturedAt, source)
   return true
 end
 
+--- Returns stored DPS info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {dps, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerDpsInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -610,6 +699,16 @@ function Sync.GetPlayerDpsInfo(name, realm)
   return dpsInfoByPlayerKey[key]
 end
 
+--- Stores a received kick/interrupt availability payload for a peer.
+-- Rejected (returns false) when hasKick or onCooldown are not explicit booleans,
+-- or when hasKick==true and cooldownRemain is nil or negative.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param onCooldown boolean Whether the kick spell is currently on cooldown.
+-- @param cooldownRemain number Remaining cooldown seconds; required when hasKick==true.
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param hasKick boolean Whether the player has a kick spell at all.
+-- @return boolean true if stored kick state changed; false if unchanged or rejected.
 function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -648,6 +747,10 @@ function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capture
   return changed
 end
 
+--- Returns stored kick info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {hasKick, onCooldown, cooldownRemain, capturedAt, receivedAt, receivedAtGetTime}
 function Sync.GetPlayerKickInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -656,6 +759,10 @@ function Sync.GetPlayerKickInfo(name, realm)
   return kickInfoByPlayerKey[key]
 end
 
+--- Clears stored kick info for a peer (e.g. when the player leaves the group).
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return boolean true if an entry existed and was removed.
 function Sync.ClearPlayerKickInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -666,6 +773,13 @@ function Sync.ClearPlayerKickInfo(name, realm)
   return hadValue
 end
 
+--- Stores a received location (map) payload for a peer. Clears the entry when mapID is invalid.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param mapID number|nil Current dungeon/zone map ID; nil or 0 clears the entry.
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label.
+-- @return boolean true if stored location changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerLocInfo(name, realm, mapID, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -700,6 +814,10 @@ function Sync.SetPlayerLocInfo(name, realm, mapID, capturedAt, source)
   return true
 end
 
+--- Returns stored location info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {mapID, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerLocInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -708,6 +826,14 @@ function Sync.GetPlayerLocInfo(name, realm)
   return locInfoByPlayerKey[key]
 end
 
+--- Stores a received target-keystone payload for a peer. Clears the entry when mapID is invalid.
+-- @param name string Sender name.
+-- @param realm string|nil Sender realm.
+-- @param mapID number|nil Target dungeon map ID; nil or 0 clears the entry.
+-- @param level number|nil Target key level (nil when unknown).
+-- @param capturedAt number|nil Timestamp from the payload.
+-- @param source string|nil Sync source label.
+-- @return boolean true if stored target changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -744,6 +870,10 @@ function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
   return true
 end
 
+--- Returns stored target info for a peer, or nil if none received.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerTargetInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -752,6 +882,12 @@ function Sync.GetPlayerTargetInfo(name, realm)
   return targetInfoByPlayerKey[key]
 end
 
+--- Returns a summary of the most recently received sync bucket for a peer.
+-- Picks the bucket with the highest capturedAt/receivedAt timestamp across all data types.
+-- Used to compute approximate sync intervals for tooltip display.
+-- @param name string Player name.
+-- @param realm string|nil Realm name.
+-- @return table|nil {kind, capturedAt, receivedAt, previousSyncStamp, intervalSeconds, source, addonVersion, protocolVersion}
 function Sync.GetPlayerSyncSummary(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
@@ -802,6 +938,9 @@ function Sync.GetPlayerSyncSummary(name, realm)
   return best
 end
 
+--- Returns the current group addon sync channel, or nil when not in a group.
+-- Priority: INSTANCE_CHAT > RAID > PARTY.
+-- @return string|nil "INSTANCE_CHAT", "RAID", "PARTY", or nil.
 function Sync.GetAddonSyncChannel()
   local inInstanceGroup = LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)
   if inInstanceGroup then
@@ -816,6 +955,8 @@ function Sync.GetAddonSyncChannel()
   return nil
 end
 
+--- Registers ISILIVE and LibKS addon message prefixes with C_ChatInfo.
+-- Must be called once (on PLAYER_LOGIN) before addon messages can be received.
 function Sync.RegisterPrefix()
   if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
     pcall(C_ChatInfo.RegisterAddonMessagePrefix, ISILIVE_SYNC_PREFIX)
@@ -823,6 +964,9 @@ function Sync.RegisterPrefix()
   end
 end
 
+--- Broadcasts a HELLO announcement to the group.
+-- Rate-limited by ISILIVE_HELLO_COOLDOWN (8 s). Suppressed when isVisible==false unless allowHidden==true.
+-- @param opts table {version:string, protocolVersion:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendHello(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -864,6 +1008,9 @@ function Sync.SendHello(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's keystone to the group.
+-- Deduplicated (onlyIfChanged) and rate-limited by ISILIVE_KEY_COOLDOWN (5 s).
+-- @param opts table {mapID:number, level:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendKey(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -911,6 +1058,9 @@ function Sync.SendKey(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's stats (spec/ilvl/rio) to the group.
+-- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
+-- @param opts table {specID:number, ilvl:number, rio:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendStats(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -958,6 +1108,9 @@ function Sync.SendStats(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's last-run DPS to the group.
+-- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
+-- @param opts table {dps:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendDps(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -992,6 +1145,9 @@ function Sync.SendDps(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's kick/interrupt availability to the group.
+-- Rate-limited to 1 s; deduplicated by payload string.
+-- @param opts table {hasKick:boolean, onCooldown:boolean, cooldownRemain:number, force:boolean}
 function Sync.SendKick(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1048,6 +1204,9 @@ function Sync.SendKick(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's current dungeon/zone map ID to the group.
+-- Deduplicated and rate-limited by ISILIVE_STATS_COOLDOWN (5 s).
+-- @param opts table {mapID:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendLoc(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1082,6 +1241,9 @@ function Sync.SendLoc(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts the local player's target keystone (desired dungeon/level) to the group.
+-- Deduplicated and rate-limited by ISILIVE_TARGET_COOLDOWN (5 s).
+-- @param opts table {mapID:number, level:number, capturedAt:number, source:string, isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendTarget(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1124,6 +1286,9 @@ function Sync.SendTarget(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
+--- Broadcasts a REQSYNC request, asking all peers to re-send their current sync snapshot.
+-- Rate-limited by ISILIVE_REFRESH_REQUEST_COOLDOWN (1 s).
+-- @param opts table|nil {force:boolean}
 function Sync.SendRefreshRequest(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return
@@ -1148,6 +1313,10 @@ function Sync.SendRefreshRequest(opts)
   C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "REQSYNC", channel)
 end
 
+--- Sends a LibKeystone "R" request to the party asking peers to reply with their key data.
+-- Only sent in party (not raid). Rate-limited by LIBKEYSTONE_REQUEST_COOLDOWN (3 s).
+-- @param opts table|nil {force:boolean}
+-- @return boolean true if the message was sent; false if suppressed.
 function Sync.SendLibKeystoneRequest(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return false
@@ -1174,6 +1343,10 @@ function Sync.SendLibKeystoneRequest(opts)
   return true
 end
 
+--- Sends the local player's keystone and rio to party in LibKeystone format ("level,mapID,rio").
+-- Only sent in party (not raid). No cooldown — caller is responsible for throttling.
+-- @param opts table {mapID:number, level:number, rio:number}
+-- @return boolean true if the message was sent; false if suppressed.
 function Sync.SendLibKeystonePartyData(opts)
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return false
@@ -1219,6 +1392,9 @@ function Sync.SendLibKeystonePartyData(opts)
   return true
 end
 
+--- Broadcasts a SHAREKEYS request, asking all peers to announce their keystones in group chat.
+-- No cooldown on the request itself; receivers handle their own rate-limiting.
+-- @return boolean true if the message was sent; false when not in a group.
 function Sync.SendShareKeysRequest()
   if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
     return false
@@ -1235,8 +1411,13 @@ function Sync.SendShareKeysRequest()
   return true
 end
 
+local MAX_ADDON_MESSAGE_LENGTH = 255
+
 local function ProcessLibKeystoneMessage(message, sender, localName, localRealm, channel)
   if type(sender) ~= "string" or sender == "" then
+    return nil
+  end
+  if type(message) ~= "string" or #message == 0 or #message > MAX_ADDON_MESSAGE_LENGTH then
     return nil
   end
   if channel ~= nil and channel ~= "PARTY" then
@@ -1255,7 +1436,7 @@ local function ProcessLibKeystoneMessage(message, sender, localName, localRealm,
 
   local levelRaw, mapIDRaw, ratingRaw = nil, nil, nil
   if type(message) == "string" then
-    levelRaw, mapIDRaw, ratingRaw = string.match(message, "^(-?%d+),(-?%d+),(%d+)$")
+    levelRaw, mapIDRaw, ratingRaw = string.match(message, "^(%d+),(%d+),(%d+)$")
   end
   if not levelRaw or not mapIDRaw or not ratingRaw then
     return nil
@@ -1296,6 +1477,20 @@ local function ProcessLibKeystoneMessage(message, sender, localName, localRealm,
   }
 end
 
+--- Processes an incoming addon message and updates peer sync state accordingly.
+-- Routes ISILIVE payloads (KEY, STATS, DPS, LOC, TARGET, KICK, HELLO, ACK, REQSYNC, SHAREKEYS)
+-- and LibKS payloads to their respective handlers. Silently drops messages that fail
+-- prefix, sender, or length validation.
+-- @param prefix string Addon message prefix ("ISILIVE" or "LibKS").
+-- @param message string Raw payload (max 255 bytes; empty or oversized are dropped).
+-- @param sender string Sender's "Name-Realm" string (must be non-empty).
+-- @param localName string Local player name (used to detect self-messages).
+-- @param localRealm string|nil Local player realm.
+-- @param channel string|nil Arrival channel (used for LibKS PARTY-only filter).
+-- @return table|nil Result with fields: shouldAck, shouldRequestRefresh, shouldShareKeys, sender,
+--   peerAddonVersion, peerProtocolVersion, peerCapturedAt, peerSource,
+--   keyUpdated, statsUpdated, dpsUpdated, locUpdated, targetUpdated, kickUpdated.
+--   Returns nil when the message is rejected or the prefix is unrecognized.
 function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm, channel)
   if prefix == LIBKEYSTONE_SYNC_PREFIX then
     return ProcessLibKeystoneMessage(message, sender, localName, localRealm, channel)
@@ -1304,6 +1499,9 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     return nil
   end
   if type(sender) ~= "string" or sender == "" then
+    return nil
+  end
+  if type(message) ~= "string" or #message == 0 or #message > MAX_ADDON_MESSAGE_LENGTH then
     return nil
   end
 

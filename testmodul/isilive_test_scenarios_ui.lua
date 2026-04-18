@@ -765,10 +765,8 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       Assert.NotNil(onDragStart, "main frame should define OnDragStart handler")
       Assert.NotNil(onDragStop, "main frame should define OnDragStop handler")
 
-      ---@diagnostic disable: need-check-nil
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(mainUI.frame._startMovingCalls, 1, "combat drag start should still call StartMoving")
       Assert.Equal(mainUI.frame._stopMovingCalls, 1, "combat drag stop should still call StopMovingOrSizing")
@@ -807,9 +805,7 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       Assert.NotNil(onDragStart, "drag handle should still define OnDragStart")
       Assert.NotNil(onDragStop, "drag handle should still define OnDragStop")
 
-      ---@diagnostic disable-next-line: need-check-nil
       onDragStart(mainUI.dragHandle)
-      ---@diagnostic disable-next-line: need-check-nil
       onDragStop(mainUI.dragHandle)
 
       Assert.Equal(mainUI.frame._startMovingCalls, 1, "hidden grip lines must not disable dragging")
@@ -837,9 +833,7 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
 
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
       Assert.NotNil(onClick, "close button should define OnClick handler")
-      ---@diagnostic disable: need-check-nil
       onClick(mainUI.closeButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.False(mainUI.frame:IsShown(), "close button should hide frame")
     end)
@@ -868,9 +862,7 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
 
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
       Assert.NotNil(onClick, "close button should define OnClick handler")
-      ---@diagnostic disable: need-check-nil
       onClick(mainUI.closeButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.False(mainUI.frame:IsShown(), "close button must hide frame immediately even during combat")
     end)
@@ -1068,7 +1060,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       Assert.NotNil(onShow, "game menu should register an OnShow hook")
 
       local ok, err = pcall(function()
-        ---@diagnostic disable-next-line: need-check-nil
         onShow(gameMenuFrame)
       end)
 
@@ -1215,7 +1206,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         inCombat = true
         gameMenuFrame._shown = true
         local okShow, errShow = pcall(function()
-          ---@diagnostic disable-next-line: need-check-nil
           onShow(gameMenuFrame)
         end)
 
@@ -1224,7 +1214,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         Assert.True(professionsButton:IsShown(), "insecure shortcut button should stay visible during combat")
         local onClick = professionsButton._scripts and professionsButton._scripts.OnClick or nil
         Assert.NotNil(onClick, "profession shortcut should keep an OnClick handler")
-        ---@diagnostic disable-next-line: need-check-nil
         onClick(professionsButton)
         Assert.Equal(professionsActionCalls, 0, "insecure shortcut action should no-op during combat")
 
@@ -1236,7 +1225,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
 
         Assert.True(panelFrame:IsShown(), "mounted panel should remain visible after regen")
-        ---@diagnostic disable-next-line: need-check-nil
         onClick(professionsButton)
         Assert.Equal(professionsActionCalls, 1, "insecure shortcut action should execute again after combat")
       end)
@@ -1291,7 +1279,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       inCombat = true
       gameMenuFrame._shown = true
       local okShow, errShow = pcall(function()
-        ---@diagnostic disable-next-line: need-check-nil
         onShow(gameMenuFrame)
       end)
 
@@ -1471,10 +1458,8 @@ local function RegisterGameMenuDefaultOpenerTests(test, Assert, WithGlobals, Loa
       Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
       Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
 
-      ---@diagnostic disable: need-check-nil
       onClickProfessions(strip.buttonsById.professions, "LeftButton")
       onClickSpellbook(strip.buttonsById.spellbook, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(professionClicks, 1, "profession button should trigger ProfessionMicroButton first")
       Assert.Equal(spellbookDirectCalls, 1, "spellbook button should prefer the explicit spellbook opener")
@@ -1555,10 +1540,8 @@ local function RegisterGameMenuDefaultOpenerTests(test, Assert, WithGlobals, Loa
       Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
       Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
 
-      ---@diagnostic disable: need-check-nil
       onClickProfessions(strip.buttonsById.professions, "LeftButton")
       onClickSpellbook(strip.buttonsById.spellbook, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(professionClicks, 1, "profession button should still try the native micro button first")
       Assert.Equal(
@@ -1674,7 +1657,7 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
 
       Assert.NotNil(resetUiButton, "settings panel should create a resetui action button in the display section")
       Assert.NotNil(resetDbButton, "settings panel should create a reset all settings button")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.Equal(
         resetUiButton.label:GetText(),
         "Reset UI position (/isilive resetui)",
@@ -1743,7 +1726,7 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
       Assert.NotNil(lastPopupName, "reset all settings button should open a confirmation popup")
       Assert.NotNil(staticPopupDialogs[lastPopupName], "reset all settings confirmation popup should be registered")
       staticPopupDialogs[lastPopupName].OnAccept()
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(resetUiCalls, 0, "resetui cancel should not call the reset-main-frame callback")
       Assert.Equal(resetDbCalls, 1, "reset all settings button should call the DB reset callback once")
@@ -1825,7 +1808,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       end
 
       Assert.NotNil(slider, "settings panel should create a background alpha slider")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.Equal(slider:GetValue(), 0.50, "slider should initialize with a 50 percent default")
 
       panel.Refresh()
@@ -1836,7 +1819,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       local onValueChanged = slider._scripts and slider._scripts.OnValueChanged or nil
       Assert.NotNil(onValueChanged, "slider should define OnValueChanged")
       onValueChanged(slider, 0.70)
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(db.bgAlpha, 0.70, "user changes should be persisted")
       Assert.Equal(lastBgAlpha, 0.70, "user changes should call the background alpha callback")
@@ -1925,7 +1908,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.Nil(expandedButton, "settings panel should hide the expanded default-layout option")
       Assert.NotNil(m2Button, "settings panel should create an M2 default-layout button")
       Assert.NotNil(lastUsedButton, "settings panel should create a last-used default-layout button")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.Equal(
         m2Button._backdropColor[4],
         0.25,
@@ -1941,10 +1924,8 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.NotNil(onClickM2, "M2 button should define OnClick")
       Assert.NotNil(onClickLast, "Last Used button should define OnClick")
 
-      ---@diagnostic disable: need-check-nil
       onClickM2(m2Button, "LeftButton")
       onClickLast(lastUsedButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(
         db.rosterDefaultLayoutMode,
@@ -2035,7 +2016,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
 
       Assert.Nil(expandedButton, "settings panel should not expose the expanded layout option")
       Assert.NotNil(m2Button, "settings panel should still expose the M2 layout option")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.Equal(
         m2Button._backdropColor[4],
         0.25,
@@ -2045,7 +2026,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       local onClickM2 = (m2Button._scripts and m2Button._scripts.OnClick) or nil
       Assert.NotNil(onClickM2, "M2 button should define OnClick")
       onClickM2(m2Button, "LeftButton")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.Equal(
         db.rosterDefaultLayoutMode,
@@ -2126,14 +2107,14 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       end
 
       Assert.NotNil(autoCloseCheck, "settings panel should create an auto-close checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.False(autoCloseCheck:GetChecked(), "auto-close should default to disabled when no saved value exists")
 
       db.autoCloseMainFrame = true
       panel.Refresh()
 
       Assert.True(autoCloseCheck:GetChecked(), "refresh should honor an explicit true override")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 
@@ -2202,7 +2183,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       end
 
       Assert.NotNil(combatFadeCheck, "settings panel should create a combat fade checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.False(combatFadeCheck:GetChecked(), "combat fade should default to disabled when no saved value exists")
 
       panel.Refresh()
@@ -2213,7 +2194,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       local onClick = combatFadeCheck._scripts and combatFadeCheck._scripts.OnClick or nil
       Assert.NotNil(onClick, "combat fade checkbox should define OnClick")
       onClick(combatFadeCheck)
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
 
       Assert.True(db.combatFadeMM, "user enabling combat fade should be persisted")
       Assert.True(combatFadeCheck:GetChecked(), "user enabling combat fade should keep the checkbox checked")
@@ -2300,7 +2281,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
 
       Assert.NotNil(startupCheck, "settings panel should create a startup auto-show checkbox")
       Assert.NotNil(keyEndCheck, "settings panel should create a key-end auto-open checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.True(startupCheck:GetChecked(), "startup auto-show should default to enabled")
       Assert.True(keyEndCheck:GetChecked(), "key-end auto-open should default to enabled")
 
@@ -2310,15 +2291,15 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       Assert.NotNil(onClickKeyEnd, "key-end checkbox should define OnClick")
 
       startupCheck:SetChecked(false)
-      onClickStartup(startupCheck) ---@diagnostic disable-line: need-check-nil
+      onClickStartup(startupCheck)
       keyEndCheck:SetChecked(false)
-      onClickKeyEnd(keyEndCheck) ---@diagnostic disable-line: need-check-nil
+      onClickKeyEnd(keyEndCheck)
 
       Assert.False(db.autoShowMainFrameOnStartup, "disabling startup auto-show should persist false")
       Assert.False(db.autoOpenMainFrameOnKeyEnd, "disabling key-end auto-open should persist false")
       Assert.Equal(startupToggleStates[1], false, "startup checkbox should notify its callback")
       Assert.Equal(keyEndToggleStates[1], false, "key-end checkbox should notify its callback")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 end
@@ -2393,14 +2374,14 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       end
 
       Assert.NotNil(guideCheck, "settings panel should create a column-guides checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.False(guideCheck:GetChecked(), "column guides should default to disabled")
 
       local onClick = guideCheck._scripts and guideCheck._scripts.OnClick or nil
       Assert.NotNil(onClick, "column guides checkbox should define OnClick")
 
       guideCheck:SetChecked(true)
-      onClick(guideCheck) ---@diagnostic disable-line: need-check-nil
+      onClick(guideCheck)
       Assert.True(db.showRosterColumnGuides, "enabling the checkbox should persist the enabled setting")
       Assert.Equal(callbackStates[1], true, "enabling the checkbox should notify the callback")
 
@@ -2408,10 +2389,10 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       Assert.True(guideCheck:GetChecked(), "refresh should keep the enabled checkbox state")
 
       guideCheck:SetChecked(false)
-      onClick(guideCheck) ---@diagnostic disable-line: need-check-nil
+      onClick(guideCheck)
       Assert.False(db.showRosterColumnGuides, "disabling the checkbox should persist the disabled setting")
       Assert.Equal(callbackStates[2], false, "disabling the checkbox should notify the callback")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 
@@ -2485,7 +2466,7 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       end
 
       Assert.NotNil(navigatorCheck, "settings panel should create a portal navigator checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.True(navigatorCheck:GetChecked(), "portal navigator should default to enabled when no saved value exists")
       Assert.Equal(
         navigatorCheck.label:GetText(),
@@ -2497,13 +2478,13 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       Assert.NotNil(onClick, "portal navigator checkbox should define OnClick")
 
       navigatorCheck:SetChecked(false)
-      onClick(navigatorCheck) ---@diagnostic disable-line: need-check-nil
+      onClick(navigatorCheck)
       Assert.False(db.showPortalNavigator, "disabling the checkbox should persist the disabled setting")
       Assert.Equal(callbackStates[1], false, "disabling the checkbox should notify the callback")
 
       panel.Refresh()
       Assert.False(navigatorCheck:GetChecked(), "refresh should keep the disabled portal navigator state")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 
@@ -2580,16 +2561,16 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       end
 
       Assert.NotNil(hideButton, "settings panel should create a Raid Off raid-behavior button")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.Equal(hideButton._backdropColor[4], 0.25, "Raid Off should be highlighted by default")
 
       local onClickHide = hideButton._scripts and hideButton._scripts.OnClick or nil
       Assert.NotNil(onClickHide, "raid-behavior button should define OnClick")
-      onClickHide(hideButton, "LeftButton") ---@diagnostic disable-line: need-check-nil
+      onClickHide(hideButton, "LeftButton")
 
       Assert.Equal(db.raidTransitionBehavior, "hide", "choosing Raid Off should persist the disabled mode")
       Assert.Equal(raidBehaviorChanges[1], "hide", "raid behavior selector should notify the callback")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 end
@@ -2677,7 +2658,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.NotNil(leadSoundCheck, "settings panel should create a leader-transfer sound checkbox")
       Assert.NotNil(groupJoinSoundCheck, "settings panel should create a group-join sound checkbox")
       Assert.NotNil(portalSoundCheck, "settings panel should create a portal sound checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.True(leadSoundCheck:GetChecked(), "leader-transfer sound should default to enabled")
       Assert.False(groupJoinSoundCheck:GetChecked(), "group-join sound should default to disabled")
       Assert.True(portalSoundCheck:GetChecked(), "portal sound should default to enabled")
@@ -2690,11 +2671,11 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.NotNil(onClickPortal, "portal sound checkbox should define OnClick")
 
       leadSoundCheck:SetChecked(false)
-      onClickLead(leadSoundCheck) ---@diagnostic disable-line: need-check-nil
+      onClickLead(leadSoundCheck)
       groupJoinSoundCheck:SetChecked(true)
-      onClickJoin(groupJoinSoundCheck) ---@diagnostic disable-line: need-check-nil
+      onClickJoin(groupJoinSoundCheck)
       portalSoundCheck:SetChecked(false)
-      onClickPortal(portalSoundCheck) ---@diagnostic disable-line: need-check-nil
+      onClickPortal(portalSoundCheck)
 
       Assert.False(db.soundLeadEnabled, "disabling leader-transfer sound should persist false")
       Assert.True(db.soundGroupJoinEnabled, "enabling group-join sound should persist true")
@@ -2704,7 +2685,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.False(leadSoundCheck:GetChecked(), "refresh should keep the disabled leader-transfer sound state")
       Assert.True(groupJoinSoundCheck:GetChecked(), "refresh should keep the enabled group-join sound state")
       Assert.False(portalSoundCheck:GetChecked(), "refresh should keep the disabled portal sound state")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 
@@ -3014,15 +2995,15 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
       end
 
       Assert.NotNil(lockCheck, "settings panel should create the drag-lock checkbox")
-      ---@diagnostic disable: need-check-nil, undefined-field
+      ---@diagnostic disable: undefined-field
       Assert.True(lockCheck:GetChecked(), "main frame position lock should default to enabled")
 
       local onClick = lockCheck._scripts and lockCheck._scripts.OnClick or nil
       Assert.NotNil(onClick, "main frame position lock checkbox should define OnClick")
       lockCheck:SetChecked(false)
-      onClick(lockCheck) ---@diagnostic disable-line: need-check-nil
+      onClick(lockCheck)
       Assert.False(db.lockMainFramePosition, "unlocking the checkbox should persist false")
-      ---@diagnostic enable: need-check-nil, undefined-field
+      ---@diagnostic enable: undefined-field
     end)
   end)
 
@@ -3052,19 +3033,15 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.NotNil(onDragStart, "main UI should define an OnDragStart handler")
       Assert.NotNil(onDragStop, "main UI should define an OnDragStop handler")
 
-      ---@diagnostic disable: need-check-nil
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(mainUI.frame._startMovingCalls, 0, "locked frame should ignore drag start")
       Assert.Equal(mainUI.frame._stopMovingCalls, 0, "locked frame should ignore drag stop")
 
       mainUI.SetDragLocked(false)
-      ---@diagnostic disable: need-check-nil
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(mainUI.frame._startMovingCalls, 1, "unlocked frame should start moving")
       Assert.Equal(mainUI.frame._stopMovingCalls, 1, "unlocked frame should stop moving")
@@ -3098,16 +3075,12 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
 
       local onClick = mainUI.lockButton._scripts and mainUI.lockButton._scripts.OnClick or nil
       Assert.NotNil(onClick, "lock button should define OnClick")
-      ---@diagnostic disable: need-check-nil
       onClick(mainUI.lockButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.False(mainUI.GetDragLocked(), "first click should unlock the frame")
       Assert.False(mainUI.lockButton._isLocked, "lock button should reflect the unlocked state")
 
-      ---@diagnostic disable: need-check-nil
       onClick(mainUI.lockButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
       Assert.True(mainUI.GetDragLocked(), "second click should lock the frame again")
       Assert.True(mainUI.lockButton._isLocked, "lock button should reflect the relocked state")
     end)

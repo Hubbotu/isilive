@@ -421,9 +421,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
 
       local onClick = centerNotice.closeButton._scripts and centerNotice.closeButton._scripts.OnClick or nil
       Assert.NotNil(onClick, "center notice close button should define OnClick handler")
-      ---@diagnostic disable: need-check-nil
       onClick(centerNotice.closeButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.False(centerNotice.frame:IsShown(), "center notice close button should hide notice frame")
     end)
@@ -455,9 +453,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
       inCombat = true
       local onClick = centerNotice.closeButton._scripts and centerNotice.closeButton._scripts.OnClick or nil
       Assert.NotNil(onClick, "center notice close button should define OnClick handler")
-      ---@diagnostic disable: need-check-nil
       onClick(centerNotice.closeButton, "LeftButton")
-      ---@diagnostic enable: need-check-nil
 
       Assert.False(centerNotice.frame:IsShown(), "center notice close in combat should hide notice frame immediately")
     end)
@@ -663,9 +659,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
       Assert.Equal(playedChannel, "SFX", "center notice should use the SFX channel for portal sounds")
       local onEnter = centerNotice.teleportButton._scripts and centerNotice.teleportButton._scripts.OnEnter or nil
       Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
-      ---@diagnostic disable: need-check-nil
       onEnter(centerNotice.teleportButton)
-      ---@diagnostic enable: need-check-nil
 
       local privateTooltip = nil
       for _, frame in ipairs(createdFrames) do
@@ -766,9 +760,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
       centerNotice.ConfigureTeleportButton("Tazavesh: Straßen der Wunder", 999)
       local onEnter = centerNotice.teleportButton._scripts and centerNotice.teleportButton._scripts.OnEnter or nil
       Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
-      ---@diagnostic disable: need-check-nil
       onEnter(centerNotice.teleportButton)
-      ---@diagnostic enable: need-check-nil
 
       local privateTooltip = nil
       for _, frame in ipairs(createdFrames) do
@@ -823,10 +815,8 @@ local function RegisterCenterNoticeDragResetTest(test, Assert, WithGlobals, Load
 
       centerNotice.Show("Drag test", 20, nil, nil, {})
       centerNotice.frame:SetPoint("CENTER", UIParent, "CENTER", 12, -34)
-      ---@diagnostic disable: need-check-nil
       onDragStart(centerNotice.frame)
       onDragStop(centerNotice.frame)
-      ---@diagnostic enable: need-check-nil
 
       Assert.Equal(centerNotice.frame._startMovingCalls, 1, "center notice drag start should call StartMoving")
       Assert.Equal(centerNotice.frame._stopMovingCalls, 1, "center notice drag stop should call StopMovingOrSizing")

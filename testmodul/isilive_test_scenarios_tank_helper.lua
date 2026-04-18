@@ -387,7 +387,7 @@ local function RegisterNativeWorldMarkerButtonTests(test, Assert, WithGlobals, L
       end
     end
     Assert.NotNil(readyCheckButton, "Readycheck button should exist")
-    ---@diagnostic disable-next-line: need-check-nil, undefined-field
+    ---@diagnostic disable-next-line: undefined-field
     Assert.Equal(readyCheckButton.pointX, -145, "M+Managment buttons should align with the expanded management column")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("marker1"), 1, "Blue Square uses world marker 1")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("action1"), "set", "left click must place marker")
@@ -505,7 +505,7 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
     local versionFontString = FindFontStringByPoint(createdFontStrings, "LEFT", 5, 0)
     Assert.NotNil(titleFontString, "Title font string should exist")
     Assert.NotNil(versionFontString, "Version font string should exist")
-    ---@diagnostic disable: need-check-nil, undefined-field
+    ---@diagnostic disable: undefined-field
     Assert.Equal(
       collapseButton._collapseButtonLabel,
       "V",
@@ -560,7 +560,7 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
       "H",
       "H mode button keeps static H label while vertical mini mode is active"
     )
-    ---@diagnostic enable: need-check-nil, undefined-field
+    ---@diagnostic enable: undefined-field
   end)
 end
 
@@ -665,7 +665,6 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
     Assert.NotNil(m2Button, "M2 mode button should exist")
     Assert.Nil(expandedButton, "Expanded mode button should stay hidden from the title bar")
     Assert.NotNil(titleVersion, "Title version should exist")
-    ---@diagnostic disable: need-check-nil
     Assert.Equal(horizontalButton._collapseButtonLabel, "H", "H mode button has static H label in expanded mode")
 
     local helperButtons = {}
@@ -722,7 +721,6 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
       "H mode button keeps static H label after leaving horizontal mode"
     )
     Assert.True(titleVersion.hidden ~= true, "Title version should be visible again in M2 mode")
-    ---@diagnostic enable: need-check-nil
   end)
 end
 

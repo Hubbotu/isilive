@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, need-check-nil
+---@diagnostic disable: undefined-global
 local LoadAddonModules = nil
 local MakeController = nil
 
