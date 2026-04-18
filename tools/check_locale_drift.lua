@@ -1,4 +1,5 @@
 #!/usr/bin/env lua
+---@diagnostic disable: undefined-global
 -- Scans locale/isiLive_texts.lua for drift between enUS (reference) and the
 -- other locales (deDE/frFR/esES/ptBR/itIT/ruRU/trTR):
 --   * missing keys in a locale (key exists in enUS but not in target)
