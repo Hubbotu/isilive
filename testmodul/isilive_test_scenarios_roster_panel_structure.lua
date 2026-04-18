@@ -33,10 +33,7 @@ return function(test, ctx)
   test("RosterPanel SetTraceLogger accepts a trace function", function()
     local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
     addon.RosterPanel.SetTraceLogger(function() end)
-    Assert.True(
-      type(addon.RosterPanel.SetTraceLogger) == "function",
-      "SetTraceLogger must be callable"
-    )
+    Assert.True(type(addon.RosterPanel.SetTraceLogger) == "function", "SetTraceLogger must be callable")
   end)
 
   test("RosterPanel traces creation with mock logger", function()
