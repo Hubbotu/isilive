@@ -61,8 +61,6 @@ local LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = RI.LAYOUT_MODE_COMPACT_MAIN_HORIZONT
 local DEFAULT_LAYOUT_MODE_LAST_USED = "last_used"
 local LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL_LEGACY = "compact_horizontal_2"
 local FULL_FRAME_WIDTH = RI.FULL_FRAME_WIDTH or 755
-local HELPER_BUTTON_SIZE = RI.HELPER_BUTTON_SIZE or 18
-local HELPER_COLUMN_X = RI.HELPER_COLUMN_X or -111
 local DEFAULT_MIN_FRAME_HEIGHT = RI.DEFAULT_MIN_FRAME_HEIGHT or 236
 local IsCombatLockdownActive = RI.IsCombatLockdownActive or function()
   return false
@@ -137,25 +135,30 @@ local CreateCdTrackerRow = RI.CreateCdTrackerRow
 local UpdateCdTrackerRow = RI.UpdateCdTrackerRow
 local CreateKillTrackRow = RI.CreateKillTrackRow
 local UpdateKillTrackRow = RI.UpdateKillTrackRow
+local CreateFlatButton = RI.CreateFlatButton
+local CreatePanelHeaders = RI.CreatePanelHeaders
+local CreateM2ColumnGuides = RI.CreateM2ColumnGuides
+local AttachPanelButtonTooltip = RI.AttachPanelButtonTooltip
+local AttachModeButtonTooltip = RI.AttachModeButtonTooltip
+local CreateTankHelperButtons = RI.CreateTankHelperButtons
 
--- Column position constants
-local SPEC_COL_X = 4
-local NAME_COL_X = 93
-local SERVER_COL_X = 75
-local KEY_COL_X = 216
-local ILVL_COL_X = 282
-local RIO_COL_X = 318
-local SPEC_COL_WIDTH = 52
-local NAME_COL_WIDTH = 122
-local SERVER_COL_WIDTH = 18
-local KEY_COL_WIDTH = 62
-local ILVL_COL_WIDTH = 32
--- Leave enough room for long positive RIO deltas like (+999)9999 without clipping.
-local RIO_COL_WIDTH = 70
-local DPS_COL_X = RIO_COL_X + RIO_COL_WIDTH + 2
-local DPS_COL_WIDTH = 40
-local KICK_COL_X = DPS_COL_X + DPS_COL_WIDTH + 4
-local KICK_COL_WIDTH = 58
+-- Column position constants (defined in isiLive_roster_panel_chrome.lua, shared via RI).
+local SPEC_COL_X = RI.SPEC_COL_X or 4
+local NAME_COL_X = RI.NAME_COL_X or 93
+local SERVER_COL_X = RI.SERVER_COL_X or 75
+local KEY_COL_X = RI.KEY_COL_X or 216
+local ILVL_COL_X = RI.ILVL_COL_X or 282
+local RIO_COL_X = RI.RIO_COL_X or 318
+local SPEC_COL_WIDTH = RI.SPEC_COL_WIDTH or 52
+local NAME_COL_WIDTH = RI.NAME_COL_WIDTH or 122
+local SERVER_COL_WIDTH = RI.SERVER_COL_WIDTH or 18
+local KEY_COL_WIDTH = RI.KEY_COL_WIDTH or 62
+local ILVL_COL_WIDTH = RI.ILVL_COL_WIDTH or 32
+local RIO_COL_WIDTH = RI.RIO_COL_WIDTH or 70
+local DPS_COL_X = RI.DPS_COL_X or (RIO_COL_X + RIO_COL_WIDTH + 2)
+local DPS_COL_WIDTH = RI.DPS_COL_WIDTH or 40
+local KICK_COL_X = RI.KICK_COL_X or (DPS_COL_X + DPS_COL_WIDTH + 4)
+local KICK_COL_WIDTH = RI.KICK_COL_WIDTH or 58
 local KICK_HOVER_WIDTH = 58
 local ROLE_BUTTON_X = SPEC_COL_X + SPEC_COL_WIDTH + 4
 
@@ -409,88 +412,6 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip)
   return row
 end
 
-local Colors = addonTable.UICommon and addonTable.UICommon.Colors or {}
-
-local function CreateFlatButton(parent, width, height)
-  local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
-  button:SetSize(width, height)
-  local UICommon = addonTable and addonTable.UICommon
-  if type(UICommon) == "table" and type(UICommon.ApplyBackdrop) == "function" then
-    UICommon.ApplyBackdrop(button, "FLAT_BUTTON")
-  end
-  if type(button.EnableMouse) == "function" then
-    button:EnableMouse(true)
-  end
-  if type(button.RegisterForClicks) == "function" then
-    button:RegisterForClicks("LeftButtonUp")
-  end
-
-  local label = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  if type(label.SetPoint) == "function" then
-    label:SetPoint("CENTER", 0, 0)
-  end
-  local tn = Colors.TEXT_NORMAL or { 0.85, 0.85, 0.9 }
-  if type(label.SetTextColor) == "function" then
-    label:SetTextColor(tn[1], tn[2], tn[3], 1)
-  end
-  button._flatLabel = label
-
-  local function ApplyDefaultVisual(self)
-    if type(self.SetBackdropColor) == "function" then
-      local bgSec = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.7 }
-      self:SetBackdropColor(bgSec[1], bgSec[2], bgSec[3], bgSec[4])
-    end
-    if type(self.SetBackdropBorderColor) == "function" then
-      local ab = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
-      self:SetBackdropBorderColor(ab[1], ab[2], ab[3], 0.45)
-    end
-  end
-
-  local function ApplyHoverVisual(self)
-    if type(self.SetBackdropColor) == "function" then
-      self:SetBackdropColor(0.18, 0.18, 0.26, 0.8)
-    end
-    if type(self.SetBackdropBorderColor) == "function" then
-      local ab = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
-      self:SetBackdropBorderColor(ab[1], ab[2], ab[3], 0.6)
-    end
-  end
-
-  local function ApplyPressedVisual(self)
-    if type(self.SetBackdropColor) == "function" then
-      self:SetBackdropColor(0.08, 0.08, 0.12, 0.95)
-    end
-    if type(self.SetBackdropBorderColor) == "function" then
-      local ab = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
-      self:SetBackdropBorderColor(ab[1], ab[2], ab[3], 0.9)
-    end
-  end
-
-  if type(button.HookScript) == "function" then
-    button:HookScript("OnEnter", function(self)
-      ApplyHoverVisual(self)
-    end)
-    button:HookScript("OnLeave", function(self)
-      ApplyDefaultVisual(self)
-    end)
-    button:HookScript("OnMouseDown", function(self)
-      ApplyPressedVisual(self)
-    end)
-    button:HookScript("OnMouseUp", function(self)
-      local isMouseOver = type(self.IsMouseOver) == "function" and self:IsMouseOver()
-      if isMouseOver then
-        ApplyHoverVisual(self)
-      else
-        ApplyDefaultVisual(self)
-      end
-    end)
-  end
-
-  ApplyDefaultVisual(button)
-
-  return button
-end
-
 local function AttachControllerAccessors(controller, deps)
   function controller.GetRefreshButton()
     return deps.refreshButton
@@ -514,242 +435,6 @@ local function AttachControllerAccessors(controller, deps)
       btn.TriggerRemoteCooldown()
     end
   end
-end
-
-local function CreatePanelHeaders(mainFrame)
-  local specHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  specHeader:SetPoint("TOPLEFT", SPEC_COL_X, -34)
-  specHeader:SetWidth(SPEC_COL_WIDTH)
-  specHeader:SetJustifyH("RIGHT")
-
-  local nameHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  nameHeader:SetPoint("TOPLEFT", NAME_COL_X, -34)
-  nameHeader:SetWidth(NAME_COL_WIDTH)
-  nameHeader:SetJustifyH("LEFT")
-
-  local ilvlHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  ilvlHeader:SetPoint("TOPLEFT", ILVL_COL_X, -34)
-  ilvlHeader:SetWidth(ILVL_COL_WIDTH)
-  ilvlHeader:SetJustifyH("RIGHT")
-
-  local serverHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  serverHeader:SetPoint("TOPLEFT", SERVER_COL_X, -34)
-  serverHeader:SetWidth(SERVER_COL_WIDTH)
-  serverHeader:SetJustifyH("LEFT")
-
-  local keyHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  keyHeader:SetPoint("TOPLEFT", KEY_COL_X, -34)
-  keyHeader:SetWidth(KEY_COL_WIDTH)
-  keyHeader:SetJustifyH("RIGHT")
-  if keyHeader.SetWordWrap then
-    keyHeader:SetWordWrap(false)
-  end
-  if keyHeader.SetNonSpaceWrap then
-    keyHeader:SetNonSpaceWrap(false)
-  end
-  if keyHeader.SetMaxLines then
-    keyHeader:SetMaxLines(1)
-  end
-
-  local rioHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  rioHeader:SetPoint("TOPLEFT", RIO_COL_X, -34)
-  rioHeader:SetWidth(RIO_COL_WIDTH)
-  rioHeader:SetJustifyH("RIGHT")
-  if rioHeader.SetWordWrap then
-    rioHeader:SetWordWrap(false)
-  end
-  if rioHeader.SetNonSpaceWrap then
-    rioHeader:SetNonSpaceWrap(false)
-  end
-  if rioHeader.SetMaxLines then
-    rioHeader:SetMaxLines(1)
-  end
-
-  local dpsHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  dpsHeader:SetPoint("TOPLEFT", DPS_COL_X, -34)
-  dpsHeader:SetWidth(DPS_COL_WIDTH)
-  dpsHeader:SetJustifyH("RIGHT")
-  if dpsHeader.SetWordWrap then
-    dpsHeader:SetWordWrap(false)
-  end
-  if dpsHeader.SetNonSpaceWrap then
-    dpsHeader:SetNonSpaceWrap(false)
-  end
-  if dpsHeader.SetMaxLines then
-    dpsHeader:SetMaxLines(1)
-  end
-
-  local kickHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  kickHeader:SetPoint("TOPLEFT", KICK_COL_X, -34)
-  kickHeader:SetWidth(KICK_COL_WIDTH)
-  kickHeader:SetJustifyH("RIGHT")
-
-  local leadOptionsHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  leadOptionsHeader:SetPoint("TOPRIGHT", -10, -34)
-  leadOptionsHeader:SetWidth(120)
-  leadOptionsHeader:SetJustifyH("CENTER")
-
-  local mplusManagementHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  mplusManagementHeader:SetPoint("TOPRIGHT", -3, -34)
-  mplusManagementHeader:SetWidth(110)
-  mplusManagementHeader:SetJustifyH("CENTER")
-
-  local headerSepLeft = mainFrame:CreateTexture(nil, "ARTWORK")
-  headerSepLeft:SetHeight(1)
-  headerSepLeft:SetPoint("TOPLEFT", 8, -48)
-  headerSepLeft:SetPoint("TOPRIGHT", mainFrame, "TOP", 0, -48)
-  if type(headerSepLeft.SetTexture) == "function" then
-    headerSepLeft:SetTexture("Interface\\Buttons\\WHITE8X8")
-  end
-  if type(headerSepLeft.SetGradient) == "function" then
-    headerSepLeft:SetGradient(
-      "HORIZONTAL",
-      { r = 0.5, g = 0.5, b = 0.7, a = 0 },
-      { r = 0.5, g = 0.5, b = 0.7, a = 0.3 }
-    )
-  end
-
-  local headerSepRight = mainFrame:CreateTexture(nil, "ARTWORK")
-  headerSepRight:SetHeight(1)
-  headerSepRight:SetPoint("TOPLEFT", mainFrame, "TOP", 0, -48)
-  headerSepRight:SetPoint("TOPRIGHT", 0, -48)
-  if type(headerSepRight.SetTexture) == "function" then
-    headerSepRight:SetTexture("Interface\\Buttons\\WHITE8X8")
-  end
-  if type(headerSepRight.SetGradient) == "function" then
-    headerSepRight:SetGradient(
-      "HORIZONTAL",
-      { r = 0.5, g = 0.5, b = 0.7, a = 0.3 },
-      { r = 0.5, g = 0.5, b = 0.7, a = 0 }
-    )
-  end
-
-  return {
-    specHeader = specHeader,
-    nameHeader = nameHeader,
-    ilvlHeader = ilvlHeader,
-    serverHeader = serverHeader,
-    keyHeader = keyHeader,
-    rioHeader = rioHeader,
-    dpsHeader = dpsHeader,
-    kickHeader = kickHeader,
-    leadOptionsHeader = leadOptionsHeader,
-    mplusManagementHeader = mplusManagementHeader,
-    headerSepLeft = headerSepLeft,
-    headerSepRight = headerSepRight,
-  }
-end
-
-local function CreateM2ColumnGuides(mainFrame)
-  local guideDefs = {
-    { key = "spec", x = SPEC_COL_X + SPEC_COL_WIDTH },
-    { key = "name", x = NAME_COL_X + NAME_COL_WIDTH },
-    { key = "server", x = SERVER_COL_X + SERVER_COL_WIDTH },
-    { key = "key", x = KEY_COL_X + KEY_COL_WIDTH },
-    { key = "ilvl", x = ILVL_COL_X + ILVL_COL_WIDTH },
-    { key = "rio", x = RIO_COL_X + RIO_COL_WIDTH },
-    { key = "dps", x = DPS_COL_X + DPS_COL_WIDTH },
-  }
-
-  local guides = {}
-  for _, def in ipairs(guideDefs) do
-    local guide = mainFrame:CreateTexture(nil, "OVERLAY")
-    guide._m2ColumnGuide = true
-    guide._guideKey = def.key
-    guide._guideX = def.x
-    if guide.SetWidth then
-      guide:SetWidth(1)
-    elseif guide.SetSize then
-      guide:SetSize(1, 1)
-    end
-    if guide.SetColorTexture then
-      guide:SetColorTexture(0.2, 0.8, 1, 0.28)
-    elseif guide.SetTexture then
-      guide:SetTexture("Interface\\Buttons\\WHITE8X8")
-    end
-    if guide.SetPoint then
-      guide:SetPoint("TOPLEFT", mainFrame, "TOPLEFT", def.x, -30)
-      guide:SetPoint("BOTTOMLEFT", mainFrame, "BOTTOMLEFT", def.x, 20)
-    end
-    if guide.Hide then
-      guide:Hide()
-    end
-    table.insert(guides, guide)
-  end
-
-  return guides
-end
-
-local function AttachPanelButtonTooltip(tooltipFrame, button, getL, titleKey, descriptionKey, isPlayerLeader)
-  button:SetScript("OnEnter", function(self)
-    local tooltip = AnchorRosterHoverTooltip(tooltipFrame, self)
-    if type(tooltip) ~= "table" then
-      return
-    end
-
-    local L = getL()
-    if type(tooltip.SetText) == "function" then
-      tooltip:SetText(L[titleKey], 1, 1, 1)
-    end
-    if type(tooltip.AddLine) == "function" then
-      tooltip:AddLine(L[descriptionKey], 1, 1, 1, true)
-      if isPlayerLeader and not isPlayerLeader() then
-        tooltip:AddLine(L.TOOLTIP_LEAD_REQUIRED, 1, 0.2, 0.2, true)
-      end
-    end
-    if type(tooltip.Show) == "function" then
-      tooltip:Show()
-    end
-  end)
-  button:SetScript("OnLeave", function()
-    HideRosterHoverTooltip(tooltipFrame)
-  end)
-end
-
-local function AttachModeButtonTooltip(
-  tooltipFrame,
-  button,
-  getL,
-  titleText,
-  descriptionKey,
-  descriptionFallback,
-  clickHintKey,
-  clickHintFallback
-)
-  button:SetScript("OnEnter", function(self)
-    local tooltip = AnchorRosterHoverTooltip(tooltipFrame, self)
-    if type(tooltip) ~= "table" then
-      return
-    end
-
-    local L = type(getL) == "function" and getL() or {}
-    local descriptionText = type(descriptionKey) == "string" and L[descriptionKey] or nil
-    if type(descriptionText) ~= "string" or descriptionText == "" then
-      descriptionText = descriptionFallback
-    end
-    local clickHintText = type(clickHintKey) == "string" and L[clickHintKey] or nil
-    if type(clickHintText) ~= "string" or clickHintText == "" then
-      clickHintText = clickHintFallback
-    end
-
-    if type(tooltip.SetText) == "function" then
-      tooltip:SetText(titleText, 1, 1, 1)
-    end
-    if type(tooltip.AddLine) == "function" then
-      if type(descriptionText) == "string" and descriptionText ~= "" then
-        tooltip:AddLine(descriptionText, 1, 1, 1, true)
-      end
-      if type(clickHintText) == "string" and clickHintText ~= "" then
-        tooltip:AddLine(clickHintText, 0.8, 0.8, 0.8, true)
-      end
-    end
-    if type(tooltip.Show) == "function" then
-      tooltip:Show()
-    end
-  end)
-  button:SetScript("OnLeave", function()
-    HideRosterHoverTooltip(tooltipFrame)
-  end)
 end
 
 local function CreateShareKeysButton(mainFrame, deps)
@@ -953,77 +638,6 @@ local function CreatePanelButtons(mainFrame, deps)
     shareKeysButton = shareKeysButton,
     countdownCancelButton = countdownCancelButton,
   }
-end
-
-local function CreateTankHelperButtons(mainFrame, tooltipFrame, getL)
-  local markers = {
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6", id = 1, name = "Square (Blue)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_4", id = 2, name = "Triangle (Green)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3", id = 3, name = "Diamond (Purple)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7", id = 4, name = "Cross (Red)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", id = 5, name = "Star (Yellow)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_2", id = 6, name = "Circle (Orange)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_5", id = 7, name = "Moon (Silver)" },
-    { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_8", id = 8, name = "Skull (White)" },
-  }
-
-  local buttons = {}
-  local startY = -60
-  local size = HELPER_BUTTON_SIZE
-  local gap = 2
-
-  -- Position: right of the DPS column, directly left of M+Travel.
-  -- M+Marker and M+Management are swapped compared to the old layout.
-  local xPos = HELPER_COLUMN_X
-
-  for i, marker in ipairs(markers) do
-    local btn = CreateFrame("Button", nil, mainFrame, "SecureActionButtonTemplate")
-    btn:SetSize(size, size)
-    btn._verticalY = startY - ((i - 1) * (size + gap))
-    btn:SetPoint("TOPRIGHT", xPos, btn._verticalY)
-    btn._markerIndex = i
-
-    if btn.SetNormalTexture then
-      btn:SetNormalTexture(marker.icon)
-    end
-    if btn.SetAttribute then
-      btn:SetAttribute("type1", "worldmarker") -- Left click: setzen
-      btn:SetAttribute("marker1", marker.id)
-      btn:SetAttribute("action1", "set")
-      btn:SetAttribute("type2", "worldmarker") -- Right click: remove
-      btn:SetAttribute("marker2", marker.id)
-      btn:SetAttribute("action2", "clear")
-    end
-    if btn.RegisterForClicks then
-      btn:RegisterForClicks("AnyUp", "AnyDown")
-    end
-
-    btn:SetScript("OnEnter", function(self)
-      local tooltip = AnchorRosterHoverTooltip(tooltipFrame, self)
-      if type(tooltip) == "table" and type(tooltip.SetText) == "function" then
-        tooltip:SetText("World Marker: " .. marker.name, 1, 1, 1)
-        if type(tooltip.AddLine) == "function" then
-          tooltip:AddLine("Left-Click: Place", 0, 1, 0)
-          tooltip:AddLine("Right-Click: Clear", 1, 0.2, 0.2)
-        end
-        tooltip:Show()
-      end
-    end)
-    btn:SetScript("OnLeave", function()
-      HideRosterHoverTooltip(tooltipFrame)
-    end)
-
-    table.insert(buttons, btn)
-  end
-
-  local header = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  header:SetPoint("TOPRIGHT", xPos + 18, -34)
-  header:SetWidth(60)
-  header:SetJustifyH("CENTER")
-  local L = getL()
-  header:SetText(L.TANK_HELPER_HEADER or "Tank Helper")
-
-  return buttons, header
 end
 
 local function ConstructPanelUI(mainFrame, uiDeps)

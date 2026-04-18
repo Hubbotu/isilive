@@ -9,6 +9,12 @@
   - `ui/isiLive_roster_panel.lua` shrinks from 2661 to 2085 lines; load order, test harness `FILE_PATHS` / `IMPLICIT_DEPENDENCIES`, and the architecture tests are kept in sync with the new modules.
   - Net effect: row rendering is isolated from the main panel controller, the main file stays well under the file cap, and all 704 usecase tests continue to pass.
 
+- **Roster-Panel refactor (Phase 2):**
+  - Extracted panel chrome (`CreateFlatButton`, `CreatePanelHeaders`, `CreateM2ColumnGuides`, `AttachPanelButtonTooltip`, `AttachModeButtonTooltip`, `CreateTankHelperButtons`) and the shared column position/width constants into a new `ui/isiLive_roster_panel_chrome.lua`.
+  - The column constants (`SPEC_COL_X`, `NAME_COL_X`, …, `KICK_COL_WIDTH`) are now published via `_RosterInternal`; `roster_panel.lua` imports them instead of keeping a parallel copy, so header layout and row rendering stay aligned by construction.
+  - `CreateShareKeysButton` and `CreatePanelButtons` stay in `roster_panel.lua` because they are tightly coupled to the keystone announce helpers.
+  - `ui/isiLive_roster_panel.lua` shrinks further from 2085 to 1698 lines; load order, test harness, and architecture tests updated accordingly. All 704 usecase tests still pass.
+
 - **CI hygiene:**
   - Collapsed accidental double blank lines introduced by the recent scenario/UI splits to satisfy `stylua --check`.
   - Imported `CD_TRACKER_ROW_HEIGHT` into the new kill-row module and removed the now-unused `CD_TRACKER_ROW_BOTTOM_OFFSET` upvalue from `ui/isiLive_roster_panel.lua` to clear `luacheck` warnings.

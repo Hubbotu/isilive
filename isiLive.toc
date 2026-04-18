@@ -56,6 +56,7 @@ game/isiLive_mplus_timer.lua
 game/isiLive_killtrack.lua
 game/isiLive_kick_tracker.lua
 ui/isiLive_roster_panel_helpers.lua
+ui/isiLive_roster_panel_chrome.lua
 ui/isiLive_roster_panel_cd_row.lua
 ui/isiLive_roster_panel_kill_row.lua
 ui/isiLive_roster_panel.lua
