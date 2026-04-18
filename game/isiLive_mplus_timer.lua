@@ -76,6 +76,7 @@ local function StartTimer()
   state.deathTimeLost = 0
   state.running = true
   state.completed = false
+  tickAccum = 0
   tickFrame:SetScript("OnUpdate", function(_, elapsed)
     tickAccum = tickAccum + elapsed
     if tickAccum >= 0.1 then

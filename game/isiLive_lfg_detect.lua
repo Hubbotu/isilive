@@ -443,9 +443,12 @@ frame:RegisterEvent("GROUP_ROSTER_UPDATE")
 
 frame:SetScript("OnEvent", function(_self, event, ...)
   if event == "PLAYER_LOGIN" then
+    -- 30s safety-net ticker. Primary triggers are event-driven
+    -- (LFG_LIST_ACTIVE_ENTRY_UPDATE + GROUP_ROSTER_UPDATE); this catches
+    -- state transitions the API does not emit events for.
     local C_Timer_ref = rawget(_G, "C_Timer")
     if type(C_Timer_ref) == "table" and type(C_Timer_ref.NewTicker) == "function" then
-      C_Timer_ref.NewTicker(5, CheckActiveGroup)
+      C_Timer_ref.NewTicker(30, CheckActiveGroup)
     end
   elseif event == "LFG_LIST_APPLICATION_STATUS_UPDATED" then
     local searchResultID, newStatus = ...
