@@ -1,0 +1,715 @@
+local _, addonTable = ...
+
+addonTable = addonTable or {}
+addonTable._RosterInternal = addonTable._RosterInternal or {}
+local RI = addonTable._RosterInternal
+
+local CreateFrame = rawget(_G, "CreateFrame")
+
+local function Trace(msg)
+  local logger = RI._rosterPanelLogger
+  if logger then
+    logger("RosterPanel: " .. msg)
+  end
+end
+
+-- Tooltip imports.
+local DisableFontStringWrapping = RI.DisableFontStringWrapping or function(_fs) end
+local HideRosterHoverTooltip = RI.HideRosterHoverTooltip or function(...)
+  local _ = ...
+end
+local AnchorRosterHoverTooltip = RI.AnchorRosterHoverTooltip or function(...)
+  local _ = ...
+end
+local FormatCompactTooltipNumber = RI.FormatCompactTooltipNumber or function(n)
+  return tostring(n or 0)
+end
+local ShowRosterNameFallbackTooltip = RI.ShowRosterNameFallbackTooltip or function(...)
+  local _ = ...
+end
+local ShowRosterInfoTooltip = RI.ShowRosterInfoTooltip or function(...)
+  local _ = ...
+end
+
+-- Layout / state imports.
+local LAYOUT_MODE_EXPANDED = RI.LAYOUT_MODE_EXPANDED or "expanded"
+local IsCompactLayoutMode = RI.IsCompactLayoutMode or function(_mode)
+  return false
+end
+local IsMainHorizontalLayoutMode = RI.IsMainHorizontalLayoutMode
+  or RI.IsStackedModernLayoutMode
+  or function(_mode)
+    return false
+  end
+local IsCombatLockdownActive = RI.IsCombatLockdownActive or function()
+  return false
+end
+local GetFrameHeightForLayoutMode = RI.GetFrameHeightForLayoutMode or function(_mode, minHeight)
+  return minHeight
+end
+local UpdateCollapseState = RI.UpdateCollapseState or function(_ui, _mode, _frame) end
+local CD_TRACKER_ROW_HEIGHT = RI.CD_TRACKER_ROW_HEIGHT or 20
+
+-- Column position constants (defined in isiLive_roster_panel_chrome.lua).
+local SPEC_COL_X = RI.SPEC_COL_X or 4
+local NAME_COL_X = RI.NAME_COL_X or 93
+local SERVER_COL_X = RI.SERVER_COL_X or 75
+local KEY_COL_X = RI.KEY_COL_X or 216
+local ILVL_COL_X = RI.ILVL_COL_X or 282
+local RIO_COL_X = RI.RIO_COL_X or 318
+local SPEC_COL_WIDTH = RI.SPEC_COL_WIDTH or 52
+local NAME_COL_WIDTH = RI.NAME_COL_WIDTH or 122
+local SERVER_COL_WIDTH = RI.SERVER_COL_WIDTH or 18
+local KEY_COL_WIDTH = RI.KEY_COL_WIDTH or 62
+local ILVL_COL_WIDTH = RI.ILVL_COL_WIDTH or 32
+local RIO_COL_WIDTH = RI.RIO_COL_WIDTH or 70
+local DPS_COL_X = RI.DPS_COL_X or (RIO_COL_X + RIO_COL_WIDTH + 2)
+local DPS_COL_WIDTH = RI.DPS_COL_WIDTH or 40
+local KICK_COL_X = RI.KICK_COL_X or (DPS_COL_X + DPS_COL_WIDTH + 4)
+local KICK_COL_WIDTH = RI.KICK_COL_WIDTH or 58
+local KICK_HOVER_WIDTH = 58
+local ROLE_BUTTON_X = SPEC_COL_X + SPEC_COL_WIDTH + 4
+
+-- These settings are temporarily hidden from Blizzard Settings.
+-- Keep the runtime behavior hard-forced until the controls are re-enabled.
+local FORCE_SHOW_DPS_COLUMN = true
+
+local function CreateMemberRow(mainFrame, index, rosterTooltip)
+  local yOffset = -52 - (index - 1) * 16
+  local row = {}
+
+  row.hoverFrame = CreateFrame("Frame", nil, mainFrame)
+  row.hoverFrame:SetPoint("TOPLEFT", 4, yOffset + 2)
+  -- Hover/background area now extends through the Kick column.
+  -- Management buttons stay further right and remain outside this area.
+  row.hoverFrame:SetWidth(KICK_COL_X + KICK_HOVER_WIDTH - 4)
+  row.hoverFrame:SetHeight(16)
+  if row.hoverFrame.EnableMouse then
+    row.hoverFrame:EnableMouse(true)
+  end
+
+  row.hoverFrame:SetScript("OnMouseUp", function(_, button)
+    if not row.unit then
+      return
+    end
+
+    if button == "RightButton" then
+      local name = row.tooltipName
+      if name then
+        local target = (row.tooltipRealm and row.tooltipRealm ~= "") and (name .. "-" .. row.tooltipRealm) or name
+        local openChat = rawget(_G, "ChatFrame_OpenChat")
+        if type(openChat) == "function" then
+          pcall(openChat, "/w " .. target .. " ")
+        end
+      end
+    end
+  end)
+
+  if index % 2 == 0 then
+    local altBg = row.hoverFrame:CreateTexture(nil, "BACKGROUND", nil, -1)
+    altBg:SetAllPoints()
+    altBg:SetColorTexture(1, 1, 1, 0.03)
+  end
+
+  row.readyCheckBackground = row.hoverFrame:CreateTexture(nil, "BACKGROUND", nil, 0)
+  row.readyCheckBackground:SetAllPoints()
+  row.readyCheckBackground:Hide()
+
+  row.highlight = row.hoverFrame:CreateTexture(nil, "BACKGROUND")
+  row.highlight:SetAllPoints()
+  row.highlight:SetColorTexture(0.3, 0.65, 1, 0.08)
+  row.highlight:Hide()
+
+  row.hoverFrame:SetScript("OnEnter", function()
+    row.highlight:Show()
+    if
+      not ShowRosterInfoTooltip(
+        rosterTooltip,
+        row.hoverFrame,
+        row.unit,
+        row.tooltipInfo,
+        row.getDungeonShortCode,
+        row.getDungeonName,
+        row.getPlayerLastRunDps,
+        row.getLanguageTooltipMarkup,
+        row.getL
+      )
+    then
+      ShowRosterNameFallbackTooltip(rosterTooltip, row.hoverFrame, row.tooltipName, row.tooltipRealm)
+    end
+  end)
+  row.hoverFrame:SetScript("OnLeave", function()
+    row.highlight:Hide()
+    HideRosterHoverTooltip(rosterTooltip)
+  end)
+
+  row.roleButton = CreateFrame("Button", nil, mainFrame, "SecureActionButtonTemplate")
+  row.roleButton:SetSize(14, 14)
+  row.roleButton:SetPoint("TOPLEFT", ROLE_BUTTON_X, yOffset - 1)
+  row.roleButton:RegisterForClicks("AnyUp", "AnyDown")
+  row.roleButton.icon = row.roleButton:CreateTexture(nil, "ARTWORK")
+  row.roleButton.icon:SetAllPoints()
+  row.roleButton.icon:SetTexture("Interface\\LFGFrame\\UI-LFG-ICON-PORTRAITROLES")
+  row.roleButton:SetScript("OnEnter", function(self)
+    local tooltip = AnchorRosterHoverTooltip(rosterTooltip, self)
+    if type(tooltip) == "table" and type(tooltip.SetText) == "function" then
+      tooltip:SetText("Role Marker", 1, 1, 1)
+      if type(tooltip.AddLine) == "function" then
+        tooltip:AddLine("Click to mark unit", 1, 1, 1, true)
+        tooltip:AddLine("Tank: Blue Square", 0.2, 0.4, 1, true)
+        tooltip:AddLine("Healer: Green Triangle", 0.2, 1, 0.2, true)
+      end
+      tooltip:Show()
+    end
+  end)
+  row.roleButton:SetScript("OnLeave", function()
+    HideRosterHoverTooltip(rosterTooltip)
+  end)
+
+  row.spec = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.spec:SetPoint("TOPLEFT", SPEC_COL_X, yOffset)
+  row.spec:SetJustifyH("RIGHT")
+  row.spec:SetWidth(SPEC_COL_WIDTH)
+  DisableFontStringWrapping(row.spec)
+
+  row.name = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.name:SetPoint("TOPLEFT", NAME_COL_X, yOffset)
+  row.name:SetJustifyH("LEFT")
+  row.name:SetWidth(NAME_COL_WIDTH)
+  DisableFontStringWrapping(row.name)
+
+  row.ilvl = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.ilvl:SetPoint("TOPLEFT", ILVL_COL_X, yOffset)
+  row.ilvl:SetWidth(ILVL_COL_WIDTH)
+  row.ilvl:SetJustifyH("RIGHT")
+  DisableFontStringWrapping(row.ilvl)
+
+  row.key = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.key:SetPoint("TOPLEFT", KEY_COL_X, yOffset)
+  row.key:SetWidth(KEY_COL_WIDTH)
+  row.key:SetJustifyH("RIGHT")
+  DisableFontStringWrapping(row.key)
+
+  row.rio = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.rio:SetPoint("TOPLEFT", RIO_COL_X, yOffset)
+  row.rio:SetWidth(RIO_COL_WIDTH)
+  row.rio:SetJustifyH("RIGHT")
+  DisableFontStringWrapping(row.rio)
+
+  row.dps = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.dps:SetPoint("TOPLEFT", DPS_COL_X, yOffset)
+  row.dps:SetWidth(DPS_COL_WIDTH)
+  row.dps:SetJustifyH("RIGHT")
+  DisableFontStringWrapping(row.dps)
+
+  row.kick = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.kick:SetPoint("TOPLEFT", KICK_COL_X, yOffset)
+  row.kick:SetWidth(KICK_COL_WIDTH)
+  row.kick:SetJustifyH("RIGHT")
+  DisableFontStringWrapping(row.kick)
+
+  row.realm = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  row.realm:SetPoint("TOPLEFT", SERVER_COL_X, yOffset)
+  row.realm:SetWidth(SERVER_COL_WIDTH)
+  row.realm:SetJustifyH("LEFT")
+  DisableFontStringWrapping(row.realm)
+
+  return row
+end
+
+local function IsEntryAtTargetDungeon(targetMapID, entry, info)
+  local isAtDungeon = false
+
+  if targetMapID and entry and entry.unit then
+    local mapApi = rawget(_G, "C_Map")
+    local getBestMapForUnit = mapApi and mapApi.GetBestMapForUnit or nil
+    if type(getBestMapForUnit) == "function" then
+      local ok, playerMapID = pcall(getBestMapForUnit, entry.unit)
+      if ok and playerMapID and tonumber(playerMapID) == tonumber(targetMapID) then
+        isAtDungeon = true
+      end
+    end
+  end
+
+  if not isAtDungeon and targetMapID and info and info.syncLocMapID then
+    if tonumber(info.syncLocMapID) == tonumber(targetMapID) then
+      isAtDungeon = true
+    end
+  end
+
+  return isAtDungeon
+end
+
+local function BuildRowDisplayData(state, entry, isReadyCheckActive, targetMapID, includeReadyCheckDecorations)
+  local info = entry and entry.info or {}
+  local shouldIncludeReadyCheckDecorations = includeReadyCheckDecorations == true
+
+  return state.buildDisplayData(info, {
+    unit = entry and entry.unit or nil,
+    truncateName = state.truncateName,
+    getShortSpecLabel = state.getShortSpecLabel,
+    getLanguageFlagMarkup = state.getLanguageFlagMarkup,
+    getDungeonShortCode = state.getDungeonShortCode,
+    getRioDelta = state.getRioDelta,
+    syncMarker = state.syncMarker,
+    syncBadge = state.syncBadge,
+    syncSummary = state.getPlayerSyncSummary and state.getPlayerSyncSummary(info.name, info.realm) or nil,
+    isReadyCheckActive = shouldIncludeReadyCheckDecorations and isReadyCheckActive or nil,
+    getReadyCheckReadyUntil = shouldIncludeReadyCheckDecorations and state.getReadyCheckReadyUntil or nil,
+    getReadyCheckDeclinedUntil = shouldIncludeReadyCheckDecorations and state.getReadyCheckDeclinedUntil or nil,
+    getTime = shouldIncludeReadyCheckDecorations and state.getTime or nil,
+    isAtDungeon = IsEntryAtTargetDungeon(targetMapID, entry, info),
+  })
+end
+
+local function ApplyRowNameDisplay(row, displayData)
+  if not row or not row.name or type(row.name.SetText) ~= "function" then
+    return
+  end
+
+  row.name:SetText(
+    (displayData.readyCheckMarkup or "")
+      .. " |c"
+      .. displayData.colorHex
+      .. displayData.displayName
+      .. "|r"
+      .. displayData.atDungeonMarker
+      .. displayData.addonMarker
+  )
+end
+
+local function ApplyRowSpecDisplay(row, displayData)
+  if not row or not row.spec or type(row.spec.SetText) ~= "function" then
+    return
+  end
+
+  row.spec:SetText("|c" .. displayData.colorHex .. displayData.specText .. "|r")
+end
+
+local function ApplyRowReadyCheckDisplay(row, displayData)
+  local background = row and row.readyCheckBackground or nil
+  local color = displayData and displayData.readyCheckBackgroundColor or nil
+  if not background then
+    return
+  end
+
+  if type(color) == "table" and #color >= 4 then
+    background:SetColorTexture(color[1], color[2], color[3], color[4])
+    background:Show()
+  else
+    background:Hide()
+  end
+end
+
+local function HasReadyCheckHoldInRoster(state, roster)
+  local buildOrderedRoster = type(state.buildOrderedRoster) == "function" and state.buildOrderedRoster or nil
+  local getReadyCheckReadyUntil = type(state.getReadyCheckReadyUntil) == "function" and state.getReadyCheckReadyUntil
+    or nil
+  local getReadyCheckDeclinedUntil = type(state.getReadyCheckDeclinedUntil) == "function"
+      and state.getReadyCheckDeclinedUntil
+    or nil
+  local getTime = type(state.getTime) == "function" and state.getTime or nil
+  local now = type(getTime) == "function" and tonumber(getTime()) or nil
+  if not now or not buildOrderedRoster then
+    return false
+  end
+
+  for _, entry in ipairs(buildOrderedRoster(roster, state.rolePriority, state.unitPriority)) do
+    local unit = entry and entry.unit or nil
+    if type(unit) == "string" and unit ~= "" then
+      local readyUntil = getReadyCheckReadyUntil and tonumber(getReadyCheckReadyUntil(unit)) or nil
+      if readyUntil and readyUntil > now then
+        return true
+      end
+      local declinedUntil = getReadyCheckDeclinedUntil and tonumber(getReadyCheckDeclinedUntil(unit)) or nil
+      if declinedUntil and declinedUntil > now then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+local function SetKickCellText(cell, info)
+  if not cell then
+    return
+  end
+  if type(info) ~= "table" or info.syncHasKick == false then
+    cell:SetText("|cff666666-|r")
+    return
+  end
+  if info.syncKickOnCooldown == true then
+    local secs = math.ceil(info.syncKickRemain or 0)
+    if secs > 0 then
+      cell:SetText(string.format("|cffff4040%ds|r", secs))
+    else
+      cell:SetText("|cff666666-|r")
+    end
+    return
+  end
+  if info.syncKickOnCooldown == false then
+    cell:SetText("|cff44ff44ready|r")
+    return
+  end
+  cell:SetText("|cff666666-|r")
+end
+
+local function ResolveReadyCheckActive(state)
+  if type(state) ~= "table" then
+    return false
+  end
+
+  local value = state.isReadyCheckActive
+  if type(value) == "function" then
+    local ok, result = pcall(value)
+    return ok and result == true
+  end
+
+  return value == true
+end
+
+local RefreshReadyCheckStateImpl
+
+local function RenderRosterImpl(state, roster)
+  local memberCount = roster and #roster or 0
+  Trace(string.format("rendering roster, member_count=%d", memberCount))
+  local memberRows = state.memberRows
+  local mainFrame = state.mainFrame
+  local shareKeysButton = state.shareKeysButton
+  local rosterTooltip = state.rosterTooltip
+  local setMainFrameHeightSafe = state.setMainFrameHeightSafe
+  local minFrameHeight = state.minFrameHeight
+  local raidNoticeLabel = state.raidNoticeLabel
+  local buildOrderedRoster = state.buildOrderedRoster
+  local rolePriority = state.rolePriority
+  local unitPriority = state.unitPriority
+  local resolveActiveKeyOwnerUnit = state.resolveActiveKeyOwnerUnit
+  local isReadyCheckActive = ResolveReadyCheckActive(state)
+  local resolveTargetMapID = state.resolveTargetMapID
+  local getOwnedKeystoneSnapshot = type(state.getOwnedKeystoneSnapshot) == "function" and state.getOwnedKeystoneSnapshot
+    or nil
+  local buildDisplayData = state.buildDisplayData
+  local truncateName = state.truncateName
+  local getShortSpecLabel = state.getShortSpecLabel
+  local getLanguageFlagMarkup = state.getLanguageFlagMarkup
+  local getLanguageTooltipMarkup = state.getLanguageTooltipMarkup
+  local getDungeonShortCode = state.getDungeonShortCode
+  local getDungeonName = state.getDungeonName
+  local getRioDelta = state.getRioDelta
+  local syncMarker = state.syncMarker
+  local syncBadge = state.syncBadge
+  local getPlayerSyncSummary = state.getPlayerSyncSummary
+  local getPlayerLastRunDps = state.getPlayerLastRunDps
+  local getReadyCheckReadyUntil = state.getReadyCheckReadyUntil
+  local getReadyCheckDeclinedUntil = state.getReadyCheckDeclinedUntil
+  local getTime = state.getTime
+  local getL = state.getL
+  local isRaidGroup = state.isRaidGroup
+  local applyKnownKeyToRosterEntry = state.applyKnownKeyToRosterEntry
+
+  if state.uiRef then
+    state.uiRef.memberRows = memberRows
+  end
+  local layoutMode = state.uiRef and state.uiRef.layoutMode or LAYOUT_MODE_EXPANDED
+  local isCollapsed = IsCompactLayoutMode(layoutMode)
+
+  local function ClearMemberRow(row)
+    row.spec:SetText("")
+    row.name:SetText("")
+    row.realm:SetText("")
+    row.key:SetText("")
+    row.ilvl:SetText("")
+    row.rio:SetText("")
+    row.dps:SetText("")
+    if row.kick then
+      row.kick:SetText("")
+    end
+    row.unit = nil
+    row.tooltipName = nil
+    row.tooltipRealm = nil
+    row.tooltipInfo = nil
+    row.getDungeonShortCode = nil
+    row.getDungeonName = nil
+    row.getPlayerLastRunDps = nil
+    row.getLanguageTooltipMarkup = nil
+    row.getL = nil
+    if row.hoverFrame then
+      HideRosterHoverTooltip(rosterTooltip)
+      row.hoverFrame.unit = nil
+      row.hoverFrame:Hide()
+    end
+    if row.readyCheckBackground then
+      row.readyCheckBackground:Hide()
+    end
+    if row.roleButton and not IsCombatLockdownActive() then
+      row.roleButton:Hide()
+    end
+  end
+
+  -- If in a raid group, clear rows and skip roster render (H mode shows the tool buttons)
+  if isRaidGroup and isRaidGroup() then
+    for _, row in pairs(memberRows) do
+      ClearMemberRow(row)
+    end
+    if raidNoticeLabel then
+      raidNoticeLabel:Hide()
+    end
+    return
+  end
+
+  -- Normal case: hide notice, show rows
+  if raidNoticeLabel then
+    raidNoticeLabel:Hide()
+  end
+
+  -- Temporarily hidden in Settings: keep the DPS/Deaths/Kicks columns hard-enabled in runtime.
+  local showDpsColumn = FORCE_SHOW_DPS_COLUMN
+  if state.uiRef then
+    local function setHeaderVisible(key, visible)
+      local h = state.uiRef[key]
+      if h then
+        if visible then
+          h:Show()
+        else
+          h:Hide()
+        end
+      end
+    end
+    setHeaderVisible("dpsHeader", showDpsColumn)
+    setHeaderVisible("kickHeader", showDpsColumn)
+  end
+
+  if state.uiRef and state.uiRef.tankButtons and not IsCombatLockdownActive() then
+    local isMainHorizontal = IsMainHorizontalLayoutMode(state.uiRef.layoutMode)
+    local showMarkers = not isMainHorizontal
+    for _, btn in ipairs(state.uiRef.tankButtons) do
+      if showMarkers then
+        btn:Show()
+      else
+        btn:Hide()
+      end
+    end
+    if state.uiRef.tankHeader then
+      if showMarkers then
+        state.uiRef.tankHeader:Show()
+      else
+        state.uiRef.tankHeader:Hide()
+      end
+    end
+  end
+
+  for _, row in pairs(memberRows) do
+    ClearMemberRow(row)
+  end
+
+  local index = 1
+  local orderedRoster = buildOrderedRoster(roster, rolePriority, unitPriority)
+  local activeKeyOwnerUnit = resolveActiveKeyOwnerUnit and resolveActiveKeyOwnerUnit() or nil
+  local targetMapID = resolveTargetMapID and resolveTargetMapID() or nil
+  local hasAnyKey = false
+
+  for _, entry in ipairs(orderedRoster) do
+    if index > 5 then
+      break
+    end
+
+    local info = entry.info
+    if info.keyLevel and tonumber(info.keyLevel) > 0 then
+      hasAnyKey = true
+    end
+
+    local row = memberRows[index]
+    if not row then
+      row = CreateMemberRow(mainFrame, index, rosterTooltip)
+      memberRows[index] = row
+    end
+
+    if row.roleButton then
+      local role = info.role
+      local icon = row.roleButton.icon
+      local showButton = false
+
+      if role == "TANK" then
+        icon:SetTexCoord(0, 19 / 64, 22 / 64, 41 / 64)
+        showButton = true
+      elseif role == "HEALER" then
+        icon:SetTexCoord(20 / 64, 39 / 64, 1 / 64, 20 / 64)
+        showButton = true
+      elseif role == "DAMAGER" then
+        icon:SetTexCoord(20 / 64, 39 / 64, 22 / 64, 41 / 64)
+        showButton = true
+      end
+
+      if info.isGhost then
+        showButton = false
+      end
+
+      if not IsCombatLockdownActive() then
+        if showButton and not isCollapsed then
+          row.roleButton:Show()
+          row.roleButton:SetAttribute("type1", "macro")
+          row.roleButton:SetAttribute("type2", "macro")
+          if role == "TANK" then
+            -- Blue Square = 6
+            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 6\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
+          elseif role == "HEALER" then
+            -- Green Triangle = 4
+            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 4\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
+          else
+            row.roleButton:SetAttribute("macrotext1", nil)
+            row.roleButton:SetAttribute("macrotext2", nil)
+          end
+        else
+          row.roleButton:Hide()
+        end
+      end
+    end
+
+    local displayData = BuildRowDisplayData(state, entry, isReadyCheckActive, targetMapID, true)
+
+    ApplyRowSpecDisplay(row, displayData)
+    -- Skip displayData.roleIconMarkup since we render it as a secure button
+    ApplyRowNameDisplay(row, displayData)
+    row.realm:SetText(displayData.languageDisplay)
+    if displayData.keyText ~= "-" and activeKeyOwnerUnit and entry.unit == activeKeyOwnerUnit then
+      row.key:SetText("|cffff4040" .. displayData.keyText .. "|r")
+    else
+      row.key:SetText(displayData.keyText)
+    end
+    row.ilvl:SetText(displayData.ilvlText)
+    row.rio:SetText(displayData.rioText)
+    local showDps = FORCE_SHOW_DPS_COLUMN
+    if showDps then
+      local dpsText = "-"
+      if type(getPlayerLastRunDps) == "function" then
+        dpsText = FormatCompactTooltipNumber(getPlayerLastRunDps(info.name, info.realm)) or "-"
+      end
+      if dpsText == "-" and info.syncDps and info.syncDps > 0 then
+        dpsText = FormatCompactTooltipNumber(info.syncDps) or "-"
+      end
+      row.dps:SetText(dpsText)
+      row.dps:Show()
+    else
+      row.dps:SetText("")
+      row.dps:Hide()
+    end
+    if row.kick then
+      -- Refresh kick sync state from cache before rendering.
+      if type(applyKnownKeyToRosterEntry) == "function" then
+        applyKnownKeyToRosterEntry(info)
+      end
+      SetKickCellText(row.kick, info)
+    end
+    row.unit = entry.unit
+    row.tooltipName = info and info.name or nil
+    row.tooltipRealm = info and info.realm or nil
+    row.tooltipInfo = info
+    row.getDungeonShortCode = getDungeonShortCode
+    row.getDungeonName = getDungeonName
+    row.getPlayerLastRunDps = getPlayerLastRunDps
+    row.getLanguageTooltipMarkup = getLanguageTooltipMarkup
+    row.getL = getL
+    if row.hoverFrame then
+      row.hoverFrame.unit = entry.unit
+      row.hoverFrame:Show()
+      if isCollapsed then
+        row.hoverFrame:Hide()
+      end
+    end
+    index = index + 1
+  end
+
+  if not hasAnyKey and getOwnedKeystoneSnapshot then
+    local ownKeyMapID, ownKeyLevel = getOwnedKeystoneSnapshot()
+    hasAnyKey = tonumber(ownKeyMapID)
+        and tonumber(ownKeyMapID) > 0
+        and tonumber(ownKeyLevel)
+        and tonumber(ownKeyLevel) > 0
+      or false
+  end
+
+  if isReadyCheckActive or HasReadyCheckHoldInRoster(state, roster) then
+    RefreshReadyCheckStateImpl({
+      memberRows = memberRows,
+      buildOrderedRoster = buildOrderedRoster,
+      rolePriority = rolePriority,
+      unitPriority = unitPriority,
+      isReadyCheckActive = isReadyCheckActive,
+      resolveTargetMapID = resolveTargetMapID,
+      buildDisplayData = buildDisplayData,
+      truncateName = truncateName,
+      getShortSpecLabel = getShortSpecLabel,
+      getLanguageFlagMarkup = getLanguageFlagMarkup,
+      getDungeonShortCode = getDungeonShortCode,
+      getDungeonName = getDungeonName,
+      getRioDelta = getRioDelta,
+      syncMarker = syncMarker,
+      syncBadge = syncBadge,
+      getPlayerSyncSummary = getPlayerSyncSummary,
+      getReadyCheckReadyUntil = getReadyCheckReadyUntil,
+      getReadyCheckDeclinedUntil = getReadyCheckDeclinedUntil,
+      getTime = getTime,
+    }, roster)
+  end
+
+  if type(shareKeysButton.SetShareKeysAvailable) == "function" then
+    shareKeysButton.SetShareKeysAvailable(hasAnyKey)
+  else
+    shareKeysButton:SetEnabled(hasAnyKey)
+    shareKeysButton:SetAlpha(hasAnyKey and 1 or 0.45)
+  end
+
+  local cdTrackerExtra = IsMainHorizontalLayoutMode(layoutMode) and CD_TRACKER_ROW_HEIGHT or 0
+  local desiredHeight = isCollapsed and GetFrameHeightForLayoutMode(layoutMode, minFrameHeight)
+    or math.max(minFrameHeight, 45 + index * 16) + cdTrackerExtra
+  setMainFrameHeightSafe(desiredHeight)
+
+  if state.uiRef then
+    UpdateCollapseState(state.uiRef, layoutMode, mainFrame)
+  end
+end
+
+RefreshReadyCheckStateImpl = function(state, roster)
+  local buildOrderedRoster = type(state.buildOrderedRoster) == "function" and state.buildOrderedRoster or nil
+  if not buildOrderedRoster then
+    return
+  end
+  local memberRows = state.memberRows or {}
+  local orderedRoster = buildOrderedRoster(roster, state.rolePriority, state.unitPriority)
+  local isReadyCheckActive = ResolveReadyCheckActive(state)
+  local targetMapID = state.resolveTargetMapID and state.resolveTargetMapID() or nil
+
+  local index = 1
+  for _, entry in ipairs(orderedRoster) do
+    if index > 5 then
+      break
+    end
+
+    local row = memberRows[index]
+    if row then
+      local displayData = BuildRowDisplayData(state, entry, isReadyCheckActive, targetMapID, true)
+      ApplyRowReadyCheckDisplay(row, displayData)
+      ApplyRowSpecDisplay(row, displayData)
+      ApplyRowNameDisplay(row, displayData)
+    end
+
+    index = index + 1
+  end
+end
+
+RI.CreateMemberRow = CreateMemberRow
+RI.IsEntryAtTargetDungeon = IsEntryAtTargetDungeon
+RI.BuildRowDisplayData = BuildRowDisplayData
+RI.ApplyRowNameDisplay = ApplyRowNameDisplay
+RI.ApplyRowSpecDisplay = ApplyRowSpecDisplay
+RI.ApplyRowReadyCheckDisplay = ApplyRowReadyCheckDisplay
+RI.HasReadyCheckHoldInRoster = HasReadyCheckHoldInRoster
+RI.SetKickCellText = SetKickCellText
+RI.ResolveReadyCheckActive = ResolveReadyCheckActive
+RI.RenderRosterImpl = RenderRosterImpl
+RI.RefreshReadyCheckStateImpl = function(state, roster)
+  return RefreshReadyCheckStateImpl(state, roster)
+end

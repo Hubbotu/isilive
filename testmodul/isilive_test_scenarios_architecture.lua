@@ -37,6 +37,7 @@ local FILE_PATHS = {
   ["isiLive_roster_panel_chrome.lua"] = "ui/isiLive_roster_panel_chrome.lua",
   ["isiLive_roster_panel_cd_row.lua"] = "ui/isiLive_roster_panel_cd_row.lua",
   ["isiLive_roster_panel_kill_row.lua"] = "ui/isiLive_roster_panel_kill_row.lua",
+  ["isiLive_roster_panel_render.lua"] = "ui/isiLive_roster_panel_render.lua",
   ["isiLive_ui.lua"] = "ui/isiLive_ui.lua",
   ["isiLive_settings.lua"] = "ui/isiLive_settings.lua",
   ["isiLive_leader_watch.lua"] = "logic/isiLive_leader_watch.lua",
@@ -825,11 +826,12 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       "function controller.RefreshKickColumn()",
       "RosterPanel must expose a dedicated kick-column refresh helper"
     )
+    local rosterPanelRenderContent = ReadFile("isiLive_roster_panel_render.lua")
     AssertContains(
       Assert,
-      rosterPanelContent,
+      rosterPanelRenderContent,
       'cell:SetText("|cff44ff44ready|r")',
-      "RosterPanel kick refresh helper must render the ready state in green"
+      "RosterPanel render module must render the kick-ready state in green"
     )
   end)
 end

@@ -15,6 +15,13 @@
   - `CreateShareKeysButton` and `CreatePanelButtons` stay in `roster_panel.lua` because they are tightly coupled to the keystone announce helpers.
   - `ui/isiLive_roster_panel.lua` shrinks further from 2085 to 1698 lines; load order, test harness, and architecture tests updated accordingly. All 704 usecase tests still pass.
 
+- **Roster-Panel refactor (Phase 3):**
+  - Extracted the row builder (`CreateMemberRow`) and the entire roster render pipeline (`RenderRosterImpl`, `RefreshReadyCheckStateImpl`, `BuildRowDisplayData`, `IsEntryAtTargetDungeon`, `ApplyRowNameDisplay`, `ApplyRowSpecDisplay`, `ApplyRowReadyCheckDisplay`, `HasReadyCheckHoldInRoster`, `ResolveReadyCheckActive`, `SetKickCellText`) into the new `ui/isiLive_roster_panel_render.lua` and exposed them through `_RosterInternal`.
+  - `RosterPanel.SetTraceLogger` now also publishes the trace logger via `_RosterInternal._rosterPanelLogger` so the split render module can emit `RosterPanel:`-prefixed traces without sharing an upvalue.
+  - Removed the now-orphan tooltip / column-constant / layout-helper imports from `roster_panel.lua` to keep the file free of dead locals; the controller methods reach the render and kick-cell helpers through small `RI` shims.
+  - `ui/isiLive_roster_panel.lua` shrinks further from 1698 to 1039 lines; the new render module sits at 715 lines (well below the 3200-line file cap, with `RenderRosterImpl` at ~299 lines below the 420-line function cap). The architecture kick-column test now reads the kick-ready marker from the render module.
+  - All 704 usecase tests continue to pass.
+
 - **CI hygiene:**
   - Collapsed accidental double blank lines introduced by the recent scenario/UI splits to satisfy `stylua --check`.
   - Imported `CD_TRACKER_ROW_HEIGHT` into the new kill-row module and removed the now-unused `CD_TRACKER_ROW_BOTTOM_OFFSET` upvalue from `ui/isiLive_roster_panel.lua` to clear `luacheck` warnings.
