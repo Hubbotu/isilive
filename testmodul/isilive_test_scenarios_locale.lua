@@ -299,14 +299,7 @@ return function(test, ctx)
           if type(value) == "string" then
             Assert.True(
               #value <= 14,
-              localeName
-                .. "."
-                .. key
-                .. " must be <= 14 chars (is "
-                .. tostring(#value)
-                .. '): "'
-                .. value
-                .. '"'
+              localeName .. "." .. key .. " must be <= 14 chars (is " .. tostring(#value) .. '): "' .. value .. '"'
             )
           end
         end

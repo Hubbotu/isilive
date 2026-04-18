@@ -1102,14 +1102,8 @@ function Sync.SendStats(opts)
     NormalizeStatsPayload(opts.specID, opts.ilvl, opts.rio, opts.capturedAt, opts.source)
   local dedupePayload =
     string.format("STATS:%d:%d:%d", tonumber(numericSpecID) or 0, tonumber(numericIlvl) or 0, tonumber(numericRio) or 0)
-  local blocked, now = IsBlockedBySendGate(
-    opts,
-    lastStatsPayloadSent,
-    lastIsiLiveStatsAt,
-    dedupePayload,
-    ISILIVE_STATS_COOLDOWN,
-    nil
-  )
+  local blocked, now =
+    IsBlockedBySendGate(opts, lastStatsPayloadSent, lastIsiLiveStatsAt, dedupePayload, ISILIVE_STATS_COOLDOWN, nil)
   if blocked then
     return
   end
