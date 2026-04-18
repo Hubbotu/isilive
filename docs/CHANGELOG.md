@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-18 - Version 0.9.170 (patch)
+
+- **Roster-Panel refactor (Phase 1):**
+  - Extracted CdTracker row creation/update (`CreateCdTrackerRow`, `UpdateCdTrackerRow`) into `ui/isiLive_roster_panel_cd_row.lua`.
+  - Extracted KillTrack row creation/update (`CreateKillTrackRow`, `UpdateKillTrackRow`) into `ui/isiLive_roster_panel_kill_row.lua`.
+  - Moved shared font helpers (`ApplyFontStringSize`, `FormatMplusTime`, `SetFontStringTextColorSafe`) into `ui/isiLive_roster_panel_helpers.lua`, exposed via the existing `_RosterInternal` namespace.
+  - `ui/isiLive_roster_panel.lua` shrinks from 2661 to 2085 lines; load order, test harness `FILE_PATHS` / `IMPLICIT_DEPENDENCIES`, and the architecture tests are kept in sync with the new modules.
+  - Net effect: row rendering is isolated from the main panel controller, the main file stays well under the file cap, and all 704 usecase tests continue to pass.
+
+- **CI hygiene:**
+  - Collapsed accidental double blank lines introduced by the recent scenario/UI splits to satisfy `stylua --check`.
+  - Imported `CD_TRACKER_ROW_HEIGHT` into the new kill-row module and removed the now-unused `CD_TRACKER_ROW_BOTTOM_OFFSET` upvalue from `ui/isiLive_roster_panel.lua` to clear `luacheck` warnings.
+  - Added `---@diagnostic disable: undefined-global` to `isilive_test_scenarios_ui.lua`, `isilive_test_scenarios_ui_settings.lua` and `tools/check_locale_drift.lua` so the Lua language server stops flagging `loadfile` / `io` / `os` in files that run under the real Lua stdlib.
+
 ## 2026-04-18 - Version 0.9.169 (patch)
 
 - **Share-keys chat announcement fixed end-to-end:**
