@@ -965,24 +965,53 @@ function Sync.RegisterPrefix()
   end
 end
 
+-- Common pre-send guard shared by Send* functions: API availability, sync-enabled,
+-- caller visibility, and channel resolution. Returns the outgoing channel string,
+-- or nil when the send should be suppressed.
+local function ResolveSendChannel(opts)
+  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
+    return nil
+  end
+  if not IsSyncEnabled() then
+    return nil
+  end
+  if opts.isVisible == false and opts.allowHidden ~= true then
+    return nil
+  end
+  return Sync.GetAddonSyncChannel()
+end
+
+-- Shared dedupe/cooldown gate for Send* functions that share the pattern
+-- "skip if identical payload and still in cooldown window".
+-- Returns (blocked:boolean, now:number). onBlocked, if provided, is called with
+-- ("unchanged") or ("cooldown", remainSeconds) for deep-trace logging.
+local function IsBlockedBySendGate(opts, lastPayload, lastAt, dedupePayload, cooldown, onBlocked)
+  local now = GetTime()
+  if opts.force then
+    return false, now
+  end
+  if opts.onlyIfChanged == true and dedupePayload == lastPayload then
+    if onBlocked then
+      onBlocked("unchanged", 0)
+    end
+    return true, now
+  end
+  if dedupePayload == lastPayload and (now - lastAt) < cooldown then
+    if onBlocked then
+      onBlocked("cooldown", cooldown - (now - lastAt))
+    end
+    return true, now
+  end
+  return false, now
+end
+
 --- Broadcasts a HELLO announcement to the group.
 -- Rate-limited by ISILIVE_HELLO_COOLDOWN (8 s). Suppressed when isVisible==false unless allowHidden==true.
 -- @param opts table {version:string, protocolVersion:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendHello(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
@@ -1015,43 +1044,40 @@ end
 -- @param opts table {mapID:number, level:number, capturedAt:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendKey(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
 
   local payload, numericMapID, numericLevel = NormalizeKeyPayload(opts.mapID, opts.level, opts.capturedAt, opts.source)
   local dedupePayload = string.format("KEY:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
-  local now = GetTime()
-  if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastKeyPayloadSent then
-    SyncLogDeep(
-      "send_key_blocked",
-      "reason=unchanged mapID=%s level=%s",
-      tostring(numericMapID),
-      tostring(numericLevel)
-    )
-    return
-  end
-  if not opts.force and dedupePayload == lastKeyPayloadSent and (now - lastIsiLiveKeyAt) < ISILIVE_KEY_COOLDOWN then
-    SyncLogDeep(
-      "send_key_blocked",
-      "reason=cooldown mapID=%s level=%s remain=%.1f",
-      tostring(numericMapID),
-      tostring(numericLevel),
-      ISILIVE_KEY_COOLDOWN - (now - lastIsiLiveKeyAt)
-    )
+  local blocked, now = IsBlockedBySendGate(
+    opts,
+    lastKeyPayloadSent,
+    lastIsiLiveKeyAt,
+    dedupePayload,
+    ISILIVE_KEY_COOLDOWN,
+    function(reason, remain)
+      if reason == "unchanged" then
+        SyncLogDeep(
+          "send_key_blocked",
+          "reason=unchanged mapID=%s level=%s",
+          tostring(numericMapID),
+          tostring(numericLevel)
+        )
+      else
+        SyncLogDeep(
+          "send_key_blocked",
+          "reason=cooldown mapID=%s level=%s remain=%.1f",
+          tostring(numericMapID),
+          tostring(numericLevel),
+          remain
+        )
+      end
+    end
+  )
+  if blocked then
     return
   end
 
@@ -1066,19 +1092,8 @@ end
 -- @param opts table {specID:number, ilvl:number, rio:number, capturedAt:number,
 --   source:string, isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendStats(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
@@ -1087,15 +1102,15 @@ function Sync.SendStats(opts)
     NormalizeStatsPayload(opts.specID, opts.ilvl, opts.rio, opts.capturedAt, opts.source)
   local dedupePayload =
     string.format("STATS:%d:%d:%d", tonumber(numericSpecID) or 0, tonumber(numericIlvl) or 0, tonumber(numericRio) or 0)
-  local now = GetTime()
-  if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastStatsPayloadSent then
-    return
-  end
-  if
-    not opts.force
-    and dedupePayload == lastStatsPayloadSent
-    and (now - lastIsiLiveStatsAt) < ISILIVE_STATS_COOLDOWN
-  then
+  local blocked, now = IsBlockedBySendGate(
+    opts,
+    lastStatsPayloadSent,
+    lastIsiLiveStatsAt,
+    dedupePayload,
+    ISILIVE_STATS_COOLDOWN,
+    nil
+  )
+  if blocked then
     return
   end
 
@@ -1117,30 +1132,17 @@ end
 -- @param opts table {dps:number, capturedAt:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendDps(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
 
   local payload, numericDps = NormalizeDpsPayload(opts.dps, opts.capturedAt, opts.source)
   local dedupePayload = string.format("DPS:%d", tonumber(numericDps) or 0)
-  local now = GetTime()
-  if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastDpsPayloadSent then
-    return
-  end
-  if not opts.force and dedupePayload == lastDpsPayloadSent and (now - lastIsiLiveDpsAt) < ISILIVE_STATS_COOLDOWN then
+  local blocked, now =
+    IsBlockedBySendGate(opts, lastDpsPayloadSent, lastIsiLiveDpsAt, dedupePayload, ISILIVE_STATS_COOLDOWN, nil)
+  if blocked then
     return
   end
 
@@ -1154,17 +1156,12 @@ end
 -- Rate-limited to 1 s; deduplicated by payload string.
 -- @param opts table {hasKick:boolean, onCooldown:boolean, cooldownRemain:number, force:boolean}
 function Sync.SendKick(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
+
   local hasKick = opts.hasKick
   if hasKick ~= true and hasKick ~= false then
     return
@@ -1185,15 +1182,11 @@ function Sync.SendKick(opts)
   local encodedOnCooldown = encodedHasKick and (onCooldown == true and 1 or 0) or -1
   local remain = 0
   if encodedHasKick then
-    local remainValue = cooldownRemain
-    if remainValue == nil then
-      return
-    end
-    remain = math.ceil(remainValue)
+    remain = math.ceil(cooldownRemain)
   end
-  local now = GetTime()
   local payload = string.format("KICK:%d:%d", encodedOnCooldown, remain)
-  if not opts.force and payload == lastKickPayloadSent and (now - lastIsiLiveKickAt) < 1 then
+  local blocked, now = IsBlockedBySendGate(opts, lastKickPayloadSent, lastIsiLiveKickAt, payload, 1, nil)
+  if blocked then
     return
   end
   SyncLog(
@@ -1214,30 +1207,17 @@ end
 -- @param opts table {mapID:number, capturedAt:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean, onlyIfChanged:boolean}
 function Sync.SendLoc(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
 
   local payload, numericMapID = NormalizeLocPayload(opts.mapID, opts.capturedAt, opts.source)
   local dedupePayload = string.format("LOC:%d", tonumber(numericMapID) or 0)
-  local now = GetTime()
-  if not opts.force and opts.onlyIfChanged == true and dedupePayload == lastLocPayloadSent then
-    return
-  end
-  if not opts.force and dedupePayload == lastLocPayloadSent and (now - lastIsiLiveLocAt) < ISILIVE_STATS_COOLDOWN then
+  local blocked, now =
+    IsBlockedBySendGate(opts, lastLocPayloadSent, lastIsiLiveLocAt, dedupePayload, ISILIVE_STATS_COOLDOWN, nil)
+  if blocked then
     return
   end
 
@@ -1252,19 +1232,8 @@ end
 -- @param opts table {mapID:number, level:number, capturedAt:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendTarget(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  if opts.isVisible == false and opts.allowHidden ~= true then
-    return
-  end
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
@@ -1272,12 +1241,9 @@ function Sync.SendTarget(opts)
   local payload, numericMapID, numericLevel =
     NormalizeTargetPayload(opts.mapID, opts.level, opts.capturedAt, opts.source)
   local dedupePayload = string.format("TARGET:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
-  local now = GetTime()
-  if
-    not opts.force
-    and dedupePayload == lastTargetPayloadSent
-    and (now - lastIsiLiveTargetAt) < ISILIVE_TARGET_COOLDOWN
-  then
+  local blocked, now =
+    IsBlockedBySendGate(opts, lastTargetPayloadSent, lastIsiLiveTargetAt, dedupePayload, ISILIVE_TARGET_COOLDOWN, nil)
+  if blocked then
     return
   end
 
@@ -1297,15 +1263,8 @@ end
 -- Rate-limited by ISILIVE_REFRESH_REQUEST_COOLDOWN (1 s).
 -- @param opts table|nil {force:boolean}
 function Sync.SendRefreshRequest(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return
-  end
-  if not IsSyncEnabled() then
-    return
-  end
   opts = opts or {}
-
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel(opts)
   if not channel then
     return
   end
@@ -1403,13 +1362,7 @@ end
 -- No cooldown on the request itself; receivers handle their own rate-limiting.
 -- @return boolean true if the message was sent; false when not in a group.
 function Sync.SendShareKeysRequest()
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
-    return false
-  end
-  if not IsSyncEnabled() then
-    return false
-  end
-  local channel = Sync.GetAddonSyncChannel()
+  local channel = ResolveSendChannel({})
   if not channel then
     return false
   end
