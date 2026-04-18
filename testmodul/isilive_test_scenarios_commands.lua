@@ -9,6 +9,7 @@ local function BuildCommandLocale()
     HELP_TPTEST = "/isilive tptest",
     HELP_TPDEBUG = "/isilive tpdebug",
     HELP_LOG = "/isilive log",
+    HELP_QDEBUG = "/isilive qdebug",
     HELP_LOCK = "/isilive lock",
     HELP_UNLOCK = "/isilive unlock",
     HELP_RESETUI = "/isilive resetui",
@@ -397,13 +398,22 @@ local function RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddon
 
     local expected = {
       "Commands:",
+      "/isilive test",
       "/isilive testall",
+      "/isilive tptest",
+      "/isilive tpdebug",
       "/isilive log",
+      "/isilive qdebug",
       "/isilive lock",
       "/isilive unlock",
       "/isilive resetui",
+      "/isilive bindcheck",
+      "/isilive pause",
+      "/isilive resume",
       "/isilive stop",
       "/isilive start",
+      "/isilive lead",
+      "/isilive lang [en|de|fr|es|pt]",
     }
 
     Assert.Equal(#state.prints, #expected, "help must only print the public command list")

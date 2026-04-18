@@ -74,15 +74,36 @@ local function BuildDeps(opts)
   }
 end
 
+-- Ordered list mirrors the command handlers in TryHandle*Commands below.
+-- Keep in sync when adding a new slash command.
+local HELP_KEYS = {
+  "HELP_HEADER",
+  "HELP_TEST",
+  "HELP_TESTALL",
+  "HELP_TPTEST",
+  "HELP_TPDEBUG",
+  "HELP_LOG",
+  "HELP_QDEBUG",
+  "HELP_LOCK",
+  "HELP_UNLOCK",
+  "HELP_RESETUI",
+  "HELP_BINDCHECK",
+  "HELP_PAUSE",
+  "HELP_RESUME",
+  "HELP_STOP",
+  "HELP_START",
+  "HELP_LEAD",
+  "HELP_LANG",
+  "HELP_RESET",
+}
+
 local function PrintHelp(printFn, L)
-  printFn(L.HELP_HEADER)
-  printFn(L.HELP_TESTALL)
-  printFn(L.HELP_LOG)
-  printFn(L.HELP_LOCK)
-  printFn(L.HELP_UNLOCK)
-  printFn(L.HELP_RESETUI)
-  printFn(L.HELP_STOP)
-  printFn(L.HELP_START)
+  for _, key in ipairs(HELP_KEYS) do
+    local line = L[key]
+    if type(line) == "string" and line ~= "" then
+      printFn(line)
+    end
+  end
 end
 
 local ARG_ON = { on = true, ["1"] = true, ["true"] = true }
