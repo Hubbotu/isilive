@@ -5,6 +5,20 @@ addonTable = addonTable or {}
 local RosterPanel = {}
 addonTable.RosterPanel = RosterPanel
 
+-- Trace logger for debug output
+local runtimeLog = nil
+
+--- Set trace logger for debug output
+function RosterPanel.SetTraceLogger(logger)
+  runtimeLog = logger
+end
+
+local function Trace(msg)
+  if runtimeLog then
+    runtimeLog("RosterPanel: " .. msg)
+  end
+end
+
 -- Imports from _RosterInternal (set by roster_tooltip.lua and roster_layout.lua).
 -- Load-order dependency: isiLive_roster_tooltip.lua and isiLive_roster_layout.lua
 -- must appear before this file in isiLive.toc (currently lines 49-50 vs 53).
@@ -1590,6 +1604,7 @@ local function CreateTankHelperButtons(mainFrame, tooltipFrame, getL)
 end
 
 local function ConstructPanelUI(mainFrame, uiDeps)
+  Trace("constructing UI, row_count=5")
   local isRaidGroupFn = uiDeps.isRaidGroup
 
   -- Background for visibility
@@ -1750,6 +1765,7 @@ local function ConstructPanelUI(mainFrame, uiDeps)
       if isRaidGroupFn() and target ~= LAYOUT_MODE_COMPACT_HORIZONTAL then
         return
       end
+      Trace(string.format("layout mode changed to %s", tostring(target)))
       ui.layoutMode = target
       local db = GetDB()
       if db then
@@ -1935,6 +1951,8 @@ end
 local RefreshReadyCheckStateImpl
 
 local function RenderRosterImpl(state, roster)
+  local memberCount = roster and #roster or 0
+  Trace(string.format("rendering roster, member_count=%d", memberCount))
   local memberRows = state.memberRows
   local mainFrame = state.mainFrame
   local shareKeysButton = state.shareKeysButton
@@ -2262,6 +2280,7 @@ RefreshReadyCheckStateImpl = function(state, roster)
 end
 
 function RosterPanel.CreateController(opts)
+  Trace("creating controller")
   opts = opts or {}
 
   local mainFrame = assert(opts.mainFrame, "isiLive: RosterPanel requires mainFrame")
@@ -2500,6 +2519,7 @@ function RosterPanel.CreateController(opts)
 
   function controller.UpdateLeaderButtons()
     local enabled = isPlayerLeader()
+    Trace(string.format("updating leader buttons, isLeader=%s", tostring(enabled)))
     if logRuntimeTraceDeep then
       logRuntimeTraceDeep(function()
         return string.format("[ROSTER_UI] leader_buttons enabled=%s", tostring(enabled))
