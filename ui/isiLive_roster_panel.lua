@@ -93,17 +93,9 @@ local function ResolveConfiguredDefaultOpenLayoutMode()
 
   return LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL
 end
-local IsCompactLayoutMode = RI.IsCompactLayoutMode or function(_mode)
-  return false
-end
 local IsHorizontalCompactLayoutMode = RI.IsHorizontalCompactLayoutMode or function(_mode)
   return false
 end
-local IsMainHorizontalLayoutMode = RI.IsMainHorizontalLayoutMode
-  or RI.IsStackedModernLayoutMode
-  or function(_mode)
-    return false
-  end
 local CreateSystemOptionToggles = RI.CreateSystemOptionToggles
 local RefreshSystemOptionToggles = RI.RefreshSystemOptionToggles
 local LayoutSystemOptionToggles = RI.LayoutSystemOptionToggles
