@@ -93,6 +93,52 @@ return function(test, ctx)
     Assert.True(locales.deDE.LOADED_HINT:find("%%s") ~= nil, "deDE LOADED_HINT must contain %s placeholder")
   end)
 
+  test("Format placeholder counts match enUS across all locales", function()
+    local addon = LoadAddonModules({ "isiLive_texts.lua" })
+    local locales = addon.Texts.GetLocaleTables()
+
+    -- string.format crashes at runtime if a locale has a different %s/%d count
+    -- than the call site expects. Guard against silent placeholder drift by
+    -- comparing every translated string against its enUS counterpart.
+    local function countPlaceholders(s)
+      local count = 0
+      for _ in s:gmatch("%%[sd]") do
+        count = count + 1
+      end
+      return count
+    end
+
+    for localeName, localeTable in pairs(locales) do
+      if localeName ~= "enUS" then
+        for key, enValue in pairs(locales.enUS) do
+          local translated = localeTable[key]
+          if type(enValue) == "string" and type(translated) == "string" then
+            local enCount = countPlaceholders(enValue)
+            local trCount = countPlaceholders(translated)
+            Assert.Equal(
+              trCount,
+              enCount,
+              localeName
+                .. "."
+                .. tostring(key)
+                .. " has "
+                .. tostring(trCount)
+                .. " %s/%d placeholders but enUS has "
+                .. tostring(enCount)
+                .. ': enUS="'
+                .. enValue
+                .. '" '
+                .. localeName
+                .. '="'
+                .. translated
+                .. '"'
+            )
+          end
+        end
+      end
+    end
+  end)
+
   test("RAID_GROUP_HIDDEN is defined in both locales", function()
     local addon = LoadAddonModules({ "isiLive_texts.lua" })
     local locales = addon.Texts.GetLocaleTables()
@@ -131,6 +177,141 @@ return function(test, ctx)
     Assert.Equal(addon.Locale.ResolveLocaleTag("pt"), "ptBR", "pt tag must resolve to ptBR")
     Assert.Equal(addon.Locale.ResolveLocaleTag("ptbr"), "ptBR", "ptbr tag must resolve to ptBR")
     Assert.Equal(addon.Locale.ResolveLocaleTag("xx"), "enUS", "unsupported tag must fallback to enUS")
+  end)
+
+  test("enUS values must not contain German-only stopwords", function()
+    local addon = LoadAddonModules({ "isiLive_texts.lua" })
+    local locales = addon.Texts.GetLocaleTables()
+
+    -- Words that are unambiguously German and must never appear in English text.
+    -- Catches accidental cross-locale copy/paste like CHAT_QUEUE_PREFIX
+    -- ("Warteschlangenbeitritt") leaking into the enUS table.
+    local germanStopwords = {
+      "Warteschlange",
+      "Schlüssel",
+      "Hauptfenster",
+      "Befehle",
+      "Sprache",
+      "Gesperrt",
+      "Entsperr",
+      "Einstellung",
+      "Gruppe",
+      "Bereit",
+      "Gilde",
+      "Charakter",
+      "Berufe",
+      "Talente",
+      "Zauber",
+      "Erfolge",
+      "Sammlung",
+      "Ruhestein",
+      "ä",
+      "ö",
+      "ü",
+      "Ä",
+      "Ö",
+      "Ü",
+      "ß",
+    }
+
+    for key, value in pairs(locales.enUS) do
+      if type(value) == "string" then
+        for _, stopword in ipairs(germanStopwords) do
+          Assert.True(
+            value:find(stopword, 1, true) == nil,
+            "enUS." .. tostring(key) .. ' contains German stopword "' .. stopword .. '": ' .. tostring(value)
+          )
+        end
+      end
+    end
+  end)
+
+  test("deDE values must not contain English-only stopwords", function()
+    local addon = LoadAddonModules({ "isiLive_texts.lua" })
+    local locales = addon.Texts.GetLocaleTables()
+
+    -- Words that are unambiguously English and must never appear in German text.
+    -- Whitelist of keys that legitimately keep English shared terms (technical
+    -- WoW vocabulary, slash commands, brand names).
+    local englishStopwordKeyAllowlist = {
+      HELP_HEADER = true,
+      HELP_TEST = true,
+      HELP_TESTALL = true,
+      HELP_TPTEST = true,
+      HELP_TPDEBUG = true,
+      HELP_LOG = true,
+      HELP_LOCK = true,
+      HELP_UNLOCK = true,
+      HELP_RESETUI = true,
+      HELP_BINDCHECK = true,
+      HELP_PAUSE = true,
+      HELP_RESUME = true,
+      HELP_STOP = true,
+      HELP_START = true,
+      HELP_LANG = true,
+      HELP_LEAD = true,
+      HELP_RESET = true,
+      -- Proper nouns: WoW dungeon names stay English in every locale.
+      TESTALL_DUMMY_DUNGEON = true,
+    }
+
+    local englishStopwords = {
+      " the ",
+      " and ",
+      " with ",
+      " from ",
+      " your ",
+    }
+
+    for key, value in pairs(locales.deDE) do
+      if type(value) == "string" and not englishStopwordKeyAllowlist[key] then
+        local lowered = " " .. value:lower() .. " "
+        for _, stopword in ipairs(englishStopwords) do
+          Assert.True(
+            lowered:find(stopword, 1, true) == nil,
+            "deDE." .. tostring(key) .. ' contains English stopword "' .. stopword .. '": ' .. tostring(value)
+          )
+        end
+      end
+    end
+  end)
+
+  test("Full-width action button labels stay within 14 characters", function()
+    local addon = LoadAddonModules({ "isiLive_texts.lua" })
+    local locales = addon.Texts.GetLocaleTables()
+
+    -- Per CLAUDE.md: action buttons in the main UI are 120x24px and labels
+    -- must stay <= 14 characters to avoid visual truncation.
+    local fullWidthActionButtonKeys = {
+      "BTN_READYCHECK",
+      "BTN_COUNTDOWN10",
+      "BTN_COUNTDOWN_CANCEL",
+      "BTN_REFRESH",
+      "BTN_SHARE_KEYS",
+    }
+
+    local localeNames = { "enUS", "deDE", "frFR", "esES", "ptBR", "itIT", "ruRU", "trTR" }
+    for _, localeName in ipairs(localeNames) do
+      local localeTable = locales[localeName]
+      if localeTable then
+        for _, key in ipairs(fullWidthActionButtonKeys) do
+          local value = localeTable[key]
+          if type(value) == "string" then
+            Assert.True(
+              #value <= 14,
+              localeName
+                .. "."
+                .. key
+                .. " must be <= 14 chars (is "
+                .. tostring(#value)
+                .. '): "'
+                .. value
+                .. '"'
+            )
+          end
+        end
+      end
+    end
   end)
 
   test("Locale GetUnitServerLanguage skips missing units without UnitGUID or UnitIsUnit", function()
