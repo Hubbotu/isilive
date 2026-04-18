@@ -10,22 +10,7 @@ local function FindTicker(tickers, interval)
   return nil
 end
 
-local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, initial)
-  initial = initial or {}
-
-  local state = {
-    time = tonumber(initial.time) or 0,
-    mainFrameShown = initial.mainFrameShown == true,
-    isRaidGroup = initial.isRaidGroup == true,
-    mplusTimerData = initial.mplusTimerData,
-    sentKick = {},
-    tickers = {},
-    createdFrames = {},
-    roster = initial.roster or {
-      player = { name = "Player", realm = "Realm" },
-    },
-  }
-
+local function BuildDefaultKickInfo(initial)
   local kickInfo = initial.kickInfo
     or {
       availabilityResolved = true,
@@ -37,8 +22,11 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
   if kickInfo.availabilityResolved == nil then
     kickInfo.availabilityResolved = true
   end
+  return kickInfo
+end
 
-  WithGlobals({
+local function BuildGlobalsEnv(state)
+  return {
     GetTime = function()
       return state.time
     end,
@@ -94,106 +82,328 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
         table.insert(state.afterCallbacks, callback)
       end,
     },
-  }, function()
+  }
+end
+
+local function BuildKickTrackerModule(state, initial, kickInfo)
+  return {
+    CreateController = function(opts)
+      state.kickTrackerOpts = opts
+      local function CacheCooldown()
+        state.kickCacheCalls = (state.kickCacheCalls or 0) + 1
+        local success = initial.kickCacheSuccess ~= false
+        if type(initial.onKickCacheCooldown) == "function" then
+          success = initial.onKickCacheCooldown(kickInfo, state) ~= false
+        end
+        if
+          success
+          and initial.fireKickCooldownChangedOnCache == true
+          and state.kickTrackerOpts
+          and type(state.kickTrackerOpts.onCooldownChanged) == "function"
+        then
+          state.kickCooldownChangedCallbacks = (state.kickCooldownChangedCallbacks or 0) + 1
+          state.kickTrackerOpts.onCooldownChanged(kickInfo.onCooldown, kickInfo.cooldownRemain, kickInfo.spellID)
+        end
+        return success
+      end
+      return {
+        OnCast = function(unit, spellID)
+          state.kickOnCastCalls = (state.kickOnCastCalls or 0) + 1
+          state.lastKickCast = {
+            unit = unit,
+            spellID = spellID,
+          }
+          local observedKick = true
+          if type(initial.onKickCast) == "function" then
+            observedKick = initial.onKickCast(kickInfo, state, unit, spellID) == true
+          end
+          if observedKick then
+            kickInfo.availabilityResolved = true
+            kickInfo.hasKick = true
+          end
+          if
+            observedKick
+            and initial.fireKickCooldownChangedOnCast == true
+            and state.kickTrackerOpts
+            and type(state.kickTrackerOpts.onCooldownChanged) == "function"
+          then
+            state.kickOnCastCooldownChangedCallbacks = (state.kickOnCastCooldownChangedCallbacks or 0) + 1
+            state.kickTrackerOpts.onCooldownChanged(kickInfo.onCooldown, kickInfo.cooldownRemain, kickInfo.spellID)
+          end
+          return observedKick
+        end,
+        CacheCooldown = CacheCooldown,
+        ResolveKickState = function()
+          state.kickResolveCalls = (state.kickResolveCalls or 0) + 1
+          local exactCooldownKnown = CacheCooldown()
+          if type(initial.resolveKickState) == "function" then
+            local overrideExactStateKnown = initial.resolveKickState(kickInfo, state)
+            if overrideExactStateKnown ~= nil then
+              exactCooldownKnown = overrideExactStateKnown == true
+            end
+          elseif type(initial.resolveKickSpellID) == "function" then
+            kickInfo.spellID = initial.resolveKickSpellID(kickInfo, state)
+            if kickInfo.spellID == nil then
+              kickInfo.availabilityResolved = true
+              kickInfo.hasKick = false
+              kickInfo.onCooldown = false
+              kickInfo.cooldownRemain = 0
+            else
+              kickInfo.availabilityResolved = true
+              kickInfo.hasKick = true
+            end
+          end
+
+          return {
+            spellID = kickInfo.spellID,
+            hasKick = kickInfo.hasKick == true,
+            availabilityResolved = kickInfo.availabilityResolved == true,
+            onCooldown = kickInfo.onCooldown == true,
+            cooldownRemain = kickInfo.cooldownRemain,
+            exactCooldownKnown = kickInfo.availabilityResolved == true
+              and kickInfo.hasKick == true
+              and exactCooldownKnown == true,
+          }
+        end,
+        Scan = function()
+          state.kickScans = (state.kickScans or 0) + 1
+        end,
+        GetKickInfo = function()
+          return {
+            availabilityResolved = kickInfo.availabilityResolved == true,
+            spellID = kickInfo.spellID,
+            hasKick = kickInfo.hasKick,
+            onCooldown = kickInfo.onCooldown,
+            cooldownRemain = kickInfo.cooldownRemain,
+          }
+        end,
+      }
+    end,
+  }
+end
+
+local function BuildControllerContext(state, addon, initial)
+  local ctx = {
+    modules = {
+      contextHelpers = {
+        GetUnitServerLanguage = function()
+          return "en"
+        end,
+      },
+      locale = {
+        ResolveLocaleTag = function(tag)
+          return tag
+        end,
+      },
+      testMode = {
+        CreateController = function(_opts)
+          return {
+            EnterFullDummyPreview = function() end,
+            ExitTestMode = function() end,
+            ToggleStandardTestMode = function() end,
+            RefreshActivePreview = function()
+              return false
+            end,
+          }
+        end,
+      },
+      configBuilders = {
+        BuildTestModeControllerOpts = function(opts)
+          return opts
+        end,
+      },
+      bindings = {
+        CreateController = function(_opts)
+          return {
+            ApplyHotkeyBindings = function()
+              state.bindingApplyCalls = (state.bindingApplyCalls or 0) + 1
+            end,
+            StartBindingWatchdog = function() end,
+            GetPendingBindingApply = function()
+              return false
+            end,
+          }
+        end,
+      },
+      cdTracker = {
+        CreateController = function(opts)
+          state.cdTrackerOpts = opts
+          return {
+            Scan = function()
+              state.cdScans = (state.cdScans or 0) + 1
+            end,
+            GetBResInfo = function()
+              return nil
+            end,
+            GetLustInfo = function()
+              return nil
+            end,
+            SetDemoData = function() end,
+            ClearDemoData = function() end,
+          }
+        end,
+      },
+      sync = {
+        SetPlayerKickInfo = function(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick)
+          state.lastSetKickInfo = {
+            name = name,
+            realm = realm,
+            onCooldown = onCooldown,
+            cooldownRemain = cooldownRemain,
+            capturedAt = capturedAt,
+            hasKick = hasKick,
+          }
+        end,
+        SendKick = function(opts)
+          table.insert(state.sentKick, {
+            hasKick = opts.hasKick,
+            onCooldown = opts.onCooldown,
+            cooldownRemain = opts.cooldownRemain,
+            force = opts.force,
+          })
+        end,
+        ClearPlayerKickInfo = function(name, realm)
+          state.clearKickInfoCalls = (state.clearKickInfoCalls or 0) + 1
+          state.lastClearedKickInfo = {
+            name = name,
+            realm = realm,
+          }
+          return true
+        end,
+      },
+    },
+    runtimeState = {
+      GetRuntimeFlags = function()
+        return {
+          isStopped = false,
+          isPaused = false,
+          isTestMode = false,
+          isTestAllMode = false,
+        }
+      end,
+      PatchRuntimeFlags = function() end,
+      ClearLatestQueueTarget = function() end,
+      IsReadyCheckActive = function()
+        return initial.readyCheckActive == true
+      end,
+      HasReadyCheckHold = function()
+        return initial.readyCheckHold == true
+      end,
+    },
+    addonTable = addon,
+    locales = {
+      enUS = {
+        LANG_SET_EN = "Language set",
+      },
+    },
+    L = {
+      LANG_SET_EN = "Language set",
+    },
+    GetL = function()
+      return {
+        LANG_SET_EN = "Language set",
+      }
+    end,
+    GetRealmInfoLib = function()
+      return nil
+    end,
+    GetLanguageTooltipMarkup = function()
+      return ""
+    end,
+    BuildDummyRoster = function()
+      return {}
+    end,
+    SetRoster = function(roster)
+      state.roster = roster
+    end,
+    SetMainFrameVisible = function(_visible) end,
+    UpdateUI = function()
+      state.uiUpdates = (state.uiUpdates or 0) + 1
+    end,
+    UpdateLeaderButtons = function() end,
+    ShowCenterNotice = function() end,
+    ResetInspectAll = function() end,
+    CaptureRioBaselineSnapshot = function() end,
+    ClearRioBaselineSnapshot = function() end,
+    EnableRioDeltaDisplay = function() end,
+    UpdateMPlusTeleportButton = function() end,
+    SetCenterNoticeVisible = function() end,
+    inviteHint = {
+      frame = {
+        Hide = function() end,
+      },
+    },
+    TriggerGroupRosterUpdate = function() end,
+    ToggleMainFrameVisibility = function() end,
+    ApplyLocalizationToUI = function() end,
+    inspectController = {
+      EnqueueInspect = function() end,
+    },
+    GetRoster = function()
+      return state.roster
+    end,
+    ResolveStatusTargetMapID = function()
+      return nil
+    end,
+    ClearLatestQueueTarget = function() end,
+    mainFrame = {
+      IsShown = function()
+        return state.mainFrameShown == true
+      end,
+    },
+    rosterPanelController = {
+      RefreshCdTracker = function()
+        state.cdRefreshes = (state.cdRefreshes or 0) + 1
+      end,
+      RefreshReadyCheckState = function()
+        state.readyCheckRefreshes = (state.readyCheckRefreshes or 0) + 1
+      end,
+      RefreshKickColumn = function()
+        state.kickRefreshes = (state.kickRefreshes or 0) + 1
+      end,
+      SetCdController = function(ctrl)
+        state.cdController = ctrl
+      end,
+    },
+    IsRaidGroup = function()
+      return state.isRaidGroup == true
+    end,
+  }
+
+  ctx.ApplyHotkeyBindings = function()
+    if ctx.bindingController and type(ctx.bindingController.ApplyHotkeyBindings) == "function" then
+      ctx.bindingController.ApplyHotkeyBindings()
+    end
+  end
+
+  return ctx
+end
+
+local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, initial)
+  initial = initial or {}
+
+  local state = {
+    time = tonumber(initial.time) or 0,
+    mainFrameShown = initial.mainFrameShown == true,
+    isRaidGroup = initial.isRaidGroup == true,
+    mplusTimerData = initial.mplusTimerData,
+    sentKick = {},
+    tickers = {},
+    createdFrames = {},
+    roster = initial.roster or {
+      player = { name = "Player", realm = "Realm" },
+    },
+  }
+
+  local kickInfo = BuildDefaultKickInfo(initial)
+
+  WithGlobals(BuildGlobalsEnv(state), function()
     local addon = LoadAddonModules({
       "isiLive_factory_controllers.lua",
       "isiLive_factory_kick_tracker.lua",
     }, {
       _FactoryInternal = {},
-      KickTracker = {
-        CreateController = function(opts)
-          state.kickTrackerOpts = opts
-          local function CacheCooldown()
-            state.kickCacheCalls = (state.kickCacheCalls or 0) + 1
-            local success = initial.kickCacheSuccess ~= false
-            if type(initial.onKickCacheCooldown) == "function" then
-              success = initial.onKickCacheCooldown(kickInfo, state) ~= false
-            end
-            if
-              success
-              and initial.fireKickCooldownChangedOnCache == true
-              and state.kickTrackerOpts
-              and type(state.kickTrackerOpts.onCooldownChanged) == "function"
-            then
-              state.kickCooldownChangedCallbacks = (state.kickCooldownChangedCallbacks or 0) + 1
-              state.kickTrackerOpts.onCooldownChanged(kickInfo.onCooldown, kickInfo.cooldownRemain, kickInfo.spellID)
-            end
-            return success
-          end
-          return {
-            OnCast = function(unit, spellID)
-              state.kickOnCastCalls = (state.kickOnCastCalls or 0) + 1
-              state.lastKickCast = {
-                unit = unit,
-                spellID = spellID,
-              }
-              local observedKick = true
-              if type(initial.onKickCast) == "function" then
-                observedKick = initial.onKickCast(kickInfo, state, unit, spellID) == true
-              end
-              if observedKick then
-                kickInfo.availabilityResolved = true
-                kickInfo.hasKick = true
-              end
-              if
-                observedKick
-                and initial.fireKickCooldownChangedOnCast == true
-                and state.kickTrackerOpts
-                and type(state.kickTrackerOpts.onCooldownChanged) == "function"
-              then
-                state.kickOnCastCooldownChangedCallbacks = (state.kickOnCastCooldownChangedCallbacks or 0) + 1
-                state.kickTrackerOpts.onCooldownChanged(kickInfo.onCooldown, kickInfo.cooldownRemain, kickInfo.spellID)
-              end
-              return observedKick
-            end,
-            CacheCooldown = CacheCooldown,
-            ResolveKickState = function()
-              state.kickResolveCalls = (state.kickResolveCalls or 0) + 1
-              local exactCooldownKnown = CacheCooldown()
-              if type(initial.resolveKickState) == "function" then
-                local overrideExactStateKnown = initial.resolveKickState(kickInfo, state)
-                if overrideExactStateKnown ~= nil then
-                  exactCooldownKnown = overrideExactStateKnown == true
-                end
-              elseif type(initial.resolveKickSpellID) == "function" then
-                kickInfo.spellID = initial.resolveKickSpellID(kickInfo, state)
-                if kickInfo.spellID == nil then
-                  kickInfo.availabilityResolved = true
-                  kickInfo.hasKick = false
-                  kickInfo.onCooldown = false
-                  kickInfo.cooldownRemain = 0
-                else
-                  kickInfo.availabilityResolved = true
-                  kickInfo.hasKick = true
-                end
-              end
-
-              return {
-                spellID = kickInfo.spellID,
-                hasKick = kickInfo.hasKick == true,
-                availabilityResolved = kickInfo.availabilityResolved == true,
-                onCooldown = kickInfo.onCooldown == true,
-                cooldownRemain = kickInfo.cooldownRemain,
-                exactCooldownKnown = kickInfo.availabilityResolved == true
-                  and kickInfo.hasKick == true
-                  and exactCooldownKnown == true,
-              }
-            end,
-            Scan = function()
-              state.kickScans = (state.kickScans or 0) + 1
-            end,
-            GetKickInfo = function()
-              return {
-                availabilityResolved = kickInfo.availabilityResolved == true,
-                spellID = kickInfo.spellID,
-                hasKick = kickInfo.hasKick,
-                onCooldown = kickInfo.onCooldown,
-                cooldownRemain = kickInfo.cooldownRemain,
-              }
-            end,
-          }
-        end,
-      },
+      KickTracker = BuildKickTrackerModule(state, initial, kickInfo),
       MplusTimer = {
         GetTimerData = function()
           return state.mplusTimerData
@@ -201,198 +411,7 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
       },
     })
 
-    local ctx = {
-      modules = {
-        contextHelpers = {
-          GetUnitServerLanguage = function()
-            return "en"
-          end,
-        },
-        locale = {
-          ResolveLocaleTag = function(tag)
-            return tag
-          end,
-        },
-        testMode = {
-          CreateController = function(_opts)
-            return {
-              EnterFullDummyPreview = function() end,
-              ExitTestMode = function() end,
-              ToggleStandardTestMode = function() end,
-              RefreshActivePreview = function()
-                return false
-              end,
-            }
-          end,
-        },
-        configBuilders = {
-          BuildTestModeControllerOpts = function(opts)
-            return opts
-          end,
-        },
-        bindings = {
-          CreateController = function(_opts)
-            return {
-              ApplyHotkeyBindings = function()
-                state.bindingApplyCalls = (state.bindingApplyCalls or 0) + 1
-              end,
-              StartBindingWatchdog = function() end,
-              GetPendingBindingApply = function()
-                return false
-              end,
-            }
-          end,
-        },
-        cdTracker = {
-          CreateController = function(opts)
-            state.cdTrackerOpts = opts
-            return {
-              Scan = function()
-                state.cdScans = (state.cdScans or 0) + 1
-              end,
-              GetBResInfo = function()
-                return nil
-              end,
-              GetLustInfo = function()
-                return nil
-              end,
-              SetDemoData = function() end,
-              ClearDemoData = function() end,
-            }
-          end,
-        },
-        sync = {
-          SetPlayerKickInfo = function(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick)
-            state.lastSetKickInfo = {
-              name = name,
-              realm = realm,
-              onCooldown = onCooldown,
-              cooldownRemain = cooldownRemain,
-              capturedAt = capturedAt,
-              hasKick = hasKick,
-            }
-          end,
-          SendKick = function(opts)
-            table.insert(state.sentKick, {
-              hasKick = opts.hasKick,
-              onCooldown = opts.onCooldown,
-              cooldownRemain = opts.cooldownRemain,
-              force = opts.force,
-            })
-          end,
-          ClearPlayerKickInfo = function(name, realm)
-            state.clearKickInfoCalls = (state.clearKickInfoCalls or 0) + 1
-            state.lastClearedKickInfo = {
-              name = name,
-              realm = realm,
-            }
-            return true
-          end,
-        },
-      },
-      runtimeState = {
-        GetRuntimeFlags = function()
-          return {
-            isStopped = false,
-            isPaused = false,
-            isTestMode = false,
-            isTestAllMode = false,
-          }
-        end,
-        PatchRuntimeFlags = function() end,
-        ClearLatestQueueTarget = function() end,
-        IsReadyCheckActive = function()
-          return initial.readyCheckActive == true
-        end,
-        HasReadyCheckHold = function()
-          return initial.readyCheckHold == true
-        end,
-      },
-      addonTable = addon,
-      locales = {
-        enUS = {
-          LANG_SET_EN = "Language set",
-        },
-      },
-      L = {
-        LANG_SET_EN = "Language set",
-      },
-      GetL = function()
-        return {
-          LANG_SET_EN = "Language set",
-        }
-      end,
-      GetRealmInfoLib = function()
-        return nil
-      end,
-      GetLanguageTooltipMarkup = function()
-        return ""
-      end,
-      BuildDummyRoster = function()
-        return {}
-      end,
-      SetRoster = function(roster)
-        state.roster = roster
-      end,
-      SetMainFrameVisible = function(_visible) end,
-      UpdateUI = function()
-        state.uiUpdates = (state.uiUpdates or 0) + 1
-      end,
-      UpdateLeaderButtons = function() end,
-      ShowCenterNotice = function() end,
-      ResetInspectAll = function() end,
-      CaptureRioBaselineSnapshot = function() end,
-      ClearRioBaselineSnapshot = function() end,
-      EnableRioDeltaDisplay = function() end,
-      UpdateMPlusTeleportButton = function() end,
-      SetCenterNoticeVisible = function() end,
-      inviteHint = {
-        frame = {
-          Hide = function() end,
-        },
-      },
-      TriggerGroupRosterUpdate = function() end,
-      ToggleMainFrameVisibility = function() end,
-      ApplyLocalizationToUI = function() end,
-      inspectController = {
-        EnqueueInspect = function() end,
-      },
-      GetRoster = function()
-        return state.roster
-      end,
-      ResolveStatusTargetMapID = function()
-        return nil
-      end,
-      ClearLatestQueueTarget = function() end,
-      mainFrame = {
-        IsShown = function()
-          return state.mainFrameShown == true
-        end,
-      },
-      rosterPanelController = {
-        RefreshCdTracker = function()
-          state.cdRefreshes = (state.cdRefreshes or 0) + 1
-        end,
-        RefreshReadyCheckState = function()
-          state.readyCheckRefreshes = (state.readyCheckRefreshes or 0) + 1
-        end,
-        RefreshKickColumn = function()
-          state.kickRefreshes = (state.kickRefreshes or 0) + 1
-        end,
-        SetCdController = function(ctrl)
-          state.cdController = ctrl
-        end,
-      },
-      IsRaidGroup = function()
-        return state.isRaidGroup == true
-      end,
-    }
-
-    ctx.ApplyHotkeyBindings = function()
-      if ctx.bindingController and type(ctx.bindingController.ApplyHotkeyBindings) == "function" then
-        ctx.bindingController.ApplyHotkeyBindings()
-      end
-    end
+    local ctx = BuildControllerContext(state, addon, initial)
 
     addon._FactoryInternal.InitializeFactorySecondaryControllers(ctx)
     state.ctx = ctx
