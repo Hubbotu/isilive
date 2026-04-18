@@ -43,6 +43,9 @@ local FILE_PATHS = {
   ["isiLive_roster_tooltip.lua"] = "ui/isiLive_roster_tooltip.lua",
   ["isiLive_roster_layout.lua"] = "ui/isiLive_roster_layout.lua",
   ["isiLive_roster_panel.lua"] = "ui/isiLive_roster_panel.lua",
+  ["isiLive_roster_panel_helpers.lua"] = "ui/isiLive_roster_panel_helpers.lua",
+  ["isiLive_roster_panel_cd_row.lua"] = "ui/isiLive_roster_panel_cd_row.lua",
+  ["isiLive_roster_panel_kill_row.lua"] = "ui/isiLive_roster_panel_kill_row.lua",
   ["isiLive_ui.lua"] = "ui/isiLive_ui.lua",
   ["isiLive_settings.lua"] = "ui/isiLive_settings.lua",
   -- logic
@@ -97,6 +100,15 @@ local IMPLICIT_DEPENDENCIES = {
   ["isiLive_roster_panel.lua"] = {
     "isiLive_roster_tooltip.lua",
     "isiLive_roster_layout.lua",
+    "isiLive_roster_panel_helpers.lua",
+    "isiLive_roster_panel_cd_row.lua",
+    "isiLive_roster_panel_kill_row.lua",
+  },
+  ["isiLive_roster_panel_cd_row.lua"] = {
+    "isiLive_roster_panel_helpers.lua",
+  },
+  ["isiLive_roster_panel_kill_row.lua"] = {
+    "isiLive_roster_panel_helpers.lua",
   },
   ["isiLive_factory.lua"] = {
     "isiLive_factory_frame_bridge.lua",

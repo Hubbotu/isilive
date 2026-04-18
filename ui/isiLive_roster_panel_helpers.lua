@@ -1,0 +1,38 @@
+local _, addonTable = ...
+addonTable = addonTable or {}
+
+local RI = addonTable._RosterInternal or {}
+addonTable._RosterInternal = RI
+
+local function ApplyFontStringSize(fontString, size)
+  if fontString == nil then
+    return
+  end
+  if type(fontString.GetFont) ~= "function" or type(fontString.SetFont) ~= "function" then
+    return
+  end
+
+  local fontPath, _, fontFlags = fontString:GetFont()
+  if type(fontPath) ~= "string" or fontPath == "" then
+    return
+  end
+
+  fontString:SetFont(fontPath, size, fontFlags)
+end
+
+local function FormatMplusTime(seconds)
+  local abs = math.abs(seconds)
+  local m = math.floor(abs / 60)
+  local s = math.floor(abs % 60)
+  return string.format("%d:%02d", m, s)
+end
+
+local function SetFontStringTextColorSafe(fontString, r, g, b)
+  if fontString and type(fontString.SetTextColor) == "function" then
+    fontString:SetTextColor(r, g, b)
+  end
+end
+
+RI.ApplyFontStringSize = ApplyFontStringSize
+RI.FormatMplusTime = FormatMplusTime
+RI.SetFontStringTextColorSafe = SetFontStringTextColorSafe
