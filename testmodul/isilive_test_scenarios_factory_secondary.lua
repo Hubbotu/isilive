@@ -95,7 +95,10 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
       end,
     },
   }, function()
-    local addon = LoadAddonModules({ "isiLive_factory_controllers.lua" }, {
+    local addon = LoadAddonModules({
+      "isiLive_factory_controllers.lua",
+      "isiLive_factory_kick_tracker.lua",
+    }, {
       _FactoryInternal = {},
       KickTracker = {
         CreateController = function(opts)

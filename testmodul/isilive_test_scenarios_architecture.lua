@@ -60,6 +60,8 @@ local FILE_PATHS = {
   ["isiLive_controller_init.lua"] = "factory/isiLive_controller_init.lua",
   ["isiLive_factory_frame_bridge.lua"] = "factory/isiLive_factory_frame_bridge.lua",
   ["isiLive_factory_controllers.lua"] = "factory/isiLive_factory_controllers.lua",
+  ["isiLive_factory_kick_tracker.lua"] = "factory/isiLive_factory_kick_tracker.lua",
+  ["isiLive_factory_minimap.lua"] = "factory/isiLive_factory_minimap.lua",
   ["isiLive_factory.lua"] = "factory/isiLive_factory.lua",
   ["ARCHITECTURE.md"] = "docs/ARCHITECTURE.md",
   ["ARCHITECTURE_RULES.md"] = "docs/ARCHITECTURE_RULES.md",
@@ -786,7 +788,7 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
   end)
 
   test("Architecture kick tracker uses lightweight kick-column refresh hooks", function()
-    local helpersContent = ReadFile("isiLive_factory_controllers.lua")
+    local helpersContent = ReadFile("isiLive_factory_kick_tracker.lua")
     local rosterPanelContent = ReadFile("isiLive_roster_panel.lua")
 
     AssertContains(

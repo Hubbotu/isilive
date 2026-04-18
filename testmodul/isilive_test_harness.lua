@@ -72,6 +72,8 @@ local FILE_PATHS = {
   ["isiLive_controller_init.lua"] = "factory/isiLive_controller_init.lua",
   ["isiLive_factory_frame_bridge.lua"] = "factory/isiLive_factory_frame_bridge.lua",
   ["isiLive_factory_controllers.lua"] = "factory/isiLive_factory_controllers.lua",
+  ["isiLive_factory_kick_tracker.lua"] = "factory/isiLive_factory_kick_tracker.lua",
+  ["isiLive_factory_minimap.lua"] = "factory/isiLive_factory_minimap.lua",
   ["isiLive_factory.lua"] = "factory/isiLive_factory.lua",
 }
 
