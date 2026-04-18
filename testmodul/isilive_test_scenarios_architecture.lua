@@ -1180,6 +1180,117 @@ local function RegisterArchitectureGuardsSyncTests(test, Assert)
   end)
 end
 
+local function RegisterArchitectureLoadOrderTests(test, Assert)
+  local function ParseTocOrder()
+    local tocContent = ReadFile("isiLive.toc")
+    local order = {}
+    local index = 0
+    for line in tocContent:gmatch("[^\r\n]+") do
+      local trimmed = line:match("^%s*(.-)%s*$") or ""
+      if trimmed ~= "" and not trimmed:match("^##") and not trimmed:match("^#") then
+        local bareName = trimmed:match("([^/\\]+%.lua)$")
+        if bareName then
+          index = index + 1
+          order[bareName] = index
+        end
+      end
+    end
+    return order
+  end
+
+  local function ParseHarnessDependencies()
+    local harnessContent = ReadFile("testmodul/isilive_test_harness.lua")
+    local block = string.match(harnessContent, "local%s+IMPLICIT_DEPENDENCIES%s*=%s*(%b{})")
+    if not block then
+      error("architecture test cannot locate local IMPLICIT_DEPENDENCIES = { ... } block in test harness")
+    end
+    local deps = {}
+    local order = {}
+    for key, body in string.gmatch(block, '%["([^"]+)"%]%s*=%s*(%b{})') do
+      local list = {}
+      for dep in string.gmatch(body, '"([^"]+)"') do
+        list[#list + 1] = dep
+      end
+      deps[key] = list
+      order[#order + 1] = key
+    end
+    return deps, order
+  end
+
+  test("Architecture IMPLICIT_DEPENDENCIES keys exist in .toc", function()
+    local tocOrder = ParseTocOrder()
+    local deps, keyOrder = ParseHarnessDependencies()
+    Assert.True(#keyOrder > 0, "IMPLICIT_DEPENDENCIES must contain at least one entry")
+    for _, key in ipairs(keyOrder) do
+      Assert.True(
+        tocOrder[key] ~= nil,
+        string.format("IMPLICIT_DEPENDENCIES key %q must be listed in isiLive.toc", key)
+      )
+      for _, dep in ipairs(deps[key]) do
+        Assert.True(
+          tocOrder[dep] ~= nil,
+          string.format("IMPLICIT_DEPENDENCIES[%q] dependency %q must be listed in isiLive.toc", key, dep)
+        )
+      end
+    end
+  end)
+
+  test("Architecture IMPLICIT_DEPENDENCIES dependencies precede dependents in .toc", function()
+    local tocOrder = ParseTocOrder()
+    local deps, keyOrder = ParseHarnessDependencies()
+    for _, key in ipairs(keyOrder) do
+      local keyIndex = tocOrder[key]
+      if keyIndex then
+        for _, dep in ipairs(deps[key]) do
+          local depIndex = tocOrder[dep]
+          if depIndex then
+            Assert.True(
+              depIndex < keyIndex,
+              string.format(
+                "IMPLICIT_DEPENDENCIES[%q] dependency %q must precede %q in isiLive.toc (dep at %d, key at %d)",
+                key,
+                dep,
+                key,
+                depIndex,
+                keyIndex
+              )
+            )
+          end
+        end
+      end
+    end
+  end)
+
+  test("Architecture IMPLICIT_DEPENDENCIES files are registered in test harness FILE_PATHS", function()
+    local harnessContent = ReadFile("testmodul/isilive_test_harness.lua")
+    local pathsBlock = string.match(harnessContent, "local%s+FILE_PATHS%s*=%s*(%b{})")
+    if not pathsBlock then
+      error("architecture test cannot locate local FILE_PATHS = { ... } block in test harness")
+    end
+    local registered = {}
+    for fileName in string.gmatch(pathsBlock, '%["([^"]+)"%]') do
+      registered[fileName] = true
+    end
+    local deps, keyOrder = ParseHarnessDependencies()
+    for _, key in ipairs(keyOrder) do
+      Assert.True(
+        registered[key] == true,
+        string.format("IMPLICIT_DEPENDENCIES key %q must be registered in test harness FILE_PATHS", key)
+      )
+      for _, dep in ipairs(deps[key]) do
+        Assert.True(
+          registered[dep] == true,
+          string.format(
+            "IMPLICIT_DEPENDENCIES[%q] dependency %q must be registered in test harness FILE_PATHS",
+            key,
+            dep
+          )
+        )
+      end
+    end
+  end)
+end
+
 return function(test, ctx)
   RegisterArchitectureSourceBoundaryTests(test, ctx.assert)
   RegisterArchitectureQueueWiringTests(test, ctx.assert)
@@ -1191,4 +1302,5 @@ return function(test, ctx)
   RegisterArchitectureWorkflowTests(test, ctx.assert)
   RegisterArchitectureModuleApiTests(test, ctx.assert, ctx.load_modules)
   RegisterArchitectureGuardsSyncTests(test, ctx.assert)
+  RegisterArchitectureLoadOrderTests(test, ctx.assert)
 end

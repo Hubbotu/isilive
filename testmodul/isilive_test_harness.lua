@@ -101,6 +101,11 @@ local IMPLICIT_DEPENDENCIES = {
   ["isiLive_factory.lua"] = {
     "isiLive_factory_frame_bridge.lua",
     "isiLive_factory_controllers.lua",
+    "isiLive_factory_kick_tracker.lua",
+    "isiLive_factory_minimap.lua",
+  },
+  ["isiLive_factory_controllers.lua"] = {
+    "isiLive_factory_kick_tracker.lua",
   },
   -- isiLive_sound_utils.lua must be loaded before isiLive_teleport_ui.lua because
   -- PlayPortalAvailableSound delegates to addonTable.SoundUtils at runtime.
