@@ -5,6 +5,7 @@ local RI = addonTable._RosterInternal or {}
 addonTable._RosterInternal = RI
 
 local ApplyFontStringSize = RI.ApplyFontStringSize
+local CD_TRACKER_ROW_HEIGHT = RI.CD_TRACKER_ROW_HEIGHT or 20
 
 local KILLTRACK_ROW_BOTTOM_OFFSET = 12
 local CD_TRACKER_FONT_SIZE = 12

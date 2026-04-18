@@ -123,7 +123,6 @@ local IsMainHorizontalLayoutMode = RI.IsMainHorizontalLayoutMode
   end
 local GetFrameHeightForLayoutMode = RI.GetFrameHeightForLayoutMode
 local CD_TRACKER_ROW_HEIGHT = RI.CD_TRACKER_ROW_HEIGHT or 20
-local CD_TRACKER_ROW_BOTTOM_OFFSET = RI.CD_TRACKER_ROW_BOTTOM_OFFSET or 20
 local CreateSystemOptionToggles = RI.CreateSystemOptionToggles
 local RefreshSystemOptionToggles = RI.RefreshSystemOptionToggles
 local LayoutSystemOptionToggles = RI.LayoutSystemOptionToggles
