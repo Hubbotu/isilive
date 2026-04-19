@@ -32,6 +32,7 @@ local FILE_PATHS = {
   ["isiLive_mplus_timer.lua"] = "game/isiLive_mplus_timer.lua",
   ["isiLive_kick_tracker.lua"] = "game/isiLive_kick_tracker.lua",
   ["isiLive_lfg_detect.lua"] = "game/isiLive_lfg_detect.lua",
+  ["isiLive_combat_events.lua"] = "game/isiLive_combat_events.lua",
   -- ui
   ["isiLive_bindings.lua"] = "ui/isiLive_bindings.lua",
   ["isiLive_ui_common.lua"] = "ui/isiLive_ui_common.lua",

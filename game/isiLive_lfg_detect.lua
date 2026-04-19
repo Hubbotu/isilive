@@ -79,37 +79,14 @@ local function MapIDFromActivityIDs(activityIDs)
   return nil
 end
 
-local function GetDungeonName(mapID)
-  local SeasonData = addonTable.SeasonData
-  if type(SeasonData) == "table" and type(SeasonData.GetDungeonName) == "function" then
-    local db = rawget(_G, "IsiLiveDB")
-    local localeTag = (type(db) == "table" and db.locale) or nil
-    if not localeTag then
-      local getLocale = rawget(_G, "GetLocale")
-      if type(getLocale) == "function" then
-        localeTag = getLocale()
-      end
-    end
-    local name = SeasonData.GetDungeonName(mapID, localeTag)
-    if type(name) == "string" and name ~= "" then
-      return name
-    end
-  end
-  return tostring(mapID)
-end
-
-local function Print(msg)
-  local frame = rawget(_G, "DEFAULT_CHAT_FRAME")
-  if type(frame) == "table" and type(frame.AddMessage) == "function" then
-    frame:AddMessage("|cff9be28f[isiLive]|r " .. tostring(msg))
-  end
-end
-
 -- ---------------------------------------------------------------------------
 -- State
 -- ---------------------------------------------------------------------------
 
--- [searchResultID] = mapID  — pending invites not yet accepted
+-- [searchResultID] = { mapID, leaderName }  — pending invites not yet accepted.
+-- leaderName is the LFG group leader as returned by C_LFGList.GetSearchResultInfo;
+-- used later as a tie-breaker when multiple roster members hold a key for the same
+-- dungeon (the leader is in practice the key owner).
 local pendingInvites = {}
 -- mapID of the last detected own queue listing (nil = no active listing)
 local lastQueueMapID = nil
@@ -118,15 +95,17 @@ local detectedMapID = nil
 -- mapID from a just-accepted invite that is waiting for the roster to settle.
 -- This prevents a transient non-group roster update from clearing a valid highlight.
 local pendingAcceptedInviteMapID = nil
+-- Leader name of the LFG group whose invite produced the current detectedMapID
+-- (nil = detectedMapID was not set via invite path, or roster is post-reset).
+-- Consumers use this to disambiguate ResolveActiveKeyOwnerUnit when the roster
+-- contains multiple members with the same keyMapID.
+local activeInviteLeader = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
 local highlightCallback = nil
 local groupRosterTraceLogger = nil
 
--- Injected by the factory so chat messages follow the player's locale setting.
--- MINOR-1 fix: removes hardcoded German strings.
-local localeGetter = nil
 local debugLog = nil
 local debugTrace = nil
 local debugTraceDeep = nil
@@ -160,10 +139,6 @@ function LFGDetect.SetHighlightCallback(fn)
     -- replay the current state once so the UI cannot miss the highlight.
     TriggerHighlightUpdate("queue")
   end
-end
-
-function LFGDetect.SetLocaleGetter(fn)
-  localeGetter = type(fn) == "function" and fn or nil
 end
 
 function LFGDetect.SetGroupRosterTraceLogger(fn)
@@ -269,8 +244,18 @@ local function OnInvited(searchResultID)
     tostring(mapID)
   )
   if mapID then
-    pendingInvites[searchResultID] = mapID
-    Log("state_set", "var=pendingInvites[%s] val=%s", tostring(searchResultID), tostring(mapID))
+    local leaderName = nil
+    if type(info) == "table" and type(info.leaderName) == "string" and info.leaderName ~= "" then
+      leaderName = info.leaderName
+    end
+    pendingInvites[searchResultID] = { mapID = mapID, leaderName = leaderName }
+    Log(
+      "state_set",
+      "var=pendingInvites[%s] mapID=%s leader=%s",
+      tostring(searchResultID),
+      tostring(mapID),
+      tostring(leaderName)
+    )
   end
 end
 
@@ -284,28 +269,38 @@ TriggerHighlightUpdate = function(soundContext)
 end
 
 local function OnInviteAccepted(searchResultID)
-  local mapID = pendingInvites[searchResultID]
-  Log("invite_accepted", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
+  local entry = pendingInvites[searchResultID]
+  local mapID = type(entry) == "table" and entry.mapID or nil
+  local leaderName = type(entry) == "table" and entry.leaderName or nil
+  Log(
+    "invite_accepted",
+    "searchResultID=%s mapID=%s leader=%s",
+    tostring(searchResultID),
+    tostring(mapID),
+    tostring(leaderName)
+  )
   if mapID then
     pendingInvites[searchResultID] = nil
     if detectedMapID ~= mapID then
       Log("state_set", "var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID))
       detectedMapID = mapID
       pendingAcceptedInviteMapID = mapID
+      activeInviteLeader = leaderName
       Log("state_set", "var=pendingAcceptedInviteMapID val=%s", tostring(mapID))
-      local L = localeGetter and localeGetter() or {}
-      Print(string.format(L.LFG_DETECT_INVITE or "LFG invite detected: %s", GetDungeonName(mapID)))
+      Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
       TriggerHighlightUpdate("invite")
     end
   end
 end
 
 local function OnInviteDeclined(searchResultID)
-  local mapID = pendingInvites[searchResultID]
+  local entry = pendingInvites[searchResultID]
+  local mapID = type(entry) == "table" and entry.mapID or nil
   Log("invite_declined", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
   pendingInvites[searchResultID] = nil
   if mapID and detectedMapID == mapID then
     detectedMapID = nil
+    activeInviteLeader = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -353,6 +348,7 @@ local function ClearDetectedState()
     Log("clear_detected_state", "path=queue_ticker lastQueueMapID=%s", tostring(lastQueueMapID))
     detectedMapID = nil
     lastQueueMapID = nil
+    activeInviteLeader = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -364,10 +360,12 @@ local function ClearAllStateImpl()
     or lastQueueMapID ~= nil
     or next(pendingInvites) ~= nil
     or pendingAcceptedInviteMapID ~= nil
+    or activeInviteLeader ~= nil
   Log("clear_all_state", "hadState=%s", tostring(hadState))
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
+  activeInviteLeader = nil
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
@@ -376,6 +374,10 @@ end
 
 function LFGDetect.GetDetectedMapID()
   return detectedMapID
+end
+
+function LFGDetect.GetActiveInviteLeader()
+  return activeInviteLeader
 end
 
 function LFGDetect.ClearAllState()
@@ -423,8 +425,6 @@ local function CheckActiveGroup()
     detectedMapID = mapID
     Log("state_set", "var=lastQueueMapID val=%s", tostring(mapID))
     Log("state_set", "var=detectedMapID val=%s", tostring(mapID))
-    local L = localeGetter and localeGetter() or {}
-    Print(string.format(L.LFG_DETECT_QUEUE or "LFG listing detected: %s", GetDungeonName(mapID)))
     TriggerHighlightUpdate("queue") -- BUG-1: own listing → suppress portal sound
   elseif not mapID and lastQueueMapID ~= nil then
     Log("queue_listing_cleared", "no_active_entry")
@@ -503,12 +503,11 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     -- yet (e.g. inviteaccepted fired before GROUP_ROSTER_UPDATE settled),
     -- apply it now.
     if not detectedMapID then
-      local resultID, mapID = next(pendingInvites)
-      if resultID and mapID then
-        detectedMapID = mapID
+      local resultID, entry = next(pendingInvites)
+      if resultID and type(entry) == "table" and entry.mapID then
+        detectedMapID = entry.mapID
+        activeInviteLeader = entry.leaderName
         pendingInvites[resultID] = nil
-        local L = localeGetter and localeGetter() or {}
-        Print(string.format(L.LFG_DETECT_INVITE or "LFG invite detected: %s", GetDungeonName(mapID)))
         TriggerHighlightUpdate("invite")
       else
         CheckActiveGroup()

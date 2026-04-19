@@ -20,7 +20,7 @@ SoundUtils.Registry = {
     file = "Interface\\AddOns\\isiLive\\sounds\\SynthChord.ogg",
     labelKey = "SETTINGS_SOUND_GROUP_JOIN_ENABLED",
     settingKey = "soundGroupJoinEnabled",
-    defaultEnabled = false,
+    defaultEnabled = true,
     defaultChannel = "SFX",
   },
   portal_available = {

@@ -22,7 +22,6 @@ local function RegisterFactoryPrimaryGroupSettleTests(test, Assert, LoadAddonMod
           return 559
         end,
         SetHighlightCallback = function() end,
-        SetLocaleGetter = function() end,
         SetGroupRosterTraceLogger = function(fn)
           addon._capturedGroupRosterTraceLogger = fn
         end,

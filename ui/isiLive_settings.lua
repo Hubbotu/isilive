@@ -1397,7 +1397,7 @@ local SOUND_SETTING_FALLBACKS = {
     labelKey = "SETTINGS_SOUND_GROUP_JOIN_ENABLED",
     labelFallback = "Sound: Group Join",
     settingKey = "soundGroupJoinEnabled",
-    defaultEnabled = false,
+    defaultEnabled = true,
   },
   portal_available = {
     labelKey = "SETTINGS_SOUND_PORTAL_AVAILABLE",
@@ -1476,6 +1476,55 @@ local function BuildSoundSettingsSection(canvas, yOffset, labels, config, contro
     controls.soundChecks[entry.key] = checkbox
     yOffset = nextY
   end
+
+  return yOffset
+end
+
+local function BuildChatSettingsSection(canvas, yOffset, labels, config, controls)
+  controls.chatHeader, yOffset =
+    CreateSectionHeader(canvas, yOffset, labels.SETTINGS_SECTION_CHAT or "Chat Announcements")
+  if controls.chatHeader then
+    controls.chatHeader._sectionKey = "SETTINGS_SECTION_CHAT"
+  end
+
+  controls.chatHint, yOffset = CreateSectionNote(
+    canvas,
+    yOffset,
+    labels.SETTINGS_SECTION_CHAT_HINT or "Toggle automatic chat messages during Mythic+ runs."
+  )
+  if controls.chatHint then
+    controls.chatHint._sectionKey = "SETTINGS_SECTION_CHAT"
+  end
+
+  controls.chatAnnounceBR, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_CHAT_BR_ANNOUNCE or "Chat: Announce Battle Res usage in M+",
+    function()
+      local db = config.getDB()
+      return db.chatAnnounceBR ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.chatAnnounceBR = checked
+    end,
+    "SETTINGS_CHAT_BR_ANNOUNCE"
+  )
+
+  controls.chatAnnounceLust, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_CHAT_LUST_ANNOUNCE or "Chat: Announce Bloodlust casts in M+",
+    function()
+      local db = config.getDB()
+      return db.chatAnnounceLust ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.chatAnnounceLust = checked
+    end,
+    "SETTINGS_CHAT_LUST_ANNOUNCE"
+  )
 
   return yOffset
 end
@@ -1660,6 +1709,22 @@ local function RefreshSettingsControls(controls, config)
   end
   if controls.soundHint then
     controls.soundHint:SetText(freshL.SETTINGS_SECTION_SOUNDS_HINT or "Toggle the built-in audio cues.")
+  end
+  if controls.chatHeader then
+    controls.chatHeader:SetText(freshL.SETTINGS_SECTION_CHAT or "Chat Announcements")
+  end
+  if controls.chatHint then
+    controls.chatHint:SetText(
+      freshL.SETTINGS_SECTION_CHAT_HINT or "Toggle automatic chat messages during Mythic+ runs."
+    )
+  end
+  if controls.chatAnnounceBR and controls.chatAnnounceBR.label then
+    controls.chatAnnounceBR.label:SetText(freshL.SETTINGS_CHAT_BR_ANNOUNCE or "Chat: Announce Battle Res usage in M+")
+  end
+  if controls.chatAnnounceLust and controls.chatAnnounceLust.label then
+    controls.chatAnnounceLust.label:SetText(
+      freshL.SETTINGS_CHAT_LUST_ANNOUNCE or "Chat: Announce Bloodlust casts in M+"
+    )
   end
   controls.debugHeader:SetText(freshL.SETTINGS_SECTION_DEBUG or "Debug")
   if controls.debugHint then
@@ -1876,6 +1941,8 @@ function SettingsPanel.Create(opts)
   y = BuildBehaviorSettingsSection(content, y, L, config, controls)
   y = y - SECTION_GAP
   y = BuildSoundSettingsSection(content, y, L, config, controls)
+  y = y - SECTION_GAP
+  y = BuildChatSettingsSection(content, y, L, config, controls)
   y = y - SECTION_GAP
   y = BuildDebugSettingsSection(content, y, L, config, controls)
   y = y - SECTION_GAP

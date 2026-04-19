@@ -229,42 +229,74 @@ local function CreateTeleportButton(mainFrame, deps, index, entry)
   button.overlay:SetAllPoints()
   button.overlay:SetColorTexture(0, 0, 0, 0.35)
 
-  button.activeBorder = button.overlayFrame:CreateTexture(nil, "OVERLAY")
+  -- Hatched active-target border: a container frame holding dashed segments
+  -- along the four edges. The Show/Hide of the container propagates to the
+  -- dashes, and a slow alpha pulse animates the whole container so the icon
+  -- is highlighted without goldish blinking or scale bounce.
+  button.activeBorder = CreateFrame("Frame", nil, button.overlayFrame)
   button.activeBorder:SetAllPoints()
-  button.activeBorder:SetTexture("Interface\\Buttons\\UI-ActionButton-Border")
-  button.activeBorder:SetBlendMode("ADD")
-  button.activeBorder:SetVertexColor(1, 0.85, 0.1, 1)
   button.activeBorder:Hide()
-
-  button.activeGlow = button.overlayFrame:CreateTexture(nil, "OVERLAY")
-  button.activeGlow:SetAllPoints()
-  button.activeGlow:SetTexture("Interface\\SpellActivationOverlay\\IconAlert")
-  button.activeGlow:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-  button.activeGlow:SetBlendMode("ADD")
-  button.activeGlow:SetVertexColor(1, 0.78, 0.08, 0.9)
-  button.activeGlow:Hide()
+  do
+    local DASH_THICKNESS = 2
+    local DASH_LENGTH = 4
+    local DASH_GAP = 2
+    local HATCH_COLOR = { 0.55, 0.85, 1.0, 0.95 }
+    local function CreateEdgeDashes()
+      local dashes = {}
+      local total = 60 -- logical length used for layout math; actual sizing uses relative anchors
+      local step = DASH_LENGTH + DASH_GAP
+      local count = math.max(2, math.floor(total / step))
+      for i = 1, count do
+        local tex = button.activeBorder:CreateTexture(nil, "OVERLAY")
+        tex:SetTexture("Interface\\Buttons\\WHITE8X8")
+        tex:SetVertexColor(HATCH_COLOR[1], HATCH_COLOR[2], HATCH_COLOR[3], HATCH_COLOR[4])
+        tex:SetBlendMode("ADD")
+        dashes[i] = tex
+      end
+      return dashes, count
+    end
+    local topDashes, countH = CreateEdgeDashes()
+    local bottomDashes = CreateEdgeDashes()
+    local leftDashes, countV = CreateEdgeDashes()
+    local rightDashes = CreateEdgeDashes()
+    button.activeBorder:SetScript("OnSizeChanged", function(self, width, height)
+      local hStep = (width - DASH_GAP) / countH
+      for i, tex in ipairs(topDashes) do
+        tex:ClearAllPoints()
+        tex:SetSize(hStep - DASH_GAP, DASH_THICKNESS)
+        tex:SetPoint("TOPLEFT", self, "TOPLEFT", (i - 1) * hStep + DASH_GAP / 2, 0)
+      end
+      for i, tex in ipairs(bottomDashes) do
+        tex:ClearAllPoints()
+        tex:SetSize(hStep - DASH_GAP, DASH_THICKNESS)
+        tex:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", (i - 1) * hStep + DASH_GAP / 2, 0)
+      end
+      local vStep = (height - DASH_GAP) / countV
+      for i, tex in ipairs(leftDashes) do
+        tex:ClearAllPoints()
+        tex:SetSize(DASH_THICKNESS, vStep - DASH_GAP)
+        tex:SetPoint("TOPLEFT", self, "TOPLEFT", 0, -((i - 1) * vStep + DASH_GAP / 2))
+      end
+      for i, tex in ipairs(rightDashes) do
+        tex:ClearAllPoints()
+        tex:SetSize(DASH_THICKNESS, vStep - DASH_GAP)
+        tex:SetPoint("TOPRIGHT", self, "TOPRIGHT", 0, -((i - 1) * vStep + DASH_GAP / 2))
+      end
+    end)
+  end
 
   button.cooldownRemainingSeconds = tonumber(deps.getTeleportCooldownRemaining(button.spellID)) or 0
   UpdateTeleportButtonShortCodeLabel(button, deps)
 
-  button.animGroup = button:CreateAnimationGroup()
+  button.animGroup = button.activeBorder:CreateAnimationGroup()
   button.animGroup:SetLooping("BOUNCE")
 
-  local scaleAnim = button.animGroup:CreateAnimation("Scale")
-  scaleAnim:SetScale(1.2, 1.2)
-  scaleAnim:SetDuration(0.8)
-  scaleAnim:SetSmoothing("IN_OUT")
-  scaleAnim:SetOrder(1)
-
   local alphaAnim = button.animGroup:CreateAnimation("Alpha")
-  alphaAnim:SetFromAlpha(0.5)
+  alphaAnim:SetFromAlpha(0.55)
   alphaAnim:SetToAlpha(1.0)
-  alphaAnim:SetDuration(0.8)
+  alphaAnim:SetDuration(1.2)
   alphaAnim:SetSmoothing("IN_OUT")
   alphaAnim:SetOrder(1)
-  if alphaAnim.SetTarget then
-    alphaAnim:SetTarget(button.activeGlow)
-  end
 
   button:SetScript("OnEnter", function(self)
     local L = deps.getL()
@@ -604,26 +636,17 @@ function TeleportUI.CreateController(opts)
 
       if known then
         if button.isActiveTarget then
-          button.overlay:SetColorTexture(1, 0.5, 0.0, 0.5)
-          button.activeGlow:Show()
+          button.overlay:SetColorTexture(0.15, 0.35, 0.55, 0.25)
           if not button.animGroup:IsPlaying() then
             button.animGroup:Play()
           end
         else
           button.overlay:SetColorTexture(0, 0, 0, 0.28)
-          button.activeGlow:Hide()
           button.animGroup:Stop()
-          if not deps.isInCombat() then
-            button:SetScale(1) -- Reset scale
-          end
         end
       else
         button.overlay:SetColorTexture(0, 0, 0, 0.62)
-        button.activeGlow:Hide()
         button.animGroup:Stop()
-        if not deps.isInCombat() then
-          button:SetScale(1)
-        end
       end
 
       if

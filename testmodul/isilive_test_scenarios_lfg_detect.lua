@@ -603,29 +603,6 @@ RegisterLFGDetectOwnListingAndReplayTests = function(test, ctx)
       Assert.Equal(callbackCount, 0, "unresolved active listing must not trigger a highlight update")
     end)
   end)
-
-  test("LFGDetect own listing chat dedup prints once for same mapID", function()
-    local globals, fire, prints = BuildLFGDetectEnv({
-      globals = {
-        C_LFGList = BuildC_LFGList({}, { activityID = 1542 }),
-      },
-    })
-
-    WithGlobals(globals, function()
-      LoadAddonModules({ "isiLive_lfg_detect.lua" })
-
-      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE") -- same listing, same mapID
-
-      local lfgPrints = {}
-      for _, msg in ipairs(prints) do
-        if msg:find("LFG") then
-          table.insert(lfgPrints, msg)
-        end
-      end
-      Assert.Equal(#lfgPrints, 1, "identical mapID must print only once (Rule 22 chat dedup)")
-    end)
-  end)
 end
 
 local function RegisterLFGDetectQueueStateTests(test, ctx)
@@ -728,9 +705,74 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "queue-set detectedMapID must be cleared when listing is removed")
     end)
   end)
+
+  -- ---------------------------------------------------------------------------
+  -- GetActiveInviteLeader: leader hint captured on inviteaccepted
+  -- ---------------------------------------------------------------------------
+
+  test("LFGDetect GetActiveInviteLeader returns leaderName after invite accepted", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, leaderName = "Mematiwow-Blackmoore" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "pending invite must not expose leader yet")
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Mematiwow-Blackmoore",
+        "inviteaccepted must capture the LFG leaderName"
+      )
+    end)
+  end)
+
+  test("LFGDetect GetActiveInviteLeader is nil for queue-set detectedMapID", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({}, { activityID = 1542 }),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "own listing must set detectedMapID")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "own queue path must not produce an invite leader hint")
+    end)
+  end)
+
+  test("LFGDetect GetActiveInviteLeader clears after ClearAllState", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteLeader(), "Leader-Realm", "setup: leader captured")
+
+      addon.LFGDetect.ClearAllState()
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "ClearAllState must drop the leader hint")
+    end)
+  end)
 end
 
-local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
+local function RegisterLFGDetectResetTests(test, ctx)
   local Assert = ctx.assert
   local LoadAddonModules = ctx.load_modules
   local WithGlobals = ctx.with_globals
@@ -918,51 +960,11 @@ local function RegisterLFGDetectResetAndLocaleTests(test, ctx)
       )
     end)
   end)
-
-  -- ---------------------------------------------------------------------------
-  -- SetLocaleGetter injection (MINOR-1)
-  -- ---------------------------------------------------------------------------
-
-  test("LFGDetect uses injected locale getter for chat message", function()
-    local prints = {}
-    local localeHits = 0
-
-    local globals, fire = BuildLFGDetectEnv({
-      globals = {
-        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
-        DEFAULT_CHAT_FRAME = {
-          AddMessage = function(_, msg)
-            table.insert(prints, tostring(msg))
-          end,
-        },
-      },
-    })
-
-    WithGlobals(globals, function()
-      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
-      addon.LFGDetect.SetLocaleGetter(function()
-        localeHits = localeHits + 1
-        return { LFG_DETECT_INVITE = "Einladung erkannt: %s" }
-      end)
-
-      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
-      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
-
-      Assert.True(localeHits >= 1, "locale getter must be called when printing the invite message")
-      local found = false
-      for _, msg in ipairs(prints) do
-        if msg:find("Einladung erkannt") then
-          found = true
-        end
-      end
-      Assert.True(found, "localized invite message must appear in chat output")
-    end)
-  end)
 end
 
 return function(test, ctx)
   RegisterLFGDetectResolutionTests(test, ctx)
   RegisterLFGDetectInviteAcceptRaceTests(test, ctx)
   RegisterLFGDetectQueueStateTests(test, ctx)
-  RegisterLFGDetectResetAndLocaleTests(test, ctx)
+  RegisterLFGDetectResetTests(test, ctx)
 end

@@ -408,9 +408,71 @@ local function ForceRefreshSyncState(sync, getUnitNameAndRealm, roster)
   sync.SetPlayerKeyInfo(playerName, playerRealm, ownKeyMapID, ownKeyLevel)
 end
 
-local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID)
+-- Parses a Blizzard LFG name field like "Mematiwow" or "Mematiwow-Blackmoore"
+-- into (name, realm). realm is nil when the hint only contains a bare name
+-- (Blizzard strips the realm when it matches the local player's realm).
+local function SplitNameRealm(nameRealm)
+  if type(nameRealm) ~= "string" or nameRealm == "" then
+    return nil, nil
+  end
+  local dash = string.find(nameRealm, "-", 1, true)
+  if not dash then
+    return nameRealm, nil
+  end
+  local name = string.sub(nameRealm, 1, dash - 1)
+  local realmPart = string.sub(nameRealm, dash + 1)
+  if name == "" then
+    return nil, nil
+  end
+  if realmPart == "" then
+    return name, nil
+  end
+  return name, realmPart
+end
+
+-- Returns the roster unit whose (name[, realm]) matches the LFG-style hint, or
+-- nil when no entry matches. The hint's realm is optional — if absent, name
+-- alone is enough because Blizzard's API omits the realm for same-realm names.
+local function FindRosterUnitByHint(roster, preferredOwnerName)
+  local hintName, hintRealm = SplitNameRealm(preferredOwnerName)
+  if not hintName then
+    return nil
+  end
+  for unit, info in pairs(roster or {}) do
+    if type(info) == "table" and info.name == hintName then
+      if hintRealm == nil or info.realm == nil or info.realm == hintRealm then
+        return unit
+      end
+    end
+  end
+  return nil
+end
+
+-- preferredOwnerName is an optional LFG-leader hint (e.g. "Mematiwow-Blackmoore"
+-- from C_LFGList.GetSearchResultInfo). When provided and the hinted roster
+-- member holds a key for targetMapID, that unit wins over the generic ambiguity
+-- guard — this disambiguates the case where multiple group members happen to
+-- own a key for the same dungeon.
+--
+-- Fail-closed guard: if the hinted unit is in the roster but does not expose
+-- a matching keyMapID (e.g. the leader has no isiLive / LibKeystone sync),
+-- we must NOT fall back to the unique-owner search. Doing so would highlight
+-- another member who happens to carry a key for the same dungeon as the
+-- "active" key owner — a confidently wrong answer. Only when the hint points
+-- to no roster entry at all (e.g. boost runs where the applicant is not the
+-- key owner) do we let the unique-owner fallback run.
+local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferredOwnerName)
   local targetMapID = tonumber(activeJoinedKeyMapID)
   if not targetMapID then
+    return nil
+  end
+
+  local hintedUnit = FindRosterUnitByHint(roster, preferredOwnerName)
+  if hintedUnit then
+    local hintedInfo = roster[hintedUnit]
+    if type(hintedInfo) == "table" and tonumber(hintedInfo.keyMapID) == targetMapID then
+      return hintedUnit
+    end
     return nil
   end
 
@@ -553,8 +615,8 @@ function KeySync.CreateController(opts)
     ForceRefreshSyncState(sync, getUnitNameAndRealm, roster)
   end
 
-  function controller.ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID)
-    return ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID)
+  function controller.ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferredOwnerName)
+    return ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferredOwnerName)
   end
 
   return controller

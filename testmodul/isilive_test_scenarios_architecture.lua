@@ -732,9 +732,9 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         "soundGroupJoinEnabled",
         "group-join sound should map to the group-join setting key"
       )
-      Assert.False(
+      Assert.True(
         addon.SoundUtils.IsEnabled("group_join"),
-        "group-join sound should remain disabled by default when no DB override exists"
+        "group-join sound should be enabled by default when no DB override exists"
       )
       local portalEntry = addon.SoundUtils.GetEntry("portal_available")
       Assert.NotNil(portalEntry, "portal sound entry should exist")

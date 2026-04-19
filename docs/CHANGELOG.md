@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-04-19 - Version 0.9.175 (patch)
+
+- **BR/Lust announce: self-cast only, broadcast to group chat (fixes 6102x "table index is secret" spam in M+):**
+  - Root cause: WoW 12.0.0's Secret Values system masks the `spellID` parameter of `UNIT_SPELLCAST_SUCCEEDED` for *other players'* casts inside M+ / boss combat-restriction zones. `type(spellID) == "number"` still returns true (Secrets masquerade as numbers), but the table lookup `BR_SPELL_IDS[spellID]` throws `"table index is secret"`. In a single live key this fired thousands of times.
+  - `game/isiLive_combat_events.lua` `HandleUnitSpellcastSucceeded` now hard-filters on `unit == "player"` *before* any spellID inspection. The caster's own spellID is not Secret in their own context, so the table lookup is safe. Each isiLive client detects exactly its own cast — N isiLive users in a group cover all N casters automatically, no peer-sync needed.
+  - Switched the announcement output from local `print` to `SendChatMessage` so the whole group (including non-isiLive members) sees the line. New `DefaultSendChat` resolves the channel via `IsInGroup(LE_PARTY_CATEGORY_INSTANCE)` → `INSTANCE_CHAT`, else `IsInRaid()` → `RAID`, else `IsInGroup()` → `PARTY`. Solo = no-op. The send is wrapped in `pcall` so a failed broadcast never throws.
+  - The `IsGroupUnit` helper was removed (party/raid units are now rejected by the simpler `unit == "player"` check).
+  - `factory/isiLive_factory_controllers.lua` no longer passes `print = ctx.Print` to `CombatEvents.SetDependencies` — the module's internal `DefaultSendChat` handles broadcast directly.
+  - Locale templates (`COMBAT_CHAT_BR_USED`, `COMBAT_CHAT_LUST_STARTED`) and dedup behavior (3 s window, `Reset()` on `CHALLENGE_MODE_START` / `CHALLENGE_MODE_COMPLETED`) are unchanged.
+
+- **Tests:**
+  - Rewrote `testmodul/isilive_test_scenarios_combat_events.lua` for the self-cast contract: all BR / Lust scenarios drive `HandleUnitSpellcastSucceeded("player", ...)`, the BuildController `print` field was renamed to `sendChat` and the `prints` capture array to `messages`. The former "non-group units" test was extended to also cover `party1` and `raid3` and re-purposed as "ignores casts from units other than the player", documenting the self-cast-only invariant.
+  - 721 / 721 use-case scenarios pass.
+
+## 2026-04-19 - Version 0.9.174 (patch)
+
+- **Chat announcements for Battle Res and Bloodlust in Mythic+:**
+  - New module `game/isiLive_combat_events.lua` listens on `COMBAT_LOG_EVENT_UNFILTERED` while `C_ChallengeMode.GetActiveChallengeMapID()` reports an active key. `SPELL_RESURRECT` entries whose `spellID` matches the four battle-res spells (`20484` Rebirth, `61999` Raise Ally, `391054` Intercession, `20707` Soulstone Resurrection) produce a single chat line via the addon's `Print` helper, formatted with the localized `COMBAT_CHAT_BR_USED` template (e.g. `"Alice hat BR auf Bob benutzt"`). `SPELL_CAST_SUCCESS` entries whose `spellID` matches the twelve Bloodlust/Heroism/Time Warp/Drum/Pet variants (`2825`, `32182`, `80353`, `264667`, `390386`, `381301`, `178207`, `230935`, `256740`, `292463`, `90355`, `160452`) produce a single chat line via the `COMBAT_CHAT_LUST_STARTED` template. A 3-second dedup window keyed by `sourceGUID|spellID` swallows double-fires from the combat log; `CHALLENGE_MODE_START` / `CHALLENGE_MODE_COMPLETED` reset it so back-to-back keys do not inherit stale state.
+  - Both announcements default to enabled and are individually toggleable in the Blizzard settings panel. `ui/isiLive_settings.lua` grows a dedicated **Chat Announcements** section between Sounds and Debug with two checkboxes (`chatAnnounceBR`, `chatAnnounceLust`), using the default-true idiom `db.chatAnnounceBR ~= false` so fresh installs light up both lines without touching the saved variables.
+  - Realm suffixes are stripped for the local-realm case so the chat line reads `"Alice used BR on Bob"` instead of `"Alice-Realm used BR on Bob-Realm"`. Cross-realm names keep the realm segment when the combat log provides one.
+  - Factory wiring in `factory/isiLive_factory_controllers.lua` calls `CombatEvents.SetDependencies({ getL = ctx.GetL, getDB = function() return IsiLiveDB or {} end, print = ctx.Print })` right after the LFGDetect block so the module picks up the addon's chat-prefix/print and localized templates.
+  - Locale: added `SETTINGS_SECTION_CHAT`, `SETTINGS_SECTION_CHAT_HINT`, `SETTINGS_CHAT_BR_ANNOUNCE`, `SETTINGS_CHAT_LUST_ANNOUNCE`, `COMBAT_CHAT_BR_USED` (format `%s ... %s`) and `COMBAT_CHAT_LUST_STARTED` (format `%s`) to all eight language tables in `locale/isiLive_texts.lua`.
+
+- **Tests:**
+  - Added `testmodul/isilive_test_scenarios_combat_events.lua` with ten scenarios covering auto-registration of the three combat events, BR announcement in key, BR suppression outside key, BR gated by `chatAnnounceBR`, BR dedup inside the 3 s window with post-window re-fire, non-BR resurrect spells ignored, Bloodlust announced in key, Sated/Exhaustion aura IDs ignored (not in the cast-ID set), Lust gated by `chatAnnounceLust`, and `Reset()` clearing the dedup map so the same cast fires again.
+  - Updated the checkbox count in `testmodul/isilive_test_scenarios_ui_settings.lua` from 20 to 22 to account for the two new chat-announce toggles.
+
+## 2026-04-19 - Version 0.9.173 (patch)
+
+- **Disambiguate active-key owner via LFG leader hint:**
+  - Previously `ResolveActiveKeyOwnerUnit` in `logic/isiLive_keysync.lua` fell back to `nil` whenever more than one roster member held a keystone for the same `mapID`. That blocked both the chat announcement (`"Ziel-Dungeon: <name> +<level>"`) and the red highlight on the key owner's row in the roster panel for an ambiguous group.
+  - `game/isiLive_lfg_detect.lua` now captures `info.leaderName` from `C_LFGList.GetSearchResultInfo` when an invite is seen (stored in `pendingInvites[searchResultID]`) and promotes it to a new module-level `activeInviteLeader` state on `inviteaccepted`. A new public accessor `LFGDetect.GetActiveInviteLeader()` exposes the value. `ClearDetectedState`/`ClearAllStateImpl` drop it alongside the detected mapID.
+  - `logic/isiLive_keysync.lua` gained two helpers: `SplitNameRealm` parses the Blizzard LFG name form (`"Name"` or `"Name-Realm"`) and `FindRosterUnitByHint` matches it against the roster (realm is optional — Blizzard omits it when it matches the local realm). `ResolveActiveKeyOwnerUnit` now takes an optional third `preferredOwnerName` parameter: when the hinted roster unit holds a key for `targetMapID`, that unit wins over the ambiguity guard. When the hinted unit is in the roster but does not expose a matching `keyMapID` (e.g. the leader has no isiLive / LibKeystone sync), the function fails closed and returns `nil` — it must not silently fall back to another member's key for the same dungeon. Only when the hint resolves to no roster entry at all (e.g. boost runs where the applicant is not the key owner) does the unique-owner fallback run.
+  - `factory/isiLive_factory_controllers.lua` wires the hint through both call sites — `ctx.ResolveActiveKeyOwnerUnit` and the direct `ctx.keySyncController.ResolveActiveKeyOwnerUnit` call inside `SendOwnTargetSnapshot` now fetch `addonTable.LFGDetect.GetActiveInviteLeader()` and forward it to the controller.
+  - Net effect: after accepting an LFG invite for an M+ key, the chat announcement carries the leader's keystone level and the roster row's key text renders red for the exact leader we joined — even if another group member happens to carry a key for the same dungeon.
+
+- **Teleport active-target highlight is now a calm hatched border instead of a goldish blink:**
+  - Removed the `Interface\\SpellActivationOverlay\\IconAlert` glow texture (`button.activeGlow`) and the bouncing 1.2× scale animation that pulsed the whole teleport button. The goldish blinking was visually loud and distracting.
+  - Replaced the solid goldish action-button border (`UI-ActionButton-Border`, vertex color `1, 0.85, 0.1`) with a container frame that hosts short dashed segments along all four edges, rendered from `Interface\\Buttons\\WHITE8X8` in a cool blue-white (`0.55, 0.85, 1.0, 0.95`) with additive blending. Dash length, gap, and edge counts are recomputed from the button size on `OnSizeChanged`, so the hatch stays consistent across layout modes.
+  - The active-target overlay tint changed from a strong orange (`1, 0.5, 0.0, 0.5`) to a dezent cool blue (`0.15, 0.35, 0.55, 0.25`) so the icon itself stays readable.
+  - The animation group now targets the new hatched border (no scale, no glow) and runs a single slow alpha pulse (0.55 → 1.0, 1.2 s BOUNCE), so the border breathes gently instead of blinking. `button:SetScale(1)` resets around the former scale animation are gone since no scaling happens anymore.
+
+- **Tests:**
+  - Added five `ResolveActiveKeyOwnerUnit` scenarios in `testmodul/isilive_test_scenarios_keysync.lua` covering bare-name hint disambiguation, realm-qualified hint selection, fail-closed when the hinted leader holds a different mapID, fail-closed when the hinted leader has no synced key at all, and hint ignored when unknown so the unique-owner resolution still fires.
+  - Added three `GetActiveInviteLeader` scenarios in `testmodul/isilive_test_scenarios_lfg_detect.lua`: leader captured on `inviteaccepted` with a Blizzard-style `Name-Realm`, no leader surfaced for own-queue `detectedMapID`, and `ClearAllState` drops the hint.
+
+## 2026-04-19 - Version 0.9.172 (patch)
+
+- **LFG chat noise reduced — only the key-level announcement remains:**
+  - Removed the two redundant chat prints that fired on the LFG detection path: `"LFG-Einladung erkannt: <dungeon>"` (`OnInviteAccepted` and the delayed `GROUP_ROSTER_UPDATE` fallback) and `"LFG-Eintrag erkannt: <dungeon>"` (own/group listing via `CheckActiveGroup`) in `game/isiLive_lfg_detect.lua`.
+  - Rationale: isiLive is a Mythic+ tool; the status-panel announcement `"Ziel-Dungeon: <dungeon> +<level>"` (from `MaybeAnnounceTargetDungeonChat` in `ui/isiLive_status.lua`) already covers the only scenario where a chat line carries new information — a key-tied group context. For non-M+ LFG (Heroic/Normal Dungeon Finder) no chat line is emitted anymore; highlight and status panel are unaffected.
+  - Cleanup: removed the now-unused `localeGetter`/`SetLocaleGetter` plumbing in `game/isiLive_lfg_detect.lua`, the matching `SetLocaleGetter` wiring in `factory/isiLive_factory_controllers.lua`, the unused `Print`/`GetDungeonName` helpers, and the `LFG_DETECT_INVITE` / `LFG_DETECT_QUEUE` locale keys across all 8 language tables in `locale/isiLive_texts.lua`.
+
+- **Tests:**
+  - Removed the now-obsolete `"LFGDetect uses injected locale getter for chat message"` and `"LFGDetect own listing chat dedup prints once for same mapID"` scenarios from `testmodul/isilive_test_scenarios_lfg_detect.lua`; renamed the remaining test group function from `RegisterLFGDetectResetAndLocaleTests` to `RegisterLFGDetectResetTests`.
+  - Dropped the `SetLocaleGetter = function() end` stubs from `isilive_test_scenarios_factory_highlight_priority.lua`, `isilive_test_scenarios_factory_primary_part1.lua`, and `isilive_test_scenarios_factory_primary_part2.lua`.
+  - Updated rule `RULE-TARGET-DUNGEON-CHAT-DEDUP` in `docs/RULES_LOGIC.md` to drop the removed LFG-print test from the required-tests list; the status target-dungeon dedup test remains.
+
 ## 2026-04-19 - Version 0.9.171 (patch)
 
 - **LFG invite highlight no longer drops before the roster settles:**

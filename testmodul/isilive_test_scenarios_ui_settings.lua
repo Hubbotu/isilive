@@ -1095,7 +1095,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.NotNil(portalSoundCheck, "settings panel should create a portal sound checkbox")
       ---@diagnostic disable: undefined-field
       Assert.True(leadSoundCheck:GetChecked(), "leader-transfer sound should default to enabled")
-      Assert.False(groupJoinSoundCheck:GetChecked(), "group-join sound should default to disabled")
+      Assert.True(groupJoinSoundCheck:GetChecked(), "group-join sound should default to enabled")
       Assert.True(portalSoundCheck:GetChecked(), "portal sound should default to enabled")
 
       local onClickLead = leadSoundCheck._scripts and leadSoundCheck._scripts.OnClick or nil
@@ -1341,19 +1341,19 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 2, "settings should only expose the background opacity and UI scale sliders")
       Assert.Equal(
         checkboxCount,
-        20,
+        22,
         "settings should hide only the legacy DPS, markers, name-length,"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " and combat-fade toggles visible"
+          .. " chat-announce, and combat-fade toggles visible"
       )
 
       panel.Refresh()
       Assert.Equal(sliderCount, 2, "refresh should keep the legacy sliders hidden")
       Assert.Equal(
         checkboxCount,
-        20,
+        22,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
-          .. " while preserving the visible sound and combat-fade toggles"
+          .. " while preserving the visible sound, chat-announce, and combat-fade toggles"
       )
     end)
   end)

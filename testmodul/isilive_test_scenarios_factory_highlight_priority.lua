@@ -24,7 +24,6 @@ return function(test, ctx)
         SetHighlightCallback = function(fn)
           addon._capturedHighlightCallback = fn
         end,
-        SetLocaleGetter = function() end,
       }
 
       local factoryCtx = {

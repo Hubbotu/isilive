@@ -217,6 +217,79 @@ local function RegisterKeySyncPresenceTests(test, Assert, LoadAddonModules)
     local ctrl = BuildController(LoadAddonModules, sync)
     Assert.Equal(ctrl.ResolveActiveKeyOwnerUnit({}, nil), nil, "nil mapID must return nil")
   end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit hint picks leader when mapID is ambiguous", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 10 },
+      party1 = { name = "Leader", realm = "R", keyMapID = 200, keyLevel = 14 },
+      party2 = { name = "Other", realm = "R", keyMapID = 200, keyLevel = 8 },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "Leader"),
+      "party1",
+      "bare-name hint must disambiguate matching roster unit"
+    )
+  end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit hint with realm matches Name-Realm entry", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      party1 = { name = "Leader", realm = "Blackmoore", keyMapID = 200, keyLevel = 14 },
+      party2 = { name = "Leader", realm = "Antonidas", keyMapID = 200, keyLevel = 9 },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "Leader-Antonidas"),
+      "party2",
+      "realm-qualified hint must resolve to the cross-realm entry"
+    )
+  end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit fails closed when hinted leader holds different mapID", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 10 },
+      party1 = { name = "Leader", realm = "R", keyMapID = 300, keyLevel = 14 },
+      party2 = { name = "Other", realm = "R", keyMapID = 200, keyLevel = 8 },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "Leader"),
+      nil,
+      "leader in roster with wrong mapID must fail closed, not fall back to another member"
+    )
+  end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit fails closed when hinted leader has no key synced", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = nil, keyLevel = nil },
+      party1 = { name = "Leader", realm = "R", keyMapID = nil, keyLevel = nil },
+      party2 = { name = "Other", realm = "R", keyMapID = 200, keyLevel = 8 },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "Leader"),
+      nil,
+      "leader in roster without synced key must fail closed, not highlight another member's key"
+    )
+  end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit hint with unknown leader falls back to unique owner", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = 100, keyLevel = 10 },
+      party1 = { name = "P1", realm = "R", keyMapID = 200, keyLevel = 12 },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "GhostLeader"),
+      "party1",
+      "unknown hint must not block unique-owner resolution"
+    )
+  end)
 end
 
 local function RegisterKeySyncOwnedKeyTests(test, Assert, WithGlobals, LoadAddonModules)

@@ -23,7 +23,6 @@ local function RegisterFactoryPrimaryHighlightTests(test, Assert, LoadAddonModul
         SetHighlightCallback = function(fn)
           addon._capturedHighlightCallback = fn
         end,
-        SetLocaleGetter = function() end,
       }
 
       local state = {

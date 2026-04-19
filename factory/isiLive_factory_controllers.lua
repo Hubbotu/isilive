@@ -552,7 +552,13 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       and ctx.keySyncController
       and type(ctx.keySyncController.ResolveActiveKeyOwnerUnit) == "function"
     then
-      local ownerUnit = ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID)
+      local preferredOwnerName = nil
+      local lfgDetect = addonTable.LFGDetect
+      if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteLeader) == "function" then
+        preferredOwnerName = lfgDetect.GetActiveInviteLeader()
+      end
+      local ownerUnit =
+        ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID, preferredOwnerName)
       local roster = ctx.GetRoster()
       if ownerUnit and type(roster[ownerUnit]) == "table" then
         targetLevel = tonumber(roster[ownerUnit].keyLevel)
@@ -781,7 +787,13 @@ local function InitializeFactoryPrimaryControllers(ctx)
       targetMapID = ctx.ResolveStatusTargetMapID()
     end
 
-    return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID)
+    local preferredOwnerName = nil
+    local lfgDetect = addonTable.LFGDetect
+    if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteLeader) == "function" then
+      preferredOwnerName = lfgDetect.GetActiveInviteLeader()
+    end
+
+    return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID, preferredOwnerName)
   end
   ctx.UpdateMPlusTeleportButton = function(soundContext)
     local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
@@ -860,14 +872,10 @@ local function InitializeFactoryPrimaryControllers(ctx)
 
   -- ARCH-1 fix: inject UpdateMPlusTeleportButton into LFGDetect so the game-layer
   -- module no longer needs to reach into _factoryCtx directly.
-  -- MINOR-1 fix: inject locale getter so chat messages follow the player's locale.
   local lfgDetect = addonTable.LFGDetect
   if type(lfgDetect) == "table" then
     if type(lfgDetect.SetHighlightCallback) == "function" then
       lfgDetect.SetHighlightCallback(ctx.UpdateMPlusTeleportButton)
-    end
-    if type(lfgDetect.SetLocaleGetter) == "function" then
-      lfgDetect.SetLocaleGetter(ctx.GetL)
     end
     if type(lfgDetect.SetGroupRosterTraceLogger) == "function" then
       lfgDetect.SetGroupRosterTraceLogger(BuildLFGGroupRosterTraceLogger(ctx, modules))
@@ -881,6 +889,16 @@ local function InitializeFactoryPrimaryControllers(ctx)
     if type(lfgDetect.SetLogger) == "function" then
       lfgDetect.SetLogger(nil)
     end
+  end
+
+  local combatEvents = addonTable.CombatEvents
+  if type(combatEvents) == "table" and type(combatEvents.SetDependencies) == "function" then
+    combatEvents.SetDependencies({
+      getL = ctx.GetL,
+      getDB = function()
+        return rawget(_G, "IsiLiveDB") or {}
+      end,
+    })
   end
 end
 FI.InitializeFactoryPrimaryControllers = InitializeFactoryPrimaryControllers

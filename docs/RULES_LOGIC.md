@@ -290,7 +290,6 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Zusammenfassung: Es gibt keinen wiederholten Target-Dungeon-Chatspam; bei identischem erkanntem Ziel reicht eine einmalige Ausgabe.
 - Erforderliche Tests:
   - Status target dungeon chat announces grouped key once and resets after target clears
-  - LFGDetect own listing chat dedup prints once for same mapID
 
 ### RULE-UI-STRG-F9-JEDERZEIT
 - Regelnummer: 26
