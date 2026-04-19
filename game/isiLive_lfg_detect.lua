@@ -395,10 +395,14 @@ local function CheckActiveGroup()
     --   survive roster settling until the player actually enters the dungeon
     --   or leaves the group.
     -- - while not grouped, only clear queue-owned state.
+    -- - while an invite was just accepted, protect the state until
+    --   GROUP_ROSTER_UPDATE fires. IsInGroup() can still return false in the
+    --   window between LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted and
+    --   the delayed GROUP_ROSTER_UPDATE; clearing here races the highlight off.
     local isInGroup = rawget(_G, "IsInGroup")
     local isInRaid = rawget(_G, "IsInRaid")
     local inGroup = (type(isInGroup) == "function" and isInGroup()) or (type(isInRaid) == "function" and isInRaid())
-    if not inGroup then
+    if not inGroup and pendingAcceptedInviteMapID == nil then
       ClearDetectedState()
     end
     return

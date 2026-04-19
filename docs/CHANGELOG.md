@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-19 - Version 0.9.171 (patch)
+
+- **LFG invite highlight no longer drops before the roster settles:**
+  - Root cause: after `LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted` the player's own LFG application briefly stays visible in `C_LFGList.GetActiveEntryInfo` (so `CheckActiveGroup` promotes the map to `lastQueueMapID`), and a second `LFG_LIST_ACTIVE_ENTRY_UPDATE` immediately drops it. `GROUP_ROSTER_UPDATE` arrives ~300ms later, so `IsInGroup()` was still returning `false` in that window and `ClearDetectedState` wiped `detectedMapID` before the roster could settle.
+  - Fix: `CheckActiveGroup` skips `ClearDetectedState` while `pendingAcceptedInviteMapID ~= nil` so the invite-set highlight survives the own-listing drop until `GROUP_ROSTER_UPDATE` promotes the group and clears the guard flag.
+  - Net effect: after accepting an LFG invite, the teleport button for the matching dungeon stays highlighted without a visible flicker-off.
+
+- **deDE dungeon name:**
+  - Corrected `Windlaeuferturm` to `Windläuferturm` for mapID 557 in `game/isiLive_season_data.lua` (and the matching baseline test in `testmodul/isilive_test_scenarios_teleport.lua`).
+
+- **Tests:**
+  - Added regression test `"Highlight invite-accepted state survives own-listing drop before GROUP_ROSTER_UPDATE settles"` in `testmodul/isilive_test_scenarios_lfg_detect.lua` that reproduces the race: it fires `invited` → `inviteaccepted` → `LFG_LIST_ACTIVE_ENTRY_UPDATE` (entry present) → `LFG_LIST_ACTIVE_ENTRY_UPDATE` (entry dropped, still not in group) → `GROUP_ROSTER_UPDATE` (in group) and asserts `detectedMapID` stays at 557 throughout.
+
 ## 2026-04-18 - Version 0.9.170 (patch)
 
 - **Factory load-order guard:**

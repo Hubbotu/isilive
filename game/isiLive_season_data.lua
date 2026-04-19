@@ -109,7 +109,7 @@ SeasonData.SEASONS = {
         [161] = "Skyreach",
       },
       deDE = {
-        [557] = "Windlaeuferturm",
+        [557] = "Windläuferturm",
         [558] = "Terrasse der Magister",
         [559] = "Nexuspunkt Xenas",
         [560] = "Maisarakavernen",

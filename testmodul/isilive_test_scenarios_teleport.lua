@@ -309,7 +309,7 @@ local function RegisterTeleportResolverCoreTests(test, Assert, WithGlobals, Load
       })
 
       local expectedNames = {
-        [557] = "Windlaeuferturm",
+        [557] = "Windläuferturm",
         [558] = "Terrasse der Magister",
         [559] = "Nexuspunkt Xenas",
         [560] = "Maisarakavernen",
