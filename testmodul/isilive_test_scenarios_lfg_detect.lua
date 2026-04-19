@@ -357,94 +357,91 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
     end
   )
 
-  test(
-    "Highlight invite-accepted state survives own-listing drop before GROUP_ROSTER_UPDATE settles",
-    function()
-      -- Race condition: after LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted the
-      -- own LFG application is still briefly visible in C_LFGList.GetActiveEntryInfo
-      -- (so lastQueueMapID gets set by CheckActiveGroup), and a second
-      -- LFG_LIST_ACTIVE_ENTRY_UPDATE immediately drops it. In that window IsInGroup()
-      -- can still return false because GROUP_ROSTER_UPDATE fires ~300ms later. The
-      -- ClearDetectedState path must not clear the invite-set highlight while
-      -- pendingAcceptedInviteMapID is still waiting for the roster to settle.
-      local callbackSoundContexts = {}
-      local inGroup = false
-      local groupMemberCount = 0
-      local currentActiveEntry = { activityIDs = { 1542 } }
+  test("Highlight invite-accepted state survives own-listing drop before GROUP_ROSTER_UPDATE settles", function()
+    -- Race condition: after LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted the
+    -- own LFG application is still briefly visible in C_LFGList.GetActiveEntryInfo
+    -- (so lastQueueMapID gets set by CheckActiveGroup), and a second
+    -- LFG_LIST_ACTIVE_ENTRY_UPDATE immediately drops it. In that window IsInGroup()
+    -- can still return false because GROUP_ROSTER_UPDATE fires ~300ms later. The
+    -- ClearDetectedState path must not clear the invite-set highlight while
+    -- pendingAcceptedInviteMapID is still waiting for the roster to settle.
+    local callbackSoundContexts = {}
+    local inGroup = false
+    local groupMemberCount = 0
+    local currentActiveEntry = { activityIDs = { 1542 } }
 
-      local globals, fire = BuildLFGDetectEnv({
-        IsInGroup = function()
-          return inGroup
-        end,
-        GetNumGroupMembers = function()
-          return groupMemberCount
-        end,
-        globals = {
-          C_LFGList = {
-            GetSearchResultInfo = function(id)
-              if id == 1 then
-                return { activityID = 1542 }
-              end
-              return nil
-            end,
-            GetActiveEntryInfo = function()
-              return currentActiveEntry
-            end,
-            GetActivityFullName = function()
-              return nil
-            end,
-            GetActivityInfoTable = function()
-              return nil
-            end,
-          },
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return inGroup
+      end,
+      GetNumGroupMembers = function()
+        return groupMemberCount
+      end,
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 1 then
+              return { activityID = 1542 }
+            end
+            return nil
+          end,
+          GetActiveEntryInfo = function()
+            return currentActiveEntry
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function()
+            return nil
+          end,
         },
-      })
+      },
+    })
 
-      WithGlobals(globals, function()
-        local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
-        addon.LFGDetect.SetHighlightCallback(function(soundContext)
-          table.insert(callbackSoundContexts, soundContext)
-        end)
-
-        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
-        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
-
-        Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "inviteaccepted must set detectedMapID=557")
-
-        -- Own application still present (activityIDs=[1542]) -> lastQueueMapID=557.
-        fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-
-        Assert.Equal(
-          addon.LFGDetect.GetDetectedMapID(),
-          557,
-          "queue listing matching the accepted invite must keep detectedMapID=557"
-        )
-
-        -- Own application gets dropped between the two event firings and IsInGroup()
-        -- still reports false because GROUP_ROSTER_UPDATE has not yet arrived.
-        currentActiveEntry = nil
-
-        fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-
-        Assert.Equal(
-          addon.LFGDetect.GetDetectedMapID(),
-          557,
-          "transient own-listing drop before GROUP_ROSTER_UPDATE must not clear the invite-set highlight"
-        )
-
-        -- Roster finally settles with the accepted group present.
-        inGroup = true
-        groupMemberCount = 5
-        fire("GROUP_ROSTER_UPDATE")
-
-        Assert.Equal(
-          addon.LFGDetect.GetDetectedMapID(),
-          557,
-          "GROUP_ROSTER_UPDATE with the joined group must preserve detectedMapID=557"
-        )
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetHighlightCallback(function(soundContext)
+        table.insert(callbackSoundContexts, soundContext)
       end)
-    end
-  )
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "inviteaccepted must set detectedMapID=557")
+
+      -- Own application still present (activityIDs=[1542]) -> lastQueueMapID=557.
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "queue listing matching the accepted invite must keep detectedMapID=557"
+      )
+
+      -- Own application gets dropped between the two event firings and IsInGroup()
+      -- still reports false because GROUP_ROSTER_UPDATE has not yet arrived.
+      currentActiveEntry = nil
+
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "transient own-listing drop before GROUP_ROSTER_UPDATE must not clear the invite-set highlight"
+      )
+
+      -- Roster finally settles with the accepted group present.
+      inGroup = true
+      groupMemberCount = 5
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "GROUP_ROSTER_UPDATE with the joined group must preserve detectedMapID=557"
+      )
+    end)
+  end)
 
   test(
     "Highlight invite-accepted state survives late roster false negatives while group members are still present",
