@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-04-20 - Version 0.9.177 (patch)
+
+- **Readycheck 20 s-hold rendering: removed the split render pipeline that could drop the coloured background before the hold window ended:**
+  - Root cause of the symptom "green/red row background disappears before the 20 s hold is up": `RenderRosterImpl` in `ui/isiLive_roster_panel_render.lua` cleared `readyCheckBackground` on every row via `ClearMemberRow` and rebuilt the row body without reapplying the ready-check colour. Reapplying it was deferred to a second pass, `RefreshReadyCheckStateImpl`, gated by `if isReadyCheckActive or HasReadyCheckHoldInRoster(state, roster) then ... end`. Any render triggered during a narrow window where the per-unit `readyCheckReadyUntil` / `readyCheckDeclinedUntil` maps had not yet been populated (e.g. between `READY_CHECK_FINISHED` firing and `PromoteReadyCheckReadyUnitsToHold` / `PromoteDeclinedReadyCheckUnitsToHold` filling the maps), or where `HasReadyCheckHoldInRoster` iterated the ordered roster and returned `false` for any other reason, cleared the background and never reapplied it — even though `displayData.readyCheckBackgroundColor` already carried the correct colour.
+  - `RenderRosterImpl`'s main loop now calls `ApplyRowReadyCheckDisplay(row, displayData)` directly after `ApplyRowNameDisplay`, so the background is set (or hidden) in the same single pass that writes spec, name, key, ilvl, rio, dps and kick cells. The conditional `if isReadyCheckActive or HasReadyCheckHoldInRoster(...) then RefreshReadyCheckStateImpl({...}) end` block (23 lines) and the eleven unused local captures that only fed the `RefreshReadyCheckStateImpl` passthrough object (`buildDisplayData`, `truncateName`, `getShortSpecLabel`, `getLanguageFlagMarkup`, `getRioDelta`, `syncMarker`, `syncBadge`, `getPlayerSyncSummary`, `getReadyCheckReadyUntil`, `getReadyCheckDeclinedUntil`, `getTime`) were removed from `RenderRosterImpl`.
+  - `RefreshReadyCheckStateImpl` itself stays: it is the public API surface consumed externally via `controller.RefreshReadyCheckState(roster)` in `ui/isiLive_roster_panel.lua` and invoked from `factory/isiLive_factory_controllers.lua:763` and `:1414` for targeted re-applies that must not rebuild the whole roster. `HasReadyCheckHoldInRoster` is also preserved as an `RI.HasReadyCheckHoldInRoster` export. The underlying state layer — per-unit `readyCheckReadyUntil` / `readyCheckDeclinedUntil` maps, the global `ctx.readyCheckHoldUntil` anchor and the `C_Timer.After`-based `ScheduleReadyCheckHoldClear` sweeper in `logic/isiLive_event_handlers_challenge.lua` — is untouched; the sweeper still triggers `RefreshReadyCheckUI` when the hold window elapses.
+  - Side effect beyond the bug fix: render cost drops during the hold window because `BuildRowDisplayData`, `ApplyRowSpecDisplay` and `ApplyRowNameDisplay` no longer run twice per row per render.
+
+- **Tests:**
+  - 723 / 723 use-case scenarios pass. No test changes — the existing roster-render scenarios already exercised the single-pass contract.
+
+## 2026-04-20 - Version 0.9.176 (patch)
+
+- **Addon-message sync routed through ChatThrottleLib v24 with per-message priority:**
+  - Embedded Mikk's Public Domain `ChatThrottleLib` (v24, ~534 lines) as `libs/ChatThrottleLib/ChatThrottleLib.lua` and loaded it as the first file in `isiLive.toc` so every sync send benefits from shared burst budgeting, CPS throttling and WoW's own congestion backpressure. WoW's addon-message pipe is a shared per-client bandwidth resource — hitting it raw (`C_ChatInfo.SendAddonMessage`) drops silently under contention; ChatThrottleLib queues, prioritises and redrives without loss.
+  - New helper `DispatchAddonMessage(prefix, payload, channel, priority)` in `logic/isiLive_sync.lua` calls `ChatThrottleLib:SendAddonMessage(priority, prefix, text, chattype)` when the lib is loaded and falls back to raw `C_ChatInfo.SendAddonMessage` otherwise, so the addon still runs standalone if the lib ever fails to load.
+  - Priority per message type reflects "speed vs. correctness" weighting: `KICK` and `REQSYNC` use `ALERT` (near-real-time — a missed kick broadcast degrades coordination during pulls); `STATS`, `DPS`, `LOC` use `BULK` (metrics can yield under load without hurting gameplay); `HELLO`, `KEY`, `TARGET`, `SHAREKEYS` and the LibKeystone party/request envelopes use `NORMAL`. All 11 send sites across the sync module were converted — no raw `C_ChatInfo.SendAddonMessage` call remains in `isiLive_sync.lua`.
+  - Every send now logs its dispatch result as `sent=true|false` in the SyncLog trace, including the two LibKeystone flows (`send_libkeystone_request`, `send_libkeystone_party`) which were previously silent on failure. Drops are now visible in the debug log without needing ingame inspection of the chat pipe.
+  - `.luacheckrc` split the `libs/` exclude into separate `/` and `\\` patterns so luacheck's Lua pattern matcher correctly skips the vendored lib on both Windows and Linux CI runners (char-class `[/\\]` is invalid in Lua patterns and triggered the `"Invalid pattern '^[]"` crash on first commit). Added `ChatThrottleLib` as a `read_globals` entry. The vendored lib file carries a `---@diagnostic disable` header so Sumneko Lua-LS doesn't surface inject-field hints on Blizzard / WoW API references in VS Code.
+
+- **Tests:**
+  - Added `RegisterChatThrottleLibRoutingTests` in `testmodul/isilive_test_scenarios_sync.lua` with two scenarios: one stubs `ChatThrottleLib` with a capturing mock and asserts the priority routing for all eight synchronous sends (`KICK=ALERT`, `REQSYNC=ALERT`, `STATS=BULK`, `DPS=BULK`, `LOC=BULK`, `KEY=NORMAL`, `TARGET=NORMAL`, `HELLO=NORMAL`); the other omits `ChatThrottleLib` entirely and asserts the raw `C_ChatInfo.SendAddonMessage` fallback path still dispatches with the `KICK:` payload and `ISILIVE` prefix.
+  - Existing `send_reqsync` trace-log scenario was updated to expect the new `sent=%s` suffix.
+  - 723 / 723 use-case scenarios pass.
+
 ## 2026-04-19 - Version 0.9.175 (patch)
 
 - **BR/Lust announce: self-cast only, broadcast to group chat (fixes 6102x "table index is secret" spam in M+):**

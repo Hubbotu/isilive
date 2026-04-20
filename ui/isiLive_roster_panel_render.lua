@@ -389,21 +389,10 @@ local function RenderRosterImpl(state, roster)
   local resolveTargetMapID = state.resolveTargetMapID
   local getOwnedKeystoneSnapshot = type(state.getOwnedKeystoneSnapshot) == "function" and state.getOwnedKeystoneSnapshot
     or nil
-  local buildDisplayData = state.buildDisplayData
-  local truncateName = state.truncateName
-  local getShortSpecLabel = state.getShortSpecLabel
-  local getLanguageFlagMarkup = state.getLanguageFlagMarkup
   local getLanguageTooltipMarkup = state.getLanguageTooltipMarkup
   local getDungeonShortCode = state.getDungeonShortCode
   local getDungeonName = state.getDungeonName
-  local getRioDelta = state.getRioDelta
-  local syncMarker = state.syncMarker
-  local syncBadge = state.syncBadge
-  local getPlayerSyncSummary = state.getPlayerSyncSummary
   local getPlayerLastRunDps = state.getPlayerLastRunDps
-  local getReadyCheckReadyUntil = state.getReadyCheckReadyUntil
-  local getReadyCheckDeclinedUntil = state.getReadyCheckDeclinedUntil
-  local getTime = state.getTime
   local getL = state.getL
   local isRaidGroup = state.isRaidGroup
   local applyKnownKeyToRosterEntry = state.applyKnownKeyToRosterEntry
@@ -573,6 +562,7 @@ local function RenderRosterImpl(state, roster)
     ApplyRowSpecDisplay(row, displayData)
     -- Skip displayData.roleIconMarkup since we render it as a secure button
     ApplyRowNameDisplay(row, displayData)
+    ApplyRowReadyCheckDisplay(row, displayData)
     row.realm:SetText(displayData.languageDisplay)
     if displayData.keyText ~= "-" and activeKeyOwnerUnit and entry.unit == activeKeyOwnerUnit then
       row.key:SetText("|cffff4040" .. displayData.keyText .. "|r")
@@ -629,30 +619,6 @@ local function RenderRosterImpl(state, roster)
         and tonumber(ownKeyLevel)
         and tonumber(ownKeyLevel) > 0
       or false
-  end
-
-  if isReadyCheckActive or HasReadyCheckHoldInRoster(state, roster) then
-    RefreshReadyCheckStateImpl({
-      memberRows = memberRows,
-      buildOrderedRoster = buildOrderedRoster,
-      rolePriority = rolePriority,
-      unitPriority = unitPriority,
-      isReadyCheckActive = isReadyCheckActive,
-      resolveTargetMapID = resolveTargetMapID,
-      buildDisplayData = buildDisplayData,
-      truncateName = truncateName,
-      getShortSpecLabel = getShortSpecLabel,
-      getLanguageFlagMarkup = getLanguageFlagMarkup,
-      getDungeonShortCode = getDungeonShortCode,
-      getDungeonName = getDungeonName,
-      getRioDelta = getRioDelta,
-      syncMarker = syncMarker,
-      syncBadge = syncBadge,
-      getPlayerSyncSummary = getPlayerSyncSummary,
-      getReadyCheckReadyUntil = getReadyCheckReadyUntil,
-      getReadyCheckDeclinedUntil = getReadyCheckDeclinedUntil,
-      getTime = getTime,
-    }, roster)
   end
 
   if type(shareKeysButton.SetShareKeysAvailable) == "function" then
