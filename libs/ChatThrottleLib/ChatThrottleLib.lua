@@ -1,3 +1,4 @@
+---@diagnostic disable
 --
 -- ChatThrottleLib by Mikk
 --
