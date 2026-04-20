@@ -16,7 +16,6 @@ ignore:
   - .gitignore
   - docs
   - README.md
-  - TODO.md
   - AGENTS.md
   - CLAUDE.md
   - LICENSE

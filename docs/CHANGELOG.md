@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-20 - Version 0.9.178 (patch)
+
+- **Rename the "M2" main-horizontal layout to "M+" in all user-visible strings:**
+  - The compact main-horizontal layout mode is the second "main" layout alongside the expanded M view. Historically the mode button in the title bar, the "default UI to open" dropdown in settings and the "fade out during combat" checkbox hint all labelled it as `M2`. That was an internal implementation term (the layout is the *second* Main-style layout) and not meaningful to users; the addon's whole purpose is Mythic+, so `M+` conveys its intent at a glance and stays consistent with existing references to `M+` queue / keystone / run across the rest of the UI.
+  - `ui/isiLive_roster_layout.lua`: `LAYOUT_MODE_CONFIG[LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL].label` switched from `"M2"` to `"M+"`. This feeds `CreateModeButton(mainFrame, def.xOffset, def.label, target, ...)` in `ui/isiLive_roster_panel.lua` and is the primary title-bar button label.
+  - `ui/isiLive_roster_panel.lua`: `modeButtonDefs[1].label` (the separate static definition used for the tooltip / descriptor row) switched from `"M2"` to `"M+"`; the inline comment now reads `[M+][H][V]` instead of `[M2][H][V]`.
+  - `ui/isiLive_settings.lua`: the fallback string for the "Default UI" dropdown entry changed from `"M2"` to `"M+"` so that locales without a translation also render the new label.
+  - `locale/isiLive_texts.lua`: 16 values updated across all eight locales. `SETTINGS_DEFAULT_OPEN_UI_M2 = "M2"` becomes `"M+"` (8× identical). `SETTINGS_COMBAT_FADE_MM` loses the embedded `M2` reference in each language (e.g. `"Fade out during combat (M2 layout only)"` → `"Fade out during combat (M+ layout only)"`, `"Im Kampf ausblenden (nur M2-Layout)"` → `"Im Kampf ausblenden (nur M+-Layout)"`, plus the French/Spanish/Portuguese/Italian/Russian/Turkish variants). Locale **keys** (`SETTINGS_DEFAULT_OPEN_UI_M2`, `SETTINGS_COMBAT_FADE_MM`, `MODE_LAYOUT_M2`) are preserved — renaming the keys would have been a pure cosmetic rewrite touching every translation table and every test fixture.
+  - Deliberately **not** renamed: the layout mode string `compact_main_horizontal` (persisted in `IsiLiveDB.rosterDefaultLayoutMode`), its legacy alias `compact_horizontal_2`, the `M2_ROW_LEFT_MARGIN` / `M2_MANAGEMENT_ROW_Y` / `M2_TOOLBAR_BUTTON_WIDTH` / etc. layout constants, and the `MODE_LAYOUT_M2` tooltip description text body. Touching any of those would have forced a SavedVariables migration and a mechanical churn diff across roster_layout, tests, docs and `.pkgmeta` with zero user-visible benefit.
+
+- **Tests:**
+  - `testmodul/isilive_test_scenarios_tank_helper.lua` adjusted the `m2Button._collapseButtonLabel` assertion from `"M2"` to `"M+"` (the internal `m2Button` variable name kept for historical continuity).
+  - 723 / 723 use-case scenarios pass.
+
 ## 2026-04-20 - Version 0.9.177 (patch)
 
 - **Readycheck 20 s-hold rendering: removed the split render pipeline that could drop the coloured background before the hold window ended:**

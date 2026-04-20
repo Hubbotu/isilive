@@ -860,7 +860,7 @@ local function RegisterHorizontalModernLayoutTests(test, Assert, WithGlobals, Lo
 
     Assert.Equal(mainFrame.width, 500, "M2 mode should use the widened modern frame")
     Assert.Equal(mainFrame.height, 272, "M2 mode should keep the roster compact and leave room for the action rows")
-    Assert.Equal(m2Button._collapseButtonLabel, "M2", "M2 mode button should keep its static label")
+    Assert.Equal(m2Button._collapseButtonLabel, "M+", "M2 mode button should keep its static label")
     Assert.Equal(#toolbarButtons, 5, "M2 mode should keep all action buttons in one horizontal row")
     Assert.Equal(toolbarButtons[1].point, "BOTTOMLEFT", "M2 action row should anchor from the bottom-left")
     Assert.Equal(toolbarButtons[1].pointX, 10, "M2 action row should start at the left margin")

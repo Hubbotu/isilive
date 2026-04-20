@@ -583,7 +583,7 @@ local function ConstructPanelUI(mainFrame, uiDeps)
     ui.refreshButton,
   }
 
-  -- Three static mode buttons [M2][H][V] laid out left-to-right at the top-right.
+  -- Three static mode buttons [M+][H][V] laid out left-to-right at the top-right.
   -- Each button sets the mode directly; the active mode is highlighted gold.
   ui.layoutMode = LAYOUT_MODE_EXPANDED
   ui.isCollapsed = false
@@ -591,7 +591,7 @@ local function ConstructPanelUI(mainFrame, uiDeps)
   local modeButtonDefs = {
     {
       xOffset = -88,
-      label = "M2",
+      label = "M+",
       target = LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL,
       width = 24,
       descriptionKey = "MODE_LAYOUT_M2",

@@ -894,7 +894,7 @@ local function BuildGeneralSettingsSection(canvas, yOffset, labels, config, cont
       {
         value = DEFAULT_LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL,
         labelKey = "SETTINGS_DEFAULT_OPEN_UI_M2",
-        fallback = labels.SETTINGS_DEFAULT_OPEN_UI_M2 or "M2",
+        fallback = labels.SETTINGS_DEFAULT_OPEN_UI_M2 or "M+",
         width = 40,
       },
     },
