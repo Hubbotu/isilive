@@ -154,6 +154,7 @@ local function BuildEventHandlersBaseOptions(entryRef, counters)
     processAddonMessage = function(_prefix, _message, _sender)
       return nil
     end,
+    showCombatAnnounce = function(_info) end,
     sendAck = function(_sender)
       counters.acks = counters.acks + 1
     end,

@@ -1,8 +1,8 @@
 ## Interface: 120001
-## Title: isiLive v0.9.178
+## Title: isiLive v0.9.179
 ## Notes: M+ Dungeon and Group Managment
 ## Author: mematiWoW
-## Version: 0.9.178
+## Version: 0.9.179
 ## SavedVariables: IsiLiveDB
 ## IconTexture: Interface\Icons\INV_Misc_QuestionMark
 libs/ChatThrottleLib/ChatThrottleLib.lua

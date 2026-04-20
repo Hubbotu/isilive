@@ -71,67 +71,13 @@ local function BuildDefaultGetUnitName()
   end
 end
 
--- Strips the "-Realm" suffix from names so the chat message reads naturally on
--- the local realm. Cross-realm names keep the realm segment.
-local function FormatDisplayName(name)
-  if type(name) ~= "string" or name == "" then
-    return "?"
-  end
-  local dash = string.find(name, "-", 1, true)
-  if not dash then
-    return name
-  end
-  return string.sub(name, 1, dash - 1)
-end
-
--- Resolves the chat channel for group announcements. INSTANCE_CHAT wins
--- inside M+ / raid instances because PARTY/RAID do not route there.
-local function DefaultResolveChannel()
-  local inInstanceGroup = rawget(_G, "IsInGroup")
-  local partyCategoryInstance = rawget(_G, "LE_PARTY_CATEGORY_INSTANCE")
-  if type(inInstanceGroup) == "function" and partyCategoryInstance ~= nil then
-    local ok, inInstance = pcall(inInstanceGroup, partyCategoryInstance)
-    if ok and inInstance then
-      return "INSTANCE_CHAT"
-    end
-  end
-  local inRaid = rawget(_G, "IsInRaid")
-  if type(inRaid) == "function" then
-    local ok, isRaid = pcall(inRaid)
-    if ok and isRaid then
-      return "RAID"
-    end
-  end
-  if type(inInstanceGroup) == "function" then
-    local ok, isGroup = pcall(inInstanceGroup)
-    if ok and isGroup then
-      return "PARTY"
-    end
-  end
-  return nil
-end
-
-local function DefaultSendChat(msg)
-  local sendChatMessage = rawget(_G, "SendChatMessage")
-  if type(sendChatMessage) ~= "function" then
-    return
-  end
-  local channel = DefaultResolveChannel()
-  if not channel then
-    return
-  end
-  pcall(sendChatMessage, tostring(msg), channel)
-end
-
 function CombatEvents.CreateController(opts)
   opts = opts or {}
   local getTime = type(opts.getTime) == "function" and opts.getTime or DefaultGetTime
   local isInKey = type(opts.isInKey) == "function" and opts.isInKey or DefaultIsInKey
   local getUnitName = type(opts.getUnitName) == "function" and opts.getUnitName or BuildDefaultGetUnitName()
-  local sendChat = type(opts.sendChat) == "function" and opts.sendChat or DefaultSendChat
-  local getL = type(opts.getL) == "function" and opts.getL or function()
-    return {}
-  end
+  local broadcast = type(opts.broadcastCombatAnnounce) == "function" and opts.broadcastCombatAnnounce
+    or function(_kind, _sourceName, _spellID) end
   local getDB = type(opts.getDB) == "function" and opts.getDB or function()
     return {}
   end
@@ -163,29 +109,15 @@ function CombatEvents.CreateController(opts)
     return false
   end
 
-  local function AnnounceBR(sourceName, spellID)
-    if ShouldDedup(sourceName or "", spellID) then
-      return
-    end
-    local L = getL() or {}
-    local template = L.COMBAT_CHAT_BR_USED or "%s used BR"
-    sendChat(string.format(template, FormatDisplayName(sourceName)))
-  end
-
-  local function AnnounceLust(sourceName, spellID)
-    if ShouldDedup(sourceName or "", spellID) then
-      return
-    end
-    local L = getL() or {}
-    local template = L.COMBAT_CHAT_LUST_STARTED or "%s started Bloodlust"
-    sendChat(string.format(template, FormatDisplayName(sourceName)))
-  end
-
   -- Only self-casts: the 12.0.0 Secret Values system masks spellID for other
   -- players' UNIT_SPELLCAST_SUCCEEDED events inside M+ / boss restriction
   -- zones, which makes BR_SPELL_IDS[spellID] throw "table index is secret".
-  -- Each isiLive client detects exactly its own cast and broadcasts the
-  -- announcement to group chat, so N isiLive users cover all N casters.
+  -- Each isiLive client detects exactly its own cast and broadcasts via the
+  -- isiLive addon-message channel (BRLUST payload). All isiLive peers render
+  -- the announcement locally; non-isiLive players see nothing. The previous
+  -- SendChatMessage path was removed because 12.0 raises ADDON_ACTION_FORBIDDEN
+  -- when the protected SendChatMessage is invoked from a tainted M+/boss
+  -- execution context.
   function controller.HandleUnitSpellcastSucceeded(unit, _, spellID)
     if unit ~= "player" then
       return
@@ -196,19 +128,25 @@ function CombatEvents.CreateController(opts)
     if type(spellID) ~= "number" then
       return
     end
+    local kind
     if BR_SPELL_IDS[spellID] then
       if not IsEnabledForBR() then
         return
       end
-      AnnounceBR(getUnitName(unit), spellID)
-      return
-    end
-    if LUST_CAST_IDS[spellID] then
+      kind = "BR"
+    elseif LUST_CAST_IDS[spellID] then
       if not IsEnabledForLust() then
         return
       end
-      AnnounceLust(getUnitName(unit), spellID)
+      kind = "LUST"
+    else
+      return
     end
+    local sourceName = getUnitName(unit)
+    if ShouldDedup(sourceName or "", spellID) then
+      return
+    end
+    broadcast(kind, sourceName, spellID)
   end
 
   function controller.Reset()

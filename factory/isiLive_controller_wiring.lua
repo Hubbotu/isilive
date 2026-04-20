@@ -363,6 +363,8 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
     local localName, localRealm = deps.getUnitNameAndRealm("player")
     return modules.sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm, channel)
   end
+  config.showCombatAnnounce = type(deps.showCombatAnnounce) == "function" and deps.showCombatAnnounce
+    or function(_info) end
   config.sendAck = function(sender)
     if C_ChatInfo and C_ChatInfo.SendAddonMessage and type(sender) == "string" and sender ~= "" then
       C_ChatInfo.SendAddonMessage(modules.sync.GetPrefix(), "ACK:" .. deps.getAddonVersionRaw(), "WHISPER", sender)
@@ -578,6 +580,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     applyHotkeyBindings = ctx.applyHotkeyBindings,
     startBindingWatchdog = ctx.startBindingWatchdog,
     getUnitNameAndRealm = ctx.getUnitNameAndRealm,
+    showCombatAnnounce = ctx.ShowCombatAnnounce,
     markIsiLiveUser = ctx.markIsiLiveUser,
     getUnitRio = ctx.getUnitRio,
     getInspectSpecName = ctx.getInspectSpecName,

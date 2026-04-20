@@ -891,13 +891,58 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end
   end
 
+  -- Strips the "-Realm" suffix from a player name so the chat output reads
+  -- naturally on the local realm. Cross-realm names keep their realm segment.
+  local function FormatDisplayName(name)
+    if type(name) ~= "string" or name == "" then
+      return "?"
+    end
+    local dash = string.find(name, "-", 1, true)
+    if not dash then
+      return name
+    end
+    return string.sub(name, 1, dash - 1)
+  end
+
+  -- Renders a BR/Lust combat announcement locally via ctx.Print. Used both for
+  -- the local self-cast (Ego-User) and for incoming addon-message broadcasts
+  -- from isiLive peers. Locale-resolved so each receiver renders in its own
+  -- client locale.
+  ctx.ShowCombatAnnounce = function(info)
+    if type(info) ~= "table" then
+      return
+    end
+    local L = ctx.GetL and ctx.GetL() or {}
+    local template
+    if info.kind == "BR" then
+      template = L.COMBAT_CHAT_BR_USED or "%s used BR"
+    elseif info.kind == "LUST" then
+      template = L.COMBAT_CHAT_LUST_STARTED or "%s started Bloodlust"
+    else
+      return
+    end
+    ctx.Print(string.format(template, FormatDisplayName(info.caster)))
+  end
+
+  -- Self-cast detected by combat_events: render locally and broadcast to all
+  -- isiLive peers via the addon-message channel. Non-isiLive players see
+  -- nothing (intentional - 12.0 SendChatMessage taint blocks the previous
+  -- group-chat broadcast).
+  ctx.BroadcastCombatAnnounce = function(kind, sourceName, spellID)
+    local info = { kind = kind, caster = sourceName, spellID = spellID }
+    ctx.ShowCombatAnnounce(info)
+    if ctx.modules and ctx.modules.sync and type(ctx.modules.sync.SendCombatAnnounce) == "function" then
+      ctx.modules.sync.SendCombatAnnounce(info)
+    end
+  end
+
   local combatEvents = addonTable.CombatEvents
   if type(combatEvents) == "table" and type(combatEvents.SetDependencies) == "function" then
     combatEvents.SetDependencies({
-      getL = ctx.GetL,
       getDB = function()
         return rawget(_G, "IsiLiveDB") or {}
       end,
+      broadcastCombatAnnounce = ctx.BroadcastCombatAnnounce,
     })
   end
 end

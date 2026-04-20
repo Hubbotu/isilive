@@ -553,6 +553,9 @@ function RuntimeLifecycle.BuildHandlers(ctx)
         ctx.triggerShareKeysCooldown()
       end
     end
+    if syncResult.combatAnnounce then
+      ctx.showCombatAnnounce(syncResult.combatAnnounce)
+    end
 
     local changed = syncResult.targetUpdated == true or syncResult.kickUpdated == true
     ctx.forEachRosterInfo(function(info)

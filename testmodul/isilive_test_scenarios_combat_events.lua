@@ -79,15 +79,10 @@ end
 
 local function BuildController(opts)
   opts = opts or {}
-  local messages = opts.messages or {}
+  local broadcasts = opts.broadcasts or {}
   local nowRef = opts.nowRef or { value = 0 }
   local inKeyRef = opts.inKeyRef or { value = true }
   local dbRef = opts.dbRef or { value = {} }
-  local labels = opts.labels
-    or {
-      COMBAT_CHAT_BR_USED = "%s used BR",
-      COMBAT_CHAT_LUST_STARTED = "%s started Bloodlust",
-    }
   local nameMap = opts.nameMap or {
     player = "Alice-Realm",
   }
@@ -103,11 +98,8 @@ local function BuildController(opts)
     getUnitName = function(unit)
       return nameMap[unit] or unit
     end,
-    sendChat = function(msg)
-      table.insert(messages, tostring(msg))
-    end,
-    getL = function()
-      return labels
+    broadcastCombatAnnounce = function(kind, sourceName, spellID)
+      table.insert(broadcasts, { kind = kind, caster = sourceName, spellID = spellID })
     end,
     getDB = function()
       return dbRef.value
@@ -120,16 +112,18 @@ local function RegisterCombatEventsBRTests(test, ctx)
   local WithGlobals = ctx.with_globals
   local LoadAddonModules = ctx.load_modules
 
-  test("CombatEvents announces own BR when in key", function()
+  test("CombatEvents broadcasts own BR when in key", function()
     local addon = nil
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
-    local controller = BuildController({ addon = addon, messages = messages })
+    local broadcasts = {}
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
-    Assert.Equal(#messages, 1, "must broadcast exactly one BR line to group chat")
-    Assert.Equal(messages[1], "Alice used BR", "realm suffix must be stripped for readability")
+    Assert.Equal(#broadcasts, 1, "must broadcast exactly one BR call")
+    Assert.Equal(broadcasts[1].kind, "BR", "broadcast kind must be BR")
+    Assert.Equal(broadcasts[1].caster, "Alice-Realm", "broadcast must pass raw unit name (realm strip happens in receiver)")
+    Assert.Equal(broadcasts[1].spellID, 20484, "broadcast must include spellID")
   end)
 
   test("CombatEvents suppresses BR when not in key", function()
@@ -137,14 +131,14 @@ local function RegisterCombatEventsBRTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
+    local broadcasts = {}
     local controller = BuildController({
       addon = addon,
-      messages = messages,
+      broadcasts = broadcasts,
       inKeyRef = { value = false },
     })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
-    Assert.Equal(#messages, 0, "no BR announcement outside M+")
+    Assert.Equal(#broadcasts, 0, "no BR broadcast outside M+")
   end)
 
   test("CombatEvents respects chatAnnounceBR=false toggle", function()
@@ -152,14 +146,14 @@ local function RegisterCombatEventsBRTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
+    local broadcasts = {}
     local controller = BuildController({
       addon = addon,
-      messages = messages,
+      broadcasts = broadcasts,
       dbRef = { value = { chatAnnounceBR = false } },
     })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
-    Assert.Equal(#messages, 0, "BR announcement must be gated by chatAnnounceBR")
+    Assert.Equal(#broadcasts, 0, "BR broadcast must be gated by chatAnnounceBR")
   end)
 
   test("CombatEvents dedups identical BR events within 3s", function()
@@ -167,16 +161,16 @@ local function RegisterCombatEventsBRTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
+    local broadcasts = {}
     local nowRef = { value = 100 }
-    local controller = BuildController({ addon = addon, messages = messages, nowRef = nowRef })
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts, nowRef = nowRef })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
     nowRef.value = 102
     controller.HandleUnitSpellcastSucceeded("player", "cast-2", 20484)
-    Assert.Equal(#messages, 1, "second BR within dedup window must be dropped")
+    Assert.Equal(#broadcasts, 1, "second BR within dedup window must be dropped")
     nowRef.value = 104
     controller.HandleUnitSpellcastSucceeded("player", "cast-3", 20484)
-    Assert.Equal(#messages, 2, "BR after dedup window elapses must fire again")
+    Assert.Equal(#broadcasts, 2, "BR after dedup window elapses must fire again")
   end)
 
   test("CombatEvents ignores casts from units other than the player", function()
@@ -184,8 +178,8 @@ local function RegisterCombatEventsBRTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
-    local controller = BuildController({ addon = addon, messages = messages })
+    local broadcasts = {}
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts })
     -- Only the caster announces their own cast; other units are ignored to
     -- avoid "table index is secret" from the 12.0.0 Secret Values system.
     controller.HandleUnitSpellcastSucceeded("party1", "cast-1", 20484)
@@ -193,7 +187,7 @@ local function RegisterCombatEventsBRTests(test, ctx)
     controller.HandleUnitSpellcastSucceeded("target", "cast-3", 20484)
     controller.HandleUnitSpellcastSucceeded("boss1", "cast-4", 20484)
     controller.HandleUnitSpellcastSucceeded("focus", "cast-5", 20484)
-    Assert.Equal(#messages, 0, "BR from non-player units must be ignored (self-casts only)")
+    Assert.Equal(#broadcasts, 0, "BR from non-player units must be ignored (self-casts only)")
   end)
 end
 
@@ -202,16 +196,17 @@ local function RegisterCombatEventsLustTests(test, ctx)
   local WithGlobals = ctx.with_globals
   local LoadAddonModules = ctx.load_modules
 
-  test("CombatEvents announces own Bloodlust cast when in key", function()
+  test("CombatEvents broadcasts own Bloodlust cast when in key", function()
     local addon = nil
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
-    local controller = BuildController({ addon = addon, messages = messages })
+    local broadcasts = {}
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 2825)
-    Assert.Equal(#messages, 1, "must broadcast the Bloodlust cast")
-    Assert.Equal(messages[1], "Alice started Bloodlust")
+    Assert.Equal(#broadcasts, 1, "must broadcast the Bloodlust cast")
+    Assert.Equal(broadcasts[1].kind, "LUST", "broadcast kind must be LUST")
+    Assert.Equal(broadcasts[1].spellID, 2825, "broadcast must carry the Bloodlust spellID")
   end)
 
   test("CombatEvents ignores unrelated spell IDs", function()
@@ -219,11 +214,11 @@ local function RegisterCombatEventsLustTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
-    local controller = BuildController({ addon = addon, messages = messages })
+    local broadcasts = {}
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts })
     -- 1459 = Arcane Intellect: a cast but neither BR nor Lust.
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 1459)
-    Assert.Equal(#messages, 0, "unrelated cast IDs must not announce anything")
+    Assert.Equal(#broadcasts, 0, "unrelated cast IDs must not broadcast anything")
   end)
 
   test("CombatEvents respects chatAnnounceLust=false toggle", function()
@@ -231,14 +226,14 @@ local function RegisterCombatEventsLustTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
+    local broadcasts = {}
     local controller = BuildController({
       addon = addon,
-      messages = messages,
+      broadcasts = broadcasts,
       dbRef = { value = { chatAnnounceLust = false } },
     })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 2825)
-    Assert.Equal(#messages, 0, "Lust announcement must be gated by chatAnnounceLust")
+    Assert.Equal(#broadcasts, 0, "Lust broadcast must be gated by chatAnnounceLust")
   end)
 
   test("CombatEvents Reset clears dedup so same cast fires again", function()
@@ -246,15 +241,15 @@ local function RegisterCombatEventsLustTests(test, ctx)
     WithGlobals(BuildCombatEventsEnv(), function()
       addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
-    local messages = {}
+    local broadcasts = {}
     local nowRef = { value = 50 }
-    local controller = BuildController({ addon = addon, messages = messages, nowRef = nowRef })
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts, nowRef = nowRef })
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 2825)
     controller.HandleUnitSpellcastSucceeded("player", "cast-2", 2825)
-    Assert.Equal(#messages, 1, "dedup must suppress repeat before Reset")
+    Assert.Equal(#broadcasts, 1, "dedup must suppress repeat before Reset")
     controller.Reset()
     controller.HandleUnitSpellcastSucceeded("player", "cast-3", 2825)
-    Assert.Equal(#messages, 2, "Reset must clear dedup state")
+    Assert.Equal(#broadcasts, 2, "Reset must clear dedup state")
   end)
 end
 

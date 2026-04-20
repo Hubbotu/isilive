@@ -142,6 +142,7 @@ local function BuildContext(opts)
 
   ctx.processAddonMessage = RequireFunction(opts.processAddonMessage, "processAddonMessage")
   ctx.sendAck = RequireFunction(opts.sendAck, "sendAck")
+  ctx.showCombatAnnounce = RequireFunction(opts.showCombatAnnounce, "showCombatAnnounce")
   ctx.sendRefreshResponse = RequireFunction(opts.sendRefreshResponse, "sendRefreshResponse")
   ctx.forEachRosterInfo = RequireFunction(opts.forEachRosterInfo, "forEachRosterInfo")
   ctx.isSyncUserKnown = RequireFunction(opts.isSyncUserKnown, "isSyncUserKnown")

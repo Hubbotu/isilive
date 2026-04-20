@@ -1280,6 +1280,41 @@ function Sync.SendTarget(opts)
   )
 end
 
+--- Broadcasts a BR / Bloodlust combat announcement to all isiLive peers.
+-- Sender-side dedup is handled upstream by combat_events.HandleUnitSpellcastSucceeded
+-- (per source+spellID, 3 s window), so this function does not gate again. Suppressed
+-- when no group channel is available; isVisible / allowHidden semantics follow
+-- ResolveSendChannel.
+-- @param opts table {kind:"BR"|"LUST", caster:string, spellID:number,
+--   isVisible:boolean, allowHidden:boolean}
+function Sync.SendCombatAnnounce(opts)
+  opts = opts or {}
+  local channel = ResolveSendChannel(opts)
+  if not channel then
+    return
+  end
+  local kind = tostring(opts.kind or "")
+  if kind ~= "BR" and kind ~= "LUST" then
+    return
+  end
+  local caster = tostring(opts.caster or "")
+  if caster == "" or string.find(caster, ":", 1, true) then
+    return
+  end
+  local spellID = tonumber(opts.spellID) or 0
+  local payload = string.format("BRLUST:%s:%s:%d", kind, caster, spellID)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "NORMAL")
+  SyncLog(
+    "send_combat_announce",
+    "kind=%s caster=%s spellID=%d channel=%s sent=%s",
+    kind,
+    caster,
+    spellID,
+    tostring(channel),
+    tostring(sent)
+  )
+end
+
 --- Broadcasts a REQSYNC request, asking all peers to re-send their current sync snapshot.
 -- Rate-limited by ISILIVE_REFRESH_REQUEST_COOLDOWN (1 s).
 -- @param opts table|nil {force:boolean}
@@ -1509,6 +1544,7 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   local locUpdated = false
   local kickUpdated = false
   local targetUpdated = false
+  local combatAnnounce = nil
 
   local parts = SplitPayload(message)
   local bucket = parts[1]
@@ -1539,6 +1575,15 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     if (numericState == -1 or numericState == 0 or numericState == 1) and numericRemain and numericRemain >= 0 then
       local hasKick = numericState ~= -1
       kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick)
+    end
+  elseif bucket == "BRLUST" and parts[2] and parts[3] then
+    local kind = parts[2]
+    if kind == "BR" or kind == "LUST" then
+      combatAnnounce = {
+        kind = kind,
+        caster = parts[3],
+        spellID = tonumber(parts[4]) or 0,
+      }
     end
   end
 
@@ -1596,5 +1641,6 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     targetUpdated = targetUpdated and true or false,
     kickUpdated = kickUpdated and true or false,
     shouldShareKeys = shouldShareKeys and true or false,
+    combatAnnounce = combatAnnounce,
   }
 end

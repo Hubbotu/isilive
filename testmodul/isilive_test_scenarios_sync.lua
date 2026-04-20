@@ -857,6 +857,23 @@ local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, Loa
       local wrongPrefix =
         addon.Sync.ProcessAddonMessage("WRONGPREFIX", "HELLO:1.0", "Someone-Realm", "MyPlayer", "Realm")
       Assert.Nil(wrongPrefix, "wrong prefix must return nil")
+
+      local brResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "BRLUST:BR:Caster-OtherRealm:20484", "Caster-OtherRealm", "MyPlayer", "Realm")
+      Assert.NotNil(brResult, "BRLUST must return result")
+      Assert.NotNil(brResult.combatAnnounce, "BR payload must surface combatAnnounce on the result")
+      Assert.Equal(brResult.combatAnnounce.kind, "BR", "combatAnnounce kind must be BR")
+      Assert.Equal(brResult.combatAnnounce.caster, "Caster-OtherRealm", "combatAnnounce must carry the raw caster name")
+      Assert.Equal(brResult.combatAnnounce.spellID, 20484, "combatAnnounce must include numeric spellID")
+
+      local lustResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "BRLUST:LUST:Shaman-OtherRealm:2825", "Shaman-OtherRealm", "MyPlayer", "Realm")
+      Assert.NotNil(lustResult.combatAnnounce, "LUST payload must surface combatAnnounce on the result")
+      Assert.Equal(lustResult.combatAnnounce.kind, "LUST", "combatAnnounce kind must be LUST")
+
+      local malformed =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "BRLUST:UNKNOWN:Foo:1", "Foo-OtherRealm", "MyPlayer", "Realm")
+      Assert.Nil(malformed.combatAnnounce, "unknown BRLUST kind must not surface combatAnnounce")
     end)
   end)
 
