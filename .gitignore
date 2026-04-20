@@ -9,6 +9,8 @@ desktop.ini
 .claude/*
 !.claude/README.md
 !.claude/settings.example.json
+!.claude/skills/
+!.claude/skills/**
 .idea/
 *.code-workspace
 .luarc.json
