@@ -6,11 +6,15 @@
 --   * extra keys in a locale (key exists in target but not in enUS)
 --   * %s/%d placeholder count mismatches (would crash string.format at runtime)
 --
+-- Also scans locale/isiLive_locale.lua LANGUAGE_NAME_BY_LOCALE for the same
+-- drift (missing/extra keys) across the supported display locales.
+--
 -- Exits 0 on clean, 1 on drift. Intended for local runs and CI.
 -- Run from repo root:
 --   lua tools/check_locale_drift.lua
 
 local TEXTS_PATH = "locale/isiLive_texts.lua"
+local LOCALE_PATH = "locale/isiLive_locale.lua"
 
 local loader = loadfile(TEXTS_PATH)
 if not loader then
@@ -18,7 +22,23 @@ if not loader then
   os.exit(2)
 end
 
-local addonTable = {}
+local addonTable = {
+  Validators = {
+    IsExistingUnit = function()
+      return false
+    end,
+  },
+  StringUtils = {
+    NormalizeRealmName = function(s)
+      return tostring(s or "")
+    end,
+  },
+  Languages = {
+    ResolveTag = function(tag)
+      return tag
+    end,
+  },
+}
 local ok, err = pcall(loader, "isiLive", addonTable)
 if not ok then
   io.stderr:write("drift: load error: " .. tostring(err) .. "\n")
@@ -90,6 +110,48 @@ for _, localeName in ipairs(orderedLocales) do
     for _, key in ipairs(sortedKeys(localeTable)) do
       if ref[key] == nil then
         issues[#issues + 1] = string.format("%s.%s: EXTRA (not present in enUS)", localeName, key)
+      end
+    end
+  end
+end
+
+local localeLoader = loadfile(LOCALE_PATH)
+if not localeLoader then
+  io.stderr:write("drift: cannot load " .. LOCALE_PATH .. "\n")
+  os.exit(2)
+end
+local okLocale, errLocale = pcall(localeLoader, "isiLive", addonTable)
+if not okLocale then
+  io.stderr:write("drift: load error (" .. LOCALE_PATH .. "): " .. tostring(errLocale) .. "\n")
+  os.exit(2)
+end
+if not addonTable.Locale or type(addonTable.Locale.GetLanguageNameTables) ~= "function" then
+  io.stderr:write("drift: addonTable.Locale.GetLanguageNameTables not available\n")
+  os.exit(2)
+end
+
+local languageNameTables = addonTable.Locale.GetLanguageNameTables()
+local languageNameRef = languageNameTables and languageNameTables.enUS
+if type(languageNameRef) ~= "table" then
+  io.stderr:write("drift: LANGUAGE_NAME_BY_LOCALE.enUS missing\n")
+  os.exit(2)
+end
+
+for _, localeName in ipairs(orderedLocales) do
+  local localeTable = languageNameTables[localeName]
+  if type(localeTable) ~= "table" then
+    issues[#issues + 1] = string.format("LANGUAGE_NAME_BY_LOCALE.%s: locale table missing entirely", localeName)
+  else
+    for _, key in ipairs(sortedKeys(languageNameRef)) do
+      if localeTable[key] == nil then
+        issues[#issues + 1] =
+          string.format("LANGUAGE_NAME_BY_LOCALE.%s.%s: MISSING (enUS has this key)", localeName, key)
+      end
+    end
+    for _, key in ipairs(sortedKeys(localeTable)) do
+      if languageNameRef[key] == nil then
+        issues[#issues + 1] =
+          string.format("LANGUAGE_NAME_BY_LOCALE.%s.%s: EXTRA (not present in enUS)", localeName, key)
       end
     end
   end

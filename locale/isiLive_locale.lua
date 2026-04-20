@@ -127,47 +127,44 @@ function Locale.ResolveLocaleTag(tag)
   return addonTable.Languages.ResolveTag(tag)
 end
 
+function Locale.GetLanguageNameTables()
+  return LANGUAGE_NAME_BY_LOCALE
+end
+
+-- KR/CN/TW: tags are recognized but have no flag asset in
+-- LANGUAGE_FLAG_TEXTURE_BY_TAG → GetLanguageFlagMarkup returns text fallback.
+-- These are display-only locales (no isiLive UI translation) and therefore
+-- are not listed in Languages.SUPPORTED.
+local EXTRA_LOCALE_TO_LANGUAGE_TAG = {
+  kokr = "KR",
+  zhcn = "CN",
+  zhtw = "TW",
+}
+
+local localeToLanguageTagCache
+
+local function BuildLocaleToLanguageTagTable()
+  local map = {}
+  for _, lang in ipairs(addonTable.Languages.SUPPORTED) do
+    local twoLetter = lang.tag:sub(1, 2):upper()
+    map[lang.tag:lower()] = twoLetter
+    for _, alias in ipairs(lang.cmdAliases) do
+      map[alias] = twoLetter
+    end
+  end
+  for alias, twoLetter in pairs(EXTRA_LOCALE_TO_LANGUAGE_TAG) do
+    map[alias] = twoLetter
+  end
+  return map
+end
+
 function Locale.LocaleToLanguageTag(localeTag)
   if not localeTag then
     return "??"
   end
+  localeToLanguageTagCache = localeToLanguageTagCache or BuildLocaleToLanguageTagTable()
   local normalized = tostring(localeTag):gsub("%-", ""):lower()
-  if normalized == "dede" then
-    return "DE"
-  end
-  if normalized == "enus" or normalized == "engb" then
-    return "EN"
-  end
-  if normalized == "frfr" then
-    return "FR"
-  end
-  if normalized == "eses" or normalized == "esmx" then
-    return "ES"
-  end
-  if normalized == "ruru" then
-    return "RU"
-  end
-  if normalized == "itit" then
-    return "IT"
-  end
-  if normalized == "trtr" then
-    return "TR"
-  end
-  if normalized == "ptbr" or normalized == "ptpt" then
-    return "PT"
-  end
-  -- KR/CN/TW: tags are recognized but have no flag asset in
-  -- LANGUAGE_FLAG_TEXTURE_BY_TAG → GetLanguageFlagMarkup returns "??".
-  if normalized == "kokr" then
-    return "KR"
-  end
-  if normalized == "zhcn" then
-    return "CN"
-  end
-  if normalized == "zhtw" then
-    return "TW"
-  end
-  return "??"
+  return localeToLanguageTagCache[normalized] or "??"
 end
 
 function Locale.GetLanguageFlagTexturePath(languageTag)

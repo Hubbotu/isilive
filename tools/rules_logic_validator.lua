@@ -495,6 +495,13 @@ local function PrintSummary(printFn, rules, counts, indexedTests)
   )
 end
 
+function Validator.CollectTests(scenarioFiles)
+  if type(scenarioFiles) ~= "table" then
+    return {}, { "rules: scenarioFiles must be a table" }, {}
+  end
+  return CollectDeterministicTests(scenarioFiles)
+end
+
 function Validator.Run(opts)
   opts = opts or {}
   local rulesPath = opts.rulesPath or "docs/RULES_LOGIC.md"
@@ -508,7 +515,14 @@ function Validator.Run(opts)
     scenarioFiles = {}
   end
 
-  local testsByName, testErrors, expandedScenarioFiles = CollectDeterministicTests(scenarioFiles)
+  local testsByName, testErrors, expandedScenarioFiles
+  if type(opts.testsByName) == "table" then
+    testsByName = opts.testsByName
+    testErrors = {}
+    expandedScenarioFiles = opts.expandedScenarioFiles or {}
+  else
+    testsByName, testErrors, expandedScenarioFiles = CollectDeterministicTests(scenarioFiles)
+  end
   for _, err in ipairs(testErrors) do
     table.insert(errors, err)
   end

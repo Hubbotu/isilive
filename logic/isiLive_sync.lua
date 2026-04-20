@@ -1175,7 +1175,7 @@ function Sync.SendKick(opts)
   local encodedHasKick = hasKick == true
   local encodedOnCooldown = encodedHasKick and (onCooldown == true and 1 or 0) or -1
   local remain = 0
-  if encodedHasKick then
+  if encodedHasKick and cooldownRemain then
     remain = math.ceil(cooldownRemain)
   end
   local payload = string.format("KICK:%d:%d", encodedOnCooldown, remain)
@@ -1459,111 +1459,53 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     return nil
   end
 
-  SyncLog(
-    "message_received",
-    "sender=%s type=%s",
-    tostring(sender),
-    tostring(type(message) == "string" and message:match("^(%a+)") or "unknown")
-  )
+  SyncLog("message_received", "sender=%s type=%s", tostring(sender), tostring(message:match("^(%a+)") or "unknown"))
   Sync.MarkUser(sender)
 
   local senderKey = Sync.NormalizePlayerKey(sender)
   local selfKey = Sync.NormalizePlayerKey(localName, localRealm)
-  local isHelloMessage = type(message) == "string" and message:find("^HELLO:")
-  local isAckMessage = type(message) == "string" and message:find("^ACK:")
+  local isHelloMessage = message:find("^HELLO:") ~= nil
+  local isAckMessage = message:find("^ACK:") ~= nil
   local shouldAck = isHelloMessage and senderKey ~= selfKey
-  local shouldRequestRefresh = type(message) == "string" and message == "REQSYNC" and senderKey ~= selfKey
-  local shouldShareKeys = type(message) == "string" and message == "SHAREKEYS" and senderKey ~= selfKey
+  local shouldRequestRefresh = message == "REQSYNC" and senderKey ~= selfKey
+  local shouldShareKeys = message == "SHAREKEYS" and senderKey ~= selfKey
+
   local keyUpdated = false
-
-  if type(message) == "string" and message:find("^KEY:") then
-    local parts = SplitPayload(message)
-    local mapIDRaw = parts[2]
-    local levelRaw = parts[3]
-    local capturedAtRaw = parts[4]
-    local sourceRaw = parts[5]
-    if mapIDRaw and levelRaw then
-      keyUpdated =
-        Sync.SetPlayerKeyInfo(sender, nil, tonumber(mapIDRaw), tonumber(levelRaw), tonumber(capturedAtRaw), sourceRaw)
-    end
-  end
-
   local statsUpdated = false
-  if type(message) == "string" and message:find("^STATS:") then
-    local parts = SplitPayload(message)
-    local specIDRaw = parts[2]
-    local ilvlRaw = parts[3]
-    local rioRaw = parts[4]
-    local capturedAtRaw = parts[5]
-    local sourceRaw = parts[6]
-    if specIDRaw and ilvlRaw and rioRaw then
-      statsUpdated = Sync.SetPlayerStatsInfo(
-        sender,
-        nil,
-        tonumber(specIDRaw),
-        tonumber(ilvlRaw),
-        tonumber(rioRaw),
-        tonumber(capturedAtRaw),
-        sourceRaw
-      )
-    end
-  end
-
   local dpsUpdated = false
-  if type(message) == "string" and message:find("^DPS:") then
-    local parts = SplitPayload(message)
-    local dpsRaw = parts[2]
-    local capturedAtRaw = parts[3]
-    local sourceRaw = parts[4]
-    if dpsRaw then
-      dpsUpdated = Sync.SetPlayerDpsInfo(sender, nil, tonumber(dpsRaw), tonumber(capturedAtRaw), sourceRaw)
-    end
-  end
-
   local locUpdated = false
-  if type(message) == "string" and message:find("^LOC:") then
-    local parts = SplitPayload(message)
-    local mapIDRaw = parts[2]
-    local capturedAtRaw = parts[3]
-    local sourceRaw = parts[4]
-    if mapIDRaw then
-      locUpdated = Sync.SetPlayerLocInfo(sender, nil, tonumber(mapIDRaw), tonumber(capturedAtRaw), sourceRaw)
-    end
-  end
-
   local kickUpdated = false
-  if type(message) == "string" and message:find("^KICK:") then
-    local parts = SplitPayload(message)
-    local onCooldownRaw = parts[2]
-    local remainRaw = parts[3]
-    if onCooldownRaw ~= nil and remainRaw ~= nil then
-      local numericState = tonumber(onCooldownRaw)
-      local numericRemain = tonumber(remainRaw)
-      if numericState == -1 or numericState == 0 or numericState == 1 then
-        if numericRemain ~= nil and numericRemain >= 0 then
-          local hasKick = numericState ~= -1
-          kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick)
-        end
-      end
-    end
-  end
-
   local targetUpdated = false
-  if type(message) == "string" and message:find("^TARGET:") then
-    local parts = SplitPayload(message)
-    local mapIDRaw = parts[2]
-    local levelRaw = parts[3]
-    local capturedAtRaw = parts[4]
-    local sourceRaw = parts[5]
-    if mapIDRaw and levelRaw then
-      targetUpdated = Sync.SetPlayerTargetInfo(
-        sender,
-        nil,
-        tonumber(mapIDRaw),
-        tonumber(levelRaw),
-        tonumber(capturedAtRaw),
-        sourceRaw
-      )
+
+  local parts = SplitPayload(message)
+  local bucket = parts[1]
+
+  if bucket == "KEY" and parts[2] and parts[3] then
+    keyUpdated =
+      Sync.SetPlayerKeyInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), tonumber(parts[4]), parts[5])
+  elseif bucket == "STATS" and parts[2] and parts[3] and parts[4] then
+    statsUpdated = Sync.SetPlayerStatsInfo(
+      sender,
+      nil,
+      tonumber(parts[2]),
+      tonumber(parts[3]),
+      tonumber(parts[4]),
+      tonumber(parts[5]),
+      parts[6]
+    )
+  elseif bucket == "DPS" and parts[2] then
+    dpsUpdated = Sync.SetPlayerDpsInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), parts[4])
+  elseif bucket == "LOC" and parts[2] then
+    locUpdated = Sync.SetPlayerLocInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), parts[4])
+  elseif bucket == "TARGET" and parts[2] and parts[3] then
+    targetUpdated =
+      Sync.SetPlayerTargetInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), tonumber(parts[4]), parts[5])
+  elseif bucket == "KICK" and parts[2] and parts[3] then
+    local numericState = tonumber(parts[2])
+    local numericRemain = tonumber(parts[3])
+    if (numericState == -1 or numericState == 0 or numericState == 1) and numericRemain and numericRemain >= 0 then
+      local hasKick = numericState ~= -1
+      kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick)
     end
   end
 
@@ -1572,7 +1514,6 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   local peerCapturedAt = nil
   local peerSource = nil
   if isHelloMessage or isAckMessage then
-    local parts = SplitPayload(message)
     peerAddonVersion = parts[2]
     if isHelloMessage then
       peerProtocolVersion = tonumber(parts[3])

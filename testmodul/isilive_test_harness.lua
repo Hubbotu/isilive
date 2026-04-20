@@ -87,6 +87,8 @@ local function ResolveFile(file)
   return FILE_PATHS[file] or file
 end
 
+Harness.FILE_PATHS = FILE_PATHS
+
 -- Modules loaded before any other module in LoadAddonModules (shared utilities).
 local UNIVERSAL_DEPENDENCIES = {
   "isiLive_validation_helpers.lua",
