@@ -5,6 +5,7 @@
 ## Version: 0.9.175
 ## SavedVariables: IsiLiveDB
 ## IconTexture: Interface\Icons\INV_Misc_QuestionMark
+libs/ChatThrottleLib/ChatThrottleLib.lua
 core/isiLive_validation_helpers.lua
 core/isiLive_string_utils.lua
 core/isiLive_sound_utils.lua

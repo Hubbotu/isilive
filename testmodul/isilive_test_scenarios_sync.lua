@@ -196,7 +196,12 @@ local function RegisterSyncRuntimeLogBurstTests(test, Assert, WithGlobals, LoadA
       addon.Sync.SendRefreshRequest({ force = true })
 
       Assert.Equal(type(capturedBuilder), "function", "sync trace logger must receive a lazy message builder")
-      Assert.Equal(capturedBuilder(), "[SYNC] send_reqsync channel=PARTY", "sync trace builder must format on demand")
+      local formatted = capturedBuilder and capturedBuilder() or nil
+      Assert.Equal(
+        formatted,
+        "[SYNC] send_reqsync channel=PARTY sent=false",
+        "sync trace builder must format on demand"
+      )
     end)
   end)
 end
@@ -1715,6 +1720,78 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
   end)
 end
 
+local function RegisterChatThrottleLibRoutingTests(test, Assert, WithGlobals, LoadAddonModules)
+  local function SetupRoutingGlobals(ctlMessages, fallbackMessages)
+    return {
+      GetTime = function()
+        return 100
+      end,
+      IsInGroup = function()
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      ChatThrottleLib = ctlMessages and {
+        SendAddonMessage = function(_self, priority, prefix, text, chattype)
+          table.insert(ctlMessages, { priority = priority, prefix = prefix, text = text, chattype = chattype })
+        end,
+      } or nil,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          if fallbackMessages then
+            table.insert(fallbackMessages, { prefix = prefix, message = message, channel = channel })
+          end
+          return true
+        end,
+      },
+    }
+  end
+
+  test("Sync routes send through ChatThrottleLib with correct priority per message type", function()
+    local ctlMessages = {}
+    WithGlobals(SetupRoutingGlobals(ctlMessages, nil), function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      addon.Sync.SendKick({ hasKick = true, onCooldown = false, cooldownRemain = 0 })
+      addon.Sync.SendStats({ isVisible = true, specID = 72, ilvl = 615, rio = 3210 })
+      addon.Sync.SendKey({ isVisible = true, mapID = 2649, level = 14 })
+      addon.Sync.SendDps({ isVisible = true, dps = 100000 })
+      addon.Sync.SendLoc({ isVisible = true, mapID = 2649 })
+      addon.Sync.SendTarget({ isVisible = true, mapID = 2649, level = 14 })
+      addon.Sync.SendRefreshRequest({ force = true })
+      addon.Sync.SendHello({ force = true, version = "0.9.175", protocolVersion = 2, source = "test" })
+
+      local byKind = {}
+      for _, m in ipairs(ctlMessages) do
+        byKind[m.text:match("^(%a+)") or m.text] = m
+      end
+
+      Assert.Equal(byKind["KICK"].priority, "ALERT", "KICK must use ALERT priority")
+      Assert.Equal(byKind["REQSYNC"].priority, "ALERT", "REQSYNC must use ALERT priority")
+      Assert.Equal(byKind["STATS"].priority, "BULK", "STATS must use BULK priority")
+      Assert.Equal(byKind["DPS"].priority, "BULK", "DPS must use BULK priority")
+      Assert.Equal(byKind["LOC"].priority, "BULK", "LOC must use BULK priority")
+      Assert.Equal(byKind["KEY"].priority, "NORMAL", "KEY must use NORMAL priority")
+      Assert.Equal(byKind["TARGET"].priority, "NORMAL", "TARGET must use NORMAL priority")
+      Assert.Equal(byKind["HELLO"].priority, "NORMAL", "HELLO must use NORMAL priority")
+    end)
+  end)
+
+  test("Sync falls back to raw C_ChatInfo.SendAddonMessage when ChatThrottleLib is absent", function()
+    local fallbackMessages = {}
+    WithGlobals(SetupRoutingGlobals(nil, fallbackMessages), function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      addon.Sync.SendKick({ hasKick = true, onCooldown = false, cooldownRemain = 0 })
+
+      Assert.Equal(#fallbackMessages, 1, "send without ChatThrottleLib must dispatch via C_ChatInfo")
+      Assert.Equal(fallbackMessages[1].prefix, "ISILIVE", "fallback dispatch must use isiLive prefix")
+      Assert.True(fallbackMessages[1].message:match("^KICK:") ~= nil, "fallback dispatch must carry kick payload")
+    end)
+  end)
+end
+
 local function RegisterSyncResetTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Sync ClearKnownUsers resets send cooldowns so next identical payload fires immediately", function()
     local sentMessages = {}
@@ -1800,5 +1877,6 @@ return function(test, ctx)
   RegisterProcessMessageTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterDpsLocSyncTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterChatThrottleLibRoutingTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterSyncResetTests(test, Assert, WithGlobals, LoadAddonModules)
 end

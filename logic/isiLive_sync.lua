@@ -981,6 +981,22 @@ local function ResolveSendChannel(opts)
   return Sync.GetAddonSyncChannel()
 end
 
+-- Routes an addon message through ChatThrottleLib when the embedded lib is
+-- present (priority-queued, fair-shared with other addons). Falls back to
+-- raw C_ChatInfo.SendAddonMessage if the lib is unavailable. Returns true
+-- if the message was accepted for dispatch (either enqueued by CTL or
+-- handed to Blizzard), false if it was rejected outright.
+local function DispatchAddonMessage(prefix, payload, channel, priority)
+  local ctl = rawget(_G, "ChatThrottleLib")
+  if ctl and type(ctl.SendAddonMessage) == "function" then
+    return pcall(ctl.SendAddonMessage, ctl, priority or "NORMAL", prefix, payload, channel)
+  end
+  if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+    return C_ChatInfo.SendAddonMessage(prefix, payload, channel) and true or false
+  end
+  return false
+end
+
 -- Shared dedupe/cooldown gate for Send* functions that share the pattern
 -- "skip if identical payload and still in cooldown window".
 -- Returns (blocked:boolean, now:number). onBlocked, if provided, is called with
@@ -1029,14 +1045,15 @@ function Sync.SendHello(opts)
     GetSyncTimestamp() or 0,
     NormalizeSyncSource(opts.source) or "local"
   )
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "NORMAL")
   SyncLog(
     "send_hello",
-    "version=%s channel=%s source=%s",
+    "version=%s channel=%s source=%s sent=%s",
     tostring(opts.version or "?"),
     tostring(channel),
-    tostring(opts.source or "local")
+    tostring(opts.source or "local"),
+    tostring(sent)
   )
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
 --- Broadcasts the local player's keystone to the group.
@@ -1081,10 +1098,17 @@ function Sync.SendKey(opts)
     return
   end
 
-  SyncLog("send_key", "mapID=%s level=%s channel=%s", tostring(numericMapID), tostring(numericLevel), tostring(channel))
   lastIsiLiveKeyAt = now
   lastKeyPayloadSent = dedupePayload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "NORMAL")
+  SyncLog(
+    "send_key",
+    "mapID=%s level=%s channel=%s sent=%s",
+    tostring(numericMapID),
+    tostring(numericLevel),
+    tostring(channel),
+    tostring(sent)
+  )
 end
 
 --- Broadcasts the local player's stats (spec/ilvl/rio) to the group.
@@ -1108,17 +1132,18 @@ function Sync.SendStats(opts)
     return
   end
 
+  lastIsiLiveStatsAt = now
+  lastStatsPayloadSent = dedupePayload
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "BULK")
   SyncLog(
     "send_stats",
-    "specID=%s ilvl=%s rio=%s channel=%s",
+    "specID=%s ilvl=%s rio=%s channel=%s sent=%s",
     tostring(numericSpecID),
     tostring(numericIlvl),
     tostring(numericRio),
-    tostring(channel)
+    tostring(channel),
+    tostring(sent)
   )
-  lastIsiLiveStatsAt = now
-  lastStatsPayloadSent = dedupePayload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
 --- Broadcasts the local player's last-run DPS to the group.
@@ -1140,10 +1165,10 @@ function Sync.SendDps(opts)
     return
   end
 
-  SyncLog("send_dps", "dps=%s channel=%s", tostring(numericDps), tostring(channel))
   lastIsiLiveDpsAt = now
   lastDpsPayloadSent = dedupePayload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "BULK")
+  SyncLog("send_dps", "dps=%s channel=%s sent=%s", tostring(numericDps), tostring(channel), tostring(sent))
 end
 
 --- Broadcasts the local player's kick/interrupt availability to the group.
@@ -1183,17 +1208,18 @@ function Sync.SendKick(opts)
   if blocked then
     return
   end
+  lastIsiLiveKickAt = now
+  lastKickPayloadSent = payload
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "ALERT")
   SyncLog(
     "send_kick",
-    "hasKick=%s onCooldown=%s remain=%s channel=%s",
+    "hasKick=%s onCooldown=%s remain=%s channel=%s sent=%s",
     tostring(hasKick),
     tostring(onCooldown),
     tostring(remain),
-    tostring(channel)
+    tostring(channel),
+    tostring(sent)
   )
-  lastIsiLiveKickAt = now
-  lastKickPayloadSent = payload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
 end
 
 --- Broadcasts the local player's current dungeon/zone map ID to the group.
@@ -1215,10 +1241,10 @@ function Sync.SendLoc(opts)
     return
   end
 
-  SyncLog("send_loc", "mapID=%s channel=%s", tostring(numericMapID), tostring(channel))
   lastIsiLiveLocAt = now
   lastLocPayloadSent = dedupePayload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "BULK")
+  SyncLog("send_loc", "mapID=%s channel=%s sent=%s", tostring(numericMapID), tostring(channel), tostring(sent))
 end
 
 --- Broadcasts the local player's target keystone (desired dungeon/level) to the group.
@@ -1241,16 +1267,17 @@ function Sync.SendTarget(opts)
     return
   end
 
-  SyncLog(
-    "send_target",
-    "mapID=%s level=%s channel=%s",
-    tostring(numericMapID),
-    tostring(numericLevel),
-    tostring(channel)
-  )
   lastIsiLiveTargetAt = now
   lastTargetPayloadSent = dedupePayload
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "NORMAL")
+  SyncLog(
+    "send_target",
+    "mapID=%s level=%s channel=%s sent=%s",
+    tostring(numericMapID),
+    tostring(numericLevel),
+    tostring(channel),
+    tostring(sent)
+  )
 end
 
 --- Broadcasts a REQSYNC request, asking all peers to re-send their current sync snapshot.
@@ -1268,9 +1295,9 @@ function Sync.SendRefreshRequest(opts)
     return
   end
 
-  SyncLog("send_reqsync", "channel=%s", tostring(channel))
   lastIsiLiveRefreshRequestAt = now
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "REQSYNC", channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, "REQSYNC", channel, "ALERT")
+  SyncLog("send_reqsync", "channel=%s sent=%s", tostring(channel), tostring(sent))
 end
 
 --- Sends a LibKeystone "R" request to the party asking peers to reply with their key data.
@@ -1299,7 +1326,8 @@ function Sync.SendLibKeystoneRequest(opts)
   end
 
   lastLibKeystoneRequestAt = now
-  C_ChatInfo.SendAddonMessage(LIBKEYSTONE_SYNC_PREFIX, "R", "PARTY")
+  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, "R", "PARTY", "NORMAL")
+  SyncLog("send_libkeystone_request", "channel=PARTY sent=%s", tostring(sent))
   return true
 end
 
@@ -1344,10 +1372,15 @@ function Sync.SendLibKeystonePartyData(opts)
     numericRio = math.floor(numericRio)
   end
 
-  C_ChatInfo.SendAddonMessage(
-    LIBKEYSTONE_SYNC_PREFIX,
-    string.format("%d,%d,%d", numericLevel, numericMapID, numericRio),
-    "PARTY"
+  local payload = string.format("%d,%d,%d", numericLevel, numericMapID, numericRio)
+  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, payload, "PARTY", "NORMAL")
+  SyncLog(
+    "send_libkeystone_party",
+    "level=%s mapID=%s rio=%s sent=%s",
+    tostring(numericLevel),
+    tostring(numericMapID),
+    tostring(numericRio),
+    tostring(sent)
   )
   return true
 end
@@ -1360,8 +1393,8 @@ function Sync.SendShareKeysRequest()
   if not channel then
     return false
   end
-  SyncLog("send_sharekeys", "channel=%s", tostring(channel))
-  C_ChatInfo.SendAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel)
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel, "NORMAL")
+  SyncLog("send_sharekeys", "channel=%s sent=%s", tostring(channel), tostring(sent))
   return true
 end
 
