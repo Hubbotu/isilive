@@ -32,5 +32,8 @@ sounds/*
 
 # Local LuaRocks tree (CI/local tooling)
 .luarocks/
+
+# Private project notes — synced via byi77/isilive-workspace
 TODO.md
-!TODO.md
+AGENTS.md
+CLAUDE.md
