@@ -122,7 +122,11 @@ local function RegisterCombatEventsBRTests(test, ctx)
     controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
     Assert.Equal(#broadcasts, 1, "must broadcast exactly one BR call")
     Assert.Equal(broadcasts[1].kind, "BR", "broadcast kind must be BR")
-    Assert.Equal(broadcasts[1].caster, "Alice-Realm", "broadcast must pass raw unit name (realm strip happens in receiver)")
+    Assert.Equal(
+      broadcasts[1].caster,
+      "Alice-Realm",
+      "broadcast must pass raw unit name (realm strip happens in receiver)"
+    )
     Assert.Equal(broadcasts[1].spellID, 20484, "broadcast must include spellID")
   end)
 
