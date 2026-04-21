@@ -155,7 +155,7 @@ local function RegisterShareKeysGlobalPathTest()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       ---@diagnostic enable: undefined-field
@@ -308,7 +308,7 @@ local function RegisterShareKeysDeterministicLinkTest()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       ---@diagnostic enable: undefined-field
@@ -473,7 +473,7 @@ local function RegisterShareKeysFallbackLinkTest()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       ---@diagnostic enable: undefined-field
@@ -631,7 +631,7 @@ local function RegisterShareKeysLiveSnapshotTest()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
       Assert.True(shareKeysButton.enabled, "live owned keystone data should keep the share-keys button available")
       ---@diagnostic disable: undefined-field
@@ -781,7 +781,7 @@ local function RegisterShareKeysDebounceTests()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
       shareKeysButton.OnClick()
@@ -922,7 +922,7 @@ local function RegisterShareKeysDebounceTests()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
       ---@diagnostic disable: undefined-field
       shareKeysButton.OnClick()
@@ -1075,7 +1075,7 @@ local function RegisterShareKeysNoOpAndRemoteTests()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@cast shareKeysButton any
       Assert.True(shareKeysButton.enabled, "foreign group keys should still make the button clickable")
       ---@diagnostic disable: undefined-field
@@ -1192,7 +1192,7 @@ RegisterShareKeysRemoteCooldownTests = function()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
 
       controller.TriggerShareKeysCooldown()
@@ -1309,7 +1309,7 @@ RegisterShareKeysRemoteCooldownTests = function()
         end
       end
 
-      Assert.NotNil(shareKeysButton, "share-keys button should exist")
+      shareKeysButton = Assert.NotNil(shareKeysButton, "share-keys button should exist")
       ---@diagnostic disable: undefined-field
       controller.TriggerShareKeysCooldown()
       controller.RenderRoster(roster)

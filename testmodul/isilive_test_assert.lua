@@ -32,10 +32,15 @@ function Assert.Nil(value, message)
   end
 end
 
+---@generic T
+---@param value T?
+---@param message? string
+---@return T
 function Assert.NotNil(value, message)
   if value == nil then
     fail(message or "expected non-nil value")
   end
+  return value
 end
 
 return Assert

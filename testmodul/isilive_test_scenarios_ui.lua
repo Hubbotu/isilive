@@ -341,8 +341,8 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
 
       local onDragStart = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStart or nil
       local onDragStop = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStop or nil
-      Assert.NotNil(onDragStart, "main frame should define OnDragStart handler")
-      Assert.NotNil(onDragStop, "main frame should define OnDragStop handler")
+      onDragStart = Assert.NotNil(onDragStart, "main frame should define OnDragStart handler")
+      onDragStop = Assert.NotNil(onDragStop, "main frame should define OnDragStop handler")
 
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
@@ -381,8 +381,8 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
 
       local onDragStart = mainUI.dragHandle._scripts and mainUI.dragHandle._scripts.OnDragStart or nil
       local onDragStop = mainUI.dragHandle._scripts and mainUI.dragHandle._scripts.OnDragStop or nil
-      Assert.NotNil(onDragStart, "drag handle should still define OnDragStart")
-      Assert.NotNil(onDragStop, "drag handle should still define OnDragStop")
+      onDragStart = Assert.NotNil(onDragStart, "drag handle should still define OnDragStart")
+      onDragStop = Assert.NotNil(onDragStop, "drag handle should still define OnDragStop")
 
       onDragStart(mainUI.dragHandle)
       onDragStop(mainUI.dragHandle)
@@ -411,7 +411,7 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       Assert.NotNil(mainUI.closeButton, "main UI should expose close button")
 
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
-      Assert.NotNil(onClick, "close button should define OnClick handler")
+      onClick = Assert.NotNil(onClick, "close button should define OnClick handler")
       onClick(mainUI.closeButton, "LeftButton")
 
       Assert.False(mainUI.frame:IsShown(), "close button should hide frame")
@@ -440,7 +440,7 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       Assert.True(mainUI.frame:IsShown(), "frame should be visible before combat close test")
 
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
-      Assert.NotNil(onClick, "close button should define OnClick handler")
+      onClick = Assert.NotNil(onClick, "close button should define OnClick handler")
       onClick(mainUI.closeButton, "LeftButton")
 
       Assert.False(mainUI.frame:IsShown(), "close button must hide frame immediately even during combat")
@@ -636,7 +636,7 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       inCombat = true
 
       local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
-      Assert.NotNil(onShow, "game menu should register an OnShow hook")
+      onShow = Assert.NotNil(onShow, "game menu should register an OnShow hook")
 
       local ok, err = pcall(function()
         onShow(gameMenuFrame)
@@ -784,7 +784,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         gameMenuFrame:Hide()
 
         local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
-        Assert.NotNil(onShow, "game menu should register an OnShow hook")
+        onShow = Assert.NotNil(onShow, "game menu should register an OnShow hook")
 
         inCombat = true
         gameMenuFrame._shown = true
@@ -796,7 +796,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         Assert.True(panelFrame:IsShown(), "mounted panel should stay shown through the first combat open")
         Assert.True(professionsButton:IsShown(), "insecure shortcut button should stay visible during combat")
         local onClick = professionsButton._scripts and professionsButton._scripts.OnClick or nil
-        Assert.NotNil(onClick, "profession shortcut should keep an OnClick handler")
+        onClick = Assert.NotNil(onClick, "profession shortcut should keep an OnClick handler")
         onClick(professionsButton)
         Assert.Equal(professionsActionCalls, 0, "insecure shortcut action should no-op during combat")
 
@@ -857,7 +857,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       gameMenuFrame:Hide()
 
       local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
-      Assert.NotNil(onShow, "game menu should register a shared OnShow hook")
+      onShow = Assert.NotNil(onShow, "game menu should register a shared OnShow hook")
 
       inCombat = true
       gameMenuFrame._shown = true
@@ -1038,8 +1038,8 @@ local function RegisterGameMenuDefaultOpenerTests(test, Assert, WithGlobals, Loa
         or nil
       local onClickSpellbook = strip.buttonsById.spellbook._scripts and strip.buttonsById.spellbook._scripts.OnClick
         or nil
-      Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
-      Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
+      onClickProfessions = Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
+      onClickSpellbook = Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
 
       onClickProfessions(strip.buttonsById.professions, "LeftButton")
       onClickSpellbook(strip.buttonsById.spellbook, "LeftButton")
@@ -1120,8 +1120,8 @@ local function RegisterGameMenuDefaultOpenerTests(test, Assert, WithGlobals, Loa
         or nil
       local onClickSpellbook = strip.buttonsById.spellbook._scripts and strip.buttonsById.spellbook._scripts.OnClick
         or nil
-      Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
-      Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
+      onClickProfessions = Assert.NotNil(onClickProfessions, "professions micromenu button should define OnClick")
+      onClickSpellbook = Assert.NotNil(onClickSpellbook, "spellbook micromenu button should define OnClick")
 
       onClickProfessions(strip.buttonsById.professions, "LeftButton")
       onClickSpellbook(strip.buttonsById.spellbook, "LeftButton")
@@ -1225,12 +1225,12 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
         end
       end
 
-      Assert.NotNil(lockCheck, "settings panel should create the drag-lock checkbox")
+      lockCheck = Assert.NotNil(lockCheck, "settings panel should create the drag-lock checkbox")
       ---@diagnostic disable: undefined-field
       Assert.True(lockCheck:GetChecked(), "main frame position lock should default to enabled")
 
       local onClick = lockCheck._scripts and lockCheck._scripts.OnClick or nil
-      Assert.NotNil(onClick, "main frame position lock checkbox should define OnClick")
+      onClick = Assert.NotNil(onClick, "main frame position lock checkbox should define OnClick")
       lockCheck:SetChecked(false)
       onClick(lockCheck)
       Assert.False(db.lockMainFramePosition, "unlocking the checkbox should persist false")
@@ -1261,8 +1261,8 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.True(mainUI.GetDragLocked(), "main UI should start locked")
       local onDragStart = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStart or nil
       local onDragStop = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStop or nil
-      Assert.NotNil(onDragStart, "main UI should define an OnDragStart handler")
-      Assert.NotNil(onDragStop, "main UI should define an OnDragStop handler")
+      onDragStart = Assert.NotNil(onDragStart, "main UI should define an OnDragStart handler")
+      onDragStop = Assert.NotNil(onDragStop, "main UI should define an OnDragStop handler")
 
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
@@ -1305,7 +1305,7 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.True(mainUI.lockButton._isLocked, "lock button should reflect the initial locked state")
 
       local onClick = mainUI.lockButton._scripts and mainUI.lockButton._scripts.OnClick or nil
-      Assert.NotNil(onClick, "lock button should define OnClick")
+      onClick = Assert.NotNil(onClick, "lock button should define OnClick")
       onClick(mainUI.lockButton, "LeftButton")
 
       Assert.False(mainUI.GetDragLocked(), "first click should unlock the frame")
@@ -1344,7 +1344,7 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
       mainUI.ResetPosition()
 
       local pos = IsiLiveDB.position
-      Assert.NotNil(pos, "reset position should persist a saved position")
+      pos = Assert.NotNil(pos, "reset position should persist a saved position")
       Assert.Equal(pos.point, "CENTER", "reset position should center the frame")
       Assert.Equal(pos.relativePoint, "CENTER", "reset position should anchor to the center")
       Assert.Equal(pos.x, 0, "reset position should clear horizontal offset")
