@@ -845,6 +845,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       "lua tools/validate_usecases.lua",
       "workflow must keep deterministic usecase and rules validation"
     )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_mplus_db_lifetime.lua",
+      "workflow must gate releases on the M+ forces DB lifetime"
+    )
     AssertContains(Assert, workflowContent, "Lua Syntax Check", "workflow must keep the syntax validation step")
   end)
 
@@ -894,6 +900,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       localPreflightContent,
       'Invoke-CheckedCommand "Deterministic Usecase + Rules Logic Validation" "lua tools/validate_usecases.lua"',
       "local preflight must run the same deterministic validation step as the workflow"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "M+ Forces DB Lifetime" "lua tools/check_mplus_db_lifetime.lua"',
+      "local preflight must gate releases on the M+ forces DB lifetime"
     )
     AssertContains(
       Assert,

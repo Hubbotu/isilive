@@ -117,6 +117,25 @@ Wenn eine neue Season startet:
 - erst dann `ACTIVE_SEASON_ID` umstellen
 - keine halbfertige Season live schalten
 
+### 3.5 M+ Forces DB / MDT-Sync
+
+Pruefen:
+- `data/isiLive_mplus_forces.lua` (generierter Datensatz, niemals von Hand editieren)
+- `tools/sync_mdt_forces.lua` (Generator, liest MDT und erzeugt den Datensatz)
+- `tools/check_mplus_db_lifetime.lua` (Lifetime-Gate in CI)
+- `.github/workflows/sync-mplus-forces.yml` (wochenweiser Auto-Refresh)
+
+Aktueller Soll-Zustand:
+- Der Auto-Refresh laeuft donnerstags 06:00 UTC nach dem MDT-Release-Fenster (US Tuesday Patch + EU Wednesday Reset). Manuell ausloesbar ueber `workflow_dispatch`.
+- Der Workflow klont MDT, regeneriert den Datensatz, laeuft den vollen CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, usecases) und committet nur bei echtem Diff direkt nach `main`.
+- `expiresAt` ist `generatedAt + 15 Tage`. Das Lifetime-Gate blockiert jeden Release mit abgelaufenem DB-File; Override ausschliesslich ueber `ISILIVE_ALLOW_STALE_MPLUS_DB=1`.
+- Der Generator schreibt Single-Space-Key-Format (`season = %q,`), damit StyLua den regenerierten Datensatz akzeptiert.
+
+Typische Ursachen fuer Brueche:
+- MDT aendert die Struktur von `dungeonEnemies` / `dungeonTotalCount` / `mapInfo` → `sync_mdt_forces.lua` anpassen, lokal per `lua tools/sync_mdt_forces.lua` gegen einen frischen `tools/cache/mdt`-Clone testen.
+- MDT-Clone schlaegt im Workflow fehl → Auto-Refresh bleibt still, Lifetime-Gate wird irgendwann rot.
+- Season-Wechsel → `SEASON_TO_MDT_DIR` in `sync_mdt_forces.lua` erweitern, Default-`SEASON_DEFAULT` umstellen.
+
 ## 4) Dinge, die bewusst so gebaut sind und nicht versehentlich rueckgaengig gemacht werden duerfen
 
 ### 4.1 Kein Raten

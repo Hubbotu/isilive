@@ -18,6 +18,8 @@ return {
     "vendor\\",
     "externals/",
     "externals\\",
+    "tools/cache/",
+    "tools\\cache\\",
     "realm_language_data%.lua$",
   },
 

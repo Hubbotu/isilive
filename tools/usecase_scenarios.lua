@@ -30,6 +30,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_roster_panel_tooltip.lua",
   "testmodul/isilive_test_scenarios_mob_tooltip.lua",
   "testmodul/isilive_test_scenarios_killtrack.lua",
+  "testmodul/isilive_test_scenarios_mplus_db_lifetime.lua",
   "testmodul/isilive_test_scenarios_roster_panel_wrapping.lua",
   "testmodul/isilive_test_scenarios_status.lua",
   "testmodul/isilive_test_scenarios_units.lua",

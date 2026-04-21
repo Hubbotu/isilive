@@ -1,7 +1,7 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.175`
-Zuletzt aktualisiert: `2026-04-19`
+Versionsbasis: `0.9.180`
+Zuletzt aktualisiert: `2026-04-21`
 
 ## Zweck
 
@@ -97,20 +97,23 @@ Lokale Release-Qualitaet ist absichtlich in statische und Runtime-Gates aufgetei
    - `cmd /c tools\check.cmd`
    - Lua-Syntax-Parse (`luac -p` fuer alle `.lua`-Dateien)
    - `ISILIVE_MAX_FILE_LINES=3200 ISILIVE_MAX_FUNCTION_LINES=420 lua tools/lua_metrics_check.lua`
+   - `lua tools/check_locale_drift.lua`
+   - `lua tools/check_mplus_db_lifetime.lua` — verhindert, dass eine abgelaufene `data/isiLive_mplus_forces.lua` einen Release passiert; Override ueber `ISILIVE_ALLOW_STALE_MPLUS_DB=1`.
 2. Runtime-Logik-Checks:
    - `lua tools/validate_rules_logic.lua`
    - `lua tools/validate_architecture_rules.lua`
    - `lua tools/validate_usecases.lua`
 3. `tools/validate_rules_logic.lua` validiert aktive Vertraege aus `RULES_LOGIC.md` gegen deterministische Testnamen.
 4. `tools/validate_architecture_rules.lua` validiert aktive Architekturvertraege aus `ARCHITECTURE_RULES.md` gegen deterministische Testnamen.
-5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 619 Szenarien ueber 45 Module ab; die Regelvalidatoren indizieren aktuell 619 deterministische Tests.
+5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 758 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
+6. Der M+-Forces-DB-Refresh laeuft automatisch ueber `.github/workflows/sync-mplus-forces.yml` (Donnerstag 06:00 UTC plus `workflow_dispatch`): Clone MDT → `tools/sync_mdt_forces.lua` → voller CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, usecases) → Commit + Push nach `main`. Ohne Diff im DB-File laeuft der Workflow still durch ohne Commit.
 
 Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte Einstiegspunkt fuer das statische Gate, weil sie `luacheck` ueber den repo-lokalen Windows-Shim routen, statt direkt das LuaRocks-Script aufzurufen.
 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.175 Open/Close CTRL-F9 [H][V][M][M2][L][X]|
+| isiLive                                                 v0.9.180 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
 |---------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
 |---------------------------------------------------------------------------------------------------|

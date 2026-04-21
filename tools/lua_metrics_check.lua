@@ -51,6 +51,7 @@ end
 local EXCLUDED_DIRS = {
   [".git"] = true,
   [".luarocks"] = true,
+  ["cache"] = true,
 }
 
 local function normalize_path(path)

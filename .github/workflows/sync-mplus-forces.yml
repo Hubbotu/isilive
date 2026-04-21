@@ -1,0 +1,120 @@
+name: Sync M+ Forces DB
+
+on:
+  schedule:
+    # Every Thursday 06:00 UTC (= 07:00 CET / 08:00 CEST).
+    # Timed after US Tuesday patch day + EU Wednesday weekly reset, when MDT
+    # releases typically cluster. A weekly cadence is frequent enough to catch
+    # drift and rare enough to avoid noise in quiet weeks.
+    - cron: "0 6 * * 4"
+  workflow_dispatch:
+
+concurrency:
+  # Prevent overlapping runs (e.g. scheduled + manual dispatch) from racing on
+  # push. Queue behind any in-flight run instead of cancelling it mid-push.
+  group: sync-mplus-forces
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v11
+        with:
+          luaVersion: "5.1"
+
+      - name: Clone MDT
+        run: git clone --depth 1 https://github.com/Nnoggie/MythicDungeonTools tools/cache/mdt
+
+      - name: Regenerate DB
+        run: lua tools/sync_mdt_forces.lua
+
+      - name: Clean up MDT clone before CI gates
+        run: rm -rf tools/cache
+
+      - name: Detect DB changes
+        id: diff
+        run: |
+          if git diff --quiet -- data/isiLive_mplus_forces.lua; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No DB changes — skipping validation and commit."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup LuaRocks
+        if: steps.diff.outputs.changed == 'true'
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install luacheck
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          luarocks install luacheck 1.2.0-1
+          echo "$(luarocks path --lr-bin)" >> "$GITHUB_PATH"
+
+      - name: Install LuaFileSystem
+        if: steps.diff.outputs.changed == 'true'
+        run: luarocks install luafilesystem 1.8.0-1
+
+      - name: StyLua (check)
+        if: steps.diff.outputs.changed == 'true'
+        uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ github.token }}
+          version: "2.3.1"
+          args: --check .
+
+      - name: Luacheck
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          command -v luacheck
+          luacheck --version || true
+          luacheck --exclude-files ".luarocks/**" -- .
+
+      - name: Lua Syntax Check
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -e
+          for file in $(find . -type f -name "*.lua" -not -path "./.luarocks/*"); do
+            echo "Checking $file"
+            tmp="$(mktemp)"
+            sed '1s/^\xEF\xBB\xBF//' "$file" > "$tmp"
+            lua -e "assert(loadfile('$tmp'))"
+            rm -f "$tmp"
+          done
+
+      - name: Lua Metrics Check
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          eval "$(luarocks path --lua-version 5.1)"
+          ISILIVE_MAX_FILE_LINES=3200 ISILIVE_MAX_FUNCTION_LINES=420 lua tools/lua_metrics_check.lua
+
+      - name: Locale Drift Check
+        if: steps.diff.outputs.changed == 'true'
+        run: lua tools/check_locale_drift.lua
+
+      - name: M+ Forces DB Lifetime
+        if: steps.diff.outputs.changed == 'true'
+        run: lua tools/check_mplus_db_lifetime.lua
+
+      - name: Deterministic Usecase + Rules Logic Validation
+        if: steps.diff.outputs.changed == 'true'
+        run: lua tools/validate_usecases.lua
+
+      - name: Commit + push directly to main
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/isiLive_mplus_forces.lua
+          MDT_VERSION=$(lua -e 'local f=assert(loadfile("data/isiLive_mplus_forces.lua")); local t={}; f("isiLive",t); io.write(t.MPlusForces.mdtVersion)')
+          git commit -m "data: refresh M+ forces DB from MDT ${MDT_VERSION}"
+          git push origin HEAD:main

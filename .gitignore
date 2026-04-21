@@ -35,6 +35,9 @@ sounds/*
 # Local LuaRocks tree (CI/local tooling)
 .luarocks/
 
+# Build-time caches (auto-populated by tools/*.ps1 scripts)
+tools/cache/
+
 # Private project notes — synced via byi77/isilive-workspace
 TODO.md
 AGENTS.md

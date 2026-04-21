@@ -122,6 +122,7 @@ try {
   $env:ISILIVE_MAX_FUNCTION_LINES = "420"
   Invoke-CheckedCommand "Lua Metrics Check" "lua tools/lua_metrics_check.lua"
   Invoke-CheckedCommand "Locale Drift Check" "lua tools/check_locale_drift.lua"
+  Invoke-CheckedCommand "M+ Forces DB Lifetime" "lua tools/check_mplus_db_lifetime.lua"
   Invoke-CheckedCommand "Deterministic Usecase + Rules Logic Validation" "lua tools/validate_usecases.lua"
 
   Write-Host ""
