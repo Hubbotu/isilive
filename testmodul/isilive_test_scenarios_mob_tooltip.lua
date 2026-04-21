@@ -214,6 +214,33 @@ local function RegisterGuardTests(test, Assert, WithGlobals, LoadAddonModules)
     end)
   end)
 
+  test("MobTooltip honors issecretvalue on tooltipData.guid and UnitGUID fallback", function()
+    local tooltipLines = {}
+    local tooltip = MakeGameTooltip(tooltipLines)
+    -- Real-engine secret GUIDs still have type "string"; only comparisons taint.
+    -- Simulate by making issecretvalue() return true for these specific strings.
+    local secretDataGuid = "Creature-0-3889-161-12345-76132-0000SECRET1"
+    local secretMouseGuid = "Creature-0-3889-161-12345-76132-0000SECRET2"
+    SetupTooltipEnv(WithGlobals, {
+      GameTooltip = tooltip,
+      UnitGUID = function()
+        return secretMouseGuid
+      end,
+      issecretvalue = function(value)
+        return value == secretDataGuid or value == secretMouseGuid
+      end,
+    }, function(postCalls)
+      local addon = LoadAddonModules({ "isiLive_mob_tooltip.lua" }, { MPlusForces = NewMplusForcesDB() })
+      addon.MobTooltip.Register()
+      -- tooltipData.guid is secret — must be rejected before the "" comparison / match.
+      postCalls[1].callback(tooltip, { guid = secretDataGuid })
+      Assert.Equal(#tooltipLines, 0, "secret tooltipData.guid must be ignored without error")
+      -- UnitGUID fallback also returns a secret — must also be ignored.
+      postCalls[1].callback(tooltip, { dataInstanceID = 42 })
+      Assert.Equal(#tooltipLines, 0, "secret UnitGUID fallback must be ignored without error")
+    end)
+  end)
+
   test("MobTooltip.SetEnabled(false) suppresses the forces line", function()
     local tooltipLines = {}
     local tooltip = MakeGameTooltip(tooltipLines)

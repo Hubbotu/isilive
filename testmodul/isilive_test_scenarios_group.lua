@@ -1093,9 +1093,10 @@ local function RegisterGroupLifecycleFollowupTests(test, Assert, LoadAddonModule
 end
 
 local function RegisterGroupRosterCoreTests(test, Assert, LoadAddonModules)
-  test("Active M+ key blocks roster rebuild", function()
+  test("Active M+ key does not rebuild roster on ongoing updates", function()
     local controller, state = BuildGroupController(LoadAddonModules, {
       mainFrameVisible = true,
+      wasInGroup = true,
       getActiveChallengeMapID = function()
         return 2649
       end,
@@ -1103,8 +1104,33 @@ local function RegisterGroupRosterCoreTests(test, Assert, LoadAddonModules)
 
     controller.HandleGroupRosterUpdate()
 
-    Assert.Nil(state.roster.player, "roster must not rebuild during active M+")
+    Assert.Nil(state.roster.player, "ongoing roster updates must not rebuild during active M+")
     Assert.Equal(state.uiUpdates, 1, "UI should still update during active M+")
+  end)
+
+  test("Active M+ key rebuilds roster after /reload (joinedNow path)", function()
+    -- On /reload inside an active key, the Lua state is fresh: wasInGroup=false and
+    -- inGroupNow=true, so joinedNow=true. PLAYER_ENTERING_WORLD manually triggers
+    -- handleGroupRosterUpdate() as a fallback (GROUP_ROSTER_UPDATE is gated hidden in key).
+    -- The roster must be populated so UI shows group members again.
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      mainFrameVisible = true,
+      wasInGroup = false,
+      getActiveChallengeMapID = function()
+        return 2649
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.NotNil(state.roster.player, "post-reload rebuild must populate the player entry")
+    Assert.Equal(state.roster.player.name, "TestPlayer", "player name must be set after reload")
+    Assert.NotNil(state.roster.party1, "post-reload rebuild must populate party1")
+    Assert.NotNil(state.roster.party4, "post-reload rebuild must populate party4")
+    Assert.Equal(state.queued, 0, "reload-in-key must not trigger queue-join side effects (no queue capture)")
+    Assert.Equal(state.announced, 0, "reload-in-key must not announce a queued group join")
+    Assert.Equal(state.groupJoinedCalls, 0, "reload-in-key must not fire onGroupJoined")
+    Assert.Equal(#state.mainFrameVisibleCalls, 0, "reload-in-key must not auto-show or auto-hide the main frame")
   end)
 
   test("Hidden grouped roster updates keep pre-rendered UI fresh", function()

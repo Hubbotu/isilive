@@ -364,6 +364,15 @@ local function HandleGroupRosterUpdate(deps)
   deps.setWasInGroup(inGroupNow)
 
   if deps.getActiveChallengeMapID() then
+    -- Inside an active key we do not rebuild the roster on every GROUP_ROSTER_UPDATE
+    -- so that per-member state (spec, ilvl, rio, keys) is preserved. But after a /reload
+    -- the Lua state is fresh and the roster is empty; joinedNow signals exactly that
+    -- case during an active key (no one joins a group mid-dungeon).
+    if joinedNow then
+      local roster = deps.getRoster()
+      AddPlayerToRoster(deps, roster)
+      UpdatePartyMembersInRoster(deps, roster, nil)
+    end
     deps.updateUI()
     deps.updateLeaderButtons()
     return

@@ -11,6 +11,11 @@ local registered = false
 -- fires on every refresh, including hover-over-self reflow).
 local lastAppendedKey = {}
 
+local function IsSecretValue(v)
+  local fn = rawget(_G, "issecretvalue")
+  return type(fn) == "function" and fn(v) == true
+end
+
 local function GetForcesDB()
   local db = addonTable.MPlusForces
   if type(db) ~= "table" then
@@ -50,15 +55,18 @@ local function NpcIdFromGuid(guid)
 end
 
 local function ResolveGuid(tooltipData)
-  if type(tooltipData) == "table" and type(tooltipData.guid) == "string" and tooltipData.guid ~= "" then
-    return tooltipData.guid
+  if type(tooltipData) == "table" then
+    local candidate = tooltipData.guid
+    if type(candidate) == "string" and not IsSecretValue(candidate) and candidate ~= "" then
+      return candidate
+    end
   end
   local unitGUIDFn = rawget(_G, "UnitGUID")
   if type(unitGUIDFn) ~= "function" then
     return nil
   end
   local ok, guid = pcall(unitGUIDFn, "mouseover")
-  if ok and type(guid) == "string" and guid ~= "" then
+  if ok and type(guid) == "string" and not IsSecretValue(guid) and guid ~= "" then
     return guid
   end
   return nil
