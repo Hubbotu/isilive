@@ -30,14 +30,21 @@ local function ClearTable(t)
 end
 
 local combatRetryFrame = CreateFrame("Frame")
-combatRetryFrame:SetScript("OnEvent", function(self, event)
-  if event == "PLAYER_REGEN_ENABLED" then
-    for button, spellID in pairs(pendingCombatUpdates) do
-      Teleport.ApplySecureSpellToButton(button, spellID)
-    end
-    ClearTable(pendingCombatUpdates)
-    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+-- PLAYER_REGEN_ENABLED is registered statically at module load to avoid a
+-- dynamic RegisterEvent from handlers dispatched by protected code (e.g.
+-- CHALLENGE_MODE_START), which raises ADDON_ACTION_FORBIDDEN in 12.0+.
+combatRetryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+combatRetryFrame:SetScript("OnEvent", function(_, event)
+  if event ~= "PLAYER_REGEN_ENABLED" then
+    return
   end
+  if next(pendingCombatUpdates) == nil then
+    return
+  end
+  for button, spellID in pairs(pendingCombatUpdates) do
+    Teleport.ApplySecureSpellToButton(button, spellID)
+  end
+  ClearTable(pendingCombatUpdates)
 end)
 
 local function ResolveMappedSpellID(mapID)
@@ -307,7 +314,6 @@ function Teleport.ApplySecureSpellToButton(button, spellID)
   -- Protection: Cannot set attributes on secure frames while in combat.
   if InCombatLockdown and InCombatLockdown() then
     pendingCombatUpdates[button] = spellID
-    combatRetryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
     return false
   end
 
@@ -330,13 +336,7 @@ function Teleport.ApplySecureSpellToButton(button, spellID)
     button:EnableMouse(true)
   end
 
-  -- Clear from pending if it was queued previously
-  if pendingCombatUpdates[button] then
-    pendingCombatUpdates[button] = nil
-    if next(pendingCombatUpdates) == nil then
-      combatRetryFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
-    end
-  end
+  pendingCombatUpdates[button] = nil
   return true
 end
 

@@ -1472,6 +1472,18 @@ local function InitializeFactorySecondaryCdTracker(
   if ctx.rosterPanelController and type(ctx.rosterPanelController.SetCdController) == "function" then
     ctx.rosterPanelController.SetCdController(ctx.cdTrackerController)
   end
+
+  -- Subscribe the kill-track row to state updates so the pull bar refreshes
+  -- on every scenario tick / combat transition instead of only on roster
+  -- renders (which fire on sync events, not on scenario progress).
+  local killTrack = ctx.addonTable and ctx.addonTable.KillTrack
+  if type(killTrack) == "table" and type(killTrack.OnUpdate) == "function" then
+    killTrack.OnUpdate(function()
+      if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
+        ctx.rosterPanelController.RefreshKillTrackRow()
+      end
+    end)
+  end
   -- Ticker: scan + UI refresh every second for countdown timers (BL remaining time).
   local C_Timer_ref = rawget(_G, "C_Timer")
   if type(C_Timer_ref) == "table" and type(C_Timer_ref.NewTicker) == "function" then

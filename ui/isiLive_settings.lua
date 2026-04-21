@@ -817,6 +817,7 @@ local function ResolveSettingsOptions(opts)
     onRuntimeLogToggle = opts.onRuntimeLogToggle,
     onLfgFlagsToggle = opts.onLfgFlagsToggle,
     onTooltipFlagsToggle = opts.onTooltipFlagsToggle,
+    onMplusForcesToggle = opts.onMplusForcesToggle,
     onResetDB = opts.onResetDB,
     onResetMainFramePosition = opts.onResetMainFramePosition,
   }
@@ -1194,6 +1195,24 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
       end
     end,
     "SETTINGS_TOOLTIP_FLAGS"
+  )
+
+  controls.mplusForces, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_MPLUS_FORCES or "Mythic+: Show enemy forces in tooltip",
+    function()
+      local db = config.getDB()
+      return db.mplusForcesEstimate ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.mplusForcesEstimate = checked
+      if type(config.onMplusForcesToggle) == "function" then
+        config.onMplusForcesToggle(checked)
+      end
+    end,
+    "SETTINGS_MPLUS_FORCES"
   )
 
   return yOffset
@@ -1855,6 +1874,10 @@ local function RefreshSettingsControls(controls, config)
   if controls.tooltipFlags then
     controls.tooltipFlags.label:SetText(freshL.SETTINGS_TOOLTIP_FLAGS or "Tooltip: Language Flags")
     controls.tooltipFlags.check:SetChecked(db.tooltipFlagsEnabled ~= false)
+  end
+  if controls.mplusForces then
+    controls.mplusForces.label:SetText(freshL.SETTINGS_MPLUS_FORCES or "Mythic+: Show enemy forces in tooltip")
+    controls.mplusForces.check:SetChecked(db.mplusForcesEstimate ~= false)
   end
 
   if controls.showDps then

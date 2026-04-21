@@ -164,18 +164,6 @@ local function BuildKeystoneLinkText(shortCode, keyLevel)
   return string.format("%s +%d", tostring(shortCode or "?"), level)
 end
 
-local function BuildClickableKeystoneFallback(keyMapID, keyLevel, shortCode)
-  local label = BuildKeystoneLinkText(shortCode, keyLevel)
-  local buildClickableKeystoneLink = type(ContextHelpers.BuildClickableKeystoneLink) == "function"
-      and ContextHelpers.BuildClickableKeystoneLink
-    or nil
-  local keyLink = buildClickableKeystoneLink and buildClickableKeystoneLink(keyMapID, keyLevel, label) or nil
-  if keyLink then
-    return keyLink
-  end
-  return label
-end
-
 local function ResolveOwnedKeystoneSnapshot(opts)
   if type(opts.getOwnedKeystoneSnapshot) == "function" then
     local mapID, level = opts.getOwnedKeystoneSnapshot()
@@ -213,7 +201,7 @@ local function BuildOwnKeyAnnounceLine(opts)
   local keyLink = buildKeystoneChatLink and buildKeystoneChatLink(keyMapID, keyLevel) or nil
   if not keyLink then
     local short = opts.getDungeonShortCode(keyMapID)
-    keyLink = BuildClickableKeystoneFallback(keyMapID, keyLevel, short)
+    keyLink = BuildKeystoneLinkText(short, keyLevel)
   end
 
   local L = opts.getL()

@@ -884,9 +884,13 @@ local function RegisterTeleportEntryAndCombatTests(test, Assert, WithGlobals, Lo
       createdFrames[1]:FireEvent("PLAYER_REGEN_ENABLED")
       Assert.Equal(attributes.spell, "Spell-445414", "deferred update should apply spell attribute after combat")
       Assert.True(attributes.enableMouse, "deferred update should restore mouse interactions")
-      Assert.False(
+      -- PLAYER_REGEN_ENABLED stays registered after drain: the frame is statically
+      -- registered at module load to avoid dynamic RegisterEvent from protected
+      -- dispatch (ADDON_ACTION_FORBIDDEN in 12.0+). OnEvent early-returns when the
+      -- pending queue is empty.
+      Assert.True(
         createdFrames[1]:IsEventRegistered("PLAYER_REGEN_ENABLED"),
-        "retry frame should unregister after draining pending updates"
+        "retry frame keeps PLAYER_REGEN_ENABLED registered (static registration)"
       )
     end)
   end)

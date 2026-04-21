@@ -104,21 +104,6 @@ function ContextHelpers.BuildKeystoneChatLink(mapID, level)
   return string.format("[%s]", dungeonLabel)
 end
 
-function ContextHelpers.BuildClickableKeystoneLink(mapID, level, label)
-  local numericMapID = math.floor(tonumber(mapID) or 0)
-  local numericLevel = math.floor(tonumber(level) or 0)
-  if numericMapID <= 0 or numericLevel <= 0 then
-    return nil
-  end
-
-  local linkLabel = tostring(label or ""):gsub("^%s+", ""):gsub("%s+$", "")
-  if linkLabel == "" then
-    linkLabel = string.format("Keystone +%d", numericLevel)
-  end
-
-  return string.format("|cffa335ee|Hkeystone:180653:%d:%d:0:0:0:0|h[%s]|h|r", numericMapID, numericLevel, linkLabel)
-end
-
 local function ResolveOwnedKeystoneSnapshot(opts)
   opts = opts or {}
 
@@ -158,9 +143,8 @@ function ContextHelpers.BuildOwnKeystoneAnnounceLine(opts)
   local keyLink = ContextHelpers.BuildKeystoneChatLink(keyMapID, keyLevel)
   if not keyLink then
     local shortCode = type(opts.getDungeonShortCode) == "function" and opts.getDungeonShortCode(keyMapID) or nil
-    local fallbackLabel = shortCode and string.format("%s +%d", tostring(shortCode), keyLevel)
+    keyLink = shortCode and string.format("%s +%d", tostring(shortCode), keyLevel)
       or string.format("Keystone +%d", keyLevel)
-    keyLink = ContextHelpers.BuildClickableKeystoneLink(keyMapID, keyLevel, fallbackLabel) or fallbackLabel
   end
 
   local L = type(opts.getL) == "function" and opts.getL() or {}

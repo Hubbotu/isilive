@@ -1341,19 +1341,19 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 2, "settings should only expose the background opacity and UI scale sliders")
       Assert.Equal(
         checkboxCount,
-        22,
+        23,
         "settings should hide only the legacy DPS, markers, name-length,"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, and combat-fade toggles visible"
+          .. " chat-announce, combat-fade, and M+ forces toggles visible"
       )
 
       panel.Refresh()
       Assert.Equal(sliderCount, 2, "refresh should keep the legacy sliders hidden")
       Assert.Equal(
         checkboxCount,
-        22,
+        23,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
-          .. " while preserving the visible sound, chat-announce, and combat-fade toggles"
+          .. " while preserving the visible sound, chat-announce, combat-fade, and M+ forces toggles"
       )
     end)
   end)

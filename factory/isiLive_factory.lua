@@ -247,6 +247,12 @@ local function FinalizeFactorySettings(ctx)
           rosterInternal.SetTooltipFlagsEnabled(enabled)
         end
       end,
+      onMplusForcesToggle = function(enabled)
+        local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
+        if type(mobTooltip) == "table" and type(mobTooltip.SetEnabled) == "function" then
+          mobTooltip.SetEnabled(enabled)
+        end
+      end,
       onResetDB = function()
         ctx.resetDB()
       end,
@@ -261,6 +267,15 @@ local function FinalizeFactorySettings(ctx)
     local rosterInternal = ctx.addonTable and ctx.addonTable._RosterInternal
     if type(rosterInternal) == "table" and type(rosterInternal.SetTooltipFlagsEnabled) == "function" then
       rosterInternal.SetTooltipFlagsEnabled(db.tooltipFlagsEnabled ~= false)
+    end
+    local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
+    if type(mobTooltip) == "table" then
+      if type(mobTooltip.Register) == "function" then
+        mobTooltip.Register()
+      end
+      if type(mobTooltip.SetEnabled) == "function" then
+        mobTooltip.SetEnabled(db.mplusForcesEstimate ~= false)
+      end
     end
   end
 

@@ -12,18 +12,45 @@ local state = {
   total = 0,
 }
 
--- Pull prediction state (delta-based, Midnight-compatible)
--- In Midnight M+, all NPC identification APIs return secret values inside the
--- instance. The only viable approach is tracking the scenario quantity delta:
--- record rawCount at combat start, diff = kills so far in this pull.
+-- Pull prediction state (delta-based, Midnight-compatible).
+-- Records rawCount at combat start; diff = kills during this pull.
 local pull = {
   inCombat = false,
   startRawCount = 0,
   startTotal = 0,
-  pullPercent = 0, -- cached for display
+  pullPercent = 0,
+  displayUntil = 0, -- pullPercent stays visible until this GetTime() stamp
 }
 
+-- Post-combat grace window: the final SCENARIO_CRITERIA_UPDATE often lags
+-- PLAYER_REGEN_ENABLED by ~0.3s; 2s covers late fires and lets the player
+-- read the pull delta before it resets.
+local POST_COMBAT_GRACE_SECONDS = 2.0
+
 local demoData = nil
+local updateCallbacks = {}
+local refreshTicker = nil
+local nowFn = nil
+
+local function Now()
+  if type(nowFn) == "function" then
+    return nowFn()
+  end
+  local getTime = rawget(_G, "GetTime")
+  if type(getTime) == "function" then
+    return getTime()
+  end
+  return 0
+end
+
+local function NotifyUpdate()
+  for i = 1, #updateCallbacks do
+    local cb = updateCallbacks[i]
+    if type(cb) == "function" then
+      pcall(cb)
+    end
+  end
+end
 
 local function FindEnemyForcesCriteria()
   if not C_ScenarioInfo or type(C_ScenarioInfo.GetScenarioStepInfo) ~= "function" then
@@ -102,7 +129,7 @@ local function ReadLiveData()
 end
 
 local function UpdatePullPercent()
-  if not pull.inCombat or not state.active then
+  if not state.active then
     pull.pullPercent = 0
     return
   end
@@ -116,27 +143,146 @@ local function UpdatePullPercent()
     gained = 0
   end
   pull.pullPercent = (gained / total) * 100
+  if pull.inCombat and pull.pullPercent > 0 then
+    pull.displayUntil = Now() + POST_COMBAT_GRACE_SECONDS
+  end
+end
+
+local function ShouldDisplayPull()
+  if pull.inCombat then
+    return true
+  end
+  if pull.pullPercent > 0 and Now() < pull.displayUntil then
+    return true
+  end
+  return false
+end
+
+local function StartRefreshTicker()
+  if refreshTicker ~= nil then
+    return
+  end
+  if not C_Timer or type(C_Timer.NewTicker) ~= "function" then
+    return
+  end
+  refreshTicker = C_Timer.NewTicker(0.5, function()
+    if not state.active then
+      return
+    end
+    NotifyUpdate()
+  end)
+end
+
+local function StopRefreshTicker()
+  if refreshTicker and type(refreshTicker.Cancel) == "function" then
+    pcall(refreshTicker.Cancel, refreshTicker)
+  end
+  refreshTicker = nil
 end
 
 function KillTrack.GetData()
   if demoData then
     return demoData
   end
+  local displayPull = ShouldDisplayPull()
   return {
     active = state.active,
     percent = state.percent,
     rawCount = state.rawCount,
     total = state.total,
-    inCombat = pull.inCombat,
-    pullPercent = pull.pullPercent,
+    inCombat = displayPull,
+    pullPercent = displayPull and pull.pullPercent or 0,
   }
 end
 
 function KillTrack.SetDemoData(data)
   demoData = data
+  NotifyUpdate()
 end
+
 function KillTrack.ClearDemoData()
   demoData = nil
+  NotifyUpdate()
+end
+
+-- Subscribe a callback fired whenever KillTrack state changes (scenario
+-- criteria, combat transitions, ticker). UI uses this to refresh the kill
+-- bar reliably instead of depending on the roster render loop.
+function KillTrack.OnUpdate(callback)
+  if type(callback) ~= "function" then
+    return
+  end
+  for i = 1, #updateCallbacks do
+    if updateCallbacks[i] == callback then
+      return
+    end
+  end
+  table.insert(updateCallbacks, callback)
+end
+
+function KillTrack.ClearCallbacks()
+  for i = #updateCallbacks, 1, -1 do
+    updateCallbacks[i] = nil
+  end
+end
+
+-- Exposed for tests: inject a deterministic time source.
+function KillTrack._SetTimeProvider(fn)
+  nowFn = fn
+end
+
+-- Exposed for tests: drive the event loop directly.
+function KillTrack._DispatchEvent(event)
+  if event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
+    state.active = false
+    state.percent = 0
+    state.rawCount = 0
+    state.total = 0
+    pull.inCombat = false
+    pull.pullPercent = 0
+    pull.displayUntil = 0
+    StopRefreshTicker()
+    NotifyUpdate()
+  elseif event == "CHALLENGE_MODE_START" then
+    ReadLiveData()
+    if state.active then
+      StartRefreshTicker()
+    end
+    NotifyUpdate()
+  elseif event == "PLAYER_REGEN_DISABLED" then
+    -- Refresh baseline from live data first: state.rawCount may be stale if
+    -- no SCENARIO_CRITERIA_UPDATE has fired since the last pull ended.
+    ReadLiveData()
+    if state.active then
+      pull.inCombat = true
+      pull.startRawCount = state.rawCount
+      pull.startTotal = state.total
+      pull.pullPercent = 0
+    end
+    NotifyUpdate()
+  elseif event == "PLAYER_REGEN_ENABLED" then
+    pull.inCombat = false
+    pull.displayUntil = Now() + POST_COMBAT_GRACE_SECONDS
+    NotifyUpdate()
+    if C_Timer and type(C_Timer.After) == "function" then
+      C_Timer.After(POST_COMBAT_GRACE_SECONDS + 0.1, function()
+        if not pull.inCombat then
+          pull.pullPercent = 0
+          pull.displayUntil = 0
+          NotifyUpdate()
+        end
+      end)
+    end
+  else
+    ReadLiveData()
+    UpdatePullPercent()
+    if state.active then
+      StartRefreshTicker()
+    else
+      StopRefreshTicker()
+    end
+    NotifyUpdate()
+  end
 end
 
 local eventFrame = CreateFrame("Frame")
@@ -149,36 +295,5 @@ eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
 
 eventFrame:SetScript("OnEvent", function(_, event)
-  if event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
-    state.active = false
-    state.percent = 0
-    state.rawCount = 0
-    state.total = 0
-    pull.inCombat = false
-    pull.pullPercent = 0
-  elseif event == "PLAYER_REGEN_DISABLED" then
-    -- Combat start: snapshot current raw count as pull baseline
-    if state.active then
-      pull.inCombat = true
-      pull.startRawCount = state.rawCount
-      pull.startTotal = state.total
-      pull.pullPercent = 0
-    end
-  elseif event == "PLAYER_REGEN_ENABLED" then
-    -- Combat end: delay slightly to catch final SCENARIO_CRITERIA_UPDATE
-    if C_Timer and C_Timer.After then
-      C_Timer.After(0.5, function()
-        pull.inCombat = false
-        pull.pullPercent = 0
-      end)
-    else
-      pull.inCombat = false
-      pull.pullPercent = 0
-    end
-  else
-    ReadLiveData()
-    if pull.inCombat then
-      UpdatePullPercent()
-    end
-  end
+  KillTrack._DispatchEvent(event)
 end)

@@ -671,9 +671,13 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         true,
         "deferred secure update should refresh secure attributes after regen"
       )
-      Assert.False(
+      -- PLAYER_REGEN_ENABLED stays registered after drain: the frame is statically
+      -- registered at module load to avoid dynamic RegisterEvent from protected
+      -- dispatch (ADDON_ACTION_FORBIDDEN in 12.0+). OnEvent early-returns when the
+      -- pending queue is empty.
+      Assert.True(
         retryFrame:IsEventRegistered("PLAYER_REGEN_ENABLED"),
-        "regen retry frame should unregister after applying pending secure updates"
+        "regen retry frame keeps PLAYER_REGEN_ENABLED registered (static registration)"
       )
     end)
   end)

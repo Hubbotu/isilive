@@ -195,9 +195,6 @@ local function ClearQueuedPanelUISecureState(state)
   end
 
   pendingPanelUISecureStateRefresh[state] = nil
-  if panelUISecureRetryFrame and next(pendingPanelUISecureStateRefresh) == nil then
-    panelUISecureRetryFrame:UnregisterEvent("PLAYER_REGEN_ENABLED")
-  end
 end
 
 local function QueuePanelUISecureStateRefresh(state)
@@ -206,14 +203,18 @@ local function QueuePanelUISecureStateRefresh(state)
   end
 
   pendingPanelUISecureStateRefresh[state] = true
-  if panelUISecureRetryFrame then
-    panelUISecureRetryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-  end
 end
 
 panelUISecureRetryFrame = CreateFrame("Frame")
-panelUISecureRetryFrame:SetScript("OnEvent", function(self, event)
+-- PLAYER_REGEN_ENABLED is registered statically at module load to avoid a
+-- dynamic RegisterEvent from handlers dispatched by protected code, which
+-- raises ADDON_ACTION_FORBIDDEN in 12.0+.
+panelUISecureRetryFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+panelUISecureRetryFrame:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_REGEN_ENABLED" then
+    return
+  end
+  if next(pendingPanelUISecureStateRefresh) == nil then
     return
   end
 
@@ -222,7 +223,6 @@ panelUISecureRetryFrame:SetScript("OnEvent", function(self, event)
     queuedStates[#queuedStates + 1] = state
     pendingPanelUISecureStateRefresh[state] = nil
   end
-  self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 
   for _, state in ipairs(queuedStates) do
     ApplyPanelUISecureState(state, true)

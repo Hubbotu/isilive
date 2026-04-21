@@ -480,9 +480,12 @@ local function RegisterShareKeysFallbackLinkTest()
 
       Assert.Equal(#sentMessages, 1, "share-keys should still emit one chat message")
       Assert.Equal(sentMessages[1].channel, "PARTY", "fallback share-keys message should still announce to party chat")
+      -- Manually constructed |Hkeystone:...|h links are server-rejected in
+      -- retail — SendChatMessage silently drops them. The fallback must stay
+      -- plain-text so the message actually reaches the party.
       Assert.True(
-        sentMessages[1].text:find("|Hkeystone:180653:2662:10:0:0:0:0|h", 1, true) ~= nil,
-        "fallback share-keys message must remain clickable"
+        sentMessages[1].text:find("|Hkeystone:", 1, true) == nil,
+        "fallback share-keys message must not contain a manually constructed keystone link"
       )
       Assert.True(
         sentMessages[1].text:find("DB +10", 1, true) ~= nil,

@@ -28,6 +28,8 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_roster_panel_hidden_default.lua",
   "testmodul/isilive_test_scenarios_roster_panel_share_keys.lua",
   "testmodul/isilive_test_scenarios_roster_panel_tooltip.lua",
+  "testmodul/isilive_test_scenarios_mob_tooltip.lua",
+  "testmodul/isilive_test_scenarios_killtrack.lua",
   "testmodul/isilive_test_scenarios_roster_panel_wrapping.lua",
   "testmodul/isilive_test_scenarios_status.lua",
   "testmodul/isilive_test_scenarios_units.lua",
