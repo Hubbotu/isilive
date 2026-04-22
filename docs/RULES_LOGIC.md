@@ -43,10 +43,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 20. In den Gruppenmitglieder-Zeilen ist kein Zeilenumbruch erlaubt.
 21. Es gibt kein Dungeon-Portal-Highlight, wenn das Ziel nicht eindeutig aufloesbar ist.
 22. Es gibt keinen wiederholten Target-Dungeon-Chatspam; bei identischem erkanntem Ziel reicht eine einmalige Ausgabe.
-23. coding: KEINE fallbacks von fallbacks
-24. coding: kein raten, schätzen oder herbeizaubern von aussagen. fakten zählen! robust und qualitativ hochwertig bleiben!
-25. der rio delta kann niemals negativ sein also zb. -15, der kann nur 0 oder höher sein.
-26. die ui kann in allen Nicht-Raid-Zustaenden mit STRG+F9 geöffnet und geschlossen werden; im raid bleibt sie aus
+23. (veraltet — ersetzt durch Regel 54) Resolver sollen keine Ratefallbacks starten, wenn der primaere Resolver bereits unresolved meldet.
+24. (veraltet — Duplikat zu Regeln 1 und 5) Keine geratenen, geschaetzten oder synthetischen Laufzeitwerte.
+25. (veraltet — Duplikat zu Regel 15) RIO-Delta bleibt immer bei `+0` oder hoeher.
+26. (veraltet — Duplikat zu Regel 2) UI-Toggle per STRG+F9 ausserhalb des Raids.
 27. das schliessen der ui ist jederzeit anforderbar, entweder per klick auf das rote x rechts oben (windows like) oder per STRG+F9; ausser im Raidmodus bleiben blockierte hide-wechsel bis `PLAYER_REGEN_ENABLED` gependelt und werden dann nachgezogen
 28. während die ui ausgeblendet ist, laufen roster/addon-sync im hintergrund weiter und dürfen eventgetrieben vor-rendern; queue-scanning und sonstige dauerhafte polling-last stoppen jedoch, der kick-sync bleibt fuer isiLive-gruppenmitglieder aktiv. Im Raid sind UI und Hintergrund-Sync komplett aus.
 29. teleport-eintraege fuer shared spells bleiben deterministisch sortiert und doppelte grid-eintraege werden entfernt.
@@ -60,7 +60,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 37. die wartungsdatei `WARTUNG.md` darf nicht im curseforge-paket landen.
 38. `WARTUNG.md` muss die verpflichtende wartungskette fuer den wiedereinstieg nennen: `CHANGELOG.md`, `TODO.md`, `RULES_LOGIC.md`, `ARCHITECTURE_RULES.md`, `AGENTS.md`, `README.md`, `RELEASE.md`, `USECASES.md`, `ARCHITECTURE.md`.
 39. Die Rollensymbole im Roster-Panel sind interaktive Buttons und ermoeglichen per Klick das manuelle Markieren von Tank (Blau) und Heiler (Gruen).
-40. Bei Gruppengroessen > 5 (Raid) wird die Main-UI sofort ausgeblendet, es wird keine Raid-Benachrichtigung ausgegeben und kein H-Modus erzwungen; Hintergrundverarbeitung fuer Raid ist aus.
+40. (veraltet — Duplikat zu Regel 11) Raid-Gruppen: UI aus, keine Raid-Notice, keine H-Mode-Erzwingung, kein Hintergrund-Sync.
 41. API-Aufrufe mit Unit-Tokens muessen `UnitExists` pruefen, bevor sie aufgerufen werden, um Race-Conditions bei Gruppenaenderungen abzufangen.
 42. Die Behavior-Option `Auto-Close bei Key-Start / Solo` ist standardmaessig aus; nur wenn sie aktiv ist, darf die Main-UI bei Key-Start und beim Solo-Uebergang automatisch schliessen.
 43. Der aktuelle Gruppenleiter wird im Roster mit einer 16x16-Krone markiert; bei bekannten isiLive-Nutzern bleibt das blaue Herz zusaetzlich sichtbar und steht vor der Krone.
@@ -294,10 +294,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-UI-STRG-F9-JEDERZEIT
 - Regelnummer: 26
 - Status: veraltet
-- Zusammenfassung: Duplikat zu Regel 2; der STRG-F9-Kampf-Toggle wird dort verbindlich erzwungen.
+- Zusammenfassung: Ersetzt durch Regel 2 (`RULE-UI-HOTKEY-KAMPF-TOGGLE`); der STRG+F9-Toggle und die Kampf-Lockdown-Defer-Logik werden dort verbindlich erzwungen.
 - Erforderliche Tests:
-  - UI toggle defers closing frame during combat and applies after regen
-  - UI toggle defers opening frame during combat and applies after regen
+  - (siehe Regel 2)
 
 ### RULE-UI-SCHLIESSEN-X-ODER-HOTKEY
 - Regelnummer: 27
@@ -402,24 +401,24 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 
 ### RULE-CODING-KEINE-FALLBACK-KETTEN
 - Regelnummer: 23
-- Status: entwurf
-- Zusammenfassung: Resolver sollen keinen weiteren ratebasierten API-Fallback ausfuehren, wenn der primäre injizierte Resolver bereits keine eindeutige Aussage liefert.
+- Status: veraltet
+- Zusammenfassung: Ersetzt durch Regel 54 (`RULE-NO-GUESS-LAUFZEITAUFLOESUNG`); der dortige No-Guess-Vertrag deckt ratebasierte Resolver-Fallback-Ketten mit ab.
 - Erforderliche Tests:
-  - Highlight map resolver does not bypass injected resolver with direct API fallback
+  - (siehe Regel 54)
 
 ### RULE-CODING-KEIN-RATEN
 - Regelnummer: 24
 - Status: veraltet
-- Zusammenfassung: Duplikat zu Regel 1 und Regel 5; unklare Faktenlage bleibt unresolved statt geraten zu werden.
+- Zusammenfassung: Ersetzt durch Regeln 1 (`RULE-QUEUE-NO-GUESS`) und 5 (`RULE-TELEPORT-KEIN-NAME-GUESSING`); das generelle No-Guess-Dach liegt heute in Regel 54.
 - Erforderliche Tests:
-  - Queue does not guess first candidate when no concrete map is available
+  - (siehe Regel 1 und Regel 5)
 
 ### RULE-RIO-DELTA-NIE-NEGATIV
 - Regelnummer: 25
 - Status: veraltet
-- Zusammenfassung: Duplikat zu Regel 15; RIO-Delta bleibt immer bei `+0` oder hoeher.
+- Zusammenfassung: Ersetzt durch Regel 15 (`RULE-ROSTER-RIO-DELTA-FORMAT`); der aktive RIO-Delta-Vertrag deckt non-negative Anzeige mit `(+X)`-Prefix ab.
 - Erforderliche Tests:
-  - Roster display clamps negative RIO delta to +0
+  - (siehe Regel 15)
 
 ### RULE-ROSTER-KOMPAKT-SPALTENBREITEN
 - Regelnummer: 35
@@ -475,10 +474,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-ROSTER-RAID-NOTICE
 - Regelnummer: 40
 - Status: veraltet
-- Zusammenfassung: Duplikat zu Regel 11; bei Gruppengroessen > 5 (Raid) wird die Main-UI sofort ausgeblendet, es wird keine Raid-Benachrichtigung ausgegeben und kein H-Modus erzwungen; Hintergrundverarbeitung fuer Raid ist aus.
+- Zusammenfassung: Ersetzt durch Regel 11 (`RULE-GRUPPE-RAID-SICHTBARKEIT`); der Raid-Hard-off-Vertrag (UI aus, keine Notice, kein Hintergrund-Sync) liegt dort.
 - Erforderliche Tests:
-  - Raid group hides the UI and suppresses background processing
-  - Factory raid behavior resolver defaults to raid off and normalizes legacy values
+  - (siehe Regel 11)
 
 ### RULE-UNIT-EXISTS-GUARD
 - Regelnummer: 41
