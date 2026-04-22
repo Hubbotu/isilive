@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-22 - Version 0.9.181 (patch)
+
+- **WoW 12.0.5 client compatibility — `## Interface: 120005` in `isiLive.toc`:**
+  - Bumped from `120001` so the AddOns screen stops flagging isiLive as out-of-date on 12.0.5 clients. Title and version strings in `isiLive.toc` aligned to `v0.9.181`.
+  - No runtime code changes were required. The `wow-api-check` skill was run against the full 12.0+ addon-restriction rule set: no `COMBAT_LOG_EVENT_UNFILTERED` registration (the addon uses `UNIT_SPELLCAST_SUCCEEDED` for BR/Lust, see `game/isiLive_combat_events.lua`); every `RegisterEvent` call lives in a main chunk or a login/factory init callback, never re-entered from a protected dispatcher (`CHALLENGE_MODE_START`, `ENCOUNTER_START`, etc.); `C_MythicPlus.GetOwnedKeystoneLink` is defensively guarded with `type == "function"` and has the bag-scan fallback for item `180653` (`core/isiLive_context_helpers.lua`); both real `PlaySoundFile` call sites use the `"SFX"` channel; no `|cff[...]|r` color-bracket pattern is injected into `SendChatMessage` outside a real `|H...|h|h` hyperlink; the peer-tooltip wording in `ui/isiLive_roster_tooltip.lua` is `"Client version: %s"` without a `(pN)` protocol suffix and without the `protocolVersion` branch. All six rule families passed on the 0.9.180 codebase, so 0.9.181 ships the same binary surface with only the TOC flag bumped.
+  - Baseline version fields synchronised across `isiLive.toc`, `CHANGELOG_RELEASE.md`, `README.md`, `docs/ARCHITECTURE.md`, and `docs/USECASES.md`.
+
 ## 2026-04-21 - Version 0.9.180 (patch)
 
 - **M+ Forces DB lifetime gate (`tools/check_mplus_db_lifetime.lua`) — prevents shipping a stale `data/isiLive_mplus_forces.lua` that was generated against an outdated MDT clone:**
