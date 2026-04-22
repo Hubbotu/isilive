@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
 Versionsbasis: `0.9.180`
-Zuletzt aktualisiert: `2026-04-21`
+Zuletzt aktualisiert: `2026-04-22`
 
 ## Akteure
 
@@ -37,6 +37,8 @@ Zuletzt aktualisiert: `2026-04-21`
 | UC-13 | Esc-Shortcuts und Addon-Settings | Der User bekommt zwei Blizzard-UI-Einstiegsflaechen plus lokalisierte Config-Toggles und eine dedizierte Sounds-Sektion |
 | UC-14 | Combat-Utility-Tracker | Live-BRes, Lust, Mythic+-Timer und gesyncter Interrupt-State bleiben im Roster-Panel sichtbar |
 | UC-15 | LFG-Detektion und Portal-Highlight | LFG-Einladungen und eigene Listings loesen lokalisierte Hinweise und das passende Portal-Highlight deterministisch aus |
+| UC-16 | BR- und Bloodlust-Gruppen-Announce im Mythic+ | Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird innerhalb eines aktiven Keys genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt |
+| UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile `Forces: %.2f%% (+%d)` an den Blizzard-Tooltip an |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -181,6 +183,37 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 5. Regel: `GROUP_ROSTER_UPDATE` ohne Gruppe loescht den gesamten LFG-Zustand inklusive pending invites, aber nur beim echten Gruppenende (`GetNumGroupMembers() == 0`); `CHALLENGE_MODE_START` und die aktive Challenge-Map allein loeschen den Invite-Zustand nicht mehr, sondern erst der echte Dungeon-Eintritt ueber den finalen Map-Check.
 6. Erfolgskriterium: Erkennungen erscheinen einmalig und lokalisiert, late `inviteaccepted`-Events bleiben korrekt aufloesbar, identische Listing-Updates erzeugen keinen inkonsistenten Highlight-State, und unbekannte Namen werden nie als Dungeon-Ziel geraten.
 
+## UC-16 BR- und Bloodlust-Gruppen-Announce im Mythic+
+
+Ziel: Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird im Mythic+ genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt, ohne die 12.0-`ADDON_ACTION_FORBIDDEN`-Regression von `SendChatMessage` zu treffen und ohne `"table index is secret"`-Spam durch Casts anderer Spieler zu produzieren.
+
+1. Trigger: `UNIT_SPELLCAST_SUCCEEDED` feuert mit `unit == "player"` waehrend `C_ChallengeMode.GetActiveChallengeMapID()` einen aktiven Key meldet.
+2. Regel: Casts anderer Spieler werden vor jeder Spell-ID-Inspektion verworfen, weil deren `spellID` in 12.0-Protected-Zonen als Secret-Value maskiert ist und ein direkter Table-Lookup `BR_SPELL_IDS[spellID]` die Fehlermeldung `"table index is secret"` ausloest.
+3. Verarbeitung: Die eigene `spellID` wird gegen `BR_SPELL_IDS` (Rebirth, Raise Ally, Intercession, Soulstone Resurrection) und `LUST_CAST_IDS` (Bloodlust, Heroism, Time Warp, Primal Rage, Fury of the Aspects, Feral Hide Drums, Drums of Fury / Mountain / Maelstrom / Deathly Ferocity, Ancient Hysteria, Netherwinds) geprueft.
+4. Regel: Ein 3-Sekunden-Dedup-Fenster pro `sourceGUID|spellID` schluckt duplizierte Cast-Events im selben Burst; `CHALLENGE_MODE_START` und `CHALLENGE_MODE_COMPLETED` rufen `Reset()` und loeschen die Dedup-Map vollstaendig.
+5. Regel: Der Sender broadcastet nur, wenn der zugehoerige Toggle aktiv ist. `chatAnnounceBR == false` blockiert BR-Announces, `chatAnnounceLust == false` blockiert Lust-Announces; beide sind standardmaessig aktiv und leben in der `Chat Announcements`-Sektion der Blizzard-Settings.
+6. Verarbeitung: Der Sender ruft `Sync.SendCombatAnnounce(kind, sourceName, spellID)` auf. Die Payload `BRLUST:<KIND>:<caster>:<spellID>` geht mit Prioritaet `NORMAL` ueber `DispatchAddonMessage` und damit ueber den ChatThrottleLib-Pfad; wenn die Lib nicht geladen ist, fallback auf raw `C_ChatInfo.SendAddonMessage`. `SendChatMessage` wird nicht verwendet, damit 12.0-Taint-Zonen keinen `ADDON_ACTION_FORBIDDEN`-Popup ausloesen.
+7. Verarbeitung: Der Sender rendert parallel die eigene Chat-Zeile lokal via `ctx.ShowCombatAnnounce` in `DEFAULT_CHAT_FRAME`, damit er seinen eigenen Cast auch solo oder ohne isiLive-Peers in der Gruppe sieht.
+8. Verarbeitung: `Sync.ProcessAddonMessage` erkennt `BRLUST:` als eigenen Bucket und exponiert `{kind, caster, spellID}` als `result.combatAnnounce`; `HandleChatMsgAddonEvent` ruft `ctx.showCombatAnnounce(...)`, das den lokalisierten Template-Text (`COMBAT_CHAT_BR_USED` / `COMBAT_CHAT_LUST_STARTED`) via `ctx.Print` in den Chat schreibt.
+9. Regel: Unbekannte `BRLUST`-Kinds (also alles ausser `"BR"` und `"LUST"`) werden auf Empfaengerseite still verworfen, damit ein zukuenftiger Sender mit neuem Kind keinen Log-Spam produziert.
+10. Regel: Nicht-isiLive-Gruppenmitglieder sehen nichts; die Verteilung laeuft ausschliesslich ueber den Addon-Message-Kanal zwischen isiLive-Peers. Bei `N` isiLive-Usern in einer Gruppe meldet jeder Caster seinen eigenen Cast, und alle `N-1` Peers bekommen die Zeile.
+11. Realm-Darstellung: Die realm-strippende Display-Logik liegt in `factory/isiLive_factory_controllers.lua.FormatDisplayName` und wird sowohl vom Self-Render- als auch vom Peer-Render-Pfad genutzt; Cross-Realm-Namen behalten dabei ihren Realm-Suffix.
+12. Erfolgskriterium: Ein BR- oder Lust-Cast im Mythic+ erzeugt genau eine sichtbare Chat-Zeile pro isiLive-Empfaenger, der Self-Render beim Sender, keinen `ADDON_ACTION_FORBIDDEN`-Popup und keinen `"table index is secret"`-Fehler; Toggles entfernen die Zeile vollstaendig auf Senderseite, Peers ausserhalb eines aktiven Keys sehen keine Zeile.
+
+## UC-17 Mob-Tooltip mit Forces-Anteil im Mythic+
+
+Ziel: Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile an den Blizzard-Tooltip an, damit der Spieler vor dem Pull sieht, wie viel Forces dieser Mob beitraegt.
+
+1. Trigger: Die Blizzard-`TooltipDataProcessor`-Post-Call-Chain feuert fuer `Enum.TooltipDataType.Unit`, waehrend `C_ChallengeMode.GetActiveChallengeMapID()` eine aktive Map-ID liefert.
+2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und stellt `MPlusForces.byNpcId` sowie `MPlusForces.dungeonTotal` bereit. Ohne validen Datensatz wird die Zeile nicht gerendert.
+3. Verarbeitung: Der GUID wird entweder direkt aus den Tooltip-Daten oder als Fallback aus `UnitGUID("mouseover")` gezogen; `NpcIdFromGuid` parsed den Blizzard-GUID und akzeptiert nur `Creature` oder `Vehicle`. Spieler-GUIDs werden verworfen.
+4. Regel: Der Eintrag wird nur gerendert, wenn die NPC-Map-ID des Datensatzes mit der aktiven Challenge-Map-ID uebereinstimmt; fremde Dungeon-NPCs (zum Beispiel in World-Quests) erhalten keine Zeile.
+5. Verarbeitung: Die Zeile wird als `string.format("Forces: %.2f%% (+%d)", (count / total) * 100, count)` mit der Farbe `(0.4, 0.8, 1)` via `tooltip:AddLine(...)` angehaengt.
+6. Regel: Ein `OnTooltipCleared`-Hook auf `GameTooltip` loescht die per-Tooltip-Dedup-Map, damit `TooltipDataProcessor`-Rerenders desselben Mobs keine Doppelzeilen stapeln.
+7. Regel: `MobTooltip.SetEnabled(false)` gated das Rendering komplett; bei deaktiviertem Feature wird keine Zeile gerendert, auch wenn alle anderen Voraussetzungen stimmen.
+8. Regel: 12.0-Secret-Value-Guards greifen an drei Stellen, bevor ein Wert verglichen oder als Pattern-Match ausgewertet wird: `C_ChallengeMode.GetActiveChallengeMapID()` (secret gemachter Wert zaehlt als kein aktiver Key), `tooltipData.guid` und der Fallback `UnitGUID("mouseover")` (secret gemachte GUID wird verworfen, damit der SetWorldCursor-Tooltip-Pfad keinen `"attempt to compare field 'guid' (a secret string value tainted by 'isiLive')"`-Fehler produziert). Ein secret gemachter Wert an irgendeiner dieser Stellen unterdrueckt das Rendering.
+9. Erfolgskriterium: Hovern ueber einen Dungeon-Mob im aktiven Key zeigt eine stabile Forces-Zeile, Hovern ausserhalb eines Keys oder auf fremden Mobs erzeugt keine Zeile, Tooltip-Rerenders duplizieren die Zeile nicht.
+
 ## Nichtfunktionale Regeln
 
 1. Kein spekulatives Verhalten: unresolved oder mehrdeutiger Map-Kontext bleibt unresolved; kein Name-/Token-Fallback-Guessing.
@@ -204,7 +237,7 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `619` Szenarien ueber `45` Module.
+Aktuelle Validator-Baseline: `760` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -218,6 +251,8 @@ Aktuelle Validator-Baseline: `619` Szenarien ueber `45` Module.
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
 11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering und gesyncte Interrupt-Cooldown-Anzeige.
 12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, concrete-LFG-Prioritaet und Highlight-Dispatch.
+13. UC-16: BR-/Lust-Self-Cast-Filter gegen 12.0-Secret-Value-Spam, 3s-`sourceGUID|spellID`-Dedup, Toggle-Gating, ChatThrottleLib-Routing via `BRLUST`-Addon-Message, Receiver-Dispatch in lokalisierten Template-Zeilen und Drop-On-Unknown-Kind.
+14. UC-17: Mob-Tooltip-Forces-Rendering nur bei aktiver Challenge-Map-ID mit passendem NPC-Dataset, Per-Tooltip-Dedup gegen `TooltipDataProcessor`-Rerender und `SetEnabled(false)`-Gate.
 
 ## Rueckverfolgbarkeit zu Quelldateien
 
@@ -237,3 +272,5 @@ Aktuelle Validator-Baseline: `619` Szenarien ueber `45` Module.
 | Auto-Marker-Logik, entfernt oder ersetzt | `isiLive_group.lua` nach Bereinigung |
 | Raid-Size-H-Mode-UI | `isiLive_roster_panel.lua`, `isiLive_group.lua` |
 | Event-Routing und Gate | `isiLive_events.lua`, `isiLive_event_handlers.lua`, `isiLive_event_handlers_runtime.lua`, `isiLive_event_handlers_queue.lua`, `isiLive_event_handlers_challenge.lua` |
+| BR-/Lust-Combat-Announce und Addon-Message-Routing | `isiLive_combat_events.lua`, `isiLive_sync.lua` (`SendCombatAnnounce`, `ProcessAddonMessage.BRLUST`), `isiLive_event_handlers_runtime.lua` (`HandleChatMsgAddonEvent`), `isiLive_factory_controllers.lua` (`FormatDisplayName`, `broadcastCombatAnnounce`), `isiLive_texts.lua` (`COMBAT_CHAT_BR_USED`, `COMBAT_CHAT_LUST_STARTED`, `SETTINGS_SECTION_CHAT`, `SETTINGS_CHAT_BR_ANNOUNCE`, `SETTINGS_CHAT_LUST_ANNOUNCE`), `libs/ChatThrottleLib/ChatThrottleLib.lua` |
+| Mob-Tooltip-Forces-Anreicherung | `isiLive_mob_tooltip.lua`, `data/isiLive_mplus_forces.lua`, `tools/sync_mdt_forces.lua`, `tools/check_mplus_db_lifetime.lua`, `.github/workflows/sync-mplus-forces.yml` |

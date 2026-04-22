@@ -117,7 +117,68 @@ Wenn eine neue Season startet:
 - erst dann `ACTIVE_SEASON_ID` umstellen
 - keine halbfertige Season live schalten
 
-### 3.5 M+ Forces DB / MDT-Sync
+### 3.5 BR-/Bloodlust-Combat-Events und Addon-Message-Transport
+
+Pruefen:
+- `game/isiLive_combat_events.lua`
+- `logic/isiLive_sync.lua` (`SendCombatAnnounce`, `ProcessAddonMessage.BRLUST`)
+- `logic/isiLive_event_handlers_runtime.lua` (`HandleChatMsgAddonEvent`)
+- `factory/isiLive_factory_controllers.lua` (`FormatDisplayName`, `broadcastCombatAnnounce`)
+- `libs/ChatThrottleLib/ChatThrottleLib.lua`
+
+Aktueller Soll-Zustand:
+- `UNIT_SPELLCAST_SUCCEEDED` wird **nur** fuer `unit == "player"` verarbeitet. Casts anderer Spieler werden vor jeder Spell-ID-Inspektion verworfen, weil 12.0-Secret-Values sonst `"table index is secret"` werfen.
+- Die Gruppen-Verteilung laeuft ueber den Addon-Message-Kanal (`BRLUST:<KIND>:<caster>:<spellID>`, Prioritaet `NORMAL` ueber `DispatchAddonMessage`), **nicht** ueber `SendChatMessage`. Sonst triggert 12.0 den `ADDON_ACTION_FORBIDDEN`-Popup in Protected-Zonen.
+- 3-Sekunden-Dedup pro `sourceGUID|spellID`; `CHALLENGE_MODE_START` und `CHALLENGE_MODE_COMPLETED` rufen `Reset()`.
+- Empfaenger rendern die lokalisierten Templates `COMBAT_CHAT_BR_USED` und `COMBAT_CHAT_LUST_STARTED`; unbekannte `BRLUST`-Kinds werden still verworfen.
+- Toggles `chatAnnounceBR` und `chatAnnounceLust` sind standardmaessig an und leben in der `Chat Announcements`-Sektion der Blizzard-Settings.
+
+Typische Ursachen fuer Brueche:
+- Jemand legt `SendChatMessage` zurueck in den Broadcast-Pfad → `ADDON_ACTION_FORBIDDEN`-Popup im Live-Key.
+- Der Self-Cast-Filter (`unit == "player"`) wird aufgeweicht → sofortiger Log-Spam aus anderen Spielern in protected Zonen.
+- Blizzard erweitert BR- oder Lust-Spell-Liste → `BR_SPELL_IDS` / `LUST_CAST_IDS` entsprechend ergaenzen, sonst fehlen Ansagen.
+
+### 3.6 ChatThrottleLib und Addon-Message-Prioritaeten
+
+Pruefen:
+- `libs/ChatThrottleLib/ChatThrottleLib.lua` (vendored, v24)
+- `logic/isiLive_sync.lua` (`DispatchAddonMessage`)
+- `isiLive.toc` — muss `libs/ChatThrottleLib/ChatThrottleLib.lua` vor allen isiLive-Modulen laden
+
+Aktueller Soll-Zustand:
+- Alle Addon-Message-Sends laufen ueber `DispatchAddonMessage(prefix, payload, channel, priority)`.
+- Wenn ChatThrottleLib geladen ist, wird `ChatThrottleLib:SendAddonMessage(priority, prefix, text, chattype)` verwendet; andernfalls Fallback auf raw `C_ChatInfo.SendAddonMessage`.
+- Prioritaets-Schema:
+  - `ALERT` → `KICK`, `REQSYNC` (zeitkritische Coordination)
+  - `NORMAL` → `HELLO`, `KEY`, `TARGET`, `SHAREKEYS`, `BRLUST`, LibKeystone-Party-/Request-Envelopes
+  - `BULK` → `STATS`, `DPS`, `LOC` (Metriken, duerfen unter Last zurueckstehen)
+- Jeder Send loggt `sent=true|false` in den SyncLog-Trace; ChatThrottleLib-Drops werden dort sichtbar.
+
+Typische Ursachen fuer Brueche:
+- `.luacheckrc` oder `.stylua`-Ausnahmen fuer `libs/` werden entfernt → StyLua- oder Luacheck-Diagnose bricht auf der vendored Lib.
+- Jemand sendet wieder raw `C_ChatInfo.SendAddonMessage` direkt → unter Last droppt die Nachricht ohne Trace.
+
+### 3.7 Mob-Tooltip mit Forces-Anteil
+
+Pruefen:
+- `ui/isiLive_mob_tooltip.lua`
+- `data/isiLive_mplus_forces.lua`
+- `tools/sync_mdt_forces.lua`
+- `tools/check_mplus_db_lifetime.lua`
+- `.github/workflows/sync-mplus-forces.yml`
+
+Aktueller Soll-Zustand:
+- Registrierung laeuft ueber `TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, ...)`. Fehlen dieser APIs = Feature bleibt still inaktiv.
+- Die Forces-Zeile wird nur gerendert, wenn `C_ChallengeMode.GetActiveChallengeMapID()` eine aktive Map meldet und die NPC-Map-ID aus dem Datensatz damit uebereinstimmt.
+- `OnTooltipCleared`-Hook verhindert Doppelzeilen auf `TooltipDataProcessor`-Rerender.
+- `MobTooltip.SetEnabled(false)` gated das Rendering komplett.
+- 12.0-Secret-Value-Guards an drei Stellen: `C_ChallengeMode.GetActiveChallengeMapID()`, `tooltipData.guid` und der Fallback `UnitGUID("mouseover")`. Ohne diesen Guard wirft der SetWorldCursor-Tooltip-Pfad `"attempt to compare field 'guid' (a secret string value tainted by 'isiLive')"`, sobald ein Mob-GUID als Secret-String zurueckkommt.
+
+Typische Ursachen fuer Brueche:
+- Blizzard aendert die `TooltipDataProcessor`-API oder `Enum.TooltipDataType.Unit` → Feature registriert sich nicht mehr.
+- `data/isiLive_mplus_forces.lua` laeuft ueber `expiresAt` → CI-Lifetime-Gate blockiert den Release; der wochenweise MDT-Refresh-Workflow regeneriert normalerweise rechtzeitig, manueller Retrigger ueber `workflow_dispatch` falls der Donnerstag-Run gescheitert ist.
+
+### 3.8 M+ Forces DB / MDT-Sync
 
 Pruefen:
 - `data/isiLive_mplus_forces.lua` (generierter Datensatz, niemals von Hand editieren)

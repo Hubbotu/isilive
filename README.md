@@ -1,87 +1,165 @@
 # isiLive
 
-WoW Mythic+ group helper addon focused on pre-key group overview and in-key tracking.
+**A Mythic+ group helper for World of Warcraft.** One window that shows who has which key, how the group is doing, and what matters during a run.
 
-Compatibility: WoW `12.0+` only.
-Current version: `0.9.175`.
+- **For:** M+ players in pre-made groups and LFG runs
+- **WoW version:** `12.0+` (Midnight) only
+- **Current version:** `0.9.180`
+- **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
 
-## Features
+## What it does
 
-### Group Roster
+When you join a group, isiLive opens a single window with everything you want to see before and during a key:
 
-- Roster table with columns: `Spec`, `Name`, `Flag`, `Key`, `iLvl`, `RIO`, `DPS`, `Kick`
-- Stable role sort: Tank → Healer → Damage Dealer
-- Addon-presence marker (blue heart) per member; group leaders show an additional crown icon
-- Ghost rows: players who leave remain visible (greyed out) until the next roster rebuild
-- Right-click a roster row to whisper
+- Who is in the group, their spec, item level, Raider.IO rating, and keystone
+- Who plays which dungeon portal, and which portals are on cooldown
+- Who can interrupt, and whose kick is still on cooldown
+- Battle Res charges and Bloodlust cooldown during a run
+- The M+ timer with `+3 / +2 / +1` cutoffs live
+- Forces percentage and a live pull-prediction bar
+
+Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
+
+---
+
+## Install
+
+1. Download from **CurseForge** or **Wago**, or drop the folder `isiLive/` into `World of Warcraft/_retail_/Interface/AddOns/`.
+2. Start the game. The window opens automatically the next time you join a 5-player group.
+
+No setup required. Open the settings via **Escape → AddOns → isiLive** if you want to change language, sounds, or auto-open behavior.
+
+---
+
+## Main window
+
+The window opens automatically when you join a group and closes when you leave. You can also open or close it yourself:
+
+- **`Ctrl + F9`** — toggle the window
+- **Red X** in the top-right corner — close it
+- **Lock icon** in the top-right — prevents dragging so the window doesn't move by accident
+- Drag the title bar to move the window. The position is remembered.
 
 ### Layouts
 
-- **M2** — main stacked layout (default): full roster + all M+ tools
-- **H** — slim horizontal tool strip with compact leader buttons
-- **V** — compact vertical palette with markers and management only
-- `CTRL+F9` toggles the main window; the title bar in M2 shows this hint directly
-- The top-right lock button prevents accidental dragging; it mirrors `Lock main frame position`
-- Active mode button is highlighted in gold; mode persists via `Default UI on Open`
+The window comes in four layouts. Click the button in the title bar to switch:
 
-### M+ Utility Row (M2 only)
+| Button | Layout | What you get |
+|---|---|---|
+| **M+** | Compact main | Full roster + all M+ tools stacked (default) |
+| **M** | Main | Roster + tools in a classic stacked view |
+| **H** | Horizontal | Slim tool strip — just the essentials |
+| **V** | Vertical | Small palette with markers and group tools |
 
-- **BR/BL Tracker:** live Battle Res charges/cooldown, Bloodlust/Heroism remaining time with spell icons
-- **M+ Timer:** countdown with `+3` / `+2` / `+1` cutoffs and death-penalty loss; rerenders live during a running key
+The selected layout is remembered across sessions.
 
-### M+ Killtracker Row (M2 only)
+---
 
-- Permanently visible bottom row showing Enemy Forces (`EF`) percentage as a labelled progress bar
-- Bar colour: green (<80%), yellow (<95%), red (≥95%)
-- Shows `--,--` when no key is active; resets immediately on key end or reset
-- **Pull prediction:** while in combat, a light-blue bar segment appended to the right of the main bar shows the forces delta of the current pull; the same value appears as `+X,XX%` text next to the main percentage
-- Pull prediction uses a scenario-quantity delta (combat-start snapshot vs. current value) — the only viable method in Midnight M+ where all NPC identification APIs return secret values inside the instance
-- Data source: `C_ScenarioInfo.GetScenarioStepInfo()` weighted-progress criterion
+## The roster
 
-### Kick Cooldown Sync
+Columns in order: **Spec · Name · Lang · Key · iLvl · RIO · DPS · Kick**
 
-- `Kick` column shows synced interrupt state per party member: `ready` or remaining seconds
-- Spec-specific interrupt spell, smooth interpolation between packets, no guessing
-- Kick state stays unresolved if exact cooldown proof is unavailable after raid exit
+- **Spec** — role-sorted: tanks first, then healers, then DPS
+- **Lang** — spoken-language flag for the player
+- **Key** — keystone and level, short code (e.g. `MT +14`, `DAWN+12`). Red if this player owns the key you joined for.
+- **iLvl** — equipped item level
+- **RIO** — current Raider.IO score. After a run, a green `(+X)` shows the gain: `(+12)3521`
+- **DPS** — overall DPS from the last dungeon, read from Blizzard's in-game damage meter
+- **Kick** — green `ready`, red seconds on cooldown, or `-` if the spec has no interrupt
+
+### Markers next to names
+
+- **Blue heart** — this player also runs isiLive
+- **Crown** — this player is the group leader
+- **Ghost row** (greyed out) — a player who left the group. Kept visible until the group dissolves or you reload, so you can still see who was there after a wipe or dungeon reset.
+- **Right-click a row** to whisper that player
+
+### Ready check
+
+During a ready check, the row background changes color: **green** for ready, **red** for declined or no answer, **yellow** (with sandglass) for still waiting. After the ready check ends, ready/declined colors stay visible for 20 seconds so you can glance at who responded how.
+
+---
+
+## Tools in the main window
+
+### M+ Utility Row
+
+- **BR** — Battle Res charges and cooldown with icon
+- **Lust** — Bloodlust/Heroism cooldown with icon and remaining time
+- **M+ Timer** — `+3 / +2 / +1` cutoffs counting down live, plus death penalty
+
+### Killtracker (Enemy Forces)
+
+A bottom bar that shows your kill-count percentage:
+
+- **Green** < 80%, **Yellow** < 95%, **Red** ≥ 95%
+- During a pull, a light-blue segment on the right shows **how much the current pull will add** (`+X.XX%`) — so you can see mid-pull whether it's enough
 
 ### Teleport Grid
 
-- 8 Midnight Season 1 dungeon portals in deterministic display order
-- Cooldown shown as `HH:MM`; active dungeon highlighted from concrete target context only
-- Short code rendered on icon when portal is ready; hidden during cooldown
-- Portal targets highlighted only from active listing or exact synced target data — never guessed
-- Portal-ready feedback uses `sounds/Portal.ogg` once when a teleport target becomes available
-- **LFG detection:** when the player receives an LFG group invite or creates their own LFG queue listing, the matching portal icon is highlighted automatically (gold border + glow animation) without the portal sound; the invite/listing notice is locale-aware and emitted once per recognized target change; the concrete LFG-detected mapID takes precedence over peer-synced highlight resolution; highlight clears when the queue is cancelled, the group dissolves, or the key starts
+All 8 season dungeon portals in one place:
 
-### Addon Sync
+- **Icon + short code** when ready (e.g. `MT`, `DAWN`)
+- **Cooldown timer** when on cooldown
+- **Highlight + sound** when a portal becomes available
+- **Highlight + gold border** on the right portal when you accept an LFG invite or create your own LFG listing for a dungeon
 
-- Party members with `isiLive` share `Spec`, `iLvl`, `RIO`, `DPS`, `Key`, dungeon location, and kick state
-- `LibKeystone`-compatible addons can contribute `Key` + `RIO` without `isiLive`
-- Manual `Re-Sync` force-sends the full local snapshot and requests replies from all peers
-- `Share Keys` posts all party keys to chat; 30s cooldown shared across all `isiLive` clients
+### Markers (for everyone)
 
-### M+ Markers
+Eight world-marker buttons: **Square, Triangle, Diamond, Cross, Star, Circle, Moon, Skull**. Anyone in the group can use them — not just the leader.
 
-- 8 world marker buttons (`Square`, `Triangle`, `Diamond`, `Cross`, `Star`, `Circle`, `Moon`, `Skull`)
-- Secure native world-marker actions; vertical stack in M2, single row in H layout
+### Role icons = one-click marks
 
-### Esc Menu Shortcuts (optional)
+Click the **tank icon** in a roster row to put a **blue square** on that player. Click the **healer icon** for a **green triangle**. Works for everyone, not only the leader.
 
-- Tooling strip: `Professions`, `Talents`, `Spells`, `Achievements`, `Quests`, `Dungeons`, `Journal`, `Collections`, `Guild`, `ReloadUI`
-- Travel strip: `Arkantine`, `Hearthstone`, `Housing`
-- Toggle via `Show ESC Menu Shortcuts` in Blizzard Settings
+### Group leader buttons
 
-### Blizzard Settings (`Settings → AddOns → isiLive`)
+Only enabled when you are the leader:
+- **Ready Check**
+- **Countdown 10s / Countdown 0s** (pull timers)
 
-Language, Advanced Combat Logging, DM Reset on Dungeon Entry, Show ESC Menu Shortcuts, Background Opacity, UI Scale, Default UI on Open, Lock main frame position, Minimap Button, Addon Sync, Auto-Open on M+ Queue, Auto-Close on Key Start / Solo, Column Guides, Sounds: Lead Transfer, Group Join, Portal Available, Queue Debug Log, Runtime Log
+### Share Keys
 
-### Auto-Behaviour
+Posts everyone's keystone in party chat — yours first, then other isiLive users reply with their own. The button has a 30-second cooldown that also triggers across the group so nobody spams duplicates.
 
-- Auto-open when joining a real small group, on key end, and on dungeon entry while grouped
-- Raid-size groups (`>5` members) hide the UI and stop all background processing
-- `Auto-Close on Key Start / Solo` defaults to disabled
+### Re-Sync
+
+Forces a fresh sync round. Use it if someone's iLvl or key looks stuck. Asks compatible LibKeystone addons for their keys too. 10-second cooldown.
+
+---
+
+## Mythic+ features
+
+### Forces on mob tooltips
+
+When you hover a mob during a key, the tooltip gains a line:
+
+```
+Forces: 1.25% (+3)
+```
+
+That tells you how much that mob (and its group) is worth — handy to decide whether a pull gets you over a threshold.
+
+### Battle Res / Bloodlust chat announce
+
+During an active key, every time someone in the group casts a Battle Res or starts Bloodlust, isiLive posts a short line:
+
+```
+Alice used BR
+Bob started Bloodlust
+```
+
+You can turn either announce off in the settings. Non-isiLive group members won't see the message — it's shared only between isiLive users.
+
+### Pre-key group view
+
+When you get an LFG invite, the matching portal highlights and the chat tells you which dungeon and level you joined — so you know before loading in.
+
+### Ghost rows after wipes / reloads
+
+If the group breaks up or someone disconnects, their data stays visible as a greyed-out row. You can still see what spec/key they had. Joining a new group clears the old ghosts.
 
 ---
 
@@ -89,26 +167,67 @@ Language, Advanced Combat Logging, DM Reset on Dungeon Entry, Show ESC Menu Shor
 
 | Key | Action |
 |---|---|
-| `CTRL+F9` | Toggle main window |
-| `CTRL+ALT+F9` | Toggle demo mode (activates/deactivates without closing the UI; deactivation restores real group state) |
+| `Ctrl + F9` | Toggle the main window |
+| `Ctrl + Alt + F9` | Toggle demo mode (for testing without a group) |
 
-## Slash Commands
+## Slash commands
 
 ```
-/isilive testall
-/isilive log [on|off|clear|tail [n]]
-/isilive lock
-/isilive unlock
-/isilive resetui
-/isilive stop
-/isilive start
+/isilive start        — enable the addon
+/isilive stop         — disable (no processing, no sync)
+/isilive lock         — lock window position
+/isilive unlock       — unlock window position
+/isilive resetui      — recenter window and reset scale + opacity (asks for confirmation)
+/isilive testall      — full preview mode with dummy data
+/isilive log on|off   — enable/disable runtime trace log
+/isilive log tail 50  — print the last 50 log entries
+/isilive log clear    — clear the log buffer
 ```
 
-`/isilive resetui` recenters the main frame and restores the UI scale and background opacity defaults.
-The matching settings button shows the default values as a separate hint line and asks for confirmation before resetting.
+## Settings
+
+Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
+
+- **General** — language, startup auto-show, minimap button
+- **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
+- **Behavior** — addon sync, auto-open on M+ queue, auto-close on key start, raid behavior, column guides
+- **Sounds** — lead transfer, group join, portal available
+- **Chat Announcements** — announce Battle Res / announce Bloodlust
+- **Administrative** — queue debug log, runtime log (both reset on reload, for support)
+
+### Auto-open defaults
+
+- Open on joining a group — **on**
+- Open when a key ends — **on**
+- Close automatically on key start or when dropping to solo — **off** (you can turn it on)
+- Show on login/reload — **on** (except in raid groups)
+- Raid groups hide the window completely and pause all background processing
 
 ---
 
-## Season
+## FAQ
 
-Active season: `midnight_s1` — 8 dungeons: `WRS`, `MT`, `NPX`, `MC`, `AA`, `POS`, `SOT`, `SR`
+**Why don't I see DPS after a run?**
+DPS is read from Blizzard's own damage meter. If Blizzard hasn't finalized the session yet, isiLive briefly retries. If the damage meter has no data for a player (e.g. late joiner), the DPS column stays empty rather than showing a guess.
+
+**Why is the Key column empty for another player?**
+They either don't have a keystone, or they don't have isiLive or a LibKeystone-compatible addon to share it.
+
+**Why did my portal highlight disappear?**
+You're already inside the dungeon, or the LFG queue was cancelled, or the group dissolved — any of those clears the highlight.
+
+**Why is the main window gone in a raid?**
+Raid groups (6+ members) are a hard-off state: UI hidden, background sync off. It comes back when the group drops to party size.
+
+**Why did the chat announce not fire?**
+BR/Lust announce only fires during an active M+ key. Also check the Chat Announcements toggles in the settings.
+
+---
+
+## Links
+
+- **Source code:** [github.com/byi77/isilive](https://github.com/byi77/isilive)
+- **Bug reports / feature requests:** GitHub issues
+- **Technical documentation:** [`docs/`](docs/)
+
+Also published on CurseForge and Wago — search for *isiLive*.
