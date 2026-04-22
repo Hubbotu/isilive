@@ -14,6 +14,7 @@ ignore:
   - .stylua.toml
   - .styluaignore
   - .luarocks
+  - .luacov
   - .gitignore
   - docs
   - README.md

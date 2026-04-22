@@ -73,3 +73,26 @@ jobs:
       - name: Deterministic Usecase + Rules Logic Validation
         run: |
           lua tools/validate_usecases.lua
+
+      - name: Install luacov
+        run: luarocks install luacov 0.15.0-1
+
+      - name: Coverage Run
+        run: |
+          eval "$(luarocks path --lua-version 5.1)"
+          lua -lluacov tools/validate_usecases.lua
+          luacov
+
+      - name: Coverage Summary
+        run: |
+          lua tools/coverage_summary.lua luacov.report.out >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Coverage Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            luacov.report.out
+            luacov.stats.out
+          retention-days: 30

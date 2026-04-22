@@ -1,0 +1,33 @@
+-- luacov configuration for isiLive.
+-- Coverage is measured during `lua -lluacov tools/validate_usecases.lua`.
+-- Report is emitted as `luacov.report.out` by the separate `luacov` runner.
+
+return {
+  -- Only production code counts. Tests, tooling, vendored libraries, and
+  -- LuaRocks dependencies are excluded so the percentage reflects
+  -- coverage of code that ships with the addon.
+  include = {
+    "core/.*",
+    "locale/.*",
+    "game/.*",
+    "ui/.*",
+    "logic/.*",
+    "factory/.*",
+    "isiLive%.lua$",
+  },
+  exclude = {
+    "testmodul/.*",
+    "tools/.*",
+    "libs/.*",
+    "%.luarocks/.*",
+    "data/.*",
+  },
+
+  -- Emit report beside luacov.stats.out so CI can upload both artifacts.
+  statsfile = "luacov.stats.out",
+  reportfile = "luacov.report.out",
+
+  -- Keep the report line-oriented; summary block at the bottom gives the
+  -- per-file totals that the CI summary parser reads.
+  deletestats = false,
+}

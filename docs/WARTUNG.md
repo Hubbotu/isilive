@@ -49,6 +49,15 @@ lua tools/validate_architecture_rules.lua
 lua tools/validate_usecases.lua
 ```
 
+Optional, wenn du die aktuelle Coverage-Zahl lokal messen willst (CI macht das automatisch und laedt `luacov.report.out` als Artefakt hoch):
+
+```powershell
+luarocks install luacov 0.15.0-1
+lua -lluacov tools/validate_usecases.lua
+lua $env:APPDATA\luarocks\bin\luacov
+lua tools/coverage_summary.lua luacov.report.out
+```
+
 Wenn das nicht gruen ist, nicht "kurz weiterbauen".
 Vor jedem Release-Tag gilt zusaetzlich: erst `main` pushen, dann den gruenen `Lua Check` fuer genau diesen Commit abwarten. Lokal entspricht der Einstieg dafuer `tools/check.ps1` bzw. `tools/check.cmd`.
 
