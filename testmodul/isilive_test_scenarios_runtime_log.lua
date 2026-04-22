@@ -425,5 +425,269 @@ return function(test, ctx)
     end)
   end)
 
+  test("Runtime log default getTimestamp/getRawTime use the live GetTime global", function()
+    WithGlobals({
+      IsiLiveDB = {},
+      GetTime = function()
+        return 42.75
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      -- Omit both getTimestamp and getRawTime: the controller must install
+      -- defaults that read GetTime().
+      local controller = addon.RuntimeLog.CreateController({ maxEntries = 10 })
+      controller.SetEnabled(true)
+      controller.Log("ping")
+      controller.Log("pong")
+      local tail = controller.GetLogTail(5)
+      Assert.True(
+        tail[1]:find("t=42%.750") ~= nil,
+        "default getTimestamp must format GetTime via string.format %.3f: got " .. tostring(tail[1])
+      )
+      Assert.True(tail[2]:find("+0%.000") ~= nil, "second entry must carry a delta line computed from getRawTime")
+    end)
+  end)
+
+  test("Runtime log controller clamps maxEntries < 1 up to 1", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "12:00:00"
+        end,
+        maxEntries = 0,
+      })
+      controller.SetEnabled(true)
+      controller.Log("one")
+      controller.Log("two")
+      Assert.Equal(controller.GetLogCount(), 1, "clamped cap=1 must retain only the newest entry")
+    end)
+  end)
+
+  test("Runtime log controller seeds IsiLiveDB when missing on SetEnabled/SetLevel", function()
+    -- Explicitly clear the saved DB so the controller has to recreate it.
+    WithGlobals({}, function()
+      local previous = rawget(_G, "IsiLiveDB")
+      rawset(_G, "IsiLiveDB", nil)
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "12:00:00"
+        end,
+      })
+      controller.SetEnabled(true)
+      Assert.NotNil(rawget(_G, "IsiLiveDB"), "SetEnabled must seed IsiLiveDB when absent")
+      rawset(_G, "IsiLiveDB", nil)
+      controller.SetLevel("deep")
+      Assert.NotNil(rawget(_G, "IsiLiveDB"), "SetLevel must seed IsiLiveDB when absent")
+      rawset(_G, "IsiLiveDB", previous)
+    end)
+  end)
+
+  test("Runtime log controller watch callback fires on each AppendLog", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+
+      local watched = {}
+      controller.SetWatchFn(function(entry)
+        table.insert(watched, entry)
+      end)
+      Assert.Equal(controller.IsWatchActive(), true)
+
+      controller.Log("[WATCH] hit")
+      Assert.Equal(#watched, 1)
+      Assert.True(watched[1]:find("event=hit") ~= nil)
+
+      controller.SetWatchFn(nil)
+      Assert.Equal(controller.IsWatchActive(), false)
+      controller.Log("[WATCH] silent")
+      Assert.Equal(#watched, 1, "after SetWatchFn(nil) no further entries must arrive")
+    end)
+  end)
+
+  test("Runtime log LogfDeep renders formatted string only when deep level is enabled", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+
+      controller.LogfDeep("[DEEP] event=x value=%d", 5)
+      Assert.Equal(controller.GetLogCount(), 0, "deep formatting must be gated by level")
+
+      controller.SetLevel("deep")
+      controller.LogfDeep("[DEEP] event=x value=%d", 7)
+      Assert.True(controller.GetLogTail(1)[1]:find("value=7") ~= nil)
+    end)
+  end)
+
+  test("Runtime log LogAt / LogfAt / TraceAt respect explicit level gating", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+
+      controller.LogAt("deep", "normal-call-at-deep-level")
+      Assert.Equal(controller.GetLogCount(), 0, "LogAt must be gated when deep level is not enabled")
+      controller.LogfAt("deep", "[X] fmt=%d", 1)
+      Assert.Equal(controller.GetLogCount(), 0)
+
+      local buildCount = 0
+      controller.TraceAt("deep", function()
+        buildCount = buildCount + 1
+        return "[X] traced"
+      end)
+      Assert.Equal(buildCount, 0, "TraceAt must not evaluate the builder when level is gated")
+
+      controller.SetLevel("deep")
+      controller.LogAt("deep", "[X] after-enable")
+      Assert.Equal(controller.GetLogCount(), 1)
+    end)
+  end)
+
+  test("Runtime log TraceAt accepts a plain string builder (non-function fast path)", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+      controller.TraceAt("normal", "[MSG] direct")
+      Assert.True(
+        controller.GetLogTail(1)[1]:find("event=direct") ~= nil,
+        "TraceAt must append a non-function message directly"
+      )
+    end)
+  end)
+
+  test("Runtime log TraceAt pcall failure is logged as [LOG_ERROR]", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+      controller.Trace(function()
+        error("builder boom", 0)
+      end)
+      local tail = controller.GetLogTail(1)[1]
+      Assert.True(tail:find("%[LOG_ERROR%] event=builder") ~= nil, "raising builder must be captured: " .. tostring(tail))
+    end)
+  end)
+
+  test("Runtime log ClearLog wipes storage and resets sequence numbering", function()
+    WithGlobals({
+      IsiLiveDB = {},
+      wipe = function(t)
+        for k in pairs(t) do
+          t[k] = nil
+        end
+        return t
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 10,
+      })
+      controller.SetEnabled(true)
+      controller.Log("a")
+      controller.Log("b")
+      Assert.Equal(controller.GetLogCount(), 2)
+      controller.ClearLog()
+      Assert.Equal(controller.GetLogCount(), 0)
+      controller.Log("c")
+      Assert.True(
+        controller.GetLogTail(1)[1]:find("^seq=1 ") ~= nil,
+        "sequence must restart at 1 after ClearLog"
+      )
+    end)
+  end)
+
+  test("Runtime log GetLogTailFiltered returns matching entries and total count", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 100,
+      })
+      controller.SetEnabled(true)
+      controller.Log("[A] event=one")
+      controller.Log("[B] event=skip")
+      controller.Log("[A] event=two")
+      controller.Log("[A] event=three")
+
+      local tail, total = controller.GetLogTailFiltered(2, "[A]")
+      Assert.Equal(total, 3, "filter must count every matching entry in storage")
+      Assert.Equal(#tail, 2, "clampedLimit must cap returned slice")
+      Assert.True(tail[2]:find("event=three") ~= nil, "tail must end at the newest matching entry")
+    end)
+  end)
+
+  test("Runtime log GetLogTailFiltered without filter delegates to GetLogTail", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 50,
+      })
+      controller.SetEnabled(true)
+      controller.Log("[A] event=one")
+      controller.Log("[B] event=two")
+
+      local tail = controller.GetLogTailFiltered(5, "")
+      Assert.Equal(#tail, 2, "empty filter must fall back to unfiltered tail")
+
+      local tail2 = controller.GetLogTailFiltered(5, 42)
+      Assert.Equal(#tail2, 2, "non-string filter must also fall back to unfiltered tail")
+    end)
+  end)
+
+  test("Runtime log GetLogTailFiltered returns empty list when nothing matches", function()
+    WithGlobals({ IsiLiveDB = {} }, function()
+      local addon = LoadAddonModules({ "isiLive_log_buffer.lua", "isiLive_runtime_log.lua" })
+      local controller = addon.RuntimeLog.CreateController({
+        getTimestamp = function()
+          return "t"
+        end,
+        maxEntries = 50,
+      })
+      controller.SetEnabled(true)
+      controller.Log("[A] event=one")
+
+      local tail, total = controller.GetLogTailFiltered(10, "NOPE")
+      Assert.Equal(total, 0)
+      Assert.Equal(#tail, 0)
+    end)
+  end)
+
   RegisterLogBufferDirectTests(test, Assert, LoadAddonModules)
 end
