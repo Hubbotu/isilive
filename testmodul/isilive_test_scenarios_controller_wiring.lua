@@ -152,6 +152,7 @@ return function(test, ctx)
 
   test("ControllerWiring setPlayerKeyInfo closure delegates to modules.sync.SetPlayerKeyInfo", function()
     local addon = LoadAddonModules({ "isiLive_controller_wiring.lua" })
+    ---@type {name:string, realm:string, mapID:number, level:number}?
     local capturedArgs = nil
     local deps = makeMinimalDeps()
     deps.modules.sync.SetPlayerKeyInfo = function(name, realm, mapID, level)
@@ -163,6 +164,7 @@ return function(test, ctx)
     getOpts().setPlayerKeyInfo("TestPlayer", "TestRealm", 2649, 15)
 
     Assert.NotNil(capturedArgs, "setPlayerKeyInfo must invoke modules.sync.SetPlayerKeyInfo")
+    ---@cast capturedArgs -nil
     Assert.Equal(capturedArgs.name, "TestPlayer")
     Assert.Equal(capturedArgs.realm, "TestRealm")
     Assert.Equal(capturedArgs.mapID, 2649)

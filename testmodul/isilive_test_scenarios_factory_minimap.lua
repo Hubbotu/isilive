@@ -120,11 +120,28 @@ local function BuildMinimapEnv(overrides)
 
   -- Lua 5.4 dropped math.atan2. WoW ships Lua 5.1 where it exists, but the
   -- local dev Lua may be 5.4. Ensure the code path can resolve the symbol
-  -- regardless of host interpreter version.
-  if type(math.atan2) ~= "function" then
-    math.atan2 = function(y, x)
-      return math.atan(y, x)
-    end
+  -- regardless of host interpreter version. The Sumneko WoW-API annotation
+  -- declares math.atan2 as a single-arg function (and math.atan as
+  -- single-arg), so we install the polyfill via rawset to sidestep the
+  -- duplicate-set-field diagnostic, and compute atan2 from atan(y/x) with
+  -- explicit quadrant handling so the single-arg math.atan matches both
+  -- Lua 5.1 (one arg) and the Sumneko annotation.
+  if type(rawget(math, "atan2")) ~= "function" then
+    rawset(math, "atan2", function(y, x)
+      if x == 0 then
+        if y > 0 then
+          return math.pi / 2
+        elseif y < 0 then
+          return -math.pi / 2
+        end
+        return 0
+      end
+      local base = math.atan(y / x)
+      if x < 0 then
+        return y >= 0 and base + math.pi or base - math.pi
+      end
+      return base
+    end)
   end
 
   -- `false` (not nil) is used to disable Minimap, because ctx.with_globals
