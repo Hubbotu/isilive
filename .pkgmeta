@@ -26,7 +26,7 @@ ignore:
   - luacheck_output.txt
   - isiLive.png
   - isiLive_H_ui.png
-  - isiLive_M2_ui.png
+  - isiLive_MPlus_ui.png
   - isiLive_M_ui.png
   - isiLive_V_ui.png
   - isiLive_screenshot.png
