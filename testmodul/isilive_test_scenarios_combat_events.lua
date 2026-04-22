@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global
+---@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local
 
 -- Builds the minimal WoW global stubs needed to load isiLive_combat_events.lua.
 -- Returns the captured onEvent handler so tests can inject events directly,
@@ -257,8 +257,318 @@ local function RegisterCombatEventsLustTests(test, ctx)
   end)
 end
 
+local function RegisterCombatEventsDefaultTests(test, ctx)
+  local Assert = ctx.assert
+  local WithGlobals = ctx.with_globals
+  local LoadAddonModules = ctx.load_modules
+
+  test("CombatEvents CreateController uses default getTime when opts.getTime missing", function()
+    local globals = BuildCombatEventsEnv()
+    globals.GetTime = function()
+      return 1234
+    end
+    local addon = nil
+    WithGlobals(globals, function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+
+    local broadcasts = {}
+    local controller
+    WithGlobals({
+      GetTime = function()
+        return 1234
+      end,
+      C_ChallengeMode = { GetActiveChallengeMapID = function()
+        return 42
+      end },
+      GetUnitName = function(unit, _)
+        return unit == "player" and "Alice-Realm" or unit
+      end,
+    }, function()
+      controller = addon.CombatEvents.CreateController({
+        broadcastCombatAnnounce = function(kind, src, sid)
+          table.insert(broadcasts, { kind = kind, src = src, sid = sid })
+        end,
+      })
+      controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    end)
+    Assert.Equal(#broadcasts, 1, "default getTime + isInKey + getUnitName must still broadcast")
+    Assert.Equal(broadcasts[1].src, "Alice-Realm", "default getUnitName must use GetUnitName(unit, true)")
+  end)
+
+  test("CombatEvents default isInKey returns false when C_ChallengeMode is missing", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller
+    WithGlobals({
+      GetTime = function()
+        return 1
+      end,
+      C_ChallengeMode = false,
+      GetUnitName = function(unit)
+        return unit
+      end,
+    }, function()
+      controller = addon.CombatEvents.CreateController({
+        broadcastCombatAnnounce = function(kind)
+          table.insert(broadcasts, kind)
+        end,
+      })
+      controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    end)
+    Assert.Equal(#broadcasts, 0, "default isInKey must gate to false when C_ChallengeMode is absent")
+  end)
+
+  test("CombatEvents default isInKey returns false when C_ChallengeMode.GetActiveChallengeMapID raises", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller
+    WithGlobals({
+      GetTime = function()
+        return 1
+      end,
+      C_ChallengeMode = { GetActiveChallengeMapID = function()
+        error("boom", 0)
+      end },
+      GetUnitName = function(unit)
+        return unit
+      end,
+    }, function()
+      controller = addon.CombatEvents.CreateController({
+        broadcastCombatAnnounce = function(kind)
+          table.insert(broadcasts, kind)
+        end,
+      })
+      controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    end)
+    Assert.Equal(#broadcasts, 0, "pcall failure must degrade isInKey to false")
+  end)
+
+  test("CombatEvents default getUnitName falls back to UnitName when GetUnitName fails", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller
+    WithGlobals({
+      GetTime = function()
+        return 1
+      end,
+      C_ChallengeMode = { GetActiveChallengeMapID = function()
+        return 9
+      end },
+      GetUnitName = function()
+        error("no name", 0)
+      end,
+      UnitName = function(unit)
+        return unit == "player" and "Bob" or unit
+      end,
+    }, function()
+      controller = addon.CombatEvents.CreateController({
+        broadcastCombatAnnounce = function(kind, src)
+          table.insert(broadcasts, src)
+        end,
+      })
+      controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    end)
+    Assert.Equal(broadcasts[1], "Bob", "fallback must use UnitName result")
+  end)
+
+  test("CombatEvents default getUnitName returns unit token when all name APIs fail", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller
+    WithGlobals({
+      GetTime = function()
+        return 1
+      end,
+      C_ChallengeMode = { GetActiveChallengeMapID = function()
+        return 9
+      end },
+      GetUnitName = function()
+        return nil
+      end,
+      UnitName = function()
+        return ""
+      end,
+    }, function()
+      controller = addon.CombatEvents.CreateController({
+        broadcastCombatAnnounce = function(_, src)
+          table.insert(broadcasts, src)
+        end,
+      })
+      controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    end)
+    Assert.Equal(broadcasts[1], "player", "last-resort fallback must be the unit token itself")
+  end)
+
+  test("CombatEvents HandleUnitSpellcastSucceeded ignores non-numeric spellID", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller = BuildController({ addon = addon, broadcasts = broadcasts })
+    controller.HandleUnitSpellcastSucceeded("player", "cast-1", "not-a-number")
+    controller.HandleUnitSpellcastSucceeded("player", "cast-2", nil)
+    Assert.Equal(#broadcasts, 0)
+  end)
+end
+
+local function RegisterCombatEventsDependencyInjectionTests(test, ctx)
+  local Assert = ctx.assert
+  local WithGlobals = ctx.with_globals
+  local LoadAddonModules = ctx.load_modules
+
+  test("CombatEvents.SetDependencies ignores non-table input", function()
+    local addon = nil
+    local globals, dispatch = BuildCombatEventsEnv()
+    WithGlobals(globals, function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    -- Must not raise; controllerInstance stays nil.
+    addon.CombatEvents.SetDependencies(nil)
+    addon.CombatEvents.SetDependencies("string")
+    addon.CombatEvents.SetDependencies(42)
+    -- OnEvent with no controller set must also be a no-op (early return).
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", 20484)
+    dispatch("CHALLENGE_MODE_START")
+  end)
+
+  test("CombatEvents eventFrame OnEvent routes UNIT_SPELLCAST_SUCCEEDED to the controller", function()
+    local addon = nil
+    local globals, dispatch = BuildCombatEventsEnv()
+    WithGlobals(globals, function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    addon.CombatEvents.SetDependencies({
+      getTime = function()
+        return 0
+      end,
+      isInKey = function()
+        return true
+      end,
+      getUnitName = function(unit)
+        return unit == "player" and "Alice" or unit
+      end,
+      broadcastCombatAnnounce = function(kind, src, sid)
+        table.insert(broadcasts, { kind = kind, src = src, sid = sid })
+      end,
+      getDB = function()
+        return {}
+      end,
+    })
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", 20484)
+    Assert.Equal(#broadcasts, 1, "UNIT_SPELLCAST_SUCCEEDED must flow through to HandleUnitSpellcastSucceeded")
+    Assert.Equal(broadcasts[1].kind, "BR")
+  end)
+
+  test("CombatEvents eventFrame OnEvent CHALLENGE_MODE_START resets dedup state", function()
+    local addon = nil
+    local globals, dispatch = BuildCombatEventsEnv()
+    WithGlobals(globals, function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local nowRef = { value = 100 }
+    addon.CombatEvents.SetDependencies({
+      getTime = function()
+        return nowRef.value
+      end,
+      isInKey = function()
+        return true
+      end,
+      getUnitName = function(unit)
+        return unit == "player" and "Alice" or unit
+      end,
+      broadcastCombatAnnounce = function(kind, src, sid)
+        table.insert(broadcasts, { kind = kind, src = src, sid = sid })
+      end,
+      getDB = function()
+        return {}
+      end,
+    })
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-1", 20484)
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-2", 20484)
+    Assert.Equal(#broadcasts, 1, "dedup must suppress repeat cast before reset")
+    dispatch("CHALLENGE_MODE_START")
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-3", 20484)
+    Assert.Equal(#broadcasts, 2, "CHALLENGE_MODE_START must Reset() dedup")
+    dispatch("CHALLENGE_MODE_COMPLETED")
+    dispatch("UNIT_SPELLCAST_SUCCEEDED", "player", "cast-4", 20484)
+    Assert.Equal(#broadcasts, 3, "CHALLENGE_MODE_COMPLETED must also Reset() dedup")
+  end)
+
+  test("CombatEvents eventFrame OnEvent ignores unrelated events", function()
+    local addon = nil
+    local globals, dispatch = BuildCombatEventsEnv()
+    WithGlobals(globals, function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    addon.CombatEvents.SetDependencies({
+      getTime = function()
+        return 0
+      end,
+      isInKey = function()
+        return true
+      end,
+      getUnitName = function(unit)
+        return unit
+      end,
+      broadcastCombatAnnounce = function(_, _, _)
+        table.insert(broadcasts, true)
+      end,
+      getDB = function()
+        return {}
+      end,
+    })
+    dispatch("PLAYER_LOGIN")
+    dispatch("GROUP_ROSTER_UPDATE")
+    Assert.Equal(#broadcasts, 0, "events outside the known set must not trigger anything")
+  end)
+
+  test("CombatEvents CreateController default getDB returns empty table (BR + Lust enabled)", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local controller = addon.CombatEvents.CreateController({
+      getTime = function()
+        return 0
+      end,
+      isInKey = function()
+        return true
+      end,
+      getUnitName = function(unit)
+        return unit
+      end,
+      broadcastCombatAnnounce = function(kind)
+        table.insert(broadcasts, kind)
+      end,
+      -- getDB omitted on purpose -> defaults to function returning {}.
+    })
+    controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    Assert.Equal(broadcasts[1], "BR", "default getDB {} must leave BR enabled")
+  end)
+end
+
 return function(test, ctx)
   RegisterCombatEventsAutoRegistrationTests(test, ctx)
   RegisterCombatEventsBRTests(test, ctx)
   RegisterCombatEventsLustTests(test, ctx)
+  RegisterCombatEventsDefaultTests(test, ctx)
+  RegisterCombatEventsDependencyInjectionTests(test, ctx)
 end

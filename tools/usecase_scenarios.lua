@@ -56,6 +56,8 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_factory_frame_bridge.lua",
   "testmodul/isilive_test_scenarios_factory_controllers_helpers.lua",
   "testmodul/isilive_test_scenarios_factory_controllers_status_helpers.lua",
+  "testmodul/isilive_test_scenarios_factory_resolvers.lua",
+  "testmodul/isilive_test_scenarios_runtime_setup.lua",
   "testmodul/isilive_test_scenarios_controller_init.lua",
   "testmodul/isilive_test_scenarios_lfg_detect.lua",
   "testmodul/isilive_test_scenarios_stress.lua",
