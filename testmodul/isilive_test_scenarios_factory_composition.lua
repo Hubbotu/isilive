@@ -1142,6 +1142,73 @@ return function(test, ctx)
       if type(factoryCtx.resetDB) == "function" then
         pcall(factoryCtx.resetDB)
       end
+      -- 7d. Direct controller helpers - each of these is a thin closure
+      --     installed inside InitializeFactoryPrimary / Secondary /
+      --     RefreshAndStatus controllers that the Happy-Path never
+      --     reaches because no UI interaction triggers it.
+      local controllerMethodCalls = {
+        { owner = "rosterPanelController", method = "RenderRoster", args = { factoryCtx.GetRoster and factoryCtx.GetRoster() } },
+        { owner = "rosterPanelController", method = "RefreshReadyCheckState", args = { factoryCtx.GetRoster and factoryCtx.GetRoster() } },
+        { owner = "rosterPanelController", method = "SetCountdownCancelText", args = { "CANCEL" } },
+        { owner = "rosterPanelController", method = "RefreshLayoutState", args = {} },
+        { owner = "rosterPanelController", method = "MarkCdTrackerDirty", args = {} },
+        { owner = "rosterPanelController", method = "RefreshKickColumn", args = {} },
+        { owner = "rosterPanelController", method = "RefreshSystemOptionToggles", args = {} },
+        { owner = "rosterPanelController", method = "GetLayoutMode", args = {} },
+        { owner = "rosterPanelController", method = "IsCollapsed", args = {} },
+        { owner = "teleportUIController", method = "UpdateButtons", args = { nil, "test" } },
+        { owner = "teleportUIController", method = "BuildButtons", args = {} },
+        { owner = "teleportUIController", method = "GetButtons", args = {} },
+        { owner = "teleportUIController", method = "SetLayoutMode", args = { "expanded" } },
+        { owner = "teleportUIController", method = "SetVisible", args = { true } },
+        { owner = "highlightController", method = "GetNormalizedActiveEntryInfo", args = {} },
+        { owner = "refreshController", method = "RunFullRefresh", args = {} },
+        { owner = "refreshController", method = "HandleOwnedKeyRefresh", args = {} },
+        { owner = "refreshController", method = "NotifyPostChallengeSync", args = {} },
+        { owner = "statusController", method = "UpdateStatusLine", args = {} },
+        { owner = "statusController", method = "MaybeShowPortalNavigatorNotice", args = {} },
+        { owner = "keySyncController", method = "ForceRefreshSyncState", args = {} },
+        { owner = "inspectController", method = "OnUpdate", args = {} },
+        { owner = "inspectController", method = "ResetAll", args = {} },
+        { owner = "inspectController", method = "ResetQueues", args = {} },
+        { owner = "kickTrackerController", method = "Scan", args = {} },
+        { owner = "kickTrackerController", method = "CacheCooldown", args = {} },
+        { owner = "kickTrackerController", method = "ResolveKickState", args = {} },
+        { owner = "kickTrackerController", method = "GetKickInfo", args = {} },
+        { owner = "queueDebugController", method = "Log", args = { "[Q] event=composition-test" } },
+        { owner = "queueDebugController", method = "EnsureStorage", args = {} },
+        { owner = "runtimeLogController", method = "Log", args = { "[RUNTIME] event=composition-test" } },
+        { owner = "runtimeLogController", method = "EnsureStorage", args = {} },
+      }
+      for _, entry in ipairs(controllerMethodCalls) do
+        local owner = factoryCtx[entry.owner]
+        if type(owner) == "table" then
+          local method = owner[entry.method]
+          if type(method) == "function" then
+            pcall(method, table.unpack(entry.args or {}))
+          end
+        end
+      end
+
+      -- 7e. ApplyLocalizationToUI / SetLanguage / EnterFullDummyPreview /
+      --     ToggleStandardTestMode run through InitializeFactorySecondary
+      --     closures; they need to survive the happy-path invocation.
+      local localizationCalls = {
+        "ApplyLocalizationToUI",
+        "SetLanguage",
+        "ExitTestMode",
+        "ToggleStandardTestMode",
+        "EnterFullDummyPreview",
+        "TriggerGroupRosterUpdate",
+        "CheckIfEnteredTargetDungeon",
+      }
+      for _, name in ipairs(localizationCalls) do
+        local fn = factoryCtx[name]
+        if type(fn) == "function" then
+          pcall(fn, "enUS")
+        end
+      end
+
       if type(capturedSettingsOpts) == "table" then
         local settingsCallbacks = {
           "onResetMainFramePosition",
