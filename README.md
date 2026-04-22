@@ -14,7 +14,7 @@
 When you join a group, isiLive opens a single window with everything you want to see before and during a key:
 
 - Who is in the group, their spec, item level, Raider.IO rating, and keystone
-- Who plays which dungeon portal, and which portals are on cooldown
+- One-click access to all 8 season dungeon portals, with live cooldowns
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
