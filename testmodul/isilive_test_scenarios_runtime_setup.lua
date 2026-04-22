@@ -22,9 +22,11 @@ local function BuildCtx(overrides)
   local calls = { leaderStart = 0 }
 
   local groupController = { id = "group-ctrl" }
-  local leaderWatchController = { Start = function()
-    calls.leaderStart = calls.leaderStart + 1
-  end }
+  local leaderWatchController = {
+    Start = function()
+      calls.leaderStart = calls.leaderStart + 1
+    end,
+  }
   local eventHandlersController = { id = "events-ctrl" }
   local gatedHandler = function() end
 

@@ -47,7 +47,7 @@ local function BuildTraceGlobals(overrides)
       -- Emulate the Blizzard behavior: after opening, the frame is
       -- exposed as a numbered ChatFrame global and picked up on the
       -- next FindExistingFrame scan.
-      local idx = (#chatFrames) + 1
+      local idx = #chatFrames + 1
       chatFrames[idx] = f
       rawset(_G, "ChatFrame" .. idx, f)
       return f
@@ -65,13 +65,14 @@ local function BuildTraceGlobals(overrides)
   end
 
   -- Return the live state handles so tests can inspect post-conditions.
-  return globals, {
-    chatFrames = chatFrames,
-    removedGroupsFor = removedGroupsFor,
-    getSelectedTab = function()
-      return selectedTab
-    end,
-  }
+  return globals,
+    {
+      chatFrames = chatFrames,
+      removedGroupsFor = removedGroupsFor,
+      getSelectedTab = function()
+        return selectedTab
+      end,
+    }
 end
 
 return function(test, ctx)

@@ -113,10 +113,9 @@ local function CaptureEventModule()
       return { Handle = Noop }
     end,
   }
-  return module,
-    function()
-      return captured
-    end
+  return module, function()
+    return captured
+  end
 end
 
 return function(test, ctx)

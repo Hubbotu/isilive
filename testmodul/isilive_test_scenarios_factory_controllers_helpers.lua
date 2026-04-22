@@ -190,21 +190,30 @@ return function(test, ctx)
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub())
-    WithGlobals({ C_ChallengeMode = { GetActiveChallengeMapID = function()
-      return 2649
-    end } }, function()
-      InitializeHelpers(c, addon)
-      Assert.Equal(c.GetActiveChallengeMapID(), 2649, "API result must be forwarded")
-    end)
+    WithGlobals(
+      { C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 2649
+        end,
+      } },
+      function()
+        InitializeHelpers(c, addon)
+        Assert.Equal(c.GetActiveChallengeMapID(), 2649, "API result must be forwarded")
+      end
+    )
   end)
 
   test("factory_controllers: GetActiveChallengeMapID returns nil when API raises", function()
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub())
-    WithGlobals({ C_ChallengeMode = { GetActiveChallengeMapID = function()
-      error("boom", 0)
-    end } }, function()
+    WithGlobals({
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          error("boom", 0)
+        end,
+      },
+    }, function()
       InitializeHelpers(c, addon)
       Assert.Nil(c.GetActiveChallengeMapID(), "pcall failure must resolve to nil")
     end)
@@ -251,9 +260,11 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub())
     local instanceType = "party"
-    WithGlobals({ GetInstanceInfo = function()
-      return "Name", instanceType
-    end }, function()
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Name", instanceType
+      end,
+    }, function()
       InitializeHelpers(c, addon)
       Assert.Equal(c.IsInPartyInstance(), true, "party instance must resolve to true")
       instanceType = "raid"
@@ -361,10 +372,12 @@ return function(test, ctx)
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local captured
-    local modules = BuildModulesStub({ NormalizePlayerKey = function(name, realm)
-      captured = { name = name, realm = realm }
-      return "NORMALIZED"
-    end })
+    local modules = BuildModulesStub({
+      NormalizePlayerKey = function(name, realm)
+        captured = { name = name, realm = realm }
+        return "NORMALIZED"
+      end,
+    })
     local c = BuildCtx(rs, modules)
     WithGlobals({}, function()
       InitializeHelpers(c, addon)
@@ -405,9 +418,11 @@ return function(test, ctx)
   test("factory_controllers: BuildRosterInfoPlayerKey normalizes name+realm via NormalizePlayerKey", function()
     local addon = Load()
     local rs = BuildRuntimeStateStub()
-    local modules = BuildModulesStub({ NormalizePlayerKey = function(name, realm)
-      return (name or "?") .. "@" .. (realm or "?")
-    end })
+    local modules = BuildModulesStub({
+      NormalizePlayerKey = function(name, realm)
+        return (name or "?") .. "@" .. (realm or "?")
+      end,
+    })
     local c = BuildCtx(rs, modules)
     WithGlobals({}, function()
       InitializeHelpers(c, addon)
@@ -416,19 +431,22 @@ return function(test, ctx)
     Assert.Equal(c.BuildRosterInfoPlayerKey({ name = "Bob" }), "Bob@?", "missing realm forwards as nil")
   end)
 
-  test("factory_controllers: RestoreRioBaseline loads from IsiLiveDB and enables display when snapshot exists", function()
-    local addon = Load()
-    local rs, storage = BuildRuntimeStateStub()
-    local c = BuildCtx(rs, BuildModulesStub())
-    local db = { rioBaseline = { ["Alice-Draenor"] = 3400 } }
-    WithGlobals({ IsiLiveDB = db }, function()
-      InitializeHelpers(c, addon)
-      storage.hasRioBaselineSnapshot = true
-      c.RestoreRioBaseline()
-    end)
-    Assert.Equal(storage.rioBaselineByKey["Alice-Draenor"], 3400, "baseline must be loaded from DB")
-    Assert.Equal(storage.rioDeltaDisplayEnabled, true, "delta display must be enabled when snapshot exists")
-  end)
+  test(
+    "factory_controllers: RestoreRioBaseline loads from IsiLiveDB and enables display when snapshot exists",
+    function()
+      local addon = Load()
+      local rs, storage = BuildRuntimeStateStub()
+      local c = BuildCtx(rs, BuildModulesStub())
+      local db = { rioBaseline = { ["Alice-Draenor"] = 3400 } }
+      WithGlobals({ IsiLiveDB = db }, function()
+        InitializeHelpers(c, addon)
+        storage.hasRioBaselineSnapshot = true
+        c.RestoreRioBaseline()
+      end)
+      Assert.Equal(storage.rioBaselineByKey["Alice-Draenor"], 3400, "baseline must be loaded from DB")
+      Assert.Equal(storage.rioDeltaDisplayEnabled, true, "delta display must be enabled when snapshot exists")
+    end
+  )
 
   test("factory_controllers: RestoreRioBaseline is a no-op when IsiLiveDB lacks a baseline", function()
     local addon = Load()

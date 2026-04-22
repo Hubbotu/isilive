@@ -40,12 +40,22 @@ local WARN_FILE_LINES = getenv_number("ISILIVE_WARN_FILE_LINES", 1200)
 local MAX_FILE_LINES = getenv_number("ISILIVE_MAX_FILE_LINES", 3200)
 local WARN_FUNCTION_LINES = getenv_number("ISILIVE_WARN_FUNCTION_LINES", 120)
 local MAX_FUNCTION_LINES = getenv_number("ISILIVE_MAX_FUNCTION_LINES", 420)
+-- Scenario registration functions in testmodul/ are intentionally long
+-- (linear lists of test(...) blocks), so they use a separate, larger limit.
+local MAX_TEST_FUNCTION_LINES = getenv_number("ISILIVE_MAX_TEST_FUNCTION_LINES", 1500)
 
 if WARN_FILE_LINES > MAX_FILE_LINES then
   WARN_FILE_LINES = MAX_FILE_LINES
 end
 if WARN_FUNCTION_LINES > MAX_FUNCTION_LINES then
   WARN_FUNCTION_LINES = MAX_FUNCTION_LINES
+end
+
+local function function_line_limit(file_path)
+  if file_path:match("^testmodul/") then
+    return MAX_TEST_FUNCTION_LINES
+  end
+  return MAX_FUNCTION_LINES
 end
 
 local EXCLUDED_DIRS = {
@@ -270,7 +280,7 @@ for _, info in ipairs(function_metrics) do
   if info.lines > WARN_FUNCTION_LINES then
     table.insert(warn_functions, info)
   end
-  if info.lines > MAX_FUNCTION_LINES then
+  if info.lines > function_line_limit(info.file) then
     table.insert(hard_functions, info)
   end
 end
@@ -320,7 +330,7 @@ if #hard_files > 0 or #hard_functions > 0 then
       string.format(
         "  func  %4d > %d  %s  (%s:%d-%d)",
         info.lines,
-        MAX_FUNCTION_LINES,
+        function_line_limit(info.file),
         info.name,
         info.file,
         info.start_line,

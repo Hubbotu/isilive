@@ -61,5 +61,4 @@ return function(test, ctx)
     Assert.Equal(fn({ raidTransitionBehavior = "show" }), "hide", "setting is intentionally frozen to hide")
     Assert.Equal(fn("not-a-table"), "hide")
   end)
-
 end

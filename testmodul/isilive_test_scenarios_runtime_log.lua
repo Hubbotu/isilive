@@ -593,7 +593,10 @@ return function(test, ctx)
         error("builder boom", 0)
       end)
       local tail = controller.GetLogTail(1)[1]
-      Assert.True(tail:find("%[LOG_ERROR%] event=builder") ~= nil, "raising builder must be captured: " .. tostring(tail))
+      Assert.True(
+        tail:find("%[LOG_ERROR%] event=builder") ~= nil,
+        "raising builder must be captured: " .. tostring(tail)
+      )
     end)
   end)
 
@@ -621,10 +624,7 @@ return function(test, ctx)
       controller.ClearLog()
       Assert.Equal(controller.GetLogCount(), 0)
       controller.Log("c")
-      Assert.True(
-        controller.GetLogTail(1)[1]:find("^seq=1 ") ~= nil,
-        "sequence must restart at 1 after ClearLog"
-      )
+      Assert.True(controller.GetLogTail(1)[1]:find("^seq=1 ") ~= nil, "sequence must restart at 1 after ClearLog")
     end)
   end)
 

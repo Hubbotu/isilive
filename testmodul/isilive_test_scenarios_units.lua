@@ -385,7 +385,11 @@ return function(test, ctx)
         local addon = LoadAddonModules({ "isiLive_units.lua" })
         local Units = addon.Units
         Assert.Equal(Units.GetShortSpecLabel("Gleichgewicht"), "Boomy", "lowercased + normalized DE spec must map")
-        Assert.Equal(Units.GetShortSpecLabel("Zerstörung"), "Destr", "umlaut normalization must hit the 'zerstorung' key")
+        Assert.Equal(
+          Units.GetShortSpecLabel("Zerstörung"),
+          "Destr",
+          "umlaut normalization must hit the 'zerstorung' key"
+        )
         Assert.Equal(Units.GetShortSpecLabel("Treffsicherheit"), "MM")
         Assert.Equal(
           Units.GetShortSpecLabel("  Holy  "),

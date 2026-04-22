@@ -241,9 +241,11 @@ local function Register(test, ctx)
 
   test("factory_frame_bridge: BuildFactoryModules returns nil fields for an empty table", function()
     local addonTable
-    ctx.with_globals({ GetLocale = function()
-      return "enUS"
-    end }, function()
+    ctx.with_globals({
+      GetLocale = function()
+        return "enUS"
+      end,
+    }, function()
       addonTable = ctx.load_modules({ "isiLive_factory_frame_bridge.lua" })
     end)
     local modules = addonTable._FactoryInternal.BuildFactoryModules({})
@@ -254,9 +256,11 @@ local function Register(test, ctx)
 
   test("factory_frame_bridge: BuildFactoryModules maps well-known keys when provided", function()
     local addonTable
-    ctx.with_globals({ GetLocale = function()
-      return "enUS"
-    end }, function()
+    ctx.with_globals({
+      GetLocale = function()
+        return "enUS"
+      end,
+    }, function()
       addonTable = ctx.load_modules({ "isiLive_factory_frame_bridge.lua" })
     end)
     local sentinelSync = { tag = "sync-sentinel" }
@@ -273,9 +277,11 @@ local function Register(test, ctx)
 
   test("factory_frame_bridge: BuildFactoryModules accepts nil input without error", function()
     local addonTable
-    ctx.with_globals({ GetLocale = function()
-      return "enUS"
-    end }, function()
+    ctx.with_globals({
+      GetLocale = function()
+        return "enUS"
+      end,
+    }, function()
       addonTable = ctx.load_modules({ "isiLive_factory_frame_bridge.lua" })
     end)
     local modules = addonTable._FactoryInternal.BuildFactoryModules(nil)
@@ -461,9 +467,11 @@ local function Register(test, ctx)
   end)
 
   test("factory_frame_bridge: IsPlayerLeader returns false when UnitExists reports no player", function()
-    WithContext(ctx, { UnitExists = function()
-      return false
-    end }, {}, function(factoryCtx)
+    WithContext(ctx, {
+      UnitExists = function()
+        return false
+      end,
+    }, {}, function(factoryCtx)
       Assert.Equal(factoryCtx.IsPlayerLeader(), false, "missing player must resolve to not-leader")
     end)
   end)
@@ -508,9 +516,11 @@ local function Register(test, ctx)
   end)
 
   test("factory_frame_bridge: IsRaidGroup prefers IsInRaid when available", function()
-    WithContext(ctx, { IsInRaid = function()
-      return true
-    end }, {}, function(factoryCtx)
+    WithContext(ctx, {
+      IsInRaid = function()
+        return true
+      end,
+    }, {}, function(factoryCtx)
       Assert.Equal(factoryCtx.IsRaidGroup(), true, "IsInRaid=true must short-circuit to raid")
     end)
   end)
@@ -548,9 +558,11 @@ local function Register(test, ctx)
   end)
 
   test("factory_frame_bridge: GetPlayerMapID returns nil when player does not exist", function()
-    WithContext(ctx, { UnitExists = function()
-      return false
-    end }, {}, function(factoryCtx)
+    WithContext(ctx, {
+      UnitExists = function()
+        return false
+      end,
+    }, {}, function(factoryCtx)
       Assert.Nil(factoryCtx.GetPlayerMapID(), "missing player must resolve to nil map id")
     end)
   end)

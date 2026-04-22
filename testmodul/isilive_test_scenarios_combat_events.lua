@@ -278,9 +278,11 @@ local function RegisterCombatEventsDefaultTests(test, ctx)
       GetTime = function()
         return 1234
       end,
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return 42
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 42
+        end,
+      },
       GetUnitName = function(unit, _)
         return unit == "player" and "Alice-Realm" or unit
       end,
@@ -333,9 +335,11 @@ local function RegisterCombatEventsDefaultTests(test, ctx)
       GetTime = function()
         return 1
       end,
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        error("boom", 0)
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          error("boom", 0)
+        end,
+      },
       GetUnitName = function(unit)
         return unit
       end,
@@ -361,9 +365,11 @@ local function RegisterCombatEventsDefaultTests(test, ctx)
       GetTime = function()
         return 1
       end,
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return 9
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 9
+        end,
+      },
       GetUnitName = function()
         error("no name", 0)
       end,
@@ -392,9 +398,11 @@ local function RegisterCombatEventsDefaultTests(test, ctx)
       GetTime = function()
         return 1
       end,
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return 9
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 9
+        end,
+      },
       GetUnitName = function()
         return nil
       end,

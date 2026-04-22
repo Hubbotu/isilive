@@ -99,9 +99,11 @@ end
 local function BuildGlobals(overrides)
   overrides = overrides or {}
   return {
-    UIParent = overrides.UIParent or { GetEffectiveScale = function()
-      return 1
-    end },
+    UIParent = overrides.UIParent or {
+      GetEffectiveScale = function()
+        return 1
+      end,
+    },
     GetCursorPosition = overrides.GetCursorPosition,
     CreateFrame = function()
       return BuildTooltipFrameStub()
@@ -165,23 +167,28 @@ return function(test, ctx)
 
   test("roster_tooltip: SetOwner with ANCHOR_CURSOR reads GetCursorPosition and UIParent scale", function()
     local cursorCalls = 0
-    WithGlobals(BuildGlobals({
-      GetCursorPosition = function()
-        cursorCalls = cursorCalls + 1
-        return 200, 300
-      end,
-      UIParent = { GetEffectiveScale = function()
-        return 0.8
-      end },
-    }), function()
-      local addon = Load()
-      local tooltip = addon._RosterInternal.EnsureSimpleTooltipAPI(BuildTooltipFrameStub())
-      local anchor = BuildTooltipFrameStub()
-      tooltip:SetOwner(anchor, "ANCHOR_CURSOR")
-      Assert.Equal(tooltip._isiLiveTooltipOwner, anchor)
-      Assert.True(cursorCalls > 0, "ANCHOR_CURSOR must consult GetCursorPosition")
-      Assert.True(#tooltip._points > 0, "SetOwner must position via SetPoint")
-    end)
+    WithGlobals(
+      BuildGlobals({
+        GetCursorPosition = function()
+          cursorCalls = cursorCalls + 1
+          return 200, 300
+        end,
+        UIParent = {
+          GetEffectiveScale = function()
+            return 0.8
+          end,
+        },
+      }),
+      function()
+        local addon = Load()
+        local tooltip = addon._RosterInternal.EnsureSimpleTooltipAPI(BuildTooltipFrameStub())
+        local anchor = BuildTooltipFrameStub()
+        tooltip:SetOwner(anchor, "ANCHOR_CURSOR")
+        Assert.Equal(tooltip._isiLiveTooltipOwner, anchor)
+        Assert.True(cursorCalls > 0, "ANCHOR_CURSOR must consult GetCursorPosition")
+        Assert.True(#tooltip._points > 0, "SetOwner must position via SetPoint")
+      end
+    )
   end)
 
   test("roster_tooltip: SetOwner without ANCHOR_CURSOR anchors TOPLEFT to BOTTOMLEFT of owner", function()
@@ -264,14 +271,17 @@ return function(test, ctx)
   end)
 
   test("roster_tooltip: FormatCompactTooltipNumber forwards to AbbreviateNumbers when available", function()
-    WithGlobals(BuildGlobals({
-      AbbreviateNumbers = function(v)
-        return "AB:" .. tostring(v)
-      end,
-    }), function()
-      local addon = Load()
-      Assert.Equal(addon._RosterInternal.FormatCompactTooltipNumber(42.6), "AB:43")
-    end)
+    WithGlobals(
+      BuildGlobals({
+        AbbreviateNumbers = function(v)
+          return "AB:" .. tostring(v)
+        end,
+      }),
+      function()
+        local addon = Load()
+        Assert.Equal(addon._RosterInternal.FormatCompactTooltipNumber(42.6), "AB:43")
+      end
+    )
   end)
 
   test("roster_tooltip: ShowRosterNameFallbackTooltip returns false without a name", function()

@@ -72,11 +72,9 @@ local function ParseSummary(block)
   local total
   for _, line in ipairs(block) do
     local trimmed = line:match("^%s*(.-)%s*$")
-    if trimmed == "" or trimmed:match("^%-+$") or trimmed:match("^=+$") then
-      -- skip blanks + dividers
-    elseif trimmed:match("^Summary$") or trimmed:match("^File%s") then
-      -- skip header rows
-    else
+    local isBlankOrDivider = trimmed == "" or trimmed:match("^%-+$") or trimmed:match("^=+$")
+    local isHeader = trimmed:match("^Summary$") or trimmed:match("^File%s")
+    if not isBlankOrDivider and not isHeader then
       local entry = ParseFileLine(trimmed)
       if entry then
         if entry.file:lower() == "total" then
@@ -167,13 +165,7 @@ for _, layer in ipairs(LAYER_ORDER) do
   local bucket = layers[layer]
   if bucket then
     io.write(
-      string.format(
-        "| `%s/` | %.2f%% | %d / %d |\n",
-        layer,
-        bucket.pct,
-        bucket.hits,
-        bucket.hits + bucket.missed
-      )
+      string.format("| `%s/` | %.2f%% | %d / %d |\n", layer, bucket.pct, bucket.hits, bucket.hits + bucket.missed)
     )
   end
 end

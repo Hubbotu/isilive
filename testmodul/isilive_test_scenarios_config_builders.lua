@@ -319,18 +319,21 @@ return function(test, ctx)
     Assert.Equal(refreshCalls, 1, "settingsPanel.Refresh must be called to repaint sliders")
   end)
 
-  test("ConfigBuilders slash resetMainFramePosition seeds IsiLiveDB when missing and tolerates missing UI refs", function()
-    local builders = LoadBuilders()
-    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
-    local WithGlobals = ctx.with_globals
-    WithGlobals({}, function()
-      local previous = rawget(_G, "IsiLiveDB")
-      rawset(_G, "IsiLiveDB", nil)
-      -- Must not raise even without mainUI / mainFrame / panelUI / settingsPanel.
-      opts.resetMainFramePosition()
-      Assert.NotNil(rawget(_G, "IsiLiveDB"))
-      Assert.Equal(rawget(_G, "IsiLiveDB").uiScale, 1.0)
-      rawset(_G, "IsiLiveDB", previous)
-    end)
-  end)
+  test(
+    "ConfigBuilders slash resetMainFramePosition seeds IsiLiveDB when missing and tolerates missing UI refs",
+    function()
+      local builders = LoadBuilders()
+      local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+      local WithGlobals = ctx.with_globals
+      WithGlobals({}, function()
+        local previous = rawget(_G, "IsiLiveDB")
+        rawset(_G, "IsiLiveDB", nil)
+        -- Must not raise even without mainUI / mainFrame / panelUI / settingsPanel.
+        opts.resetMainFramePosition()
+        Assert.NotNil(rawget(_G, "IsiLiveDB"))
+        Assert.Equal(rawget(_G, "IsiLiveDB").uiScale, 1.0)
+        rawset(_G, "IsiLiveDB", previous)
+      end)
+    end
+  )
 end

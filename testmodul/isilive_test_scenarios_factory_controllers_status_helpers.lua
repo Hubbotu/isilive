@@ -101,8 +101,12 @@ local function BuildCtx(runtimeState, modules, overrides)
     modules = modules,
     runtimeState = runtimeState,
     locale = overrides.locale or "enUS",
-    L = overrides.L or { BTN_COUNTDOWN_CANCEL = "CANCEL", UNKNOWN_GROUP = "unknown", CHAT_QUEUE_PREFIX = "ISI-Q",
-      JOINED_FROM_QUEUE = "joined %s" },
+    L = overrides.L or {
+      BTN_COUNTDOWN_CANCEL = "CANCEL",
+      UNKNOWN_GROUP = "unknown",
+      CHAT_QUEUE_PREFIX = "ISI-Q",
+      JOINED_FROM_QUEUE = "joined %s",
+    },
     GetL = overrides.GetL,
     GetRoster = overrides.GetRoster,
     IsPlayerLeader = overrides.IsPlayerLeader or function()
@@ -130,7 +134,7 @@ local function BuildCtx(runtimeState, modules, overrides)
     return ctx.L
   end
   ctx.GetRoster = ctx.GetRoster or function()
-    return (runtimeState.rosterRef) or {}
+    return runtimeState.rosterRef or {}
   end
   return ctx
 end
@@ -155,11 +159,13 @@ return function(test, ctx)
   test("factory_controllers.status: getPlayerSyncSummary returns nil without sync module function", function()
     local addon = Load()
     local rs = BuildRuntimeStateStub()
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -171,15 +177,17 @@ return function(test, ctx)
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local captured
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerSyncSummary = function(name, realm)
-        captured = { name = name, realm = realm }
-        return { status = "ok" }
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerSyncSummary = function(name, realm)
+          captured = { name = name, realm = realm }
+          return { status = "ok" }
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -226,9 +234,11 @@ return function(test, ctx)
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub(), {
-      bindingController = { GetPendingBindingApply = function()
-        return true
-      end },
+      bindingController = {
+        GetPendingBindingApply = function()
+          return true
+        end,
+      },
     })
     WithGlobals({}, function()
       Init(addon, c)
@@ -336,14 +346,18 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local logLines = {}
     local c = BuildCtx(rs, BuildModulesStub(), {
-      runtimeLogController = { Log = function(msg)
-        table.insert(logLines, msg)
-      end },
+      runtimeLogController = {
+        Log = function(msg)
+          table.insert(logLines, msg)
+        end,
+      },
     })
     WithGlobals({
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return 42
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return 42
+        end,
+      },
       IsInGroup = function()
         return false
       end,
@@ -369,9 +383,11 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub({ pendingQueueJoinInfo = { groupName = "Stale" } })
     local c = BuildCtx(rs, BuildModulesStub())
     WithGlobals({
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return nil
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
       IsInGroup = function()
         return false
       end,
@@ -391,9 +407,11 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub())
     WithGlobals({
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return nil
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
       IsInGroup = function()
         return false
       end,
@@ -414,9 +432,11 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local c = BuildCtx(rs, BuildModulesStub())
     WithGlobals({
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return nil
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
       IsInGroup = function()
         return true
       end,
@@ -436,14 +456,18 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local logLines = {}
     local c = BuildCtx(rs, BuildModulesStub(), {
-      runtimeLogController = { Log = function(msg)
-        table.insert(logLines, msg)
-      end },
+      runtimeLogController = {
+        Log = function(msg)
+          table.insert(logLines, msg)
+        end,
+      },
     })
     WithGlobals({
-      C_ChallengeMode = { GetActiveChallengeMapID = function()
-        return nil
-      end },
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
       IsInGroup = function()
         return false
       end,
@@ -475,10 +499,12 @@ return function(test, ctx)
     rs.rosterRef = roster
     local seenRoster
     local c = BuildCtx(rs, BuildModulesStub(), {
-      keySyncController = { RefreshLocalPlayerKey = function(r)
-        seenRoster = r
-        return "refreshed"
-      end },
+      keySyncController = {
+        RefreshLocalPlayerKey = function(r)
+          seenRoster = r
+          return "refreshed"
+        end,
+      },
     })
     WithGlobals({}, function()
       Init(addon, c)
@@ -527,9 +553,11 @@ return function(test, ctx)
 
   test("factory_controllers.status: ResolveLocalStatusTargetMapID prefers LFGDetect detected map ID", function()
     local addon = Load()
-    addon.LFGDetect = { GetDetectedMapID = function()
-      return 2649
-    end }
+    addon.LFGDetect = {
+      GetDetectedMapID = function()
+        return 2649
+      end,
+    }
     local rs = BuildRuntimeStateStub({ activeJoinedKeyMapID = 999, latestQueueMapID = 111 })
     local c = BuildCtx(rs, BuildModulesStub())
     WithGlobals({}, function()
@@ -611,14 +639,16 @@ return function(test, ctx)
       Alice = { mapID = 2649, level = 12 },
       Bob = { mapID = 2649, level = 12 },
     }
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerTargetInfo = function(name)
-        return targetInfoByName[name]
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function(name)
+          return targetInfoByName[name]
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -640,14 +670,16 @@ return function(test, ctx)
       Alice = { mapID = 2649, level = 12 },
       Bob = { mapID = 2650, level = 12 },
     }
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerTargetInfo = function(name)
-        return targetInfoByName[name]
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function(name)
+          return targetInfoByName[name]
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -667,14 +699,16 @@ return function(test, ctx)
       Alice = { mapID = 2649, level = 12 },
       Bob = { mapID = 2649, level = 11 },
     }
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerTargetInfo = function(name)
-        return targetInfoByName[name]
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function(name)
+          return targetInfoByName[name]
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -696,14 +730,16 @@ return function(test, ctx)
     local rs2 = BuildRuntimeStateStub()
     local roster = { player = { name = "Alice", realm = "D" } }
     rs2.rosterRef = roster
-    local mods2 = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerTargetInfo = function()
-        return { mapID = 501 }
-      end,
-    } })
+    local mods2 = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function()
+          return { mapID = 501 }
+        end,
+      },
+    })
     local c2 = BuildCtx(rs2, mods2)
     WithGlobals({}, function()
       Init(addon, c2)
@@ -740,11 +776,13 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub({ latestQueueMapID = 2649 })
     rs.rosterRef = {}
     local mods = BuildModulesStub({
-      teleport = { GetTeleportInfoByMapID = function(mapID)
-        if mapID == 2649 then
-          return { mapName = "Ara-Kara" }
-        end
-      end },
+      teleport = {
+        GetTeleportInfoByMapID = function(mapID)
+          if mapID == 2649 then
+            return { mapName = "Ara-Kara" }
+          end
+        end,
+      },
     })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
@@ -759,11 +797,13 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub({ latestActivityID = 9001, latestQueueMapID = 1 })
     rs.rosterRef = {}
     local mods = BuildModulesStub({
-      queue = { GetActivityName = function(id)
-        if id == 9001 then
-          return "City of Threads"
-        end
-      end },
+      queue = {
+        GetActivityName = function(id)
+          if id == 9001 then
+            return "City of Threads"
+          end
+        end,
+      },
     })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
@@ -805,14 +845,16 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub({ latestDungeonName = "Ara-Kara", latestQueueMapID = 2649 })
     local roster = { player = { name = "Alice", realm = "D" } }
     rs.rosterRef = roster
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      GetPlayerTargetInfo = function()
-        return { mapID = 2649, level = 15 }
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function()
+          return { mapID = 2649, level = 15 }
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods)
     WithGlobals({}, function()
       Init(addon, c)
@@ -842,17 +884,21 @@ return function(test, ctx)
     local roster = { party1 = { name = "Bob", realm = "D", keyLevel = 14 } }
     rs.rosterRef = roster
     local sent
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        SendTarget = function(payload)
+          sent = payload
+        end,
+      },
+    })
+    local mainFrame = {
+      IsShown = function()
+        return true
       end,
-      SendTarget = function(payload)
-        sent = payload
-      end,
-    } })
-    local mainFrame = { IsShown = function()
-      return true
-    end }
+    }
     local c = BuildCtx(rs, mods, {
       keySyncController = {
         ResolveActiveKeyOwnerUnit = function(_, _, _)
@@ -877,18 +923,22 @@ return function(test, ctx)
     local addon = Load()
     local rs = BuildRuntimeStateStub()
     local sent
-    local mods = BuildModulesStub({ sync = {
-      NormalizePlayerKey = function(n, r)
-        return (n or "") .. "-" .. (r or "")
-      end,
-      SendTarget = function(payload)
-        sent = payload
-      end,
-    } })
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        SendTarget = function(payload)
+          sent = payload
+        end,
+      },
+    })
     local c = BuildCtx(rs, mods, {
-      mainFrame = { IsShown = function()
-        return false
-      end },
+      mainFrame = {
+        IsShown = function()
+          return false
+        end,
+      },
     })
     WithGlobals({}, function()
       Init(addon, c)
@@ -917,9 +967,11 @@ return function(test, ctx)
     local rs = BuildRuntimeStateStub()
     local captured
     local c = BuildCtx(rs, BuildModulesStub(), {
-      rosterPanelController = { SetCountdownCancelText = function(text)
-        captured = text
-      end },
+      rosterPanelController = {
+        SetCountdownCancelText = function(text)
+          captured = text
+        end,
+      },
     })
     WithGlobals({}, function()
       Init(addon, c)

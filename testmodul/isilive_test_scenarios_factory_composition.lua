@@ -1147,8 +1147,16 @@ return function(test, ctx)
       --     RefreshAndStatus controllers that the Happy-Path never
       --     reaches because no UI interaction triggers it.
       local controllerMethodCalls = {
-        { owner = "rosterPanelController", method = "RenderRoster", args = { factoryCtx.GetRoster and factoryCtx.GetRoster() } },
-        { owner = "rosterPanelController", method = "RefreshReadyCheckState", args = { factoryCtx.GetRoster and factoryCtx.GetRoster() } },
+        {
+          owner = "rosterPanelController",
+          method = "RenderRoster",
+          args = { factoryCtx.GetRoster and factoryCtx.GetRoster() },
+        },
+        {
+          owner = "rosterPanelController",
+          method = "RefreshReadyCheckState",
+          args = { factoryCtx.GetRoster and factoryCtx.GetRoster() },
+        },
         { owner = "rosterPanelController", method = "SetCountdownCancelText", args = { "CANCEL" } },
         { owner = "rosterPanelController", method = "RefreshLayoutState", args = {} },
         { owner = "rosterPanelController", method = "MarkCdTrackerDirty", args = {} },
