@@ -1,5 +1,7 @@
 ---@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local, cast-local-type, unused-vararg
 
+local unpack = rawget(_G, "unpack") or (type(table) == "table" and rawget(table, "unpack")) or nil
+
 -- Composition-root integration test for factory/isiLive_factory.lua.
 --
 -- The existing factory_primary/factory_secondary scenarios stub every
@@ -286,7 +288,7 @@ local function BuildFrameStub()
   end
   function explicit:Click(...) end
   function explicit:GetChildren()
-    return table.unpack(self._children or {})
+    return unpack(self._children or {})
   end
   function explicit:GetNumChildren()
     return #(self._children or {})
@@ -622,7 +624,7 @@ local function BuildGlobals()
       for part in tostring(str):gmatch("([^" .. sep .. "]+)") do
         table.insert(parts, part)
       end
-      return table.unpack(parts)
+      return unpack(parts)
     end,
     strtrim = function(s)
       return (tostring(s):gsub("^%s+", ""):gsub("%s+$", ""))
@@ -1193,7 +1195,7 @@ return function(test, ctx)
         if type(owner) == "table" then
           local method = owner[entry.method]
           if type(method) == "function" then
-            pcall(method, table.unpack(entry.args or {}))
+            pcall(method, unpack(entry.args or {}))
           end
         end
       end

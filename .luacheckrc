@@ -8,7 +8,6 @@ return {
       ignore = {
         "212", -- unused argument (mock stubs intentionally match real method signatures)
         "432", -- shadowing upvalue argument (nested self-stubs in mock tables)
-        "143/table", -- table.unpack (Lua 5.1/5.2 compat differences in test Lua)
         "211/state",
         "211/_state",
         "211/db",
