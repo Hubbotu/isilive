@@ -221,4 +221,194 @@ return function(test, ctx)
     Assert.Equal(state.keySnapshots, 1, "must send forced snapshot when post-challenge flag is set")
     Assert.Equal(state.backgroundSnapshots, 0, "must not send background snapshot when post-challenge flag is set")
   end)
+
+  test("Refresh RunFullRefresh skips when paused", function()
+    local controller, state = BuildRefreshController({
+      isPaused = function()
+        return true
+      end,
+    })
+    Assert.False(controller.RunFullRefresh(), "paused refresh must return false")
+    Assert.Equal(state.syncRefreshes, 0)
+  end)
+
+  test("Refresh RunFullRefresh triggers roster update when group is non-empty and roster is empty", function()
+    local controller, state = BuildRefreshController({
+      isInGroup = function()
+        return true
+      end,
+      isRosterEmpty = function()
+        return true
+      end,
+    })
+    Assert.True(controller.RunFullRefresh())
+    Assert.Equal(state.rosterUpdates, 1, "empty roster in a group must trigger a roster update once")
+  end)
+
+  test("Refresh RunFullRefresh in testAllMode reroutes to demo refresh", function()
+    local controller, state = BuildRefreshController({
+      isTestAllMode = function()
+        return true
+      end,
+    })
+    Assert.True(controller.RunFullRefresh())
+    Assert.Equal(state.demoRefreshes, 1, "testAllMode must also route to refreshTestModeRoster")
+  end)
+
+  test("Refresh RunFullRefresh emits runtime-log traces when loggers are wired", function()
+    local state = {
+      logs = {},
+      logfs = {},
+    }
+    local addon = LoadAddonModules({ "isiLive_refresh.lua" })
+    local controller = addon.Refresh.CreateController({
+      getTime = function()
+        return 0
+      end,
+      sendIsiLiveHello = function() end,
+      sendOwnKeySnapshot = function() end,
+      sendOwnBackgroundSnapshot = function() end,
+      sendRefreshRequest = function() end,
+      queueForceRefreshData = function() end,
+      updateUI = function() end,
+      triggerGroupRosterUpdate = function() end,
+      forceRefreshSyncState = function() end,
+      refreshTestModeRoster = function()
+        return true
+      end,
+      refreshLocalPlayerKey = function()
+        return false
+      end,
+      getActiveChallengeMapID = function()
+        return nil
+      end,
+      logRuntimeTrace = function(msg)
+        table.insert(state.logs, msg)
+      end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(state.logfs, string.format(fmt, ...))
+      end,
+    })
+    controller.RunFullRefresh()
+    controller.NotifyPostChallengeSync()
+    controller.HandleOwnedKeyRefresh()
+    Assert.True(#state.logfs > 0, "logf path must fire on full-refresh + owned-key-refresh")
+    Assert.True(#state.logs > 0, "plain log path must fire on notify_post_challenge_sync")
+  end)
+
+  test("Refresh RunFullRefresh logs blocked reason when stopped / paused / challenge-active", function()
+    local addon = LoadAddonModules({ "isiLive_refresh.lua" })
+    local stoppedLogs = {}
+    local stoppedController = addon.Refresh.CreateController({
+      isStopped = function()
+        return true
+      end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(stoppedLogs, string.format(fmt, ...))
+      end,
+    })
+    stoppedController.RunFullRefresh()
+    local matchedStopped = false
+    for _, line in ipairs(stoppedLogs) do
+      if line:find("reason=stopped", 1, true) then
+        matchedStopped = true
+      end
+    end
+    Assert.True(matchedStopped, "stopped blocked reason must be traced")
+
+    local pausedLogs = {}
+    local pausedController = addon.Refresh.CreateController({
+      isPaused = function()
+        return true
+      end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(pausedLogs, string.format(fmt, ...))
+      end,
+    })
+    pausedController.RunFullRefresh()
+    local matchedPaused = false
+    for _, line in ipairs(pausedLogs) do
+      if line:find("reason=paused", 1, true) then
+        matchedPaused = true
+      end
+    end
+    Assert.True(matchedPaused, "paused blocked reason must be traced")
+
+    local challengeLogs = {}
+    local challengeController = addon.Refresh.CreateController({
+      getActiveChallengeMapID = function()
+        return 2649
+      end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(challengeLogs, string.format(fmt, ...))
+      end,
+    })
+    challengeController.RunFullRefresh()
+    local matchedChallenge = false
+    for _, line in ipairs(challengeLogs) do
+      if line:find("reason=challenge_active", 1, true) and line:find("mapID=2649", 1, true) then
+        matchedChallenge = true
+      end
+    end
+    Assert.True(matchedChallenge, "challenge_active blocked reason must include mapID")
+  end)
+
+  test("Refresh RunFullRefresh debounce path logs remaining cooldown", function()
+    local logs = {}
+    local addon = LoadAddonModules({ "isiLive_refresh.lua" })
+    local now = 10
+    local controller = addon.Refresh.CreateController({
+      getTime = function()
+        return now
+      end,
+      refreshDebounceSeconds = 2,
+      sendIsiLiveHello = function() end,
+      sendOwnKeySnapshot = function() end,
+      sendRefreshRequest = function() end,
+      queueForceRefreshData = function() end,
+      updateUI = function() end,
+      forceRefreshSyncState = function() end,
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(logs, string.format(fmt, ...))
+      end,
+    })
+    controller.RunFullRefresh()
+    now = 10.5
+    controller.RunFullRefresh()
+    local matched = false
+    for _, line in ipairs(logs) do
+      if line:find("reason=debounce", 1, true) and line:find("remain=1.5", 1, true) then
+        matched = true
+      end
+    end
+    Assert.True(matched, "debounce block must include remaining seconds in the log: " .. table.concat(logs, " | "))
+  end)
+
+  test("Refresh controller default opts guard against raw nil without raising", function()
+    local addon = LoadAddonModules({ "isiLive_refresh.lua" })
+    local controller = addon.Refresh.CreateController()
+    -- With all opts defaulted to no-op/false the full refresh must still
+    -- report true (no test mode, no debounce, nothing blocking).
+    Assert.True(controller.RunFullRefresh(), "default-args controller must complete RunFullRefresh")
+    Assert.False(controller.HandleOwnedKeyRefresh(), "default refreshLocalPlayerKey returns false => no change")
+  end)
+
+  test("Refresh debounce negative value is clamped to zero (never blocks)", function()
+    local addon = LoadAddonModules({ "isiLive_refresh.lua" })
+    local calls = 0
+    local controller = addon.Refresh.CreateController({
+      refreshDebounceSeconds = -5,
+      sendIsiLiveHello = function() end,
+      sendOwnKeySnapshot = function() end,
+      sendRefreshRequest = function() end,
+      queueForceRefreshData = function() end,
+      updateUI = function() end,
+      forceRefreshSyncState = function()
+        calls = calls + 1
+      end,
+    })
+    controller.RunFullRefresh()
+    controller.RunFullRefresh()
+    Assert.Equal(calls, 2, "clamped debounce=0 must allow back-to-back refreshes")
+  end)
 end

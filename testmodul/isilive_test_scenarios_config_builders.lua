@@ -190,4 +190,147 @@ return function(test, ctx)
     local result = builders.BuildRefreshControllerOpts(ctx_input)
     Assert.Equal(result.extraField, nil, "extra fields must not leak into result")
   end)
+
+  -- =====================================================
+  -- BuildSlashCommandsOpts inner closures
+  -- =====================================================
+
+  local function BuildSlashCtx(overrides)
+    overrides = overrides or {}
+    return {
+      commands = {},
+      printFn = function() end,
+      getL = function()
+        return {}
+      end,
+      mainUI = overrides.mainUI,
+      mainFrame = overrides.mainFrame,
+      panelUI = overrides.panelUI,
+      settingsPanel = overrides.settingsPanel,
+    }
+  end
+
+  test("ConfigBuilders slash getMainFrameLocked reads from mainUI when GetDragLocked exists", function()
+    local builders = LoadBuilders()
+    local mainUI = {
+      GetDragLocked = function()
+        return true
+      end,
+    }
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx({ mainUI = mainUI }))
+    local WithGlobals = ctx.with_globals
+    WithGlobals({}, function()
+      Assert.Equal(opts.getMainFrameLocked(), true, "mainUI.GetDragLocked must win over DB lookup")
+    end)
+  end)
+
+  test("ConfigBuilders slash getMainFrameLocked falls back to IsiLiveDB.lockMainFramePosition", function()
+    local builders = LoadBuilders()
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local WithGlobals = ctx.with_globals
+    WithGlobals({ IsiLiveDB = { lockMainFramePosition = false } }, function()
+      Assert.Equal(opts.getMainFrameLocked(), false, "explicit false in DB must unlock")
+    end)
+    WithGlobals({ IsiLiveDB = {} }, function()
+      Assert.Equal(opts.getMainFrameLocked(), true, "missing setting must default to locked")
+    end)
+  end)
+
+  test("ConfigBuilders slash setMainFrameLocked writes DB + forwards to mainUI", function()
+    local builders = LoadBuilders()
+    local seenLocked
+    local mainUI = {
+      SetDragLocked = function(v)
+        seenLocked = v
+      end,
+    }
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx({ mainUI = mainUI }))
+    local WithGlobals = ctx.with_globals
+    local db = {}
+    WithGlobals({ IsiLiveDB = db }, function()
+      opts.setMainFrameLocked(true)
+      Assert.Equal(db.lockMainFramePosition, true)
+      Assert.Equal(seenLocked, true)
+      opts.setMainFrameLocked(false)
+      Assert.Equal(db.lockMainFramePosition, false)
+      Assert.Equal(seenLocked, false)
+    end)
+  end)
+
+  test("ConfigBuilders slash setMainFrameLocked seeds IsiLiveDB when missing", function()
+    local builders = LoadBuilders()
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local WithGlobals = ctx.with_globals
+    WithGlobals({}, function()
+      local previous = rawget(_G, "IsiLiveDB")
+      rawset(_G, "IsiLiveDB", nil)
+      opts.setMainFrameLocked(true)
+      Assert.NotNil(rawget(_G, "IsiLiveDB"), "missing DB must be seeded lazily")
+      rawset(_G, "IsiLiveDB", previous)
+    end)
+  end)
+
+  test("ConfigBuilders slash resetMainFramePosition rewrites scale/alpha and calls mainUI.ResetPosition", function()
+    local builders = LoadBuilders()
+    local resetCalls = 0
+    local scaleCalls = 0
+    local lastBgAlpha = nil
+    local mainUI = {
+      ResetPosition = function()
+        resetCalls = resetCalls + 1
+      end,
+    }
+    local mainFrame = {}
+    function mainFrame:SetScale(s)
+      scaleCalls = scaleCalls + 1
+      self._scale = s
+    end
+    function mainFrame:SetBackdropColor(_r, _g, _b, a)
+      lastBgAlpha = a
+    end
+    local refreshCalls = 0
+    local settingsPanel = {
+      canvas = { SetBackdropColor = function() end },
+      Refresh = function()
+        refreshCalls = refreshCalls + 1
+      end,
+    }
+    local panelUI = {
+      panelFrame = { SetBackdropColor = function() end },
+    }
+    local builderCtx = BuildSlashCtx({
+      mainUI = mainUI,
+      mainFrame = mainFrame,
+      settingsPanel = settingsPanel,
+      panelUI = panelUI,
+    })
+    local opts = builders.BuildSlashCommandsOpts(builderCtx)
+    local WithGlobals = ctx.with_globals
+    local db = {}
+    WithGlobals({ IsiLiveDB = db }, function()
+      opts.resetMainFramePosition()
+    end)
+    Assert.Equal(db.uiScale, 1.0, "uiScale must be reset to 1.0")
+    Assert.Equal(type(db.bgAlpha), "number", "bgAlpha must be reset to a numeric default")
+    Assert.Equal(scaleCalls, 1, "mainFrame:SetScale(1.0) must be called")
+    Assert.Equal(mainFrame._scale, 1.0)
+    Assert.Equal(resetCalls, 1, "mainUI.ResetPosition must fire")
+    Assert.Equal(lastBgAlpha, db.bgAlpha, "backdrop alpha must match the reset bgAlpha")
+    Assert.Equal(refreshCalls, 1, "settingsPanel.Refresh must be called to repaint sliders")
+  end)
+
+  test("ConfigBuilders slash resetMainFramePosition seeds IsiLiveDB when missing and tolerates missing UI refs", function()
+    local builders = LoadBuilders()
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local WithGlobals = ctx.with_globals
+    WithGlobals({}, function()
+      local previous = rawget(_G, "IsiLiveDB")
+      rawset(_G, "IsiLiveDB", nil)
+      -- Must not raise even without mainUI / mainFrame / panelUI / settingsPanel.
+      opts.resetMainFramePosition()
+      Assert.NotNil(rawget(_G, "IsiLiveDB"))
+      Assert.Equal(rawget(_G, "IsiLiveDB").uiScale, 1.0)
+      rawset(_G, "IsiLiveDB", previous)
+    end)
+  end)
 end

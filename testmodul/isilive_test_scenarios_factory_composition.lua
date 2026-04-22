@@ -1047,6 +1047,94 @@ return function(test, ctx)
         end
       end
 
+      -- 7a. Kick tracker: SendOwnKickState runs through SyncOwnKickState
+      --     which covers the "available kick + resolved state" branch in
+      --     factory_kick_tracker.lua. Call with both force variants.
+      if type(factoryCtx.SendOwnKickState) == "function" then
+        pcall(factoryCtx.SendOwnKickState, true)
+        pcall(factoryCtx.SendOwnKickState, false)
+      end
+
+      -- 7b. Challenge / inspect / status / readycheck helpers - every one
+      --     is a tiny closure configured during InitializeFactoryPrimary/
+      --     SecondaryControllers that is otherwise never called.
+      local lazyCalls = {
+        { "GetActiveChallengeMapID" },
+        { "IsInPartyInstance" },
+        { "IsPortalNavigatorEnabled" },
+        { "IsReadyCheckActive" },
+        { "GetReadyCheckReadyUntil", "player" },
+        { "GetReadyCheckDeclinedUntil", "player" },
+        { "ClearAllReadyCheckReady" },
+        { "ClearAllReadyCheckDeclined" },
+        { "ClearExpiredReadyCheckReady", 0 },
+        { "ClearExpiredReadyCheckDeclined", 0 },
+        { "GetWasInGroup" },
+        { "GetWasRaidGroup" },
+        { "GetWasGroupLeader" },
+        { "GetRoster" },
+        { "NormalizePlayerKey", "Alice", "Realm" },
+        { "BuildRosterInfoPlayerKey", { name = "Alice", realm = "Realm" } },
+        { "GetRioDeltaForRosterInfo", { name = "Tester", realm = "Realm", rio = 3500 }, "player" },
+        { "NormalizeStatusTargetName", "  Dungeon  " },
+        { "NormalizeConcreteStatusTargetName", "Dungeon", 2649 },
+        { "GetPendingBindingApply" },
+        { "RefreshLocalPlayerKey" },
+        { "GetStatusTargetDungeonInfo" },
+        { "UpdateCountdownCancelButton" },
+        { "GetTeleportEmptyStateText" },
+        { "CaptureQueueJoinCandidate", "Some Group" },
+        { "AnnounceQueuedGroupJoin" },
+        { "ResetInspectAll" },
+        { "ResetInspectQueues" },
+        { "ClearLatestQueueTarget" },
+        { "ResolveActiveTeleportSpellID" },
+        { "ResolveActiveKeyOwnerUnit" },
+        { "IsInCombat" },
+        { "ApplyHotkeyBindings" },
+        { "StartBindingWatchdog" },
+      }
+      for _, entry in ipairs(lazyCalls) do
+        local name = entry[1]
+        local fn = factoryCtx[name]
+        if type(fn) == "function" then
+          pcall(fn, entry[2], entry[3])
+        end
+      end
+
+      -- 7c. Main-frame visibility functions touch the FrameBridge API
+      --     with various reason payloads (queue / user / combat) so the
+      --     autoOpenOnQueue gate in InitializeFactoryFrameBridge fires.
+      if type(factoryCtx.SetMainFrameVisible) == "function" then
+        pcall(factoryCtx.SetMainFrameVisible, true, "queue")
+        pcall(factoryCtx.SetMainFrameVisible, true, { reason = "user", skipShowCallbacks = false })
+        pcall(factoryCtx.SetMainFrameVisible, false, "user")
+      end
+      if type(factoryCtx.ToggleMainFrameVisibility) == "function" then
+        pcall(factoryCtx.ToggleMainFrameVisibility)
+        pcall(factoryCtx.ToggleMainFrameVisibility)
+      end
+      if type(factoryCtx.SetMainFrameHeightSafe) == "function" then
+        pcall(factoryCtx.SetMainFrameHeightSafe, 320)
+      end
+      if type(factoryCtx.SetMainFrameWidthSafe) == "function" then
+        pcall(factoryCtx.SetMainFrameWidthSafe, 450)
+      end
+      if type(factoryCtx.ShowCenterNotice) == "function" then
+        pcall(factoryCtx.ShowCenterNotice, "hello", 3, "Dungeon", 9001, {})
+      end
+      if type(factoryCtx.SetCenterNoticeVisible) == "function" then
+        pcall(factoryCtx.SetCenterNoticeVisible, true)
+        pcall(factoryCtx.SetCenterNoticeVisible, false)
+      end
+      if type(factoryCtx.SetPortalNavigatorVisible) == "function" then
+        pcall(factoryCtx.SetPortalNavigatorVisible, true)
+        pcall(factoryCtx.SetPortalNavigatorVisible, false)
+      end
+      if type(factoryCtx.ShowInviteHint) == "function" then
+        pcall(factoryCtx.ShowInviteHint, "joined", 3)
+      end
+
       -- 8. Settings-panel callbacks - these are wired inside
       --    FinalizeFactorySettings and exercised via ctx.resetDB + a
       --    hand-triggered onResetMainFramePosition (the latter is the
