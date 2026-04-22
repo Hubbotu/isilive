@@ -58,6 +58,14 @@ lua $env:APPDATA\luarocks\bin\luacov
 lua tools/coverage_summary.lua luacov.report.out
 ```
 
+In Git Bash / MSYS gibt `luarocks path` cmd-Syntax (`SET X=Y`) statt `export X=Y` aus. `tools/env.sh` uebersetzt die Variablen einmalig fuer die Session; ohne das findet `luacheck` seine eigenen Lua-Module nicht und `lua -lluacov ...` schlaegt an der Modul-Ladephase fehl:
+
+```bash
+source tools/env.sh
+luacheck --version
+lua -lluacov tools/validate_usecases.lua
+```
+
 Wenn das nicht gruen ist, nicht "kurz weiterbauen".
 Vor jedem Release-Tag gilt zusaetzlich: erst `main` pushen, dann den gruenen `Lua Check` fuer genau diesen Commit abwarten. Lokal entspricht der Einstieg dafuer `tools/check.ps1` bzw. `tools/check.cmd`.
 
