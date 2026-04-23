@@ -62,9 +62,20 @@ local function buildSandbox()
 end
 
 local function loadDungeonFile(path, MDT)
-  local chunk, err = loadfile(path, "t", setmetatable({ MDT = MDT }, { __index = _G }))
-  if not chunk then
-    return false, err
+  local env = setmetatable({ MDT = MDT }, { __index = _G })
+  local chunk, err
+  if setfenv then
+    -- Lua 5.1 ignores the mode/env parameters of loadfile; apply env via setfenv.
+    chunk, err = loadfile(path)
+    if not chunk then
+      return false, err
+    end
+    setfenv(chunk, env)
+  else
+    chunk, err = loadfile(path, "t", env)
+    if not chunk then
+      return false, err
+    end
   end
   local ok, runErr = pcall(chunk, "isiLive-sync")
   if not ok then
