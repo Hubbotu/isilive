@@ -1340,22 +1340,27 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       end
 
       Assert.Equal(scrollFrameCount, 1, "settings should allocate exactly one content scroll frame")
-      Assert.Equal(sliderCount, 2, "settings should only expose the background opacity and UI scale sliders")
+      Assert.Equal(
+        sliderCount,
+        3,
+        "settings should expose the background opacity, UI scale, and nameplate font-size sliders"
+      )
       Assert.Equal(
         checkboxCount,
         23,
         "settings should hide only the legacy DPS, markers, name-length,"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, combat-fade, and M+ forces toggles visible"
+          .. " chat-announce, combat-fade, and nameplate-subtoggle checkboxes visible"
+          .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
       panel.Refresh()
-      Assert.Equal(sliderCount, 2, "refresh should keep the legacy sliders hidden")
+      Assert.Equal(sliderCount, 3, "refresh should keep the nameplate font-size slider visible")
       Assert.Equal(
         checkboxCount,
         23,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
-          .. " while preserving the visible sound, chat-announce, combat-fade, and M+ forces toggles"
+          .. " while preserving the visible sound, chat-announce, combat-fade, and nameplate-subtoggle checkboxes"
       )
     end)
   end)

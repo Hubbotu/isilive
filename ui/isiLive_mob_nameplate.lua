@@ -1,0 +1,564 @@
+local _, addonTable = ...
+addonTable = addonTable or {}
+
+local MobNameplate = {}
+addonTable.MobNameplate = MobNameplate
+
+local enabled = false
+local registered = false
+local eventFrame = nil
+
+local frames = {}
+
+local format = {
+  showPercent = true,
+  bossTargetMode = "off", -- "off" | "next" | "end"
+}
+
+local function NormalizeBossTargetMode(val)
+  if val == "off" or val == "next" or val == "end" then
+    return val
+  end
+  return "off"
+end
+
+local appearance = {
+  fontSize = 12,
+  position = "RIGHT",
+  xOffset = 0,
+  yOffset = 0,
+}
+
+local function IsSecretValue(v)
+  local fn = rawget(_G, "issecretvalue")
+  return type(fn) == "function" and fn(v) == true
+end
+
+local function SafeCall(fn, ...)
+  if type(fn) ~= "function" then
+    return nil
+  end
+  local ok, a, b, c, d = pcall(fn, ...)
+  if not ok then
+    return nil
+  end
+  return a, b, c, d
+end
+
+local function IsChallengeModeActive()
+  local api = rawget(_G, "C_ChallengeMode")
+  if type(api) ~= "table" or type(api.IsChallengeModeActive) ~= "function" then
+    return false
+  end
+  local ok, active = pcall(api.IsChallengeModeActive)
+  return ok and active == true
+end
+
+local function HasProgressAPI()
+  local api = rawget(_G, "C_ScenarioInfo")
+  return type(api) == "table" and type(api.GetUnitCriteriaProgressValues) == "function"
+end
+
+local function HasNamePlateAPI()
+  local api = rawget(_G, "C_NamePlate")
+  return type(api) == "table" and type(api.GetNamePlateForUnit) == "function"
+end
+
+local function GetNameplate(unit)
+  local api = rawget(_G, "C_NamePlate")
+  if type(api) ~= "table" or type(api.GetNamePlateForUnit) ~= "function" then
+    return nil
+  end
+  local ok, plate = pcall(api.GetNamePlateForUnit, unit)
+  if not ok or type(plate) ~= "table" then
+    return nil
+  end
+  return plate
+end
+
+local function GetActiveChallengeMapID()
+  local api = rawget(_G, "C_ChallengeMode")
+  if type(api) ~= "table" or type(api.GetActiveChallengeMapID) ~= "function" then
+    return nil
+  end
+  local ok, mapID = pcall(api.GetActiveChallengeMapID)
+  if not ok or type(mapID) ~= "number" or mapID <= 0 or IsSecretValue(mapID) then
+    return nil
+  end
+  return mapID
+end
+
+local function ResolveBossTargets(mapID)
+  if type(mapID) ~= "number" then
+    return nil
+  end
+  local db = rawget(_G, "IsiLiveDB")
+  if type(db) == "table" and type(db.bossTargetsOverride) == "table" then
+    local override = db.bossTargetsOverride[mapID]
+    if type(override) == "table" and #override > 0 then
+      return override
+    end
+  end
+  local defaults = addonTable.MPlusBossTargets
+  if type(defaults) ~= "table" or type(defaults.byMapID) ~= "table" then
+    return nil
+  end
+  local entry = defaults.byMapID[mapID]
+  if type(entry) ~= "table" or #entry == 0 then
+    return nil
+  end
+  return entry
+end
+
+-- Iterates scenario criteria to find:
+--   forcesPercent: quantity/totalQuantity of the criteria with totalQuantity > 1
+--   nextBossIndex: 1-based index of the first not-completed boss criteria
+--                  (totalQuantity == 1). Boss criteria are ordered by bossOrder.
+-- Returns forcesPercent (number or nil), nextBossIndex (number or nil).
+local function ResolveScenarioProgress()
+  local api = rawget(_G, "C_ScenarioInfo")
+  if type(api) ~= "table" then
+    return nil, nil
+  end
+  local getStep = api.GetStepInfo
+  local getCriteria = api.GetCriteriaInfo
+  if type(getStep) ~= "function" or type(getCriteria) ~= "function" then
+    return nil, nil
+  end
+
+  local okStep, stepInfo = pcall(getStep)
+  if not okStep or type(stepInfo) ~= "table" then
+    return nil, nil
+  end
+  local numCriteria = tonumber(stepInfo.numCriteria)
+  if not numCriteria or numCriteria <= 0 or IsSecretValue(numCriteria) then
+    return nil, nil
+  end
+
+  local forcesPercent = nil
+  local nextBossIndex = nil
+  local bossIndexCounter = 0
+
+  for i = 1, numCriteria do
+    local okCrit, crit = pcall(getCriteria, i)
+    if okCrit and type(crit) == "table" then
+      local total = tonumber(crit.totalQuantity)
+      local qty = tonumber(crit.quantity)
+      local completed = crit.completed == true
+      if total and qty and not IsSecretValue(total) and not IsSecretValue(qty) then
+        if total > 1 then
+          if total > 0 then
+            forcesPercent = (qty / total) * 100
+            if forcesPercent > 100 then
+              forcesPercent = 100
+            end
+          end
+        else
+          bossIndexCounter = bossIndexCounter + 1
+          if nextBossIndex == nil and not completed then
+            nextBossIndex = bossIndexCounter
+          end
+        end
+      end
+    end
+  end
+
+  return forcesPercent, nextBossIndex
+end
+
+-- Returns the % points still needed until either:
+--   mode "next": the next boss's cumulative target
+--   mode "end":  the final 100 %-forces target (end-boss threshold)
+-- Returns nil if we cannot determine it (no active map, no targets for
+-- "next" mode, all bosses already defeated, scenario API returned nothing).
+local function ResolveBossRemainder(mode)
+  mode = NormalizeBossTargetMode(mode)
+  if mode == "off" then
+    return nil
+  end
+  local mapID = GetActiveChallengeMapID()
+  if not mapID then
+    return nil
+  end
+  local forcesPercent, nextBossIndex = ResolveScenarioProgress()
+  if not forcesPercent then
+    return nil
+  end
+
+  if mode == "end" then
+    local remainder = 100 - forcesPercent
+    if remainder < 0 then
+      remainder = 0
+    end
+    return remainder
+  end
+
+  -- mode == "next"
+  if not nextBossIndex then
+    return nil
+  end
+  local targets = ResolveBossTargets(mapID)
+  if not targets then
+    return nil
+  end
+  local target = tonumber(targets[nextBossIndex])
+  if not target then
+    return nil
+  end
+  local remainder = target - forcesPercent
+  if remainder < 0 then
+    remainder = 0
+  end
+  return remainder
+end
+
+local function IsEligibleUnit(unit)
+  local unitExists = rawget(_G, "UnitExists")
+  if type(unitExists) ~= "function" then
+    return false
+  end
+  local okExists, exists = pcall(unitExists, unit)
+  if not okExists or exists ~= true then
+    return false
+  end
+
+  local unitGUID = rawget(_G, "UnitGUID")
+  if type(unitGUID) ~= "function" then
+    return false
+  end
+  local okGuid, guid = pcall(unitGUID, unit)
+  if not okGuid or type(guid) ~= "string" or guid == "" or IsSecretValue(guid) then
+    return false
+  end
+
+  local unitReaction = rawget(_G, "UnitReaction")
+  if type(unitReaction) == "function" then
+    local okReact, reaction = pcall(unitReaction, unit, "player")
+    if okReact and not IsSecretValue(reaction) and type(reaction) == "number" and reaction > 4 then
+      return false
+    end
+  end
+
+  return true
+end
+
+local function BuildText(percentString, bossRemainder)
+  local parts = {}
+
+  if
+    format.showPercent
+    and type(percentString) == "string"
+    and percentString ~= ""
+    and not IsSecretValue(percentString)
+  then
+    parts[#parts + 1] = percentString .. "%"
+  end
+
+  if format.bossTargetMode ~= "off" and type(bossRemainder) == "number" and bossRemainder > 0 then
+    parts[#parts + 1] = string.format("+%.0f%%", bossRemainder)
+  end
+
+  if #parts == 0 then
+    return nil
+  end
+  return table.concat(parts, " | ")
+end
+
+local function CreateOrGetFrame(unit)
+  local frame = frames[unit]
+  if frame then
+    return frame
+  end
+  local createFrame = rawget(_G, "CreateFrame")
+  if type(createFrame) ~= "function" then
+    return nil
+  end
+  local uiParent = rawget(_G, "UIParent")
+  local ok, f = pcall(createFrame, "Frame", nil, uiParent)
+  if not ok or type(f) ~= "table" then
+    return nil
+  end
+  f:SetSize(80, 20)
+  if f.SetFrameStrata then
+    f:SetFrameStrata("MEDIUM")
+  end
+  if f.SetIgnoreParentAlpha then
+    f:SetIgnoreParentAlpha(true)
+  end
+  f.text = f:CreateFontString(nil, "OVERLAY", "GameFontNormalOutline")
+  f.text:SetPoint("CENTER")
+  if f.text.SetTextColor then
+    f.text:SetTextColor(1, 1, 1, 1)
+  end
+  frames[unit] = f
+  return f
+end
+
+local function ApplyPosition(frame, nameplate)
+  if not frame or not nameplate then
+    return
+  end
+  frame:ClearAllPoints()
+  local pos = appearance.position or "RIGHT"
+  local xo = appearance.xOffset or 0
+  local yo = appearance.yOffset or 0
+  if pos == "RIGHT" then
+    frame:SetPoint("LEFT", nameplate, "RIGHT", xo, yo)
+  elseif pos == "LEFT" then
+    frame:SetPoint("RIGHT", nameplate, "LEFT", xo, yo)
+  elseif pos == "TOP" then
+    frame:SetPoint("BOTTOM", nameplate, "TOP", xo, yo)
+  elseif pos == "BOTTOM" then
+    frame:SetPoint("TOP", nameplate, "BOTTOM", xo, yo)
+  else
+    frame:SetPoint("CENTER", nameplate, "CENTER", xo, yo)
+  end
+end
+
+local function UpdateNameplate(unit)
+  local frame = frames[unit]
+
+  if enabled == false or not HasProgressAPI() or not HasNamePlateAPI() then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  if not IsChallengeModeActive() then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  if not IsEligibleUnit(unit) then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  local api = rawget(_G, "C_ScenarioInfo")
+  local _, _, percentString = SafeCall(api.GetUnitCriteriaProgressValues, unit)
+  if IsSecretValue(percentString) then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  local bossRemainder = nil
+  if format.bossTargetMode ~= "off" then
+    bossRemainder = ResolveBossRemainder(format.bossTargetMode)
+  end
+
+  local text = BuildText(percentString, bossRemainder)
+  if not text then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  local nameplate = GetNameplate(unit)
+  if not nameplate then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  frame = CreateOrGetFrame(unit)
+  if not frame then
+    return
+  end
+
+  ApplyPosition(frame, nameplate)
+  if frame.text and frame.text.SetText then
+    frame.text:SetText(text)
+  end
+  frame:Show()
+end
+
+local function HideAll()
+  for unit, frame in pairs(frames) do
+    if frame and frame.Hide then
+      frame:Hide()
+    end
+    frames[unit] = nil
+  end
+end
+
+local function RefreshAll()
+  for i = 1, 40 do
+    UpdateNameplate("nameplate" .. i)
+  end
+end
+
+local function OnEvent(_, event, arg1)
+  if event == "NAME_PLATE_UNIT_ADDED" and type(arg1) == "string" then
+    UpdateNameplate(arg1)
+  elseif event == "NAME_PLATE_UNIT_REMOVED" and type(arg1) == "string" then
+    local frame = frames[arg1]
+    if frame then
+      frame:Hide()
+      frames[arg1] = nil
+    end
+  else
+    RefreshAll()
+  end
+end
+
+local function EnsureEventFrame()
+  if eventFrame then
+    return eventFrame
+  end
+  local createFrame = rawget(_G, "CreateFrame")
+  if type(createFrame) ~= "function" then
+    return nil
+  end
+  local ok, f = pcall(createFrame, "Frame")
+  if not ok or type(f) ~= "table" then
+    return nil
+  end
+  f:SetScript("OnEvent", OnEvent)
+  eventFrame = f
+  return f
+end
+
+local function RegisterEvents()
+  local f = EnsureEventFrame()
+  if not f or not f.RegisterEvent then
+    return false
+  end
+  f:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+  f:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
+  f:RegisterEvent("CHALLENGE_MODE_START")
+  f:RegisterEvent("PLAYER_ENTERING_WORLD")
+  f:RegisterEvent("SCENARIO_UPDATE")
+  return true
+end
+
+local function UnregisterEvents()
+  if not eventFrame or not eventFrame.UnregisterAllEvents then
+    return
+  end
+  eventFrame:UnregisterAllEvents()
+end
+
+function MobNameplate.SetEnabled(flag)
+  local next = flag ~= false
+  if next == enabled and registered then
+    return
+  end
+  enabled = next
+  if enabled then
+    if RegisterEvents() then
+      registered = true
+      RefreshAll()
+    end
+  else
+    UnregisterEvents()
+    registered = false
+    HideAll()
+  end
+end
+
+function MobNameplate.SetFormat(opts)
+  if type(opts) ~= "table" then
+    return
+  end
+  if type(opts.showPercent) == "boolean" then
+    format.showPercent = opts.showPercent
+  end
+  if type(opts.bossTargetMode) == "string" then
+    format.bossTargetMode = NormalizeBossTargetMode(opts.bossTargetMode)
+  end
+  if enabled then
+    RefreshAll()
+  end
+end
+
+function MobNameplate.SetAppearance(opts)
+  if type(opts) ~= "table" then
+    return
+  end
+  if type(opts.fontSize) == "number" and opts.fontSize > 0 then
+    appearance.fontSize = opts.fontSize
+  end
+  if type(opts.position) == "string" then
+    appearance.position = opts.position
+  end
+  if type(opts.xOffset) == "number" then
+    appearance.xOffset = opts.xOffset
+  end
+  if type(opts.yOffset) == "number" then
+    appearance.yOffset = opts.yOffset
+  end
+  if enabled then
+    RefreshAll()
+  end
+end
+
+function MobNameplate.Register()
+  if registered then
+    return true
+  end
+  if not HasProgressAPI() or not HasNamePlateAPI() then
+    return false
+  end
+  if not enabled then
+    return true
+  end
+  if RegisterEvents() then
+    registered = true
+    RefreshAll()
+    return true
+  end
+  return false
+end
+
+function MobNameplate._Test_GetFrames()
+  return frames
+end
+
+function MobNameplate._Test_GetState()
+  return {
+    enabled = enabled,
+    registered = registered,
+    format = { showPercent = format.showPercent, bossTargetMode = format.bossTargetMode },
+    appearance = {
+      fontSize = appearance.fontSize,
+      position = appearance.position,
+      xOffset = appearance.xOffset,
+      yOffset = appearance.yOffset,
+    },
+  }
+end
+
+function MobNameplate._Test_UpdateNameplate(unit)
+  UpdateNameplate(unit)
+end
+
+function MobNameplate._Test_Reset()
+  enabled = false
+  registered = false
+  if eventFrame and eventFrame.UnregisterAllEvents then
+    eventFrame:UnregisterAllEvents()
+  end
+  for unit, frame in pairs(frames) do
+    if frame and frame.Hide then
+      frame:Hide()
+    end
+    frames[unit] = nil
+  end
+  format.showPercent = true
+  format.bossTargetMode = "off"
+  appearance.fontSize = 12
+  appearance.position = "RIGHT"
+  appearance.xOffset = 0
+  appearance.yOffset = 0
+end
+
+return MobNameplate

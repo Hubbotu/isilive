@@ -44,6 +44,7 @@ local FILE_PATHS = {
   ["isiLive_roster.lua"] = "ui/isiLive_roster.lua",
   ["isiLive_roster_tooltip.lua"] = "ui/isiLive_roster_tooltip.lua",
   ["isiLive_mob_tooltip.lua"] = "ui/isiLive_mob_tooltip.lua",
+  ["isiLive_mob_nameplate.lua"] = "ui/isiLive_mob_nameplate.lua",
   ["isiLive_roster_layout.lua"] = "ui/isiLive_roster_layout.lua",
   ["isiLive_roster_panel.lua"] = "ui/isiLive_roster_panel.lua",
   ["isiLive_roster_panel_helpers.lua"] = "ui/isiLive_roster_panel_helpers.lua",

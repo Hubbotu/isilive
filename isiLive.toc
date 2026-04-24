@@ -28,6 +28,7 @@ core/isiLive_runtime_setup.lua
 factory/isiLive_controller_init.lua
 game/isiLive_season_data.lua
 data/isiLive_mplus_forces.lua
+data/isiLive_mplus_boss_targets.lua
 game/isiLive_lfg_detect.lua
 ui/isiLive_ui_common.lua
 game/isiLive_teleport.lua
@@ -54,6 +55,7 @@ ui/isiLive_roster.lua
 ui/isiLive_roster_tooltip.lua
 ui/isiLive_lfg_flags.lua
 ui/isiLive_mob_tooltip.lua
+ui/isiLive_mob_nameplate.lua
 ui/isiLive_roster_layout.lua
 game/isiLive_mplus_timer.lua
 game/isiLive_killtrack.lua

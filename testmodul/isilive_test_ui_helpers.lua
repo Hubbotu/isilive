@@ -27,6 +27,9 @@ local function CreateFontStringStub(fontObject)
     SetPoint = function(self, point, relativeTo, relativePoint, x, y)
       self._point = { point, relativeTo, relativePoint, x or 0, y or 0 }
     end,
+    ClearAllPoints = function(self)
+      self._point = nil
+    end,
     GetPoint = function(self)
       local p = self._point
       if not p then

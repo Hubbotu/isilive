@@ -26,6 +26,20 @@ local function ResolveAutoOpenMainFrameOnKeyEndEnabled(dbRef)
   return not (type(dbRef) == "table" and dbRef.autoOpenMainFrameOnKeyEnd == false)
 end
 
+local function ResolveMobNameplateBossTargetMode(dbRef)
+  if type(dbRef) == "table" then
+    local mode = dbRef.mobNameplateBossTargetMode
+    if mode == "off" or mode == "next" or mode == "end" then
+      return mode
+    end
+    -- Legacy boolean: showBossTarget == true -> "next", else "off".
+    if dbRef.mobNameplateShowBossTarget == true then
+      return "next"
+    end
+  end
+  return "off"
+end
+
 local function ResolveMainFramePositionLockEnabled(dbRef)
   return not (type(dbRef) == "table" and dbRef.lockMainFramePosition == false)
 end
@@ -253,6 +267,31 @@ local function FinalizeFactorySettings(ctx)
           mobTooltip.SetEnabled(enabled)
         end
       end,
+      onMobNameplateChange = function()
+        local mobNameplate = ctx.addonTable and ctx.addonTable.MobNameplate
+        if type(mobNameplate) ~= "table" then
+          return
+        end
+        local db = rawget(_G, "IsiLiveDB") or {}
+        if type(mobNameplate.SetFormat) == "function" then
+          mobNameplate.SetFormat({
+            showPercent = db.mobNameplateShowPercent ~= false,
+            showCount = db.mobNameplateShowCount == true,
+            showTotal = db.mobNameplateShowTotal == true,
+          })
+        end
+        if type(mobNameplate.SetAppearance) == "function" then
+          mobNameplate.SetAppearance({
+            fontSize = tonumber(db.mobNameplateFontSize) or 12,
+            position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
+            xOffset = tonumber(db.mobNameplateXOffset) or 0,
+            yOffset = tonumber(db.mobNameplateYOffset) or 0,
+          })
+        end
+        if type(mobNameplate.SetEnabled) == "function" then
+          mobNameplate.SetEnabled(db.mobNameplateEnabled == true)
+        end
+      end,
       onResetDB = function()
         ctx.resetDB()
       end,
@@ -260,6 +299,19 @@ local function FinalizeFactorySettings(ctx)
 
     -- Apply initial DB values for flag features.
     local db = IsiLiveDB or {}
+
+    -- One-time M+ forces display-mode migration: if the user never chose a
+    -- mode (both legacy keys are nil), persist "nameplate" as the default.
+    -- After this write, all later reads can safely compare against true/false
+    -- and will stay in sync with the settings-panel selector.
+    if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
+      db.mobNameplateEnabled = true
+      db.mplusForcesEstimate = false
+      if not IsiLiveDB then
+        IsiLiveDB = db
+      end
+    end
+
     local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
     if type(lfgFlags) == "table" and type(lfgFlags.SetEnabled) == "function" then
       lfgFlags.SetEnabled(db.lfgFlagsEnabled ~= false)
@@ -274,7 +326,31 @@ local function FinalizeFactorySettings(ctx)
         mobTooltip.Register()
       end
       if type(mobTooltip.SetEnabled) == "function" then
-        mobTooltip.SetEnabled(db.mplusForcesEstimate ~= false)
+        mobTooltip.SetEnabled(db.mplusForcesEstimate == true)
+      end
+    end
+
+    local mobNameplate = ctx.addonTable and ctx.addonTable.MobNameplate
+    if type(mobNameplate) == "table" then
+      if type(mobNameplate.SetFormat) == "function" then
+        mobNameplate.SetFormat({
+          showPercent = db.mobNameplateShowPercent ~= false,
+          bossTargetMode = ResolveMobNameplateBossTargetMode(db),
+        })
+      end
+      if type(mobNameplate.SetAppearance) == "function" then
+        mobNameplate.SetAppearance({
+          fontSize = tonumber(db.mobNameplateFontSize) or 12,
+          position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
+          xOffset = tonumber(db.mobNameplateXOffset) or 0,
+          yOffset = tonumber(db.mobNameplateYOffset) or 0,
+        })
+      end
+      if type(mobNameplate.Register) == "function" then
+        mobNameplate.Register()
+      end
+      if type(mobNameplate.SetEnabled) == "function" then
+        mobNameplate.SetEnabled(db.mobNameplateEnabled == true)
       end
     end
   end
