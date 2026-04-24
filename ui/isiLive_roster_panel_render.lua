@@ -337,7 +337,7 @@ local function HasReadyCheckHoldInRoster(state, roster)
   return false
 end
 
-local function SetKickCellText(cell, info)
+local function SetKickCellText(cell, info, getL)
   if not cell then
     return
   end
@@ -355,7 +355,9 @@ local function SetKickCellText(cell, info)
     return
   end
   if info.syncKickOnCooldown == false then
-    cell:SetText("|cff44ff44ready|r")
+    local L = type(getL) == "function" and getL() or {}
+    local readyText = type(L.SYNC_KICK_READY) == "string" and L.SYNC_KICK_READY or "ready"
+    cell:SetText("|cff44ff44" .. readyText .. "|r")
     return
   end
   cell:SetText("|cff666666-|r")
@@ -597,7 +599,7 @@ local function RenderRosterImpl(state, roster)
       if type(applyKnownKeyToRosterEntry) == "function" then
         applyKnownKeyToRosterEntry(info)
       end
-      SetKickCellText(row.kick, info)
+      SetKickCellText(row.kick, info, state.getL)
     end
     row.unit = entry.unit
     row.tooltipName = info and info.name or nil

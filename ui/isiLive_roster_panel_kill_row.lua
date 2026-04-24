@@ -29,7 +29,7 @@ local function CreateKillTrackRow(mainFrame)
   label:SetPoint("LEFT", box, "LEFT", 6, 0)
   label:SetWidth(84)
   label:SetJustifyH("LEFT")
-  label:SetText("|cff888888M+Killtracker|r")
+  label:SetText("|cff888888M+Killtracker|r") -- i18n-ok: brand name, kept across all locales
   ApplyFontStringSize(label, CD_TRACKER_FONT_SIZE)
 
   local pullText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")

@@ -66,6 +66,10 @@ jobs:
         run: |
           lua tools/check_locale_drift.lua
 
+      - name: Hardcoded Strings Check
+        run: |
+          lua tools/check_hardcoded_strings.lua
+
       - name: M+ Forces DB Lifetime
         run: |
           lua tools/check_mplus_db_lifetime.lua

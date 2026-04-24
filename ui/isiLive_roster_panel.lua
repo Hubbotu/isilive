@@ -800,7 +800,7 @@ function RosterPanel.CreateController(opts)
     ui.rioHeader:SetText(L.COL_RIO)
     ui.dpsHeader:SetText(L.COL_DPS)
     if ui.kickHeader then
-      ui.kickHeader:SetText("Kick")
+      ui.kickHeader:SetText(L.COL_KICK or "Kick")
     end
     ui.leadOptionsHeader:SetText(L.LEAD_OPTIONS)
     ui.mplusManagementHeader:SetText(L.MPLUS_MANAGEMENT)

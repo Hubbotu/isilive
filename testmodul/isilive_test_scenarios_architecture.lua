@@ -777,8 +777,8 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
     AssertContains(
       Assert,
       rosterPanelRenderContent,
-      'cell:SetText("|cff44ff44ready|r")',
-      "RosterPanel render module must render the kick-ready state in green"
+      'cell:SetText("|cff44ff44" .. readyText .. "|r")',
+      "RosterPanel render module must render the kick-ready state in green using the localized SYNC_KICK_READY label"
     )
   end)
 end
@@ -851,6 +851,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       "lua tools/check_mplus_db_lifetime.lua",
       "workflow must gate releases on the M+ forces DB lifetime"
     )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_hardcoded_strings.lua",
+      "workflow must gate releases on hardcoded user-visible strings in ui/ and logic/"
+    )
     AssertContains(Assert, workflowContent, "Lua Syntax Check", "workflow must keep the syntax validation step")
   end)
 
@@ -906,6 +912,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       localPreflightContent,
       'Invoke-CheckedCommand "M+ Forces DB Lifetime" "lua tools/check_mplus_db_lifetime.lua"',
       "local preflight must gate releases on the M+ forces DB lifetime"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Hardcoded Strings Check" "lua tools/check_hardcoded_strings.lua"',
+      "local preflight must gate releases on hardcoded user-visible strings"
     )
     AssertContains(
       Assert,
