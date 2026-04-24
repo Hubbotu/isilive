@@ -953,6 +953,7 @@ local function RegisterLFGDetectResetTests(test, ctx)
 
       fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
 
+      capturedBuilder = Assert.NotNil(capturedBuilder, "LFG trace logger must receive a lazy message builder")
       Assert.Equal(type(capturedBuilder), "function", "LFG trace logger must receive a lazy message builder")
       Assert.True(
         (capturedBuilder() or ""):find("%[LFG%] queue_listing_detected mapID=557 lastQueueMapID=nil") ~= nil,

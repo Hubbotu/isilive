@@ -386,7 +386,7 @@ local function RegisterNativeWorldMarkerButtonTests(test, Assert, WithGlobals, L
         break
       end
     end
-    Assert.NotNil(readyCheckButton, "Readycheck button should exist")
+    readyCheckButton = Assert.NotNil(readyCheckButton, "Readycheck button should exist")
     ---@diagnostic disable-next-line: undefined-field
     Assert.Equal(readyCheckButton.pointX, -145, "M+Managment buttons should align with the expanded management column")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("marker1"), 1, "Blue Square uses world marker 1")
@@ -503,8 +503,8 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
     Assert.NotNil(horizontalCollapseButton, "Horizontal collapse button should exist")
     local titleFontString = FindFontStringByPoint(createdFontStrings, "TOPLEFT", 10, -10)
     local versionFontString = FindFontStringByPoint(createdFontStrings, "LEFT", 5, 0)
-    Assert.NotNil(titleFontString, "Title font string should exist")
-    Assert.NotNil(versionFontString, "Version font string should exist")
+    titleFontString = Assert.NotNil(titleFontString, "Title font string should exist")
+    versionFontString = Assert.NotNil(versionFontString, "Version font string should exist")
     ---@diagnostic disable: undefined-field
     Assert.Equal(
       collapseButton._collapseButtonLabel,
@@ -541,7 +541,7 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
         break
       end
     end
-    Assert.NotNil(readyCheckButton, "Readycheck button should exist")
+    readyCheckButton = Assert.NotNil(readyCheckButton, "Readycheck button should exist")
     Assert.Equal(buttonX, -37, "M+Marker buttons should move into the right mini-mode tool column")
     Assert.Equal(readyCheckButton.pointX, -70, "M+Managment buttons should stay fully inside the mini-mode frame")
     Assert.True(
@@ -660,11 +660,11 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
     local m2Button = FindFrameByProperty(createdFrames, "_collapseLayoutMode", "compact_main_horizontal")
     local expandedButton = FindFrameByProperty(createdFrames, "_collapseLayoutMode", "expanded")
     local titleVersion = FindFontStringByPoint(createdFontStrings, "LEFT", 5, 0)
-    Assert.NotNil(collapseButton, "Vertical collapse button should exist")
-    Assert.NotNil(horizontalButton, "Horizontal collapse button should exist")
-    Assert.NotNil(m2Button, "M2 mode button should exist")
+    collapseButton = Assert.NotNil(collapseButton, "Vertical collapse button should exist")
+    horizontalButton = Assert.NotNil(horizontalButton, "Horizontal collapse button should exist")
+    m2Button = Assert.NotNil(m2Button, "M2 mode button should exist")
     Assert.Nil(expandedButton, "Expanded mode button should stay hidden from the title bar")
-    Assert.NotNil(titleVersion, "Title version should exist")
+    titleVersion = Assert.NotNil(titleVersion, "Title version should exist")
     Assert.Equal(horizontalButton._collapseButtonLabel, "H", "H mode button has static H label in expanded mode")
 
     local helperButtons = {}

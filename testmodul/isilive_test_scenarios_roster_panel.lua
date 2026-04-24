@@ -1003,9 +1003,9 @@ local function RegisterRosterPanelLeaderInteractionTests(test, Assert, WithGloba
         end
       end
 
-      Assert.NotNil(readyCheckButton, "ready-check button should exist")
-      Assert.NotNil(countdownButton, "countdown button should exist")
-      Assert.NotNil(countdownCancelButton, "countdown-cancel button should exist")
+      readyCheckButton = Assert.NotNil(readyCheckButton, "ready-check button should exist")
+      countdownButton = Assert.NotNil(countdownButton, "countdown button should exist")
+      countdownCancelButton = Assert.NotNil(countdownCancelButton, "countdown-cancel button should exist")
       ---@diagnostic disable: undefined-field
       Assert.False(readyCheckButton.enabled, "ready-check button should be disabled for non-leaders")
       Assert.False(countdownButton.enabled, "countdown button should be disabled for non-leaders")
@@ -1180,7 +1180,7 @@ local function RegisterRosterPanelRowInteractionTests(test, Assert, WithGlobals,
       controller.RenderRoster({})
 
       local rowFrame = FindInteractiveRosterRow(createdFrames)
-      Assert.NotNil(rowFrame, "interactive roster row should exist")
+      rowFrame = Assert.NotNil(rowFrame, "interactive roster row should exist")
 
       rowFrame.OnMouseUp(nil, "LeftButton")
       Assert.Equal(targetCalls, 0, "left-click must not invoke protected targeting from the roster row")

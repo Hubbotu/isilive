@@ -220,6 +220,7 @@ return function(test, ctx)
         "Akademie von Algeth'ar",
         "controller init must pass getDungeonName through to the roster panel controller"
       )
+      ---@diagnostic disable-next-line: undefined-field
       local mapID, level = rosterOpts.getOwnedKeystoneSnapshot()
       Assert.Equal(
         mapID,

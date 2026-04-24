@@ -422,7 +422,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
       Assert.NotNil(centerNotice.closeButton, "center notice should expose close button")
 
       local onClick = centerNotice.closeButton._scripts and centerNotice.closeButton._scripts.OnClick or nil
-      Assert.NotNil(onClick, "center notice close button should define OnClick handler")
+      onClick = Assert.NotNil(onClick, "center notice close button should define OnClick handler")
       onClick(centerNotice.closeButton, "LeftButton")
 
       Assert.False(centerNotice.frame:IsShown(), "center notice close button should hide notice frame")
@@ -454,7 +454,7 @@ local function RegisterCenterNoticeVisibilityTests(test, Assert, WithGlobals, Lo
 
       inCombat = true
       local onClick = centerNotice.closeButton._scripts and centerNotice.closeButton._scripts.OnClick or nil
-      Assert.NotNil(onClick, "center notice close button should define OnClick handler")
+      onClick = Assert.NotNil(onClick, "center notice close button should define OnClick handler")
       onClick(centerNotice.closeButton, "LeftButton")
 
       Assert.False(centerNotice.frame:IsShown(), "center notice close in combat should hide notice frame immediately")
@@ -664,7 +664,7 @@ RegisterCenterNoticeTeleportTooltipTests = function(test, Assert, WithGlobals, L
       )
       Assert.Equal(playedChannel, "SFX", "center notice should use the SFX channel for portal sounds")
       local onEnter = centerNotice.teleportButton._scripts and centerNotice.teleportButton._scripts.OnEnter or nil
-      Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
+      onEnter = Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
       onEnter(centerNotice.teleportButton)
 
       local privateTooltip = nil
@@ -765,7 +765,7 @@ RegisterCenterNoticeTeleportTooltipTests = function(test, Assert, WithGlobals, L
 
       centerNotice.ConfigureTeleportButton("Tazavesh: Straßen der Wunder", 999)
       local onEnter = centerNotice.teleportButton._scripts and centerNotice.teleportButton._scripts.OnEnter or nil
-      Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
+      onEnter = Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
       onEnter(centerNotice.teleportButton)
 
       local privateTooltip = nil
@@ -816,8 +816,8 @@ local function RegisterCenterNoticeDragResetTest(test, Assert, WithGlobals, Load
 
       local onDragStart = centerNotice.frame._scripts and centerNotice.frame._scripts.OnDragStart or nil
       local onDragStop = centerNotice.frame._scripts and centerNotice.frame._scripts.OnDragStop or nil
-      Assert.NotNil(onDragStart, "center notice should define an OnDragStart handler")
-      Assert.NotNil(onDragStop, "center notice should define an OnDragStop handler")
+      onDragStart = Assert.NotNil(onDragStart, "center notice should define an OnDragStart handler")
+      onDragStop = Assert.NotNil(onDragStop, "center notice should define an OnDragStop handler")
 
       centerNotice.Show("Drag test", 20, nil, nil, {})
       centerNotice.frame:SetPoint("CENTER", UIParent, "CENTER", 12, -34)

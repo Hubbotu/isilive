@@ -90,8 +90,9 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
         end
       end
 
-      Assert.NotNil(resetUiButton, "settings panel should create a resetui action button in the display section")
-      Assert.NotNil(resetDbButton, "settings panel should create a reset all settings button")
+      resetUiButton =
+        Assert.NotNil(resetUiButton, "settings panel should create a resetui action button in the display section")
+      resetDbButton = Assert.NotNil(resetDbButton, "settings panel should create a reset all settings button")
       ---@diagnostic disable: undefined-field
       Assert.Equal(
         resetUiButton.label:GetText(),
@@ -132,10 +133,10 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
       local onClickResetDb = resetDbButton._scripts and resetDbButton._scripts.OnClick or nil
       local onEnterResetDb = resetDbButton._scripts and resetDbButton._scripts.OnEnter or nil
       local onLeaveResetDb = resetDbButton._scripts and resetDbButton._scripts.OnLeave or nil
-      Assert.NotNil(onClickResetUi, "resetui button should define OnClick")
-      Assert.NotNil(onClickResetDb, "reset all settings button should define OnClick")
-      Assert.NotNil(onEnterResetDb, "reset all settings button should define OnEnter")
-      Assert.NotNil(onLeaveResetDb, "reset all settings button should define OnLeave")
+      onClickResetUi = Assert.NotNil(onClickResetUi, "resetui button should define OnClick")
+      onClickResetDb = Assert.NotNil(onClickResetDb, "reset all settings button should define OnClick")
+      onEnterResetDb = Assert.NotNil(onEnterResetDb, "reset all settings button should define OnEnter")
+      onLeaveResetDb = Assert.NotNil(onLeaveResetDb, "reset all settings button should define OnLeave")
 
       onEnterResetDb(resetDbButton)
       Assert.NotNil(
@@ -242,7 +243,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
         end
       end
 
-      Assert.NotNil(slider, "settings panel should create a background alpha slider")
+      slider = Assert.NotNil(slider, "settings panel should create a background alpha slider")
       ---@diagnostic disable: undefined-field
       Assert.Equal(slider:GetValue(), 0.50, "slider should initialize with a 50 percent default")
 
@@ -252,7 +253,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.Equal(bgAlphaChanges, 0, "refresh should not fire background alpha change callbacks")
 
       local onValueChanged = slider._scripts and slider._scripts.OnValueChanged or nil
-      Assert.NotNil(onValueChanged, "slider should define OnValueChanged")
+      onValueChanged = Assert.NotNil(onValueChanged, "slider should define OnValueChanged")
       onValueChanged(slider, 0.70)
       ---@diagnostic enable: undefined-field
 
@@ -341,8 +342,8 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       end
 
       Assert.Nil(expandedButton, "settings panel should hide the expanded default-layout option")
-      Assert.NotNil(m2Button, "settings panel should create an M2 default-layout button")
-      Assert.NotNil(lastUsedButton, "settings panel should create a last-used default-layout button")
+      m2Button = Assert.NotNil(m2Button, "settings panel should create an M2 default-layout button")
+      lastUsedButton = Assert.NotNil(lastUsedButton, "settings panel should create a last-used default-layout button")
       ---@diagnostic disable: undefined-field
       Assert.Equal(
         m2Button._backdropColor[4],
@@ -356,8 +357,8 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       )
       local onClickM2 = (m2Button._scripts and m2Button._scripts.OnClick) or nil
       local onClickLast = (lastUsedButton._scripts and lastUsedButton._scripts.OnClick) or nil
-      Assert.NotNil(onClickM2, "M2 button should define OnClick")
-      Assert.NotNil(onClickLast, "Last Used button should define OnClick")
+      onClickM2 = Assert.NotNil(onClickM2, "M2 button should define OnClick")
+      onClickLast = Assert.NotNil(onClickLast, "Last Used button should define OnClick")
 
       onClickM2(m2Button, "LeftButton")
       onClickLast(lastUsedButton, "LeftButton")
@@ -450,7 +451,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       end
 
       Assert.Nil(expandedButton, "settings panel should not expose the expanded layout option")
-      Assert.NotNil(m2Button, "settings panel should still expose the M2 layout option")
+      m2Button = Assert.NotNil(m2Button, "settings panel should still expose the M2 layout option")
       ---@diagnostic disable: undefined-field
       Assert.Equal(
         m2Button._backdropColor[4],
@@ -459,7 +460,7 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       )
 
       local onClickM2 = (m2Button._scripts and m2Button._scripts.OnClick) or nil
-      Assert.NotNil(onClickM2, "M2 button should define OnClick")
+      onClickM2 = Assert.NotNil(onClickM2, "M2 button should define OnClick")
       onClickM2(m2Button, "LeftButton")
       ---@diagnostic enable: undefined-field
 
@@ -541,7 +542,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(autoCloseCheck, "settings panel should create an auto-close checkbox")
+      autoCloseCheck = Assert.NotNil(autoCloseCheck, "settings panel should create an auto-close checkbox")
       ---@diagnostic disable: undefined-field
       Assert.False(autoCloseCheck:GetChecked(), "auto-close should default to disabled when no saved value exists")
 
@@ -617,7 +618,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(combatFadeCheck, "settings panel should create a combat fade checkbox")
+      combatFadeCheck = Assert.NotNil(combatFadeCheck, "settings panel should create a combat fade checkbox")
       ---@diagnostic disable: undefined-field
       Assert.False(combatFadeCheck:GetChecked(), "combat fade should default to disabled when no saved value exists")
 
@@ -627,7 +628,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
 
       combatFadeCheck:SetChecked(true)
       local onClick = combatFadeCheck._scripts and combatFadeCheck._scripts.OnClick or nil
-      Assert.NotNil(onClick, "combat fade checkbox should define OnClick")
+      onClick = Assert.NotNil(onClick, "combat fade checkbox should define OnClick")
       onClick(combatFadeCheck)
       ---@diagnostic enable: undefined-field
 
@@ -714,16 +715,16 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(startupCheck, "settings panel should create a startup auto-show checkbox")
-      Assert.NotNil(keyEndCheck, "settings panel should create a key-end auto-open checkbox")
+      startupCheck = Assert.NotNil(startupCheck, "settings panel should create a startup auto-show checkbox")
+      keyEndCheck = Assert.NotNil(keyEndCheck, "settings panel should create a key-end auto-open checkbox")
       ---@diagnostic disable: undefined-field
       Assert.True(startupCheck:GetChecked(), "startup auto-show should default to enabled")
       Assert.True(keyEndCheck:GetChecked(), "key-end auto-open should default to enabled")
 
       local onClickStartup = startupCheck._scripts and startupCheck._scripts.OnClick or nil
       local onClickKeyEnd = keyEndCheck._scripts and keyEndCheck._scripts.OnClick or nil
-      Assert.NotNil(onClickStartup, "startup checkbox should define OnClick")
-      Assert.NotNil(onClickKeyEnd, "key-end checkbox should define OnClick")
+      onClickStartup = Assert.NotNil(onClickStartup, "startup checkbox should define OnClick")
+      onClickKeyEnd = Assert.NotNil(onClickKeyEnd, "key-end checkbox should define OnClick")
 
       startupCheck:SetChecked(false)
       onClickStartup(startupCheck)
@@ -808,12 +809,12 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(guideCheck, "settings panel should create a column-guides checkbox")
+      guideCheck = Assert.NotNil(guideCheck, "settings panel should create a column-guides checkbox")
       ---@diagnostic disable: undefined-field
       Assert.False(guideCheck:GetChecked(), "column guides should default to disabled")
 
       local onClick = guideCheck._scripts and guideCheck._scripts.OnClick or nil
-      Assert.NotNil(onClick, "column guides checkbox should define OnClick")
+      onClick = Assert.NotNil(onClick, "column guides checkbox should define OnClick")
 
       guideCheck:SetChecked(true)
       onClick(guideCheck)
@@ -900,7 +901,7 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(navigatorCheck, "settings panel should create a portal navigator checkbox")
+      navigatorCheck = Assert.NotNil(navigatorCheck, "settings panel should create a portal navigator checkbox")
       ---@diagnostic disable: undefined-field
       Assert.True(navigatorCheck:GetChecked(), "portal navigator should default to enabled when no saved value exists")
       Assert.Equal(
@@ -910,7 +911,7 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
       )
 
       local onClick = navigatorCheck._scripts and navigatorCheck._scripts.OnClick or nil
-      Assert.NotNil(onClick, "portal navigator checkbox should define OnClick")
+      onClick = Assert.NotNil(onClick, "portal navigator checkbox should define OnClick")
 
       navigatorCheck:SetChecked(false)
       onClick(navigatorCheck)
@@ -995,12 +996,12 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      Assert.NotNil(hideButton, "settings panel should create a Raid Off raid-behavior button")
+      hideButton = Assert.NotNil(hideButton, "settings panel should create a Raid Off raid-behavior button")
       ---@diagnostic disable: undefined-field
       Assert.Equal(hideButton._backdropColor[4], 0.25, "Raid Off should be highlighted by default")
 
       local onClickHide = hideButton._scripts and hideButton._scripts.OnClick or nil
-      Assert.NotNil(onClickHide, "raid-behavior button should define OnClick")
+      onClickHide = Assert.NotNil(onClickHide, "raid-behavior button should define OnClick")
       onClickHide(hideButton, "LeftButton")
 
       Assert.Equal(db.raidTransitionBehavior, "hide", "choosing Raid Off should persist the disabled mode")
@@ -1090,9 +1091,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       end
 
       Assert.NotNil(soundSectionHeader, "settings panel should create a dedicated sounds section")
-      Assert.NotNil(leadSoundCheck, "settings panel should create a leader-transfer sound checkbox")
-      Assert.NotNil(groupJoinSoundCheck, "settings panel should create a group-join sound checkbox")
-      Assert.NotNil(portalSoundCheck, "settings panel should create a portal sound checkbox")
+      leadSoundCheck = Assert.NotNil(leadSoundCheck, "settings panel should create a leader-transfer sound checkbox")
+      groupJoinSoundCheck =
+        Assert.NotNil(groupJoinSoundCheck, "settings panel should create a group-join sound checkbox")
+      portalSoundCheck = Assert.NotNil(portalSoundCheck, "settings panel should create a portal sound checkbox")
       ---@diagnostic disable: undefined-field
       Assert.True(leadSoundCheck:GetChecked(), "leader-transfer sound should default to enabled")
       Assert.True(groupJoinSoundCheck:GetChecked(), "group-join sound should default to enabled")
@@ -1101,9 +1103,9 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       local onClickLead = leadSoundCheck._scripts and leadSoundCheck._scripts.OnClick or nil
       local onClickJoin = groupJoinSoundCheck._scripts and groupJoinSoundCheck._scripts.OnClick or nil
       local onClickPortal = portalSoundCheck._scripts and portalSoundCheck._scripts.OnClick or nil
-      Assert.NotNil(onClickLead, "leader-transfer sound checkbox should define OnClick")
-      Assert.NotNil(onClickJoin, "group-join sound checkbox should define OnClick")
-      Assert.NotNil(onClickPortal, "portal sound checkbox should define OnClick")
+      onClickLead = Assert.NotNil(onClickLead, "leader-transfer sound checkbox should define OnClick")
+      onClickJoin = Assert.NotNil(onClickJoin, "group-join sound checkbox should define OnClick")
+      onClickPortal = Assert.NotNil(onClickPortal, "portal sound checkbox should define OnClick")
 
       leadSoundCheck:SetChecked(false)
       onClickLead(leadSoundCheck)

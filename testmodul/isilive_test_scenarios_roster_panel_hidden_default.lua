@@ -183,10 +183,10 @@ local function RegisterRosterPanelHiddenDisplayDefaultTests(test, Assert, WithGl
         end
       end
 
-      Assert.NotNil(dpsHeader, "DPS header should exist")
+      dpsHeader = Assert.NotNil(dpsHeader, "DPS header should exist")
       ---@diagnostic disable-next-line: undefined-field
       Assert.True(dpsHeader:IsShown(), "hidden settings must keep the DPS header visible")
-      Assert.NotNil(rowDps, "row DPS cell should exist")
+      rowDps = Assert.NotNil(rowDps, "row DPS cell should exist")
       ---@diagnostic disable-next-line: undefined-field
       Assert.True(rowDps:IsShown(), "hidden settings must keep row DPS values visible")
       ---@diagnostic disable-next-line: undefined-field
