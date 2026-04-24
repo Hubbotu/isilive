@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.190 (patch)
+
+- **CI: 2 weitere Actions gebumpt - der 0.9.189 v4-->v5 reichte fuer `actions/upload-artifact` und `leafo/gh-actions-luarocks` nicht aus, beide v5 sind noch auf Node 20:**
+  - Live-Annotation des 0.9.189-Workflows: `Node.js 20 actions are deprecated. The following actions are running on Node.js 20 and may not work as expected: actions/upload-artifact@v5, leafo/gh-actions-luarocks@v5`. Anders als bei `actions/checkout` und `JohnnyMorganz/stylua-action` (wo v5 die Node-24-Transition-Release ist) brauchen diese beiden einen weiteren Major-Bump:
+    - `actions/upload-artifact` v5 -> v6 (in [.github/workflows/lua-check.yml](../.github/workflows/lua-check.yml))
+    - `leafo/gh-actions-luarocks` v5 -> v6 (in beiden Workflows synchron)
+  - `leafo/gh-actions-lua@v12` und `actions/checkout@v5` und `JohnnyMorganz/stylua-action@v5` bleiben unveraendert; die Workflow-Annotation in 0.9.189 listete sie nicht mehr als Node-20-warnings auf.
+  - Falls auch v6 noch Warnings wirft: 0.9.191 wird auf v7 / v6.1 weiter bumpen. Die Bumps sind iterativ, weil ohne Live-Annotation des Runners nicht klar ist welche Major-Version die Node-24-Transition tatsaechlich enthaelt (manche Maintainer machen keine release-notes dazu).
+
 ## 2026-04-24 - Version 0.9.189 (patch)
 
 - **CI: alle GitHub-Actions auf Node.js-24-faehige Versionen gebumpt ([.github/workflows/lua-check.yml](../.github/workflows/lua-check.yml), [.github/workflows/sync-mplus-forces.yml](../.github/workflows/sync-mplus-forces.yml)):**
