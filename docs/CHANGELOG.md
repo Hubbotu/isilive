@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.184 (patch)
+
+- **Hotfix: 12.0 Secret-Value taint crash on nameplates during an active key ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - Live bug reported by user: `595x ui/isiLive_mob_nameplate.lua:230: attempt to compare local 'guid' (a secret string value, while execution tainted by 'isiLive')`. Root cause: in `IsEligibleUnit`, the `guid == ""` comparison was evaluated **before** the `IsSecretValue(guid)` check. In 12.0-Midnight the `UnitGUID(unit)` return for some protected nameplate slots comes back as a Secret-Valued string — `type()` still returns `"string"` (safe), but the `==` operator on a Secret-String taints the execution stack and raises `ADDON_ACTION_FORBIDDEN`. Same pattern already fixed in [ui/isiLive_mob_tooltip.lua](../ui/isiLive_mob_tooltip.lua) in v0.9.180, but the brand-new nameplate module introduced in v0.9.182 reintroduced it.
+  - Fix: `IsSecretValue(guid)` is now evaluated **before** `guid == ""` on line 230 (`IsEligibleUnit`). Short-circuit `or` guarantees the comparison is only reached once the Secret-Value check has ruled out a tainted GUID.
+  - **Preventive audit** of the rest of the module found three analogous ordering mistakes on paths that did not crash in this report but could under different scenario shapes:
+    - `GetActiveChallengeMapID()` — `mapID <= 0` before `IsSecretValue(mapID)`. A Secret-Valued numeric `mapID` would have tainted the comparison before the guard ran. Reordered to Secret-check first.
+    - `ResolveScenarioProgress()` — `numCriteria <= 0` before `IsSecretValue(numCriteria)`. Same class of bug. Reordered, and moved the `tonumber()` conversion to after the Secret-check so we operate on the raw field.
+    - `BuildText(percentString, ...)` — `percentString ~= ""` before `not IsSecretValue(percentString)`. The caller already Secret-checks `percentString` on line 344 before calling `BuildText`, so this path never crashed in practice, but the defensive ordering inside `BuildText` itself is now correct so the function is safe under any caller.
+  - Root-cause class documented as "Secret-Value ordering invariant": any value coming through `pcall` from a Blizzard API in a protected context must be `IsSecretValue`-checked **before** any `==`, `~=`, `<`, `<=`, `>`, `>=`, `..`, or `string.match` / `string.format` operation. `type()`, `rawget`, and the Secret-check itself (`issecretvalue(v)` via `rawget`) are the only operations that are guaranteed non-tainting on Secret Values.
+  - 1061/1061 use-case scenarios pass. No test changes: the existing `MobNameplate hides text when UnitGUID is a Secret Value` scenario exercises the logical path, but the Lua test harness cannot simulate runtime-taint on a primitive string (Lua metatables on strings are not customizable for `__eq` in 5.1 without global `debug.setmetatable` hacks), so the ordering invariant is preserved via code review. A future audit task in [todo.md](../todo.md) could lift the invariant into a lint rule if the need for recurrence-prevention grows.
+
 ## 2026-04-24 - Version 0.9.183 (patch)
 
 - **Defaults fuer frische Installationen neu kalibriert auf "Namensplakette / Rest-Anzeige Aus / Schriftgroesse 12 / Position Rechts" (match settings-screenshot):**

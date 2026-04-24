@@ -82,7 +82,7 @@ local function GetActiveChallengeMapID()
     return nil
   end
   local ok, mapID = pcall(api.GetActiveChallengeMapID)
-  if not ok or type(mapID) ~= "number" or mapID <= 0 or IsSecretValue(mapID) then
+  if not ok or type(mapID) ~= "number" or IsSecretValue(mapID) or mapID <= 0 then
     return nil
   end
   return mapID
@@ -130,8 +130,12 @@ local function ResolveScenarioProgress()
   if not okStep or type(stepInfo) ~= "table" then
     return nil, nil
   end
-  local numCriteria = tonumber(stepInfo.numCriteria)
-  if not numCriteria or numCriteria <= 0 or IsSecretValue(numCriteria) then
+  local rawNum = stepInfo.numCriteria
+  if IsSecretValue(rawNum) then
+    return nil, nil
+  end
+  local numCriteria = tonumber(rawNum)
+  if not numCriteria or numCriteria <= 0 then
     return nil, nil
   end
 
@@ -227,7 +231,7 @@ local function IsEligibleUnit(unit)
     return false
   end
   local okGuid, guid = pcall(unitGUID, unit)
-  if not okGuid or type(guid) ~= "string" or guid == "" or IsSecretValue(guid) then
+  if not okGuid or type(guid) ~= "string" or IsSecretValue(guid) or guid == "" then
     return false
   end
 
@@ -248,8 +252,8 @@ local function BuildText(percentString, bossRemainder)
   if
     format.showPercent
     and type(percentString) == "string"
-    and percentString ~= ""
     and not IsSecretValue(percentString)
+    and percentString ~= ""
   then
     parts[#parts + 1] = percentString .. "%"
   end
