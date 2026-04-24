@@ -30,7 +30,7 @@ jobs:
           luaVersion: "5.1"
 
       - name: Setup LuaRocks
-        uses: leafo/gh-actions-luarocks@v5
+        uses: leafo/gh-actions-luarocks@v6
 
       - name: Install luacheck
         run: |
@@ -93,7 +93,7 @@ jobs:
 
       - name: Upload Coverage Report
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: |

@@ -51,7 +51,7 @@ jobs:
 
       - name: Setup LuaRocks
         if: steps.diff.outputs.changed == 'true'
-        uses: leafo/gh-actions-luarocks@v5
+        uses: leafo/gh-actions-luarocks@v6
 
       - name: Install luacheck
         if: steps.diff.outputs.changed == 'true'
