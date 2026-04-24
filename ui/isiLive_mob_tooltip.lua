@@ -115,7 +115,10 @@ local function AppendForcesLine(tooltip, data)
   end
   lastAppendedKey[tooltip] = key
 
-  tooltip:AddLine(string.format("Forces: %.2f%% (+%d)", percent, count), 0.4, 0.8, 1)
+  -- Format makes it unambiguous that this is the mob's contribution, not the
+  -- current dungeon progress: "+5 forces (1.16% of 431)" reads as "this mob
+  -- adds +5 to your forces counter, which is 1.16% of the 431-total".
+  tooltip:AddLine(string.format("+%d forces (%.2f%% of %d)", count, percent, total), 0.4, 0.8, 1)
 end
 
 local function HookTooltipClear()

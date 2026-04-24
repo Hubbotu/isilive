@@ -524,8 +524,8 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       Assert.Equal(#prints, 1, "identical grouped target must only print once")
       Assert.Equal(
         prints[1],
-        "Target Dungeon: Ara-Kara +14",
-        "grouped key chat should use the localized target dungeon text with key level"
+        "Target Dungeon: |cffffd200Ara-Kara +14|r",
+        "grouped key chat should highlight the dungeon + key level in yellow (chat-only, status-line stays plain)"
       )
 
       current.targetInfo = nil

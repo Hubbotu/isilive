@@ -1082,6 +1082,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
       return nil
     end,
     printFn = ctx.Print,
+    printHighlighted = ctx.PrintHighlighted,
   })
 
   ctx.statusController = statusController

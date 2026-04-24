@@ -78,6 +78,17 @@ local function CreateFactoryContext(addonName, tbl)
     end
   end
 
+  -- Styled variant for user-visible highlights (target-dungeon announce etc.).
+  -- Blue "isiLive" brand prefix, rest passes through -- callers colour their
+  -- own payload via |cff......|r so each announcement can pick its own palette.
+  ctx.PrintHighlighted = function(msg)
+    local text = tostring(msg or "")
+    print("|cff4da6ffisiLive|r: " .. text)
+    if ctx.runtimeLogController and ctx.runtimeLogController.Log then
+      ctx.runtimeLogController.Log(text)
+    end
+  end
+
   if not (modules.guards and type(modules.guards.Validate) == "function") then
     print("|cffff0000isiLive: missing module Guards (isiLive_guards.lua)|r")
     return nil

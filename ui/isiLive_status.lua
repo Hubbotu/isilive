@@ -268,7 +268,10 @@ local function BuildTargetDungeonAnnouncementText(deps, info)
 
   local L = deps.getL()
   local template = L.STATUS_TARGET_DUNGEON_TEXT or "Target Dungeon: %s"
-  return string.format(template, string.format("%s +%d", info.name, math.floor(level)))
+  -- Highlight dungeon name + level in yellow so it stands out in chat.
+  -- The blue "isiLive" brand prefix is supplied by PrintHighlighted.
+  local highlighted = string.format("|cffffd200%s +%d|r", info.name, math.floor(level))
+  return string.format(template, highlighted)
 end
 
 local function ResetTargetDungeonChatState(state)
@@ -304,7 +307,8 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
   end
 
   state.lastTargetDungeonChatSignature = signature
-  deps.printFn(announcementText)
+  local sink = deps.printHighlighted or deps.printFn
+  sink(announcementText)
 end
 
 local function GetDungeonDifficultyLabel(getL)

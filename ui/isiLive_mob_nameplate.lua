@@ -76,6 +76,61 @@ local function GetNameplate(unit)
   return plate
 end
 
+-- Parses a unit GUID and returns the NPC id as a number (nil for players/pets).
+-- Secret-Value guarded: the GUID must be type-checked, Secret-checked and
+-- non-empty BEFORE `:match` runs, otherwise a tainted GUID taints the stack.
+local function NpcIdFromGuid(guid)
+  if type(guid) ~= "string" or IsSecretValue(guid) or guid == "" then
+    return nil
+  end
+  local kind, _, _, _, _, npcStr = guid:match("^(%a+)%-(%d+)%-(%d+)%-(%d+)%-(%d+)%-(%d+)%-")
+  if kind ~= "Creature" and kind ~= "Vehicle" then
+    return nil
+  end
+  return tonumber(npcStr)
+end
+
+-- Computes a mob's forces contribution from the bundled MDT-synced DB
+-- (data/isiLive_mplus_forces.lua). Returns (percentString, rawCount) on success
+-- or (nil, nil) when the NPC is not tracked / the map has no forces total.
+-- This is the source of truth for "what does THIS mob contribute to the key"
+-- because Blizzard's GetUnitCriteriaProgressValues(unit) percentString in 12.0+
+-- can return the cumulative dungeon progress under some protected paths instead
+-- of the per-mob value the criterion was originally designed to expose.
+local function ResolveMobContributionFromDB(unit, activeMapID)
+  if type(activeMapID) ~= "number" then
+    return nil, nil
+  end
+  local unitGUIDFn = rawget(_G, "UnitGUID")
+  if type(unitGUIDFn) ~= "function" then
+    return nil, nil
+  end
+  local okGuid, guid = pcall(unitGUIDFn, unit)
+  if not okGuid or type(guid) ~= "string" or IsSecretValue(guid) or guid == "" then
+    return nil, nil
+  end
+  local npcId = NpcIdFromGuid(guid)
+  if not npcId then
+    return nil, nil
+  end
+  local db = addonTable.MPlusForces
+  if type(db) ~= "table" or type(db.byNpcId) ~= "table" or type(db.dungeonTotal) ~= "table" then
+    return nil, nil
+  end
+  local entry = db.byNpcId[npcId]
+  if type(entry) ~= "table" or entry.mapID ~= activeMapID then
+    return nil, nil
+  end
+  local dungeon = db.dungeonTotal[activeMapID]
+  local total = dungeon and tonumber(dungeon.total) or 0
+  local count = tonumber(entry.count) or 0
+  if total <= 0 or count <= 0 then
+    return nil, nil
+  end
+  local percent = (count / total) * 100
+  return string.format("%.2f", percent), count
+end
+
 local function GetActiveChallengeMapID()
   local api = rawget(_G, "C_ChallengeMode")
   if type(api) ~= "table" or type(api.GetActiveChallengeMapID) ~= "function" then
@@ -366,13 +421,19 @@ local function UpdateNameplate(unit)
     return
   end
 
-  local api = rawget(_G, "C_ScenarioInfo")
-  local _, _, percentString = SafeCall(api.GetUnitCriteriaProgressValues, unit)
-  if IsSecretValue(percentString) then
-    if frame then
-      frame:Hide()
+  local activeMapID = GetActiveChallengeMapID()
+
+  -- Primary source: bundled MDT-synced forces DB, which is deterministic and
+  -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
+  -- when the NPC is missing from the DB (e.g. freshly added patch mob before
+  -- the next scheduled DB refresh).
+  local percentString = ResolveMobContributionFromDB(unit, activeMapID)
+  if not percentString then
+    local api = rawget(_G, "C_ScenarioInfo")
+    local _, _, apiPercent = SafeCall(api.GetUnitCriteriaProgressValues, unit)
+    if not IsSecretValue(apiPercent) then
+      percentString = apiPercent
     end
-    return
   end
 
   local bossRemainder = nil
