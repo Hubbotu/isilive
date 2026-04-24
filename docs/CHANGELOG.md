@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.189 (patch)
+
+- **CI: alle GitHub-Actions auf Node.js-24-faehige Versionen gebumpt ([.github/workflows/lua-check.yml](../.github/workflows/lua-check.yml), [.github/workflows/sync-mplus-forces.yml](../.github/workflows/sync-mplus-forces.yml)):**
+  - Hintergrund: Workflow-Annotations seit Tagen `Node.js 20 actions are deprecated`. Deadline 2026-06-02 (Force Node 24) / 2026-09-16 (Node 20 vom Runner entfernt). Konservativer one-major-bump auf die jeweils erste Node-24-faehige Major-Version, weniger riskant als auf die latest-latest zu springen (z.B. checkout@v6.0.2 hat ggf. weitere breaking changes; v5 ist die Node-24-Transition-Version):
+    - `actions/checkout` v4 -> v5 (Node 24 transition release)
+    - `actions/upload-artifact` v4 -> v5
+    - `JohnnyMorganz/stylua-action` v4 -> v5
+    - `leafo/gh-actions-lua` v11 -> v12
+    - `leafo/gh-actions-luarocks` v4 -> v5
+  - Beide Workflows (push-CI und wochentlicher MDT-DB-Auto-Refresh) sind synchron gehalten.
+  - Architektur-Test in [testmodul/isilive_test_scenarios_architecture.lua](../testmodul/isilive_test_scenarios_architecture.lua) der `uses: JohnnyMorganz/stylua-action@v4` als Snippet asserted, wurde auf `@v5` mitgezogen.
+  - Tests: 1074 / 1074 gruen lokal. Die eigentlichen action-Versions schlagen erst beim ersten GitHub-Actions-Run (push) durch — falls eine v5-Action breaking-changes hat, wird der naechste push das zeigen.
+
 ## 2026-04-24 - Version 0.9.188 (minor)
 
 - **Neuer CI-Gate gegen hardcodierte Strings in `ui/` und `logic/` ([tools/check_hardcoded_strings.lua](../tools/check_hardcoded_strings.lua)):**
