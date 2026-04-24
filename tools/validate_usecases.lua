@@ -1,4 +1,16 @@
 ---@diagnostic disable: undefined-global
+
+-- Lua 5.1 / 5.4 compat: bridge unpack in both directions so test scenarios
+-- run identically whether the host Lua is 5.1 (CI) or 5.4 (local).
+-- Lua 5.1: table.unpack does not exist → set it from the global unpack.
+-- Lua 5.4: the global unpack does not exist → set it from table.unpack.
+if type(table.unpack) ~= "function" and type(rawget(_G, "unpack")) == "function" then
+  table.unpack = rawget(_G, "unpack")
+end
+if type(rawget(_G, "unpack")) ~= "function" and type(table.unpack) == "function" then
+  _G.unpack = table.unpack
+end
+
 local loaderChunk, loaderErr = loadfile("testmodul/isilive_test_loader.lua")
 if not loaderChunk then
   error(string.format("cannot load test loader: %s", tostring(loaderErr)))
