@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.188 (minor)
+
+- **Neuer CI-Gate gegen hardcodierte Strings in `ui/` und `logic/` ([tools/check_hardcoded_strings.lua](../tools/check_hardcoded_strings.lua)):**
+  - Motivation: `tools/check_locale_drift.lua` prueft nur Drift zwischen den 8 Locale-Tabellen, nicht den UI-Code selbst. Wenn jemand `tooltip:AddLine("Click to mark unit")` schreibt ohne `L.<KEY>`-Indirection, faellt das durchs Netz - genau das was 0.9.187 manuell auditieren musste (12 Stellen). Der neue Gate erwischt das automatisch beim preflight.
+  - Heuristik: scannt alle `*.lua`-Files unter `ui/` und `logic/`, sucht Zeilen mit `:AddLine(` / `:SetText(` / `:SetTitle(` / `:SetTooltipText(`. Pro Zeile: extrahiert alle `"..."`-Literale, strippt vorher zwei Patterns weg die nicht geflaggt werden sollen — `<expr> or "literal"` (Lua-Nil-Coalesce-Idiom, der String IST der Fallback) und WoW-Markup `|cff......`/`|r`/`|T...|t`/`|A...|a`/`|H...|h`. Dann tokenisiert die uebrigen Literale auf alphabetische Sequenzen >=4 Zeichen und flaggt jede Sequenz, die nicht in der kleinen Whitelist (`ilvl`, `rio`, `isilive`, `npcid`, `brez`, `mythic`, plus die 8 Locale-Tags) steht.
+  - Inline-Override: `-- i18n-ok` (oder `-- i18n: ok`) am Zeilenende silenziert den Gate fuer genuine sprach-neutrale Inhalte (Brand-Names, Icon-Labels). Sparsam einsetzen — bevorzugte Loesung ist `L.<KEY>`.
+  - Wiring: `tools/validate_ci_local.ps1` und `.github/workflows/lua-check.yml` rufen den Gate zwischen `Locale Drift Check` und `M+ Forces DB Lifetime` auf. Der wochentlich getriggerte `.github/workflows/sync-mplus-forces.yml` (auto-MDT-Refresh) mirror'd ihn ebenfalls. Architektur-Tests in [testmodul/isilive_test_scenarios_architecture.lua](../testmodul/isilive_test_scenarios_architecture.lua) asserten beide Gate-Snippets, sodass der Gate nicht still aus der Pipeline fallen kann.
+  - Initial-Run fand **3 echte Treffer** (nach Verbesserung der Heuristik von zunaechst 49 falschen Positives durch Markup-Stripping + or-Fallback-Erkennung):
+    1. [ui/isiLive_roster_panel.lua:803](../ui/isiLive_roster_panel.lua) `ui.kickHeader:SetText("Kick")` → ersetzt durch `L.COL_KICK or "Kick"`. Neuer Locale-Key `COL_KICK` in allen 8 Sprachen mit dem identischen Wert "Kick" (Gaming-Term, sprach-neutral, aber nun konsistent ueber das Locale-System routed).
+    2. [ui/isiLive_roster_panel_kill_row.lua:32](../ui/isiLive_roster_panel_kill_row.lua) `label:SetText("|cff888888M+Killtracker|r")` → mit `-- i18n-ok` annotiert (Brand-Name unseres Kill-Tracker-Moduls).
+    3. [ui/isiLive_roster_panel_render.lua:358](../ui/isiLive_roster_panel_render.lua) `cell:SetText("|cff44ff44ready|r")` (Sync-Kick-Status-Indicator) → ersetzt durch `cell:SetText("|cff44ff44" .. readyText .. "|r")` mit `readyText` aus neuem Locale-Key `SYNC_KICK_READY`. DE: "bereit", FR: "pret", ES: "listo", PT/IT: "pronto", RU: "gotov", TR: "hazir", enUS bleibt "ready". `SetKickCellText`-Signatur erweitert um `getL`-Parameter (analog zu `CreateMemberRow` aus 0.9.187), Caller in `RenderRosterImpl` reicht `state.getL` durch.
+  - Die existierende `Architecture kick tracker uses lightweight kick-column refresh hooks`-Architecture-Scenario-Assertion wurde von der hardcodierten `cell:SetText("|cff44ff44ready|r")`-Erwartung auf das neue `cell:SetText("|cff44ff44" .. readyText .. "|r")`-Pattern umgezogen.
+
 ## 2026-04-24 - Version 0.9.187 (patch)
 
 - **Lokalisierung: 12 zuvor hardcodierte englische Strings jetzt in allen 8 Sprachen uebersetzt + "forces" -> "Fortschritt" (DE) und passende Aequivalente ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
