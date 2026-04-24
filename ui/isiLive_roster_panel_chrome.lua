@@ -415,10 +415,17 @@ local function CreateTankHelperButtons(mainFrame, tooltipFrame, getL)
     btn:SetScript("OnEnter", function(self)
       local tooltip = AnchorRosterHoverTooltip(tooltipFrame, self)
       if type(tooltip) == "table" and type(tooltip.SetText) == "function" then
-        tooltip:SetText("World Marker: " .. marker.name, 1, 1, 1)
+        local L = type(getL) == "function" and getL() or {}
+        local titleFmt = type(L.TOOLTIP_WORLDMARKER_TITLE_FMT) == "string" and L.TOOLTIP_WORLDMARKER_TITLE_FMT
+          or "World Marker: %s"
+        local lclick = type(L.TOOLTIP_WORLDMARKER_LCLICK) == "string" and L.TOOLTIP_WORLDMARKER_LCLICK
+          or "Left-Click: Place"
+        local rclick = type(L.TOOLTIP_WORLDMARKER_RCLICK) == "string" and L.TOOLTIP_WORLDMARKER_RCLICK
+          or "Right-Click: Clear"
+        tooltip:SetText(string.format(titleFmt, marker.name), 1, 1, 1)
         if type(tooltip.AddLine) == "function" then
-          tooltip:AddLine("Left-Click: Place", 0, 1, 0)
-          tooltip:AddLine("Right-Click: Clear", 1, 0.2, 0.2)
+          tooltip:AddLine(lclick, 0, 1, 0)
+          tooltip:AddLine(rclick, 1, 0.2, 0.2)
         end
         tooltip:Show()
       end

@@ -74,7 +74,7 @@ local ROLE_BUTTON_X = SPEC_COL_X + SPEC_COL_WIDTH + 4
 -- Keep the runtime behavior hard-forced until the controls are re-enabled.
 local FORCE_SHOW_DPS_COLUMN = true
 
-local function CreateMemberRow(mainFrame, index, rosterTooltip)
+local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
   local yOffset = -52 - (index - 1) * 16
   local row = {}
 
@@ -153,11 +153,17 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip)
   row.roleButton:SetScript("OnEnter", function(self)
     local tooltip = AnchorRosterHoverTooltip(rosterTooltip, self)
     if type(tooltip) == "table" and type(tooltip.SetText) == "function" then
-      tooltip:SetText("Role Marker", 1, 1, 1)
+      local L = type(getL) == "function" and getL() or {}
+      local title = type(L.TOOLTIP_ROLE_MARKER_TITLE) == "string" and L.TOOLTIP_ROLE_MARKER_TITLE or "Role Marker"
+      local hint = type(L.TOOLTIP_ROLE_MARKER_HINT) == "string" and L.TOOLTIP_ROLE_MARKER_HINT or "Click to mark unit"
+      local tank = type(L.TOOLTIP_ROLE_MARKER_TANK) == "string" and L.TOOLTIP_ROLE_MARKER_TANK or "Tank: Blue Square"
+      local healer = type(L.TOOLTIP_ROLE_MARKER_HEALER) == "string" and L.TOOLTIP_ROLE_MARKER_HEALER
+        or "Healer: Green Triangle"
+      tooltip:SetText(title, 1, 1, 1)
       if type(tooltip.AddLine) == "function" then
-        tooltip:AddLine("Click to mark unit", 1, 1, 1, true)
-        tooltip:AddLine("Tank: Blue Square", 0.2, 0.4, 1, true)
-        tooltip:AddLine("Healer: Green Triangle", 0.2, 1, 0.2, true)
+        tooltip:AddLine(hint, 1, 1, 1, true)
+        tooltip:AddLine(tank, 0.2, 0.4, 1, true)
+        tooltip:AddLine(healer, 0.2, 1, 0.2, true)
       end
       tooltip:Show()
     end
@@ -510,7 +516,7 @@ local function RenderRosterImpl(state, roster)
 
     local row = memberRows[index]
     if not row then
-      row = CreateMemberRow(mainFrame, index, rosterTooltip)
+      row = CreateMemberRow(mainFrame, index, rosterTooltip, state.getL)
       memberRows[index] = row
     end
 

@@ -332,6 +332,9 @@ local function FinalizeFactorySettings(ctx)
     end
     local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
     if type(mobTooltip) == "table" then
+      if type(mobTooltip.SetLocaleGetter) == "function" and type(ctx.GetL) == "function" then
+        mobTooltip.SetLocaleGetter(ctx.GetL)
+      end
       if type(mobTooltip.Register) == "function" then
         mobTooltip.Register()
       end

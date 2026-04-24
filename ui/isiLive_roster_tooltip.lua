@@ -760,22 +760,27 @@ local function ShowRosterInfoTooltip(
     if realm then
       tooltip:AddLine(realm, 0.7, 0.7, 0.7)
     end
+    local Lrow = type(getL) == "function" and getL() or {}
     if unitLevel then
-      tooltip:AddLine("Level: " .. tostring(unitLevel), 0.9, 0.9, 0.9)
+      local fmt = type(Lrow.TOOLTIP_LEVEL_FMT) == "string" and Lrow.TOOLTIP_LEVEL_FMT or "Level: %s"
+      tooltip:AddLine(string.format(fmt, tostring(unitLevel)), 0.9, 0.9, 0.9)
     end
     if languageTooltipMarkup and languageTooltipMarkup ~= "" then
       tooltip:AddLine(languageTooltipMarkup, 0.9, 0.9, 0.9)
     end
     if className then
-      tooltip:AddLine("Class: " .. className, 0.9, 0.9, 0.9)
+      local fmt = type(Lrow.TOOLTIP_CLASS_FMT) == "string" and Lrow.TOOLTIP_CLASS_FMT or "Class: %s"
+      tooltip:AddLine(string.format(fmt, className), 0.9, 0.9, 0.9)
     elseif type(info.spec) == "string" and info.spec ~= "" then
       tooltip:AddLine(info.spec, 0.9, 0.9, 0.9)
     end
     if info.ilvl then
-      tooltip:AddLine("iLvl: " .. tostring(math.floor(tonumber(info.ilvl) or 0)), 0.9, 0.9, 0.9)
+      local fmt = type(Lrow.TOOLTIP_ILVL_FMT) == "string" and Lrow.TOOLTIP_ILVL_FMT or "iLvl: %s"
+      tooltip:AddLine(string.format(fmt, tostring(math.floor(tonumber(info.ilvl) or 0))), 0.9, 0.9, 0.9)
     end
     if info.rio then
-      tooltip:AddLine("Rio: " .. tostring(math.floor(tonumber(info.rio) or 0)), 0.9, 0.9, 0.9)
+      local fmt = type(Lrow.TOOLTIP_RIO_FMT) == "string" and Lrow.TOOLTIP_RIO_FMT or "Rio: %s"
+      tooltip:AddLine(string.format(fmt, tostring(math.floor(tonumber(info.rio) or 0))), 0.9, 0.9, 0.9)
     end
     if syncSummary then
       local L = type(getL) == "function" and getL() or {}

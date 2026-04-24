@@ -6,6 +6,9 @@ addonTable.MobTooltip = MobTooltip
 
 local enabled = true
 local registered = false
+local getLocale = function()
+  return {}
+end
 
 -- Prevents stacking the same line on tooltip rerenders (TooltipDataProcessor
 -- fires on every refresh, including hover-over-self reflow).
@@ -116,9 +119,12 @@ local function AppendForcesLine(tooltip, data)
   lastAppendedKey[tooltip] = key
 
   -- Format makes it unambiguous that this is the mob's contribution, not the
-  -- current dungeon progress: "+5 forces (1.16% of 431)" reads as "this mob
-  -- adds +5 to your forces counter, which is 1.16% of the 431-total".
-  tooltip:AddLine(string.format("+%d forces (%.2f%% of %d)", count, percent, total), 0.4, 0.8, 1)
+  -- current dungeon progress: "+5 Fortschritt (1.16% von 431)" reads as
+  -- "this mob adds +5 to your progress counter, which is 1.16% of the 431-total".
+  local L = getLocale()
+  local fmt = type(L.TOOLTIP_MOB_PROGRESS_LINE) == "string" and L.TOOLTIP_MOB_PROGRESS_LINE
+    or "+%d progress (%.2f%% of %d)"
+  tooltip:AddLine(string.format(fmt, count, percent, total), 0.4, 0.8, 1)
 end
 
 local function HookTooltipClear()
@@ -133,6 +139,12 @@ end
 
 function MobTooltip.SetEnabled(flag)
   enabled = flag ~= false
+end
+
+function MobTooltip.SetLocaleGetter(fn)
+  if type(fn) == "function" then
+    getLocale = fn
+  end
 end
 
 function MobTooltip.Register()
