@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.187 (patch)
+
+- **Lokalisierung: 12 zuvor hardcodierte englische Strings jetzt in allen 8 Sprachen uebersetzt + "forces" -> "Fortschritt" (DE) und passende Aequivalente ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - User-gemeldete Luecke: trotz eingestellter deDE-Locale blieben mehrere Hover-Tooltips auf Englisch stehen, weil ihre Strings direkt im UI-Code hart eingebettet waren und nie durch die Locale-Tabelle liefen. Der `check_locale_drift`-Gate ist deswegen immer gruen gelaufen - er vergleicht nur die 8 Locale-Tabellen gegeneinander, nicht die Call-Sites im UI-Code.
+  - 12 neue Locale-Keys eingefuehrt (in allen 8 Sprachen enUS/deDE/frFR/esES/ptBR/itIT/ruRU/trTR mit ASCII-accent-stripped / ruRU-transliteriert):
+    - `TOOLTIP_MOB_PROGRESS_LINE` - die Mouseover-Zeile fuer M+-Enemy-Forces. User-Wunsch: "forces" weg, stattdessen "Fortschritt" (DE). enUS `"+%d progress (%.2f%% of %d)"`, deDE `"+%d Fortschritt (%.2f%% von %d)"`, frFR `"+%d progression (%.2f%% sur %d)"`, esES `"+%d progreso (%.2f%% de %d)"`, ptBR `"+%d progresso (%.2f%% de %d)"`, itIT `"+%d progresso (%.2f%% di %d)"`, ruRU `"+%d progress (%.2f%% iz %d)"`, trTR `"+%d ilerleme (%.2f%% / %d)"`. `%d/%.2f/%d` Reihenfolge ist identisch in allen Sprachen, damit das drift-tool die Placeholder-Counts als synchron akzeptiert.
+    - `TOOLTIP_LEVEL_FMT` / `TOOLTIP_CLASS_FMT` / `TOOLTIP_ILVL_FMT` / `TOOLTIP_RIO_FMT` - die 4 Info-Zeilen im Roster-Hover-Tooltip. iLvl und Rio bleiben als Gaming-Communityswerte in allen Sprachen gleich, nur "Level" und "Class" werden uebersetzt (Stufe / Klasse in DE, Niveau / Classe in FR, usw.).
+    - `TOOLTIP_WORLDMARKER_TITLE_FMT` / `TOOLTIP_WORLDMARKER_LCLICK` / `TOOLTIP_WORLDMARKER_RCLICK` - die Hover-Hinweise ueber den 8 Worldmarker-Buttons rechts neben dem Roster.
+    - `TOOLTIP_ROLE_MARKER_TITLE` / `TOOLTIP_ROLE_MARKER_HINT` / `TOOLTIP_ROLE_MARKER_TANK` / `TOOLTIP_ROLE_MARKER_HEALER` - die 4-zeilige Legende ueber dem Rollen-Markierungs-Button pro Roster-Zeile.
+  - 12 Call-Sites umgestellt: [ui/isiLive_mob_tooltip.lua:123](../ui/isiLive_mob_tooltip.lua), [ui/isiLive_roster_tooltip.lua:764+770+775+778](../ui/isiLive_roster_tooltip.lua), [ui/isiLive_roster_panel_chrome.lua:418+420+421](../ui/isiLive_roster_panel_chrome.lua), [ui/isiLive_roster_panel_render.lua:156+158+159+160](../ui/isiLive_roster_panel_render.lua). Jede Stelle nutzt das etablierte Fallback-Pattern `type(L.KEY) == "string" and L.KEY or "<english literal>"` - so bleibt der Englisch-Output als Fallback erhalten, falls ein Modul-Scenario ohne Locale-Injection laeuft.
+  - Neues Modul-Interface `MobTooltip.SetLocaleGetter(fn)` in [ui/isiLive_mob_tooltip.lua](../ui/isiLive_mob_tooltip.lua) parallel zu `SetEnabled` und `Register`. Das Modul hatte bisher keinerlei Locale-Anbindung; die Factory-Init in [factory/isiLive_factory.lua:338](../factory/isiLive_factory.lua) ruft jetzt `mobTooltip.SetLocaleGetter(ctx.GetL)` vor `Register` auf, wodurch das Modul auf Sprachwechsel zur Laufzeit reagiert (der Tooltip wird ohnehin pro Hover neu aufgebaut).
+  - [ui/isiLive_roster_panel_render.lua](../ui/isiLive_roster_panel_render.lua) `CreateMemberRow`-Signatur erweitert um einen `getL`-Parameter (neuer 4. Arg). Call-Site in `RenderRosterImpl` reicht `state.getL` durch, das bereits ueber den Status-Controller verdrahtet ist. Das Role-Marker-OnEnter-Closure nutzt den Parameter via Closure-Capture.
+
+- **Tests:**
+  - Bestehende `testmodul/isilive_test_scenarios_mob_tooltip.lua`-Scenarios pruefen via `tooltipLines[1]:find("1.16")` und `:find("+5")` - beide Substrings liegen im neuen Format weiterhin vor, keine Test-Aenderung noetig.
+  - 1074 / 1074 Scenarios gruen.
+
 ## 2026-04-24 - Version 0.9.186 (minor)
 
 - **Nameplate enemy-forces overlay now uses the bundled MDT-synced DB as the source of truth ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [data/isiLive_mplus_forces.lua](../data/isiLive_mplus_forces.lua)):**
