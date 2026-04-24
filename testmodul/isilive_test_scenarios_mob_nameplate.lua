@@ -426,6 +426,273 @@ local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
   end)
 end
 
+local function RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonModules)
+  local POSITIONS = { "LEFT", "RIGHT", "TOP", "BOTTOM" }
+  local EXPECTED_ANCHORS = {
+    LEFT = { "RIGHT", "LEFT" },
+    RIGHT = { "LEFT", "RIGHT" },
+    TOP = { "BOTTOM", "TOP" },
+    BOTTOM = { "TOP", "BOTTOM" },
+  }
+
+  for _, pos in ipairs(POSITIONS) do
+    test("MobNameplate ApplyPosition anchors correctly for position " .. pos, function()
+      local globals = BuildEnv({
+        units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+        nameplates = { nameplate1 = MakeFrame() },
+        progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+      })
+      WithGlobals(globals, function()
+        local addon = LoadModule(LoadAddonModules)
+        addon.MobNameplate.SetAppearance({ position = pos })
+        addon.MobNameplate.SetEnabled(true)
+        addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+        local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+        Assert.True(frame ~= nil, "frame must exist for pos=" .. pos)
+        local expected = EXPECTED_ANCHORS[pos]
+        Assert.Equal(frame._points[1], expected[1], "frame anchor point for pos=" .. pos)
+        Assert.Equal(frame._points[3], expected[2], "nameplate anchor point for pos=" .. pos)
+      end)
+    end)
+  end
+
+  test("MobNameplate ApplyPosition falls back to CENTER for unknown position", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ position = "DIAGONAL" })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.True(frame ~= nil, "frame must exist for unknown position")
+      Assert.Equal(frame._points[1], "CENTER", "unknown position falls back to CENTER anchor")
+      Assert.Equal(frame._points[3], "CENTER", "unknown position falls back to CENTER nameplate anchor")
+    end)
+  end)
+
+  test("MobNameplate hides nothing and creates no frame when CreateFrame pcall throws", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    globals.CreateFrame = function()
+      error("createframe blew up in test")
+    end
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      -- SetEnabled tries to create the event frame via CreateFrame pcall.
+      -- The module must swallow the failure and not crash the caller.
+      addon.MobNameplate.SetEnabled(true)
+      Assert.True(
+        addon.MobNameplate._Test_GetFrames()["nameplate1"] == nil,
+        "no frame should be created when CreateFrame pcall fails"
+      )
+    end)
+  end)
+
+  test("MobNameplate hides unit when UnitReaction returns a Secret Value", function()
+    local secret = "__ISILIVE_TEST_SECRET_REACTION__"
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+      UnitReaction = function()
+        return secret
+      end,
+      issecretvalue = function(v)
+        return v == secret
+      end,
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      -- A Secret-Valued reaction must not taint the unit-eligibility check.
+      -- The module should ignore reaction > 4 when reaction is secret, so
+      -- rendering proceeds (reaction defaults to "hostile" when unreadable).
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.True(frame ~= nil, "Secret-Valued reaction must not crash; unit treated as eligible")
+    end)
+  end)
+
+  test("MobNameplate NAME_PLATE_UNIT_REMOVED OnEvent hides frame and clears pool entry", function()
+    local globals, _, frames = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      Assert.True(
+        addon.MobNameplate._Test_GetFrames()["nameplate1"] ~= nil,
+        "frame should exist before NAME_PLATE_UNIT_REMOVED"
+      )
+
+      -- Find the event frame (the one with scripts) and drive its OnEvent handler.
+      local eventFrame = nil
+      for _, f in ipairs(frames) do
+        if f._scripts and type(f._scripts.OnEvent) == "function" then
+          eventFrame = f
+          break
+        end
+      end
+      eventFrame = Assert.NotNil(eventFrame, "event frame with OnEvent script must exist")
+      eventFrame._scripts.OnEvent(eventFrame, "NAME_PLATE_UNIT_REMOVED", "nameplate1")
+
+      Assert.True(
+        addon.MobNameplate._Test_GetFrames()["nameplate1"] == nil,
+        "NAME_PLATE_UNIT_REMOVED must clear the pool entry for the removed unit"
+      )
+    end)
+  end)
+
+  test("MobNameplate SetFormat during enabled=true triggers RefreshAll", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.Equal(frame.text._text, "1.16%", "initial render uses default format")
+
+      -- Flip showPercent off: RefreshAll should re-apply to all active frames and
+      -- produce empty text, which hides the frame.
+      addon.MobNameplate.SetFormat({ showPercent = false, bossTargetMode = "off" })
+      Assert.True(frame._shown == false, "frame is hidden after SetFormat removes the only visible part")
+    end)
+  end)
+
+  test("MobNameplate SetAppearance during enabled=true re-applies font size", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      addon.MobNameplate.SetAppearance({ fontSize = 19 })
+      local state = addon.MobNameplate._Test_GetState()
+      Assert.Equal(state.appearance.fontSize, 19, "fontSize must be persisted in module state")
+    end)
+  end)
+
+  test("MobNameplate ResolveBossRemainder returns nil for mode off", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 500, percent = "1.00" } },
+      scenarioCriteria = {
+        { totalQuantity = 1, quantity = 0, completed = false },
+        { totalQuantity = 500, quantity = 85, completed = false },
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        MPlusBossTargets = {
+          byMapID = { [161] = { 28.07, 52.2, 60.09, 100 } },
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, bossTargetMode = "off" })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.Equal(frame.text._text, "1.00%", "bossTargetMode=off appends no remainder, only percent")
+    end)
+  end)
+
+  test("MobNameplate GetActiveChallengeMapID rejects Secret-Valued mapID", function()
+    local secret = 999999
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 500, percent = "1.00" } },
+      scenarioCriteria = {
+        { totalQuantity = 1, quantity = 0, completed = false },
+        { totalQuantity = 500, quantity = 85, completed = false },
+      },
+      C_ChallengeMode = {
+        IsChallengeModeActive = function()
+          return true
+        end,
+        GetActiveChallengeMapID = function()
+          return secret
+        end,
+      },
+      issecretvalue = function(v)
+        return v == secret
+      end,
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        MPlusBossTargets = {
+          byMapID = { [secret] = { 28.07 } },
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, bossTargetMode = "next" })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.True(frame ~= nil and frame._shown == true, "frame renders the percent part")
+      Assert.Equal(frame.text._text, "1.00%", "Secret-Valued mapID drops the bossTarget remainder")
+    end)
+  end)
+
+  test("MobNameplate ResolveScenarioProgress ignores Secret-Valued numCriteria", function()
+    local secret = 42
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 500, percent = "1.00" } },
+      C_ScenarioInfo = {
+        GetUnitCriteriaProgressValues = function()
+          return 5, 500, "1.00"
+        end,
+        GetStepInfo = function()
+          return { numCriteria = secret }
+        end,
+        GetCriteriaInfo = function()
+          return nil
+        end,
+      },
+      issecretvalue = function(v)
+        return v == secret
+      end,
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        MPlusBossTargets = {
+          byMapID = { [161] = { 28.07 } },
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, bossTargetMode = "next" })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.Equal(frame.text._text, "1.00%", "Secret-Valued numCriteria drops bossTarget remainder safely")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -433,4 +700,5 @@ return function(test, ctx)
 
   RegisterLifecycleTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonModules)
 end

@@ -143,6 +143,16 @@ local function FinalizeFactorySettings(ctx)
           ctx.runtimeLogController.SetEnabled(enabled)
         end
       end,
+      onClearRuntimeLog = function()
+        if type(ctx.clearRuntimeLog) == "function" then
+          ctx.clearRuntimeLog()
+        end
+      end,
+      onClearQueueDebugLog = function()
+        if type(ctx.clearQueueDebugLog) == "function" then
+          ctx.clearQueueDebugLog()
+        end
+      end,
       onPortalNavigatorToggle = function(_enabled)
         if ctx.statusController and type(ctx.statusController.MaybeShowPortalNavigatorNotice) == "function" then
           ctx.statusController.MaybeShowPortalNavigatorNotice()

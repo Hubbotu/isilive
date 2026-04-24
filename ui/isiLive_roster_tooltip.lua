@@ -5,6 +5,16 @@ addonTable = addonTable or {}
 local RI = addonTable._RosterInternal or {}
 addonTable._RosterInternal = RI
 
+-- 12.0 Secret-Value guard. Any value coming from a Blizzard tooltip or unit API
+-- in a protected context must be Secret-checked BEFORE any `==`, `~=`, `<`, `..`
+-- or `:match` operation - the comparison itself taints the execution stack.
+-- Only type(), rawget and this helper are guaranteed non-tainting.
+local function IsSecretValue(v)
+  local fn = rawget(_G, "issecretvalue")
+  return type(fn) == "function" and fn(v) == true
+end
+RI.IsSecretValue = IsSecretValue
+
 local TOOLTIP_HORIZONTAL_PADDING = 10
 local TOOLTIP_VERTICAL_PADDING = 10
 local TOOLTIP_LINE_SPACING = 3
@@ -494,7 +504,12 @@ local function ResolveBlizzardTooltipUnit(tooltip, unit, tooltipData, preferTool
   if preferTooltipDataOnly then
     -- Use unitToken from tooltip data directly; avoids UnitTokenFromGUID which returns tainted
     -- strings inside securecallfunction contexts (e.g. SetWorldCursor → SetAttribute).
-    if type(tooltipData) == "table" and type(tooltipData.unitToken) == "string" and tooltipData.unitToken ~= "" then
+    if
+      type(tooltipData) == "table"
+      and type(tooltipData.unitToken) == "string"
+      and not IsSecretValue(tooltipData.unitToken)
+      and tooltipData.unitToken ~= ""
+    then
       return tooltipData.unitToken
     end
     return nil
@@ -504,25 +519,34 @@ local function ResolveBlizzardTooltipUnit(tooltip, unit, tooltipData, preferTool
     local tooltipGetUnit = tooltip.GetUnit
     if type(tooltipGetUnit) == "function" then
       local okUnit, tooltipUnit = pcall(tooltipGetUnit, tooltip)
-      if okUnit and type(tooltipUnit) == "string" and tooltipUnit ~= "" then
+      if okUnit and type(tooltipUnit) == "string" and not IsSecretValue(tooltipUnit) and tooltipUnit ~= "" then
         return tooltipUnit
       end
     end
 
-    if type(tooltip.unit) == "string" and tooltip.unit ~= "" then
+    if type(tooltip.unit) == "string" and not IsSecretValue(tooltip.unit) and tooltip.unit ~= "" then
       return tooltip.unit
     end
   end
 
   if type(tooltipData) == "table" then
-    if type(tooltipData.unitToken) == "string" and tooltipData.unitToken ~= "" then
+    if
+      type(tooltipData.unitToken) == "string"
+      and not IsSecretValue(tooltipData.unitToken)
+      and tooltipData.unitToken ~= ""
+    then
       return tooltipData.unitToken
     end
 
     local tooltipLines = type(tooltipData.lines) == "table" and tooltipData.lines or nil
     if tooltipLines then
       for _, line in ipairs(tooltipLines) do
-        if type(line) == "table" and type(line.unitToken) == "string" and line.unitToken ~= "" then
+        if
+          type(line) == "table"
+          and type(line.unitToken) == "string"
+          and not IsSecretValue(line.unitToken)
+          and line.unitToken ~= ""
+        then
           return line.unitToken
         end
       end
@@ -531,12 +555,12 @@ local function ResolveBlizzardTooltipUnit(tooltip, unit, tooltipData, preferTool
     local unitTokenFromGUID = rawget(_G, "UnitTokenFromGUID")
     if type(unitTokenFromGUID) == "function" then
       local guid = tooltipData.guid
-      if type(guid) ~= "string" then
+      if type(guid) ~= "string" or IsSecretValue(guid) then
         guid = tooltipData.healthGUID
       end
-      if guid then
+      if type(guid) == "string" and not IsSecretValue(guid) then
         local okToken, tooltipUnit = pcall(unitTokenFromGUID, guid)
-        if okToken and type(tooltipUnit) == "string" and tooltipUnit ~= "" then
+        if okToken and type(tooltipUnit) == "string" and not IsSecretValue(tooltipUnit) and tooltipUnit ~= "" then
           return tooltipUnit
         end
       end
@@ -552,11 +576,11 @@ local function ResolveBlizzardTooltipLanguageTagFromTooltipData(tooltipData, get
   end
 
   local guid = tooltipData.guid
-  if type(guid) ~= "string" then
+  if type(guid) ~= "string" or IsSecretValue(guid) then
     guid = tooltipData.healthGUID
   end
 
-  if type(guid) ~= "string" then
+  if type(guid) ~= "string" or IsSecretValue(guid) then
     return nil, nil
   end
 
@@ -571,7 +595,7 @@ local function ResolveBlizzardTooltipLanguageTagFromTooltipData(tooltipData, get
   end
 
   local okRealm, _, _, _, _, realmLocale = pcall(realmInfoLib.GetRealmInfoByGUID, realmInfoLib, guid)
-  if not okRealm or type(realmLocale) ~= "string" or realmLocale == "" then
+  if not okRealm or type(realmLocale) ~= "string" or IsSecretValue(realmLocale) or realmLocale == "" then
     return nil, nil
   end
 

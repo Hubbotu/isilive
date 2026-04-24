@@ -268,6 +268,28 @@ local function BuildText(percentString, bossRemainder)
   return table.concat(parts, " | ")
 end
 
+local function ApplyFont(fontString)
+  if type(fontString) ~= "table" or type(fontString.SetFont) ~= "function" then
+    return
+  end
+  local file, flags
+  local template = rawget(_G, "GameFontNormalOutline")
+  if type(template) == "table" and type(template.GetFont) == "function" then
+    local ok, f, _, fl = pcall(template.GetFont, template)
+    if ok then
+      file, flags = f, fl
+    end
+  end
+  if type(file) ~= "string" or file == "" then
+    file = "Fonts\\FRIZQT__.TTF"
+  end
+  if type(flags) ~= "string" or flags == "" then
+    flags = "OUTLINE"
+  end
+  local size = tonumber(appearance.fontSize) or 12
+  pcall(fontString.SetFont, fontString, file, size, flags)
+end
+
 local function CreateOrGetFrame(unit)
   local frame = frames[unit]
   if frame then
@@ -294,6 +316,7 @@ local function CreateOrGetFrame(unit)
   if f.text.SetTextColor then
     f.text:SetTextColor(1, 1, 1, 1)
   end
+  ApplyFont(f.text)
   frames[unit] = f
   return f
 end
@@ -379,6 +402,7 @@ local function UpdateNameplate(unit)
   end
 
   ApplyPosition(frame, nameplate)
+  ApplyFont(frame.text)
   if frame.text and frame.text.SetText then
     frame.text:SetText(text)
   end

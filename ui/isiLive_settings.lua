@@ -815,6 +815,8 @@ local function ResolveSettingsOptions(opts)
     onTeleportColumnsChange = opts.onTeleportColumnsChange,
     onQueueDebugToggle = opts.onQueueDebugToggle,
     onRuntimeLogToggle = opts.onRuntimeLogToggle,
+    onClearRuntimeLog = opts.onClearRuntimeLog,
+    onClearQueueDebugLog = opts.onClearQueueDebugLog,
     onLfgFlagsToggle = opts.onLfgFlagsToggle,
     onTooltipFlagsToggle = opts.onTooltipFlagsToggle,
     onMplusForcesToggle = opts.onMplusForcesToggle,
@@ -1961,6 +1963,20 @@ local function BuildDebugSettingsSection(canvas, yOffset, labels, config, contro
     end
   )
 
+  controls.clearQueueDebugBtn, yOffset = CreateSettingsActionButton(
+    canvas,
+    yOffset,
+    labels.SETTINGS_QUEUE_DEBUG_CLEAR or "Clear Queue Debug Log",
+    240,
+    function()
+      if type(config.onClearQueueDebugLog) == "function" then
+        config.onClearQueueDebugLog()
+      end
+    end,
+    "SETTINGS_QUEUE_DEBUG_CLEAR",
+    nil
+  )
+
   controls.runtimeLog, yOffset = CreateSettingsCheckbox(
     canvas,
     yOffset,
@@ -1976,6 +1992,20 @@ local function BuildDebugSettingsSection(canvas, yOffset, labels, config, contro
         config.onRuntimeLogToggle(checked)
       end
     end
+  )
+
+  controls.clearRuntimeLogBtn, yOffset = CreateSettingsActionButton(
+    canvas,
+    yOffset,
+    labels.SETTINGS_RUNTIME_LOG_CLEAR or "Clear Runtime Log",
+    240,
+    function()
+      if type(config.onClearRuntimeLog) == "function" then
+        config.onClearRuntimeLog()
+      end
+    end,
+    "SETTINGS_RUNTIME_LOG_CLEAR",
+    nil
   )
 
   controls.columnGuides, yOffset = CreateSettingsCheckbox(
@@ -2169,6 +2199,12 @@ local function RefreshSettingsControls(controls, config)
   end
   controls.queueDebug.label:SetText(freshL.SETTINGS_QUEUE_DEBUG or "Queue Debug Log")
   controls.runtimeLog.label:SetText(freshL.SETTINGS_RUNTIME_LOG or "Runtime Log")
+  if controls.clearQueueDebugBtn and controls.clearQueueDebugBtn.label then
+    controls.clearQueueDebugBtn.label:SetText(freshL.SETTINGS_QUEUE_DEBUG_CLEAR or "Clear Queue Debug Log")
+  end
+  if controls.clearRuntimeLogBtn and controls.clearRuntimeLogBtn.label then
+    controls.clearRuntimeLogBtn.label:SetText(freshL.SETTINGS_RUNTIME_LOG_CLEAR or "Clear Runtime Log")
+  end
 
   if controls.showDps then
     controls.showDps.label:SetText(freshL.SETTINGS_SHOW_DPS_COLUMN or "Show DPS Column")
