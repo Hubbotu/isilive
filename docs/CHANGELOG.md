@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-25 - Version 0.9.192 (test)
+
+- **Test-Coverage: explizite SetFont-Verifikation fuer das Nameplate-FontSize-Wiring ([testmodul/isilive_test_scenarios_mob_nameplate.lua](../testmodul/isilive_test_scenarios_mob_nameplate.lua)):**
+  - Hintergrund: 0.9.185 fixte den FontSize-Bug (Slider-Wert wurde in `appearance.fontSize` persistiert, aber nie auf den FontString angewendet) durch den `ApplyFont`-Helper. Das damalige Test-Scenario `MobNameplate SetAppearance during enabled=true re-applies font size` prueft jedoch nur die in-memory state-Persistierung, nicht ob `SetFont` mit der neuen Groesse tatsaechlich auf dem FontString aufgerufen wird. Zwischen 0.9.185 und 0.9.191 koennte ein Refactor das Wiring still abreissen, ohne dass irgendein Test fail wird.
+  - Mock-Infrastruktur erweitert:
+    - `MakeFontString()` hat jetzt `SetFont(file, size, flags)` der `_font = {file, size, flags}` und einen `_setFontCallCount` aufzeichnet, sodass Tests verifizieren koennen, dass und wie oft `SetFont` aufgerufen wurde.
+    - Neuer `MakeGameFontNormalOutline()`-Helper liefert ein deterministisches Stand-in fuer das globale `GameFontNormalOutline`-FontObject mit `GetFont()` (Default `Fonts\\FRIZQT__.TTF`, 10, `OUTLINE`). `BuildEnv` injectiert das via `globals.GameFontNormalOutline` damit `ApplyFont`'s Template-Lookup in den Tests funktioniert.
+  - 3 neue Scenarios:
+    1. **`MobNameplate ApplyFont calls SetFont with the configured fontSize on initial frame creation`** — `SetAppearance({fontSize=22})` BEVOR `SetEnabled(true)` + `_Test_UpdateNameplate` -> `frame.text._font.size == 22`. Verifiziert dass das Initial-Frame den persistierten Wert nimmt, nicht den Modul-Default 12.
+    2. **`MobNameplate SetAppearance({fontSize}) during enabled re-applies SetFont with the new size`** — Initial render mit Default 12 -> `_setFontCallCount` Snapshot -> `SetAppearance({fontSize=19})` mid-key -> `_setFontCallCount` muss > Snapshot sein UND `_font.size == 19`. Verifiziert dass Slider-Aenderungen ohne `/reload` durchschlagen.
+    3. **`MobNameplate font-size pipeline is unaffected by Plater being loaded`** — Mock fuer `IsAddOnLoaded("Plater")` und `C_AddOns.IsAddOnLoaded("Plater")` returnt true, dann `SetAppearance({fontSize=16})` + `SetEnabled(true)` + Update -> Frame existiert, ist sichtbar, `_font.size == 16`. Lockt die Architektur-Invariante ein dass Plater-Soft-Detect ausschliesslich in Settings-UI lebt, NICHT im Nameplate-Modul; ein Refactor der "Plater geladen -> Modul disabled" einbaut wuerde diesen Test reissen.
+  - 1080 / 1080 -> 1083 / 1083 Scenarios. Stylua, luacheck, hardcoded-strings clean. Reines Test-Patch, kein Produktions-Code-Change.
+
 ## 2026-04-24 - Version 0.9.191 (minor)
 
 - **M+Killtracker: DB-total Fallback + Drift-Warning + Boss-Target-Marker auf der Progress-Bar ([game/isiLive_killtrack.lua](../game/isiLive_killtrack.lua), [ui/isiLive_roster_panel_kill_row.lua](../ui/isiLive_roster_panel_kill_row.lua)):**
