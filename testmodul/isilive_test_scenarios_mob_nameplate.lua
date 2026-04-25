@@ -8,7 +8,7 @@
 -- assert on the resulting frame/text state.
 
 local function MakeFontString()
-  local fs = { _text = "", _points = nil, _color = nil }
+  local fs = { _text = "", _points = nil, _color = nil, _font = nil, _setFontCallCount = 0 }
   function fs:SetText(text)
     self._text = tostring(text or "")
   end
@@ -18,10 +18,25 @@ local function MakeFontString()
   function fs:SetTextColor(r, g, b, a)
     self._color = { r, g, b, a }
   end
+  function fs:SetFont(file, size, flags)
+    self._font = { file = file, size = size, flags = flags }
+    self._setFontCallCount = self._setFontCallCount + 1
+  end
   function fs:GetText()
     return self._text
   end
   return fs
+end
+
+-- Stand-in for the global FontObject `GameFontNormalOutline` that ApplyFont
+-- queries via `GetFont()` to inherit the template's font-file + flags.
+-- Returns deterministic values so the SetFont assertions can compare exactly.
+local function MakeGameFontNormalOutline()
+  return {
+    GetFont = function(_self)
+      return "Fonts\\\\FRIZQT__.TTF", 10, "OUTLINE"
+    end,
+  }
 end
 
 local function MakeFrame()
@@ -153,6 +168,7 @@ local function BuildEnv(overrides)
       end,
     },
     issecretvalue = overrides.issecretvalue,
+    GameFontNormalOutline = overrides.GameFontNormalOutline or MakeGameFontNormalOutline(),
   }
 
   if overrides.globals then
@@ -693,6 +709,92 @@ local function RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonMo
   end)
 end
 
+local function RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("MobNameplate ApplyFont calls SetFont with the configured fontSize on initial frame creation", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 22 })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must exist after update")
+      local font = frame.text._font
+      font = Assert.NotNil(font, "ApplyFont must call SetFont on the FontString")
+      Assert.Equal(font.size, 22, "initial frame must use the configured fontSize, not the template default")
+      Assert.True(font.file ~= nil and font.file ~= "", "SetFont must receive a non-empty font file path")
+      Assert.True(
+        type(font.flags) == "string" and font.flags ~= "",
+        "SetFont must receive flags (e.g. OUTLINE) inherited from the template"
+      )
+    end)
+  end)
+
+  test("MobNameplate SetAppearance({fontSize}) during enabled re-applies SetFont with the new size", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must exist after first update")
+      local initialCallCount = frame.text._setFontCallCount
+      Assert.True(initialCallCount >= 1, "SetFont must have been called at least once during initial render")
+
+      -- Slider moves to 19 mid-key; SetAppearance must trigger RefreshAll
+      -- which re-runs UpdateNameplate -> ApplyFont with the new size.
+      addon.MobNameplate.SetAppearance({ fontSize = 19 })
+      Assert.True(
+        frame.text._setFontCallCount > initialCallCount,
+        "SetAppearance during enabled must trigger another SetFont call via RefreshAll"
+      )
+      Assert.Equal(frame.text._font.size, 19, "FontString must have the new fontSize after SetAppearance")
+    end)
+  end)
+
+  test("MobNameplate font-size pipeline is unaffected by Plater being loaded", function()
+    -- Plater/Platynator soft-detect lives in the settings UI, NOT in the
+    -- nameplate module itself. The module renders identically regardless of
+    -- which external nameplate addon is loaded; this scenario locks that in
+    -- so a future "skip if Plater" optimisation cannot silently break the
+    -- font-size pipeline.
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    globals.IsAddOnLoaded = function(name)
+      return name == "Plater"
+    end
+    globals.C_AddOns = {
+      IsAddOnLoaded = function(name)
+        return name == "Plater"
+      end,
+    }
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 16 })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must still be created when Plater is loaded -- module ignores soft-detect")
+      Assert.True(frame._shown == true, "overlay must render even with Plater loaded (user opt-in)")
+      local font = Assert.NotNil(frame.text._font, "SetFont must still be called when Plater is loaded")
+      Assert.Equal(font.size, 16, "fontSize must still be honoured when Plater is loaded")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -701,4 +803,5 @@ return function(test, ctx)
   RegisterLifecycleTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules)
 end
