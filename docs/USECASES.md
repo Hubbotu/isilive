@@ -38,7 +38,10 @@ Zuletzt aktualisiert: `2026-04-24`
 | UC-14 | Combat-Utility-Tracker | Live-BRes, Lust, Mythic+-Timer und gesyncter Interrupt-State bleiben im Roster-Panel sichtbar |
 | UC-15 | LFG-Detektion und Portal-Highlight | LFG-Einladungen und eigene Listings loesen lokalisierte Hinweise und das passende Portal-Highlight deterministisch aus |
 | UC-16 | BR- und Bloodlust-Gruppen-Announce im Mythic+ | Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird innerhalb eines aktiven Keys genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt |
-| UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile `Forces: %.2f%% (+%d)` an den Blizzard-Tooltip an |
+| UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile aus der DB an den Blizzard-Tooltip an |
+| UC-18 | Nameplate-Forces-Overlay im Mythic+ | Optionales Live-Overlay auf jeder feindlichen Namensplakette zeigt den Mob-Forces-Beitrag und optional den Boss-Target-Remainder |
+| UC-19 | Boss-Target-Marker im Killtracker | Vertikale Markerlinien auf der Forces-Bar visualisieren die kumulativen Boss-Target-Schwellen mit Drei-State-Farbcoding |
+| UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -208,11 +211,51 @@ Ziel: Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile an
 2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und stellt `MPlusForces.byNpcId` sowie `MPlusForces.dungeonTotal` bereit. Ohne validen Datensatz wird die Zeile nicht gerendert.
 3. Verarbeitung: Der GUID wird entweder direkt aus den Tooltip-Daten oder als Fallback aus `UnitGUID("mouseover")` gezogen; `NpcIdFromGuid` parsed den Blizzard-GUID und akzeptiert nur `Creature` oder `Vehicle`. Spieler-GUIDs werden verworfen.
 4. Regel: Der Eintrag wird nur gerendert, wenn die NPC-Map-ID des Datensatzes mit der aktiven Challenge-Map-ID uebereinstimmt; fremde Dungeon-NPCs (zum Beispiel in World-Quests) erhalten keine Zeile.
-5. Verarbeitung: Die Zeile wird als `string.format("Forces: %.2f%% (+%d)", (count / total) * 100, count)` mit der Farbe `(0.4, 0.8, 1)` via `tooltip:AddLine(...)` angehaengt.
+5. Verarbeitung: Die Zeile wird ueber die lokalisierte Format-Vorlage `L.TOOLTIP_MOB_PROGRESS_LINE` mit `count`, `(count / total) * 100` und `total` formatiert (enUS `+%d progress (%.2f%% of %d)`, deDE `+%d Fortschritt (%.2f%% von %d)`, alle 8 Sprachen synchron) und mit der Farbe `(0.4, 0.8, 1)` via `tooltip:AddLine(...)` angehaengt. Der Locale-Getter wird ueber `MobTooltip.SetLocaleGetter(ctx.GetL)` von der Factory verdrahtet.
 6. Regel: Ein `OnTooltipCleared`-Hook auf `GameTooltip` loescht die per-Tooltip-Dedup-Map, damit `TooltipDataProcessor`-Rerenders desselben Mobs keine Doppelzeilen stapeln.
 7. Regel: `MobTooltip.SetEnabled(false)` gated das Rendering komplett; bei deaktiviertem Feature wird keine Zeile gerendert, auch wenn alle anderen Voraussetzungen stimmen.
 8. Regel: 12.0-Secret-Value-Guards greifen an drei Stellen, bevor ein Wert verglichen oder als Pattern-Match ausgewertet wird: `C_ChallengeMode.GetActiveChallengeMapID()` (secret gemachter Wert zaehlt als kein aktiver Key), `tooltipData.guid` und der Fallback `UnitGUID("mouseover")` (secret gemachte GUID wird verworfen, damit der SetWorldCursor-Tooltip-Pfad keinen `"attempt to compare field 'guid' (a secret string value tainted by 'isiLive')"`-Fehler produziert). Ein secret gemachter Wert an irgendeiner dieser Stellen unterdrueckt das Rendering.
 9. Erfolgskriterium: Hovern ueber einen Dungeon-Mob im aktiven Key zeigt eine stabile Forces-Zeile, Hovern ausserhalb eines Keys oder auf fremden Mobs erzeugt keine Zeile, Tooltip-Rerenders duplizieren die Zeile nicht.
+
+## UC-18 Nameplate-Forces-Overlay im Mythic+
+
+Ziel: Eine optionale Live-Anzeige auf jeder feindlichen Namensplakette waehrend eines aktiven M+-Keys zeigt dem Spieler den Forces-Beitrag dieses Mobs ohne Mouseover.
+
+1. Trigger: `NAME_PLATE_UNIT_ADDED` / `NAME_PLATE_UNIT_REMOVED` / `CHALLENGE_MODE_START` / `PLAYER_ENTERING_WORLD` / `SCENARIO_UPDATE` feuern, waehrend `C_ChallengeMode.IsChallengeModeActive()` `true` liefert und der User `mobNameplateEnabled` aktiviert hat.
+2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und liefert `MPlusForces.byNpcId` plus `MPlusForces.dungeonTotal[mapID].total`. Optional `data/isiLive_mplus_boss_targets.lua` fuer Boss-Target-Remainder, ueberschreibbar via `IsiLiveDB.bossTargetsOverride[mapID]`.
+3. Aktivierungs-Gate (alle vier muessen halten): aktiver Key, User-Toggle gesetzt, `UnitReaction(unit,"player") <= 4` (hostile/neutral, friendly Units skipped), `UnitGUID` ist ein nicht-leerer String und kein Secret Value.
+4. Verarbeitung: Der GUID wird in eine NpcID umgewandelt (Pattern-Match auf den Blizzard-GUID, akzeptiert nur `Creature` und `Vehicle`), und der `count`-Wert aus `MPlusForces.byNpcId[npcId]` wird durch `MPlusForces.dungeonTotal[mapID].total` geteilt -> `percent = count / total * 100`. Diese DB-basierte Berechnung ist die primaere Quelle; die Blizzard-API `C_ScenarioInfo.GetUnitCriteriaProgressValues` wird nur als Fallback genutzt, wenn die DB den NPC nicht kennt (frischer Patch-Mob vor naechstem MDT-Refresh).
+5. Regel: `BuildText` rendert je nach `format`-Konfiguration `<percent>%`, `<percent>% | +<remainder>%` (Boss-Target-Mode `next` oder `end`) oder versteckt das Frame, wenn keine sichtbaren Anteile vorhanden sind.
+6. Regel: 12.0-Secret-Value-Guards greifen vor jedem `==`/`~=`/`<=`/`<`/Pattern-Match-Operator: `mapID`, `numCriteria`, `quantity`, `totalQuantity`, `unitGUID`, `unitReaction`, `percentString`. Die Reihenfolge ist `type() -> IsSecretValue() -> Comparison`, niemals umgekehrt, da der Comparison-Operator den Stack tainted, bevor der Guard laeuft.
+7. Regel: Frame-Pool pro `unit`-Token, sodass `CreateFrame` hoechstens einmal pro gleichzeitig aktivem Nameplate-Slot gerufen wird. `NAME_PLATE_UNIT_REMOVED` versteckt das Frame und entfernt den Pool-Eintrag.
+8. Regel: Plater- oder Platynator-Soft-Detect zeigt eine dezente Warnung in den Settings; `mobNameplateEnabled` defaultet auf `false` fuer Frischinstallationen, damit Nutzer dieser Addons keine Doppel-Anzeige erhalten.
+9. Verarbeitung: `appearance.fontSize` wird via `ApplyFont(fontString)` als `SetFont(file, size, flags)` mit dem Template `GameFontNormalOutline` und Default-Fallback `Fonts\\FRIZQT__.TTF` / `OUTLINE` auf den FontString uebertragen, sowohl bei Frame-Erstellung als auch bei jedem Refresh, sodass Slider-Aenderungen ohne `/reload` durchschlagen.
+10. Erfolgskriterium: Im aktiven Key zeigt jede feindliche Namensplakette eine deterministische, lokalisierungsneutrale Forces-Zahl, die der Mouseover-Tooltip-Zeile entspricht; ausserhalb eines Keys oder bei nicht-feindlichen Units bleibt das Overlay versteckt.
+
+## UC-19 Boss-Target-Marker im Killtracker
+
+Ziel: Visuelles Feedback auf der Killtracker-Forces-Bar, damit der Spieler waehrend eines Pulls sieht, ob die kumulative Forces den naechsten Boss-Target erreichen.
+
+1. Trigger: `KillTrack.OnUpdate` feuert nach `SCENARIO_CRITERIA_UPDATE`, `PLAYER_REGEN_DISABLED`, `PLAYER_REGEN_ENABLED`, `CHALLENGE_MODE_START` oder dem 0.5s-Refresh-Ticker.
+2. Voraussetzung: `data/isiLive_mplus_boss_targets.lua` ist geladen und liefert kumulative Boss-Target-Prozente pro `mapID`, ueberschreibbar via `IsiLiveDB.bossTargetsOverride[mapID]`. `KillTrack.GetData()` exposed `mapID` fuer das Lookup.
+3. Verarbeitung: Pre-allocierter Pool von 8 Marker-Texturen pro Killtracker-Row. Pro Render: aktuelle Container-Breite -> Position `x = floor(w * target / 100 + 0.5)`, `marker:SetPoint("TOP", barContainer, "TOPLEFT", x, 0)` und `marker:SetPoint("BOTTOM", barContainer, "BOTTOMLEFT", x, 0)`.
+4. Regel: Drei-State-Farbcoding basierend auf `accumulated` (`state.percent`) und `pullPct` (`pull.pullPercent`):
+   - **Grau** `(0.6, 0.6, 0.65, 0.9)` -> `pct + pullPct < target` (Boss-Target jenseits des aktuellen Pulls).
+   - **Gelb** `(1.0, 0.85, 0.2, 0.9)` -> `pct < target <= pct + pullPct` (laufender Pull bringt cumulative ueber das Target).
+   - **Gruen** `(0.2, 0.85, 0.3, 0.9)` -> `pct >= target` (Boss-Target bereits erreicht).
+5. Regel: Wenn `mapID` nil ist oder kein Boss-Target-Eintrag fuer die map existiert, werden alle Marker versteckt; keine Fehlerausgabe.
+6. Regel: Marker-Z-Order liegt im OVERLAY-Layer ueber `barFill` (cumulative) und `barPull` (pull), damit sie auch bei voller Bar sichtbar bleiben.
+7. Erfolgskriterium: Im aktiven Key zeigt die Killtracker-Bar 3-4 vertikale Marker pro Dungeon, der naechste Marker laeuft auf gelb, sobald der laufende Pull die Schwelle erreichen wuerde, und auf gruen sobald die Schwelle ueberschritten ist.
+
+## UC-20 Clear-Log-Buttons im Settings-Debug
+
+Ziel: Den User die beiden On-Reload-Debug-Logs (Queue-Debug, Runtime-Log) per Klick aus dem Settings-Panel leeren lassen, ohne die Slash-Command-Variante kennen zu muessen.
+
+1. Trigger: Klick auf den `Clear Queue Debug Log`- oder `Clear Runtime Log`-Action-Button in der Debug-Sektion des Blizzard-Settings-Canvas.
+2. Verarbeitung: Der Klick ruft `config.onClearQueueDebugLog()` bzw. `config.onClearRuntimeLog()`. Die Factory verdrahtet diese auf `ctx.clearQueueDebugLog` und `ctx.clearRuntimeLog`, dieselben Dispatcher die auch `/isilive qdebug clear` und `/isilive log clear` nutzen.
+3. Regel: Beide Buttons zeigen einen lokalisierten Label-Text aus `L.SETTINGS_QUEUE_DEBUG_CLEAR` / `L.SETTINGS_RUNTIME_LOG_CLEAR`; alle 8 Sprachen synchron.
+4. Regel: Der Refresh-on-Language-Change-Pfad in `RefreshSettingsControls` zieht die Button-Labels nach Sprachwechsel automatisch nach.
+5. Erfolgskriterium: Klick auf einen der beiden Buttons leert sofort den jeweiligen Log-Buffer (verifizierbar via `/isilive log status` oder `/isilive qdebug status`); die Slash-Command-Variante bleibt parallel verfuegbar.
 
 ## Nichtfunktionale Regeln
 

@@ -18,7 +18,9 @@ When you join a group, isiLive opens a single window with everything you want to
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
-- Forces percentage and a live pull-prediction bar
+- Forces percentage with a live pull-prediction bar **and visual boss-target markers** so you see at a glance whether a pull will reach the next boss threshold
+- Optional **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus an optional remainder until the next (or final) boss
+- Forces info on the **mouseover tooltip** for any mob in a key
 
 Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
 
@@ -96,6 +98,12 @@ A bottom bar that shows your kill-count percentage:
 
 - **Green** < 80%, **Yellow** < 95%, **Red** ≥ 95%
 - During a pull, a light-blue segment on the right shows **how much the current pull will add** (`+X.XX%`) — so you can see mid-pull whether it's enough
+- **Boss-target markers**: thin vertical lines on the bar at each cumulative boss-target threshold for the current dungeon
+  - **Grey** marker → boss target is beyond the current pull
+  - **Yellow** marker → the running pull will reach the threshold once it lands
+  - **Green** marker → the threshold is already cleared by accumulated forces
+
+Boss-target percentages come from a community-maintained data table (8 Midnight S1 dungeons). You can override them per dungeon via `IsiLiveDB.bossTargetsOverride[mapID] = { 28.07, 52.2, 60.09, 100 }` in the SavedVariables file (no UI for that — manual edit).
 
 ### Teleport Grid
 
@@ -137,10 +145,29 @@ Forces a fresh sync round. Use it if someone's iLvl or key looks stuck. Asks com
 When you hover a mob during a key, the tooltip gains a line:
 
 ```
-Forces: 1.25% (+3)
++3 progress (1.25% of 240)
 ```
 
-That tells you how much that mob (and its group) is worth — handy to decide whether a pull gets you over a threshold.
+That tells you how much that mob is worth and what fraction of the dungeon-total it represents — handy to decide whether a pull gets you over a threshold. Localized in all 8 supported languages (DE: `+3 Fortschritt (1,25% von 240)`).
+
+The percent is computed from the bundled MDT-synced forces DB, **not** from Blizzard's `GetUnitCriteriaProgressValues` API directly. That API in 12.0+ protected contexts can return cumulative dungeon progress instead of the per-mob contribution; reading from the DB is deterministic and immune to that drift.
+
+### Forces overlay on enemy nameplates
+
+Optional always-on text over every hostile unit's nameplate during a key (off by default; enable in Settings → Nameplates).
+
+```
+1.16%
+```
+
+Configurable: percent only, percent + boss-target remainder, font size 8-24, position around the nameplate (LEFT/RIGHT/TOP/BOTTOM). Same DB-based source as the tooltip — deterministic mob contribution, never the cumulative progress.
+
+**Optional remainder mode** (off / next boss / final boss):
+- `off` — only the per-mob percent (default)
+- `next` — appends `+X%` showing how much is still needed until the next not-yet-defeated boss target
+- `end` — appends `+X%` showing remainder until 100% (the end-boss threshold)
+
+Plater / Platynator users: a soft warning is shown in Settings if either is loaded — both addons can already display M+ forces on nameplates via their own scripts, so isiLive's overlay defaults to off to avoid duplication.
 
 ### Battle Res / Bloodlust chat announce
 
@@ -192,8 +219,9 @@ Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 - **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
 - **Behavior** — addon sync, auto-open on M+ queue, auto-close on key start, raid behavior, column guides
 - **Sounds** — lead transfer, group join, portal available
+- **Nameplates** — enable forces overlay, font size, position, percent toggle, boss-target remainder mode
 - **Chat Announcements** — announce Battle Res / announce Bloodlust
-- **Administrative** — queue debug log, runtime log (both reset on reload, for support)
+- **Administrative** — queue debug log, runtime log (both reset on reload, for support), plus dedicated **Clear Queue Debug Log** / **Clear Runtime Log** buttons in the panel for one-click log purge without using the slash command
 
 ### Auto-open defaults
 
