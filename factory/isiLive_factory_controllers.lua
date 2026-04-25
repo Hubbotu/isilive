@@ -1478,12 +1478,23 @@ local function InitializeFactorySecondaryCdTracker(
   -- on every scenario tick / combat transition instead of only on roster
   -- renders (which fire on sync events, not on scenario progress).
   local killTrack = ctx.addonTable and ctx.addonTable.KillTrack
-  if type(killTrack) == "table" and type(killTrack.OnUpdate) == "function" then
-    killTrack.OnUpdate(function()
-      if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
-        ctx.rosterPanelController.RefreshKillTrackRow()
-      end
-    end)
+  if type(killTrack) == "table" then
+    if type(killTrack.OnUpdate) == "function" then
+      killTrack.OnUpdate(function()
+        if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
+          ctx.rosterPanelController.RefreshKillTrackRow()
+        end
+      end)
+    end
+    -- Forward API-vs-DB total drift warnings into the runtime log so they
+    -- surface in /isilive log dump without spamming chat.
+    if type(killTrack.SetDebugLogger) == "function" then
+      killTrack.SetDebugLogger(function(fmt, ...)
+        if ctx.runtimeLogController and type(ctx.runtimeLogController.Logf) == "function" then
+          ctx.runtimeLogController.Logf(fmt, ...)
+        end
+      end)
+    end
   end
   -- Ticker: scan + UI refresh every second for countdown timers (BL remaining time).
   local C_Timer_ref = rawget(_G, "C_Timer")

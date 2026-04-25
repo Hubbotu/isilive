@@ -5,11 +5,19 @@ addonTable = addonTable or {}
 local KillTrack = {}
 addonTable.KillTrack = KillTrack
 
+-- Optional sink for drift warnings (API-total vs DB-total).
+-- The factory wires this to ctx.runtimeLogController.Logf so divergences land
+-- in /isilive log dump output without spamming the chat frame.
+local debugLogger = nil
+
+local lastDriftKey = nil
+
 local state = {
   active = false,
   percent = 0,
   rawCount = 0,
   total = 0,
+  mapID = nil,
 }
 
 -- Pull prediction state (delta-based, Midnight-compatible).
@@ -92,10 +100,12 @@ local function ReadLiveData()
     state.percent = 0
     state.rawCount = 0
     state.total = 0
+    state.mapID = nil
     return
   end
 
   state.active = true
+  state.mapID = mapID
 
   local cInfo = FindEnemyForcesCriteria()
   if not cInfo then
@@ -105,14 +115,57 @@ local function ReadLiveData()
     return
   end
 
-  local total = cInfo.totalQuantity
-  if not total or issecret(total) or total <= 0 then
+  -- Resolve API-total (live) and DB-total (deterministic, MDT-synced).
+  -- API has primacy because rawCount comes from the same API call -- using a
+  -- different total denominator would produce off-by-fraction percentages
+  -- after a Blizzard-side patch shift. DB-total is a fallback for the rare
+  -- case where Blizzard taints / nils the field.
+  local apiTotalRaw = cInfo.totalQuantity
+  local apiTotal = nil
+  if apiTotalRaw and not issecret(apiTotalRaw) then
+    local n = tonumber(apiTotalRaw)
+    if n and n > 0 then
+      apiTotal = n
+    end
+  end
+
+  local dbTotal = nil
+  local mplusForces = addonTable.MPlusForces
+  if type(mplusForces) == "table" and type(mplusForces.dungeonTotal) == "table" then
+    local entry = mplusForces.dungeonTotal[mapID]
+    if type(entry) == "table" then
+      local n = tonumber(entry.total)
+      if n and n > 0 then
+        dbTotal = n
+      end
+    end
+  end
+
+  local total = apiTotal or dbTotal
+  if not total or total <= 0 then
     state.percent = 0
     state.rawCount = 0
     state.total = 0
     return
   end
   state.total = total
+
+  -- Drift-detection: if both totals exist and disagree, surface once via the
+  -- runtime-log sink. Suppresses repeat-spam by remembering the last key we
+  -- already reported (mapID + values).
+  if apiTotal and dbTotal and apiTotal ~= dbTotal and type(debugLogger) == "function" then
+    local key = string.format("%d:%d:%d", mapID, apiTotal, dbTotal)
+    if lastDriftKey ~= key then
+      lastDriftKey = key
+      pcall(
+        debugLogger,
+        "[KILLTRACK] mapID=%d total drift: api=%d db=%d (using api; check tools/sync_mdt_forces.lua)",
+        mapID,
+        apiTotal,
+        dbTotal
+      )
+    end
+  end
 
   local rawCount = 0
   local qStr = cInfo.quantityString
@@ -126,6 +179,12 @@ local function ReadLiveData()
   end
   state.rawCount = rawCount
   state.percent = (rawCount / total) * 100
+end
+
+function KillTrack.SetDebugLogger(fn)
+  if type(fn) == "function" or fn == nil then
+    debugLogger = fn
+  end
 end
 
 local function UpdatePullPercent()
@@ -190,6 +249,7 @@ function KillTrack.GetData()
     percent = state.percent,
     rawCount = state.rawCount,
     total = state.total,
+    mapID = state.mapID,
     inCombat = displayPull,
     pullPercent = displayPull and pull.pullPercent or 0,
   }
@@ -238,6 +298,7 @@ function KillTrack._DispatchEvent(event)
     state.percent = 0
     state.rawCount = 0
     state.total = 0
+    state.mapID = nil
     pull.inCombat = false
     pull.pullPercent = 0
     pull.displayUntil = 0

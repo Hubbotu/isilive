@@ -90,12 +90,119 @@ local function CreateKillTrackRow(mainFrame)
   pctText:SetText("--,--")
   ApplyFontStringSize(pctText, CD_TRACKER_FONT_SIZE)
 
+  -- Boss-target markers: thin vertical lines on the bar at each cumulative
+  -- boss-target threshold from data/isiLive_mplus_boss_targets.lua. Pre-allocate
+  -- a fixed pool of 8 (current Midnight S1 dungeons have 3-4 bosses each, 8 is
+  -- safe headroom for future seasons). Visibility / position / color is set
+  -- per render in UpdateKillTrackRow.
+  local bossMarkers = {}
+  for i = 1, 8 do
+    local marker = barContainer:CreateTexture(nil, "OVERLAY")
+    if type(marker.SetTexture) == "function" then
+      marker:SetTexture("Interface\\Buttons\\WHITE8X8")
+    end
+    if type(marker.SetWidth) == "function" then
+      marker:SetWidth(1)
+    end
+    if type(marker.Hide) == "function" then
+      marker:Hide()
+    end
+    bossMarkers[i] = marker
+  end
+
   row.killTrackBarContainer = barContainer
   row.killTrackBarFill = barFill
   row.killTrackBarPull = barPull
   row.killTrackPctText = pctText
   row.killTrackPullText = pullText
+  row.killTrackBossMarkers = bossMarkers
   return row
+end
+
+local function ResolveBossTargetsForMap(mapID)
+  if type(mapID) ~= "number" then
+    return nil
+  end
+  local db = rawget(_G, "IsiLiveDB")
+  if type(db) == "table" and type(db.bossTargetsOverride) == "table" then
+    local override = db.bossTargetsOverride[mapID]
+    if type(override) == "table" and #override > 0 then
+      return override
+    end
+  end
+  local defaults = addonTable.MPlusBossTargets
+  if type(defaults) ~= "table" or type(defaults.byMapID) ~= "table" then
+    return nil
+  end
+  local entry = defaults.byMapID[mapID]
+  if type(entry) == "table" and #entry > 0 then
+    return entry
+  end
+  return nil
+end
+
+local function UpdateBossTargetMarkers(row, data, barContainer, containerWidth)
+  local bossMarkers = row.killTrackBossMarkers
+  if type(bossMarkers) ~= "table" then
+    return
+  end
+
+  -- Always hide all markers first; we re-show only the ones that match the
+  -- current map. Avoids stale markers when switching dungeons mid-session.
+  for i = 1, #bossMarkers do
+    local m = bossMarkers[i]
+    if m and type(m.Hide) == "function" then
+      m:Hide()
+    end
+  end
+
+  if not data or not data.active or not barContainer or containerWidth <= 0 then
+    return
+  end
+
+  local targets = ResolveBossTargetsForMap(data.mapID)
+  if not targets then
+    return
+  end
+
+  local cumulative = math.max(0, math.min(data.percent or 0, 100))
+  local pull = (data.inCombat and type(data.pullPercent) == "number") and data.pullPercent or 0
+  local cumulativePlusPull = math.min(cumulative + pull, 100)
+
+  for i, targetPct in ipairs(targets) do
+    local marker = bossMarkers[i]
+    if not marker then
+      break
+    end
+    local target = tonumber(targetPct)
+    if target and target > 0 and target <= 100 then
+      local x = math.floor(containerWidth * target / 100 + 0.5)
+      if type(marker.ClearAllPoints) == "function" then
+        marker:ClearAllPoints()
+      end
+      if type(marker.SetPoint) == "function" then
+        marker:SetPoint("TOP", barContainer, "TOPLEFT", x, 0)
+        marker:SetPoint("BOTTOM", barContainer, "BOTTOMLEFT", x, 0)
+      end
+      local r, g, b
+      if cumulative >= target then
+        -- Boss-threshold already cleared by accumulated forces.
+        r, g, b = 0.2, 0.85, 0.3
+      elseif cumulativePlusPull >= target then
+        -- Current pull will clear the threshold once it lands.
+        r, g, b = 1.0, 0.85, 0.2
+      else
+        -- Not yet reachable from this pull.
+        r, g, b = 0.6, 0.6, 0.65
+      end
+      if type(marker.SetVertexColor) == "function" then
+        marker:SetVertexColor(r, g, b, 0.9)
+      end
+      if type(marker.Show) == "function" then
+        marker:Show()
+      end
+    end
+  end
 end
 
 local function UpdateKillTrackRow(row)
@@ -163,6 +270,7 @@ local function UpdateKillTrackRow(row)
         pullText:SetText("")
       end
     end
+    UpdateBossTargetMarkers(row, data, barContainer, w)
   else
     if barFill then
       barFill:Hide()
@@ -179,6 +287,7 @@ local function UpdateKillTrackRow(row)
     if pullText then
       pullText:SetText("")
     end
+    UpdateBossTargetMarkers(row, nil, barContainer, 0)
   end
 end
 

@@ -322,6 +322,129 @@ local function RegisterTickerTests(test, Assert, WithGlobals, LoadAddonModules)
   end)
 end
 
+local function RegisterDbTotalAndMapIdTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("KillTrack.GetData exposes the active challenge mapID for downstream consumers", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 25, total = 100, mapID = 559 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.mapID, 559, "GetData must surface the active challenge mapID for UI lookups")
+    end)
+  end)
+
+  test("KillTrack.GetData clears mapID on CHALLENGE_MODE_COMPLETED", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 25, total = 100, mapID = 559 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_COMPLETED")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.mapID, nil, "mapID must reset to nil when the key ends")
+    end)
+  end)
+
+  test("KillTrack falls back to MPlusForces.dungeonTotal when API totalQuantity is missing", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 25, total = 100, mapID = 559 } })
+    -- Simulate Blizzard API returning a nil totalQuantity (e.g. tainted in a
+    -- protected context). API has primacy normally; with API absent, the DB
+    -- value drives the percent calculation.
+    env.globals.C_ScenarioInfo.GetCriteriaInfo = function()
+      return {
+        isWeightedProgress = true,
+        totalQuantity = nil,
+        quantityString = "25",
+        quantity = 25,
+      }
+    end
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" }, {
+        MPlusForces = {
+          dungeonTotal = { [559] = { total = 596, name = "Nexus Point Xenas" } },
+          byNpcId = {},
+        },
+      })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.total, 596, "total must come from MPlusForces.dungeonTotal when API total is missing")
+      Assert.True(math.abs(data.percent - (25 / 596) * 100) < 0.01, "percent uses DB-total when API-total is absent")
+    end)
+  end)
+
+  test("KillTrack ignores DB total when API total is present and uses API-total instead", function()
+    -- API-total has primacy because rawCount also comes from the API; mixing
+    -- API-rawCount with DB-total would produce off-by-fraction percentages
+    -- after a Blizzard-side patch shifts the dungeon's max forces value.
+    local env = BuildKillTrackEnv({ scenario = { quantity = 50, total = 450, mapID = 559 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" }, {
+        MPlusForces = {
+          dungeonTotal = { [559] = { total = 596, name = "Nexus Point Xenas" } },
+          byNpcId = {},
+        },
+      })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.total, 450, "API total must win when present, even if DB has a different value")
+    end)
+  end)
+
+  test("KillTrack debug logger fires once on API/DB total drift, then suppresses repeats", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 50, total = 450, mapID = 559 } })
+    local driftMessages = {}
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" }, {
+        MPlusForces = {
+          dungeonTotal = { [559] = { total = 596, name = "Nexus Point Xenas" } },
+          byNpcId = {},
+        },
+      })
+      addon.KillTrack.SetDebugLogger(function(fmt, ...)
+        table.insert(driftMessages, string.format(fmt, ...))
+      end)
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      Assert.Equal(#driftMessages, 1, "drift logger fires once on first divergent read")
+      Assert.True(
+        driftMessages[1]:find("api=450", 1, true) ~= nil,
+        "drift message must include the api total value: " .. driftMessages[1]
+      )
+      Assert.True(
+        driftMessages[1]:find("db=596", 1, true) ~= nil,
+        "drift message must include the db total value: " .. driftMessages[1]
+      )
+
+      -- Second read with same values must NOT re-trigger the logger.
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      Assert.Equal(#driftMessages, 1, "drift logger must suppress repeated identical drifts")
+    end)
+  end)
+
+  test("KillTrack stays inactive when API total is missing and DB has no entry for the mapID", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 25, total = 100, mapID = 99999 } })
+    env.globals.C_ScenarioInfo.GetCriteriaInfo = function()
+      return {
+        isWeightedProgress = true,
+        totalQuantity = nil,
+        quantityString = "25",
+        quantity = 25,
+      }
+    end
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" }, {
+        MPlusForces = {
+          dungeonTotal = { [559] = { total = 596 } },
+          byNpcId = {},
+        },
+      })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.total, 0, "total must be 0 when neither API nor DB provides a value for mapID")
+      Assert.Equal(data.percent, 0, "percent must be 0 when total cannot be resolved")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -332,4 +455,5 @@ return function(test, ctx)
   RegisterPullBaselineTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterSubscriberTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterTickerTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterDbTotalAndMapIdTests(test, Assert, WithGlobals, LoadAddonModules)
 end
