@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-04-24 - Version 0.9.191 (minor)
+
+- **M+Killtracker: DB-total Fallback + Drift-Warning + Boss-Target-Marker auf der Progress-Bar ([game/isiLive_killtrack.lua](../game/isiLive_killtrack.lua), [ui/isiLive_roster_panel_kill_row.lua](../ui/isiLive_roster_panel_kill_row.lua)):**
+  - Konsistenz-Anker mit dem Nameplate-/Tooltip-Pfad (0.9.186): der Killtracker liest `total` weiterhin primaer aus `cInfo.totalQuantity` (Blizzard-API hat Vorrang weil `rawCount` aus derselben Quelle kommt — gemischte API-rawCount + DB-total wuerden Off-by-Fraction-Prozente nach Patch-Drift produzieren). Aber: wenn die API-`totalQuantity` fehlt (Secret-Value-Taint, nil-Return, <=0), faellt der Killtracker auf `addonTable.MPlusForces.dungeonTotal[mapID].total` zurueck statt sich komplett auszuschalten. Ohne den Fallback wuerde der Tracker bei einem temporaeren API-Quirk seine Anzeige verlieren; mit dem Fallback bleibt er live solange die DB den Dungeon kennt.
+  - Drift-Detection: wenn API-total und DB-total beide existieren aber unterschiedlich sind, surfaced der Killtracker das einmalig in das Runtime-Log via neuem `KillTrack.SetDebugLogger`-Hook (`[KILLTRACK] mapID=X total drift: api=Y db=Z (using api; check tools/sync_mdt_forces.lua)`). Ein `lastDriftKey`-Cache unterdrueckt Re-Spam bei wiederholten identischen Drifts. Damit erkennen wir live ob Blizzard die `dungeonTotalCount` zwischen MDT-Refreshes geaendert hat — Symptom waere systematisch falsche %-Werte.
+  - `KillTrack.GetData()` rueckgibt jetzt zusaetzlich `mapID` (aus `state.mapID`, gesetzt in `ReadLiveData`, gecleart bei `CHALLENGE_MODE_COMPLETED`/`CHALLENGE_MODE_RESET`). Notwendig fuer das UI-Boss-Target-Lookup.
+  - **Boss-Target-Marker auf der Forces-Progress-Bar** ([ui/isiLive_roster_panel_kill_row.lua](../ui/isiLive_roster_panel_kill_row.lua)): vertikale 1px-Linien an den Boss-Target-Schwellen aus [data/isiLive_mplus_boss_targets.lua](../data/isiLive_mplus_boss_targets.lua) (z.B. Skyreach `{28.07, 52.2, 60.09, 100}`). Pre-allocierte Pool von 8 Marker-Texturen pro Row (aktuell max 4 Bosse pro Dungeon, 8 ist Headroom). Pro Render: Position rechnerisch aus aktueller Container-Breite × target/100, Re-Position bei Layout-Switches automatisch via `OnSizeChanged`-Trigger der bereits existierenden bar-Refresh-Pipeline.
+  - **Marker-Farbcodierung** drei States basierend auf `accumulated` (cumulative `state.percent`) und `pullPct` (`pull.pullPercent`):
+    - **Grau** (`0.6, 0.6, 0.65, 0.9`) — Boss-Target liegt jenseits des aktuellen Pulls (Default, "noch nicht erreichbar")
+    - **Gelb** (`1.0, 0.85, 0.2, 0.9`) — laufender Pull bringt cumulative ueber das Boss-Target ("wenn dieser Pull durchlaeuft, ist Boss freigeschaltet"). Kriterium: `pct < target <= pct + pullPct`.
+    - **Gruen** (`0.2, 0.85, 0.3, 0.9`) — Boss-Target ist bereits durch cumulative ueberschritten ("Boss bereits freigeschaltet"). Kriterium: `pct >= target`.
+  - User-Override beim Boss-Targets via `IsiLiveDB.bossTargetsOverride[mapID]` wird respektiert (gleiche Resolve-Logik wie im Nameplate aus 0.9.183).
+
+- **Tests:**
+  - 6 neue Scenarios in [testmodul/isilive_test_scenarios_killtrack.lua](../testmodul/isilive_test_scenarios_killtrack.lua):
+    - `KillTrack.GetData exposes the active challenge mapID for downstream consumers`
+    - `KillTrack.GetData clears mapID on CHALLENGE_MODE_COMPLETED`
+    - `KillTrack falls back to MPlusForces.dungeonTotal when API totalQuantity is missing` (API-nil → DB-Wert wird genommen, percent rechnet 25/596*100)
+    - `KillTrack ignores DB total when API total is present and uses API-total instead` (API-total 450 vs DB-total 596 — API gewinnt, percent basiert auf 450)
+    - `KillTrack debug logger fires once on API/DB total drift, then suppresses repeats` (Drift-Logger-Hook + lastDriftKey-Suppression)
+    - `KillTrack stays inactive when API total is missing and DB has no entry for the mapID` (mapID=99999 ohne DB-Eintrag → state bleibt 0)
+  - Usecase total 1074 -> 1080.
+
 ## 2026-04-24 - Version 0.9.190 (patch)
 
 - **CI: 2 weitere Actions gebumpt - der 0.9.189 v4-->v5 reichte fuer `actions/upload-artifact` und `leafo/gh-actions-luarocks` nicht aus, beide v5 sind noch auf Node 20:**
