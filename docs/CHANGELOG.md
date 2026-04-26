@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-26 - Version 0.9.195 (patch)
+
+- **Code-Review-Followups aus dem 0.9.194-Audit ([logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
+  - **H1 Numerische Sortierung der extras-Pieces** im KICK-Payload: vorher wurde `table.sort(pieces)` lexikographisch sortiert, was bei Spell-IDs unterschiedlicher Stelligkeit (z.B. 1766 Rogue Kick vs 119914 Demo Warlock Axe Toss) inkonsistente Reihenfolge produziert haetten. Jetzt sortiert nach numerischer `sid`-Zahl, sodass das Dedup-Hash deterministisch bleibt unabhaengig von `pairs()`-Iterationsreihenfolge. Der Realfall mit 5-6-stelligen Spell-IDs war in der Praxis OK, aber zukunftssicherer ist das numerische Sortierverhalten.
+  - **M5 Defense-in-depth: extras-Limit 8 beim Receive**. `Sync.ProcessAddonMessage` cap't das Parsen des `:E:`-Suffix bei maximal 8 Eintraegen. Realistischer Max-Fall in Midnight ist 1-2 extras (Prot Pala Avenger's Shield, Demo Warlock pet swap); ein malformed oder hostile Peer kann jetzt nicht beliebig viele Eintraege durchquetschen und Memory-Spike provozieren. Der Cap ist konservativ ueber dem Realfall.
+  - **M3 Drift-Schwellen-Begruendung** in `keysync.lua` als Kommentarblock: extras nutzen 0.6 s Schwelle vs 0.05 s fuer den primary cooldownRemain. Begruendung: extras (typisch 30 s CDs) sind Talent-/Pet-Swap-Interrupts, sub-second drift ist im Tooltip nicht visuell wahrnehmbar und nicht das Re-Render wert. Primary-Cooldowns dagegen treiben die helle Kick-Spalte und brauchen tighten Sync.
+
+- **Tests:**
+  - `KillTrack.SetDebugLogger(nil) clears the sink so subsequent drift events are silently swallowed` — verifiziert dass nach `SetDebugLogger(nil)` keine weiteren Drift-Messages mehr ankommen, auch wenn ein neuer Drift-Key (Total-Aenderung) das Repeat-Suppression-Cache ueberwinden wuerde.
+  - `Sync ProcessAddonMessage caps extras list at 8 entries (defense-in-depth)` — sendet 12 entries, prueft dass exakt 8 gespeichert werden.
+  - `Sync multi-kick roundtrip: SendKick payload feeds back through ProcessAddonMessage to the peer entry` — vollstaendige E2E-Pipeline-Verifikation: Sender-Payload wird produziert, durch ProcessAddonMessage als wenn ein Peer es empfaengt zurueckgespielt, und der gespeicherte Peer-State enthaelt beide extras mit den unveraenderten remain-Werten. Schliesst eine Test-Coverage-Luecke aus dem 0.9.194-Code-Review.
+  - `MobNameplate ApplyFont falls back to default font when GameFontNormalOutline is missing` — simuliert Runtime ohne Blizzards FontObject, verifiziert dass `SetFont` trotzdem mit konfiguriertem `fontSize=14`, `Fonts\\FRIZQT__.TTF` Fallback-File und `OUTLINE` Fallback-Flags aufgerufen wird.
+  - 1088 / 1088 -> 1092 / 1092. Stylua, luacheck, hardcoded-strings clean. Reines Robustheits-/Test-Patch, keine User-sichtbare Verhaltensaenderung.
+
 ## 2026-04-26 - Version 0.9.194 (minor)
 
 - **Multi-Kick-Tracking fuer Specs mit zusaetzlichen Interrupts ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua), [logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua), [ui/isiLive_roster_tooltip.lua](../ui/isiLive_roster_tooltip.lua)):**
