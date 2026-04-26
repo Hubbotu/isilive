@@ -89,6 +89,27 @@ local SPEC_DATA = {
   [73] = { spellID = 6552, cd = 15 },
 }
 
+-- Class-level whitelist of all known interrupt spell IDs (across specs/talents).
+-- Used by OnCast to detect a cast that is "an interrupt of my class but NOT
+-- the registered primary slot" -- e.g. Demo Warlock with Inner Demons casts
+-- both Spell Lock (Felhunter) and Axe Toss (Felguard) in the same key, or
+-- Prot Paladin with the Avenger's Shield interrupt talent.
+--
+-- Classes with only one interrupt-spell across all specs are intentionally
+-- not listed -- spec-switching for them is handled via RefreshSpec on
+-- PLAYER_SPECIALIZATION_CHANGED, not through OnCast detection.
+local CLASS_INTERRUPT_LIST = {
+  WARLOCK = { 19647, 119914 }, -- Spell Lock + Axe Toss (player-facing)
+  PALADIN = { 96231, 31935 }, -- Rebuke + Avenger's Shield (talent-as-interrupt)
+}
+
+-- CDs for spells that appear ONLY as extras (not as a spec's primary in
+-- SPEC_DATA). Primary spells take their CD from SPEC_DATA, extras need this
+-- because there's no spec-slot to read from.
+local EXTRA_KICK_CD = {
+  [31935] = 30, -- Avenger's Shield (Prot Paladin interrupt talent)
+}
+
 -- Talent spell ID → { affects = interruptSpellID, reduction = seconds | pctReduction = % }
 local CD_REDUCTION_DEFS = {
   [382297] = { affects = 2139, reduction = 5 }, -- [DE: Geistesgegenwärtig] (Mage: Counterspell 25→20)
@@ -399,6 +420,71 @@ function KickTracker.CreateController(opts)
   local watchedCastUnit = "player"
   local watchedCd = nil -- pipeline: SPEC_DATA -> ReadBaseCd -> ScanOwnTalents -> CacheCooldown (each may override)
   local talentScanDirty = true -- invalidated on spec/talent change, cleared after ScanOwnTalents
+  -- Extras-Map für Multi-Kick (Demo Warlock Inner Demons, Prot Pala Avenger's Shield).
+  -- Key = spellID (= class-interrupt-list-member, der NICHT der primary ist).
+  -- Value = { cd = baseCd seconds, cdEnd = absolute getTime() when CD expires }.
+  local extras = {}
+  local cachedPlayerClass = nil
+
+  local function ResolvePlayerClass()
+    if cachedPlayerClass then
+      return cachedPlayerClass
+    end
+    local UnitClass_ref = rawget(_G, "UnitClass")
+    if type(UnitClass_ref) ~= "function" then
+      return nil
+    end
+    local ok, _, classToken = pcall(UnitClass_ref, "player")
+    if ok and type(classToken) == "string" and classToken ~= "" then
+      cachedPlayerClass = classToken
+    end
+    return cachedPlayerClass
+  end
+
+  local function FindExtraKickSpell(spellID)
+    local class = ResolvePlayerClass()
+    if not class then
+      return false
+    end
+    local list = CLASS_INTERRUPT_LIST[class]
+    if type(list) ~= "table" then
+      return false
+    end
+    if spellID == watchedSpellID then
+      return false -- this is the primary, not an extra
+    end
+    for _, candidate in ipairs(list) do
+      if candidate == spellID then
+        return true
+      end
+    end
+    return false
+  end
+
+  local function ResolveExtraKickCd(spellID)
+    local cd = EXTRA_KICK_CD[spellID]
+    if cd and cd > 0 then
+      return cd
+    end
+    -- Fallback: this spell is some other spec's primary in our SPEC_DATA.
+    -- E.g. for Demo Warlock with Felhunter, Spell Lock (19647) is the primary
+    -- of Aff/Destro -- we look up its CD there to avoid hardcoding twice.
+    for _, spec in pairs(SPEC_DATA) do
+      if type(spec) == "table" then
+        if type(spec.spellID) == "number" and spec.spellID == spellID and type(spec.cd) == "number" then
+          return spec.cd
+        end
+        if type(spec.spells) == "table" then
+          for _, s in ipairs(spec.spells) do
+            if type(s) == "table" and s.spellID == spellID and type(s.cd) == "number" then
+              return s.cd
+            end
+          end
+        end
+      end
+    end
+    return 30 -- conservative default
+  end
   local ReadBaseCd
   local ScanOwnTalents
   local SetCooldown
@@ -610,6 +696,11 @@ function KickTracker.CreateController(opts)
   end
 
   CacheCooldown()
+  -- Eagerly cache the player's class while UnitClass is reachable in this
+  -- chunk's runtime context. Some test harnesses scope WithGlobals tightly
+  -- around CreateController; OnCast may run later when the global is gone.
+  -- For the live addon this is just a one-time read during init.
+  ResolvePlayerClass()
 
   local controller = {}
 
@@ -622,18 +713,32 @@ function KickTracker.CreateController(opts)
       return false
     end
 
+    -- Primary path: this cast is the spec's registered interrupt.
     local spellData = GetSpellDataByID(specData, spellID)
-    if not spellData then
-      return false
+    if spellData then
+      watchedSpellID = spellData.spellID
+      watchedCd = watchedCd or spellData.cd
+      ReadBaseCd()
+      ScanOwnTalents()
+      local cd = watchedCd or 15
+      SetCooldown(true, getTime() + cd)
+      return true
     end
 
-    watchedSpellID = spellData.spellID
-    watchedCd = watchedCd or spellData.cd
-    ReadBaseCd()
-    ScanOwnTalents()
-    local cd = watchedCd or 15
-    SetCooldown(true, getTime() + cd)
-    return true
+    -- Extras path: this cast is a class-interrupt that's NOT the registered
+    -- primary slot -- e.g. Demo Warlock with Inner Demons casts both Spell
+    -- Lock (Felhunter) AND Axe Toss (Felguard), or Prot Paladin with the
+    -- Avenger's Shield interrupt talent. Tracked separately from primary.
+    if FindExtraKickSpell(spellID) then
+      local cd = ResolveExtraKickCd(spellID)
+      extras[spellID] = { cd = cd, cdEnd = getTime() + cd }
+      if onCooldownChanged then
+        onCooldownChanged(onCooldown, cooldownRemain, watchedSpellID)
+      end
+      return true
+    end
+
+    return false
   end
 
   -- Called on SPELL_UPDATE_COOLDOWN and PLAYER_REGEN_ENABLED to refresh cached CD.
@@ -661,14 +766,37 @@ function KickTracker.CreateController(opts)
     if not watchedSpellID then
       RefreshSpec()
     end
+    local now = getTime()
     if onCooldown and cdEndTime > 0 then
-      local now = getTime()
       if now >= cdEndTime then
         SetCooldown(false, 0)
       else
         cooldownRemain = cdEndTime - now
       end
     end
+    -- Sweep extras: drop any whose CD has expired so GetKickInfo doesn't
+    -- emit stale entries.
+    for spellID, data in pairs(extras) do
+      if type(data) ~= "table" or type(data.cdEnd) ~= "number" or now >= data.cdEnd then
+        extras[spellID] = nil
+      end
+    end
+  end
+
+  local function CollectExtrasInfo()
+    local now = getTime()
+    local out = nil
+    for spellID, data in pairs(extras) do
+      if type(data) == "table" and type(data.cdEnd) == "number" and data.cdEnd > now then
+        out = out or {}
+        out[spellID] = {
+          onCooldown = true,
+          cooldownRemain = math.max(0, data.cdEnd - now),
+          cd = data.cd,
+        }
+      end
+    end
+    return out
   end
 
   function controller.GetKickInfo()
@@ -680,6 +808,7 @@ function KickTracker.CreateController(opts)
       availabilityResolved = availabilityResolved == true,
       onCooldown = hasKick and onCooldown or false,
       cooldownRemain = remain,
+      extras = CollectExtrasInfo(),
     }
   end
 

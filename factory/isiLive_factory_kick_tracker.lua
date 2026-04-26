@@ -72,7 +72,15 @@ local function InitializeFactorySecondaryKickTracker(
       local selfName = getUnitName and getUnitName("player") or nil
       local selfRealm = getRealmName and getRealmName() or nil
       if selfName and selfName ~= "" then
-        modules.sync.SetPlayerKickInfo(selfName, selfRealm, info.onCooldown, info.cooldownRemain, nil, hasKick)
+        modules.sync.SetPlayerKickInfo(
+          selfName,
+          selfRealm,
+          info.onCooldown,
+          info.cooldownRemain,
+          nil,
+          hasKick,
+          info.extras
+        )
       end
     end
     local now = getTime()
@@ -83,12 +91,13 @@ local function InitializeFactorySecondaryKickTracker(
     if
       modules.sync
       and type(modules.sync.SendKick) == "function"
-      and (force == true or info.onCooldown or now < kickReadyBroadcastUntil or heartbeatDue)
+      and (force == true or info.onCooldown or now < kickReadyBroadcastUntil or heartbeatDue or info.extras)
     then
       modules.sync.SendKick({
         hasKick = hasKick,
         onCooldown = info.onCooldown,
         cooldownRemain = info.cooldownRemain,
+        extras = info.extras,
         force = force == true or heartbeatDue,
       })
     end

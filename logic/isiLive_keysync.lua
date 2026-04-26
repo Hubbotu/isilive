@@ -312,10 +312,16 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
   if type(kickInfo) == "table" then
     local hasKick = kickInfo.hasKick ~= false
     if not hasKick then
-      if info.syncHasKick ~= false or info.syncKickOnCooldown ~= nil or info.syncKickRemain ~= nil then
+      if
+        info.syncHasKick ~= false
+        or info.syncKickOnCooldown ~= nil
+        or info.syncKickRemain ~= nil
+        or info.syncKickExtras ~= nil
+      then
         info.syncHasKick = false
         info.syncKickOnCooldown = nil
         info.syncKickRemain = nil
+        info.syncKickExtras = nil
         changed = true
       end
     else
@@ -327,21 +333,69 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
           interpolatedRemain = math.max(0, kickInfo.cooldownRemain - elapsed)
         end
       end
+      -- Interpolate extras the same way: subtract elapsed time off each
+      -- entry's remain. Drop entries whose remain has expired.
+      local interpolatedExtras = nil
+      if type(kickInfo.extras) == "table" then
+        local elapsed = 0
+        if kickInfo.receivedAtGetTime then
+          local getTime = rawget(_G, "GetTime")
+          if type(getTime) == "function" then
+            elapsed = getTime() - kickInfo.receivedAtGetTime
+          end
+        end
+        for spellID, data in pairs(kickInfo.extras) do
+          local remain = type(data) == "table" and tonumber(data.cooldownRemain) or nil
+          if remain then
+            local adjusted = math.max(0, remain - elapsed)
+            if adjusted > 0 then
+              interpolatedExtras = interpolatedExtras or {}
+              interpolatedExtras[spellID] = { cooldownRemain = adjusted }
+            end
+          end
+        end
+      end
+      local extrasChanged = (info.syncKickExtras == nil) ~= (interpolatedExtras == nil)
+      if not extrasChanged and interpolatedExtras and info.syncKickExtras then
+        for sid, d in pairs(interpolatedExtras) do
+          local pd = info.syncKickExtras[sid]
+          if not pd or math.abs((pd.cooldownRemain or 0) - d.cooldownRemain) > 0.6 then
+            extrasChanged = true
+            break
+          end
+        end
+        if not extrasChanged then
+          for sid in pairs(info.syncKickExtras) do
+            if not interpolatedExtras[sid] then
+              extrasChanged = true
+              break
+            end
+          end
+        end
+      end
       if
         info.syncHasKick ~= true
         or info.syncKickOnCooldown ~= kickInfo.onCooldown
         or math.abs((info.syncKickRemain or 0) - interpolatedRemain) > 0.05
+        or extrasChanged
       then
         info.syncHasKick = true
         info.syncKickOnCooldown = kickInfo.onCooldown
         info.syncKickRemain = interpolatedRemain
+        info.syncKickExtras = interpolatedExtras
         changed = true
       end
     end
-  elseif info.syncHasKick ~= nil or info.syncKickOnCooldown ~= nil or info.syncKickRemain ~= nil then
+  elseif
+    info.syncHasKick ~= nil
+    or info.syncKickOnCooldown ~= nil
+    or info.syncKickRemain ~= nil
+    or info.syncKickExtras ~= nil
+  then
     info.syncHasKick = nil
     info.syncKickOnCooldown = nil
     info.syncKickRemain = nil
+    info.syncKickExtras = nil
     changed = true
   end
 

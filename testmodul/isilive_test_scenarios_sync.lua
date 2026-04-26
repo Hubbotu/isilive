@@ -1490,6 +1490,117 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
     end)
   end)
 
+  test("Sync SendKick appends extras suffix when multi-kick extras are on cooldown", function()
+    local sentMessages = {}
+    local now = 100
+
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      -- Prot Pala: primary Rebuke ready, Avenger's Shield extra on cooldown.
+      addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+        extras = {
+          [31935] = { cooldownRemain = 22 },
+        },
+      })
+      Assert.Equal(#sentMessages, 1, "kick with extras must publish")
+      Assert.Equal(
+        sentMessages[1].message,
+        "KICK:0:0:E:31935,22",
+        "extras suffix must use ':E:' prefix and 'spellID,remain' encoding"
+      )
+
+      -- Two extras must be sorted (table.sort) and ';'-separated.
+      now = 200
+      addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+        extras = {
+          [31935] = { cooldownRemain = 8 },
+          [19647] = { cooldownRemain = 12 },
+        },
+      })
+      Assert.Equal(
+        sentMessages[2].message,
+        "KICK:0:0:E:19647,12;31935,8",
+        "multiple extras must be sorted and ';'-separated"
+      )
+
+      -- Empty extras map must NOT add the ':E:' suffix.
+      now = 300
+      addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+        extras = {},
+        force = true,
+      })
+      Assert.Equal(sentMessages[3].message, "KICK:0:0", "empty extras map must NOT append the ':E:' suffix")
+    end)
+  end)
+
+  test("Sync ProcessAddonMessage parses KICK extras suffix and stores it on the peer", function()
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      strsplit = function(sep, str, max)
+        local parts = {}
+        local pattern = "([^" .. sep .. "]*)"
+        local count = 0
+        for part in str:gmatch(pattern) do
+          count = count + 1
+          table.insert(parts, part)
+          if max and count >= max then
+            break
+          end
+        end
+        return unpack(parts)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local result =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:E:31935,22;19647,8", "Peer-Realm", "Me", "Realm")
+      Assert.True(result.kickUpdated, "KICK with extras must update peer kick state")
+
+      local stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+      Assert.NotNil(stored, "peer kick info must be stored")
+      Assert.NotNil(stored.extras, "extras map must be stored on the peer")
+      Assert.NotNil(stored.extras[31935], "Avenger's Shield (31935) must be in extras")
+      Assert.Equal(stored.extras[31935].cooldownRemain, 22, "extras remain must round-trip")
+      Assert.NotNil(stored.extras[19647], "Spell Lock (19647) must be in extras")
+      Assert.Equal(stored.extras[19647].cooldownRemain, 8, "extras remain must round-trip")
+
+      -- Peer with NO extras suffix must clear stored extras (backwards compat).
+      addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0", "Peer-Realm", "Me", "Realm")
+      stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+      Assert.Equal(stored.extras, nil, "absent extras suffix must clear previously-stored extras")
+    end)
+  end)
+
   test("Sync SendKick rejects malformed kick payload inputs without guessing", function()
     local sentMessages = {}
     local now = 200

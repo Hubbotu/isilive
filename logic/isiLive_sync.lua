@@ -709,7 +709,7 @@ end
 -- @param capturedAt number|nil Timestamp from the payload.
 -- @param hasKick boolean Whether the player has a kick spell at all.
 -- @return boolean true if stored kick state changed; false if unchanged or rejected.
-function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick)
+function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick, extras)
   local key = Sync.NormalizePlayerKey(name, realm)
   if not key or key == "" then
     return false
@@ -734,12 +734,52 @@ function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capture
   end
   local prevRemain = tonumber(prev and prev.cooldownRemain) or 0
   local remainChanged = newHasKick and newOnCooldown and math.abs(prevRemain - numericRemain) > 0.05
-  local changed = not prev or prev.onCooldown ~= newOnCooldown or prev.hasKick ~= newHasKick or remainChanged
+  -- Extras: sanitize input map; only pass through {[spellID]={cooldownRemain}}
+  -- entries with a positive remain. Caller may pass nil to clear.
+  local sanitizedExtras = nil
+  if type(extras) == "table" then
+    for spellID, data in pairs(extras) do
+      local sid = tonumber(spellID)
+      local r = type(data) == "table" and tonumber(data.cooldownRemain) or nil
+      if sid and r and r > 0 then
+        sanitizedExtras = sanitizedExtras or {}
+        sanitizedExtras[sid] = { cooldownRemain = r }
+      end
+    end
+  end
+  local extrasChanged = false
+  local prevExtras = prev and prev.extras or nil
+  if (prevExtras == nil) ~= (sanitizedExtras == nil) then
+    extrasChanged = true
+  elseif sanitizedExtras and prevExtras then
+    -- Compare keys + remains; small drift (<0.6s) treated as unchanged.
+    for sid, d in pairs(sanitizedExtras) do
+      local pd = prevExtras[sid]
+      if not pd or math.abs((pd.cooldownRemain or 0) - d.cooldownRemain) > 0.6 then
+        extrasChanged = true
+        break
+      end
+    end
+    if not extrasChanged then
+      for sid in pairs(prevExtras) do
+        if not sanitizedExtras[sid] then
+          extrasChanged = true
+          break
+        end
+      end
+    end
+  end
+  local changed = not prev
+    or prev.onCooldown ~= newOnCooldown
+    or prev.hasKick ~= newHasKick
+    or remainChanged
+    or extrasChanged
   local getTime = rawget(_G, "GetTime")
   kickInfoByPlayerKey[key] = {
     hasKick = newHasKick,
     onCooldown = newOnCooldown,
     cooldownRemain = newHasKick and numericRemain or 0,
+    extras = sanitizedExtras,
     capturedAt = tonumber(capturedAt) or now,
     receivedAt = now,
     receivedAtGetTime = type(getTime) == "function" and getTime() or nil,
@@ -1203,7 +1243,28 @@ function Sync.SendKick(opts)
   if encodedHasKick and cooldownRemain then
     remain = math.ceil(cooldownRemain)
   end
-  local payload = string.format("KICK:%d:%d", encodedOnCooldown, remain)
+  -- Optional extras suffix `:E:<spellID,remain;spellID,remain>` for multi-kick
+  -- specs (Prot Pala Avenger's Shield etc.). Only emitted when at least one
+  -- extra is on cooldown -- saves bytes on the common single-kick case.
+  -- Backwards-compatible: older isiLive peers see only parts[2]/parts[3],
+  -- ignore parts[4]/parts[5].
+  local extrasSuffix = ""
+  if type(opts.extras) == "table" then
+    local pieces = {}
+    for spellID, data in pairs(opts.extras) do
+      if type(data) == "table" then
+        local r = tonumber(data.cooldownRemain)
+        if tonumber(spellID) and r and r > 0 then
+          pieces[#pieces + 1] = string.format("%d,%d", tonumber(spellID), math.ceil(r))
+        end
+      end
+    end
+    if #pieces > 0 then
+      table.sort(pieces) -- stable order for dedup hashing
+      extrasSuffix = ":E:" .. table.concat(pieces, ";")
+    end
+  end
+  local payload = string.format("KICK:%d:%d%s", encodedOnCooldown, remain, extrasSuffix)
   local blocked, now = IsBlockedBySendGate(opts, lastKickPayloadSent, lastIsiLiveKickAt, payload, 1, nil)
   if blocked then
     return
@@ -1574,7 +1635,21 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     local numericRemain = tonumber(parts[3])
     if (numericState == -1 or numericState == 0 or numericState == 1) and numericRemain and numericRemain >= 0 then
       local hasKick = numericState ~= -1
-      kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick)
+      -- Optional extras: parts[4] == "E" marks the extras suffix. parts[5]
+      -- is `<spellID>,<remain>;<spellID>,<remain>`. Older peers omit both.
+      local extras = nil
+      if parts[4] == "E" and type(parts[5]) == "string" and parts[5] ~= "" then
+        for entry in parts[5]:gmatch("[^;]+") do
+          local sidStr, remainStr = entry:match("^(%d+),(%d+)$")
+          local sid = tonumber(sidStr)
+          local rem = tonumber(remainStr)
+          if sid and rem and rem > 0 then
+            extras = extras or {}
+            extras[sid] = { cooldownRemain = rem }
+          end
+        end
+      end
+      kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick, extras)
     end
   elseif bucket == "BRLUST" and parts[2] and parts[3] then
     local kind = parts[2]

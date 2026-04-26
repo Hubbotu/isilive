@@ -645,6 +645,128 @@ local function RegisterCooldownRecoveryTests(test, Assert, WithGlobals, LoadAddo
   end)
 end
 
+local function RegisterMultiKickExtrasTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("KickTracker tracks Avenger's Shield as an extra kick for Protection Paladin", function()
+    ---@type KickController|nil
+    local controller = nil
+    local clock = 100
+    WithGlobals({
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 66
+        end
+        return nil
+      end,
+      UnitClass = function(unit)
+        if unit == "player" then
+          return "Paladin", "PALADIN"
+        end
+        return nil
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+      controller = addon.KickTracker.CreateController({
+        getTime = function()
+          return clock
+        end,
+      })
+    end)
+
+    local kickController = RequireController(controller, "Prot Paladin must build", Assert)
+    local info = kickController.GetKickInfo()
+    Assert.Equal(info.spellID, 96231, "primary must be Rebuke")
+    Assert.Equal(info.extras, nil, "no extras before any cast")
+
+    -- Cast Avenger's Shield (31935) -> must land in extras, not primary.
+    local castOk = kickController.OnCast("player", 31935)
+    Assert.True(castOk, "Avenger's Shield cast must be tracked as an extra")
+    info = kickController.GetKickInfo()
+    Assert.Equal(info.spellID, 96231, "primary must remain Rebuke after extra-cast")
+    Assert.False(info.onCooldown, "primary must NOT be marked on cooldown by extra-cast")
+    Assert.NotNil(info.extras, "extras map must be populated")
+    Assert.NotNil(info.extras[31935], "Avenger's Shield must appear in extras map")
+    Assert.True(info.extras[31935].onCooldown, "extra entry must be marked on cooldown")
+    Assert.True(info.extras[31935].cooldownRemain > 0, "extra entry remain must be > 0 right after cast")
+  end)
+
+  test("KickTracker drops expired extras on Scan", function()
+    ---@type KickController|nil
+    local controller = nil
+    local clock = 100
+    WithGlobals({
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 66
+        end
+        return nil
+      end,
+      UnitClass = function(unit)
+        if unit == "player" then
+          return "Paladin", "PALADIN"
+        end
+        return nil
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+      controller = addon.KickTracker.CreateController({
+        getTime = function()
+          return clock
+        end,
+      })
+    end)
+
+    local kickController = RequireController(controller, "Prot Paladin must build", Assert)
+    kickController.OnCast("player", 31935)
+    Assert.NotNil(kickController.GetKickInfo().extras[31935], "extra must exist right after cast")
+
+    -- Advance clock past the 30s Avenger's Shield CD.
+    clock = clock + 35
+    kickController.Scan()
+    local info = kickController.GetKickInfo()
+    Assert.Equal(info.extras, nil, "expired extras must be removed by Scan")
+  end)
+
+  test("KickTracker ignores casts of non-class-interrupt spells", function()
+    ---@type KickController|nil
+    local controller = nil
+    WithGlobals({
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 66
+        end
+        return nil
+      end,
+      UnitClass = function(unit)
+        if unit == "player" then
+          return "Paladin", "PALADIN"
+        end
+        return nil
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+      controller = addon.KickTracker.CreateController({
+        getTime = function()
+          return 100
+        end,
+      })
+    end)
+
+    local kickController = RequireController(controller, "Prot Paladin must build", Assert)
+    local castOk = kickController.OnCast("player", 999999) -- random non-interrupt spell
+    Assert.False(castOk, "non-interrupt cast must NOT be tracked")
+    Assert.Equal(kickController.GetKickInfo().extras, nil, "extras must stay empty")
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -654,4 +776,5 @@ return function(test, ctx)
   RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCooldownRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterMultiKickExtrasTests(test, Assert, WithGlobals, LoadAddonModules)
 end

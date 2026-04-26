@@ -782,6 +782,40 @@ local function ShowRosterInfoTooltip(
       local fmt = type(Lrow.TOOLTIP_RIO_FMT) == "string" and Lrow.TOOLTIP_RIO_FMT or "Rio: %s"
       tooltip:AddLine(string.format(fmt, tostring(math.floor(tonumber(info.rio) or 0))), 0.9, 0.9, 0.9)
     end
+    -- Multi-kick extras (Demo Warlock Inner Demons, Prot Pala Avenger's Shield etc.).
+    -- Only rendered when at least one extra is on cooldown -- the primary kick
+    -- already shows in the dedicated Kick column. C_Spell.GetSpellName drives
+    -- the label per-spellID; falls back to the numeric ID if name lookup fails.
+    if type(info.syncKickExtras) == "table" then
+      local extrasHeader = type(Lrow.TOOLTIP_KICK_EXTRAS_HEADER) == "string" and Lrow.TOOLTIP_KICK_EXTRAS_HEADER
+        or "Extra kicks:"
+      local renderedHeader = false
+      local C_Spell_ref = rawget(_G, "C_Spell")
+      local getSpellName = type(C_Spell_ref) == "table"
+          and type(C_Spell_ref.GetSpellName) == "function"
+          and C_Spell_ref.GetSpellName
+        or nil
+      for spellID, data in pairs(info.syncKickExtras) do
+        local remain = type(data) == "table" and tonumber(data.cooldownRemain) or nil
+        if remain and remain > 0 then
+          local spellName = nil
+          if getSpellName then
+            local okName, resolvedName = pcall(getSpellName, spellID)
+            if okName and type(resolvedName) == "string" and resolvedName ~= "" then
+              spellName = resolvedName
+            end
+          end
+          spellName = spellName or ("Spell " .. tostring(spellID))
+          if not renderedHeader then
+            tooltip:AddLine(extrasHeader, 0.95, 0.7, 0.4)
+            renderedHeader = true
+          end
+          -- i18n-ok: spellName is auto-translated by Blizzard's GetSpellName
+          local lineText = string.format("  %s: %ds", spellName, math.ceil(remain))
+          tooltip:AddLine(lineText, 0.9, 0.85, 0.7)
+        end
+      end
+    end
     if syncSummary then
       local L = type(getL) == "function" and getL() or {}
       local intervalLabel = type(L.TOOLTIP_SYNC_FRESHNESS) == "string" and L.TOOLTIP_SYNC_FRESHNESS
