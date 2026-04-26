@@ -18,7 +18,7 @@ local function RequireController(controller, message, Assert)
 end
 
 local function RegisterBasicKickTests(test, Assert, WithGlobals, LoadAddonModules)
-  test("KickTracker resolves Holy Paladin to Rebuke", function()
+  test("KickTracker reports no interrupt for Holy Paladin (lost Rebuke in Midnight)", function()
     ---@type KickController|nil
     local controller = nil
     WithGlobals({
@@ -43,8 +43,8 @@ local function RegisterBasicKickTests(test, Assert, WithGlobals, LoadAddonModule
     local kickController = RequireController(controller, "kick info must exist for Holy Paladin", Assert)
     local info = kickController.GetKickInfo()
     Assert.NotNil(info, "kick info must exist for Holy Paladin")
-    Assert.Equal(info.spellID, 96231, "Holy Paladin must map to Rebuke")
-    Assert.False(info.onCooldown, "fresh Holy Paladin interrupt must start ready")
+    Assert.False(info.hasKick, "Holy Paladin must report hasKick=false (no Rebuke in Midnight)")
+    Assert.Equal(info.spellID, nil, "Holy Paladin must not resolve any interrupt spell")
   end)
 
   test("KickTracker resolves Devourer Demon Hunter to Disrupt", function()
@@ -144,8 +144,6 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
       { specID = 64, spellID = 2139, label = "Frost Mage" },
       { specID = 268, spellID = 116705, label = "Brewmaster Monk" },
       { specID = 269, spellID = 116705, label = "Windwalker Monk" },
-      { specID = 270, spellID = 116705, label = "Mistweaver Monk" },
-      { specID = 65, spellID = 96231, label = "Holy Paladin" },
       { specID = 66, spellID = 96231, label = "Protection Paladin" },
       { specID = 70, spellID = 96231, label = "Retribution Paladin" },
       { specID = 258, spellID = 15487, label = "Shadow Priest" },
@@ -156,7 +154,7 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
       { specID = 263, spellID = 57994, label = "Enhancement Shaman" },
       { specID = 264, spellID = 57994, label = "Restoration Shaman" },
       { specID = 265, spellID = 19647, label = "Affliction Warlock" },
-      { specID = 266, spellID = 89766, label = "Demonology Warlock" },
+      { specID = 266, spellID = 119914, label = "Demonology Warlock" },
       { specID = 267, spellID = 19647, label = "Destruction Warlock" },
       { specID = 71, spellID = 6552, label = "Arms Warrior" },
       { specID = 72, spellID = 6552, label = "Fury Warrior" },
@@ -182,14 +180,17 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
         end,
         GetSpellBaseCooldown = function(spellID)
           if spellID == spec.spellID then
-            if spellID == 89766 then
-              return 30000
+            if spellID == 119914 then
+              return 30000 -- Demo Warlock Axe Toss (player-facing ID)
             end
             if spellID == 78675 then
-              return 60000
+              return 45000 -- Balance Druid Solar Beam (Midnight:45s)
             end
             if spellID == 351338 then
-              return 20000
+              return 18000 -- Evoker Quell (Midnight:18s)
+            end
+            if spellID == 2139 then
+              return 20000 -- Mage Counterspell (Midnight:20s)
             end
             if spellID == 147362 then
               return 24000
@@ -230,6 +231,8 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
       { specID = 105, label = "Restoration Druid" },
       { specID = 256, label = "Discipline Priest" },
       { specID = 257, label = "Holy Priest" },
+      { specID = 65, label = "Holy Paladin" },
+      { specID = 270, label = "Mistweaver Monk" },
     }
 
     for _, spec in ipairs(noKickSpecs) do
@@ -325,7 +328,7 @@ local function RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModu
         return unit == "pet"
       end,
       GetSpellBaseCooldown = function(spellID)
-        if spellID == 89766 then
+        if spellID == 119914 then
           return 30000
         end
         return 0
@@ -343,7 +346,7 @@ local function RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModu
       RequireController(controller, "kick info must exist for Demonology when the pet interrupt is available", Assert)
     local info = kickController.GetKickInfo()
     Assert.NotNil(info, "kick info must exist for Demonology when the pet interrupt is available")
-    Assert.Equal(info.spellID, 89766, "Demonology must prefer the available pet interrupt")
+    Assert.Equal(info.spellID, 119914, "Demonology must prefer the player-facing Axe Toss spell ID")
     Assert.False(info.onCooldown, "available Demonology pet interrupt must start ready")
   end)
 

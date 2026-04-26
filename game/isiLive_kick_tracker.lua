@@ -6,9 +6,11 @@ local KickTracker = {}
 addonTable.KickTracker = KickTracker
 local MEANINGFUL_KICK_COOLDOWN_MIN_SECONDS = 1.5
 local NO_INTERRUPT_SPEC_IDS = {
-  [105] = true,
-  [256] = true,
-  [257] = true,
+  [105] = true, -- Restoration Druid
+  [256] = true, -- Discipline Priest
+  [257] = true, -- Holy Priest
+  [65] = true, -- Holy Paladin (no Rebuke in Midnight)
+  [270] = true, -- Mistweaver Monk (no Spear Hand Strike)
 }
 
 -- Spec-keyed interrupt data (spec ID → { spellID, cd }).
@@ -22,30 +24,30 @@ local SPEC_DATA = {
   [581] = { spellID = 183752, cd = 15 },
   [1480] = { spellID = 183752, cd = 15 },
   -- Druid
-  [102] = { spellID = 78675, cd = 60 }, -- Balance: Solar Beam
+  [102] = { spellID = 78675, cd = 45 }, -- Balance: Solar Beam (45s in current Midnight)
   [103] = { spellID = 106839, cd = 15 }, -- Feral: Skull Bash
   [104] = { spellID = 106839, cd = 15 }, -- Guardian: Skull Bash
   [105] = nil, -- Restoration: no interrupt
   -- Evoker
-  [1467] = { spellID = 351338, cd = 20 },
-  [1468] = { spellID = 351338, cd = 20 },
-  [1473] = { spellID = 351338, cd = 20 },
+  [1467] = { spellID = 351338, cd = 18 }, -- Devastation: Quell
+  [1468] = { spellID = 351338, cd = 18 }, -- Preservation: Quell
+  [1473] = { spellID = 351338, cd = 18 }, -- Augmentation: Quell
   -- Hunter
   [253] = { spellID = 147362, cd = 24 }, -- BM: Counter Shot
   [254] = { spellID = 147362, cd = 24 }, -- MM: Counter Shot
   [255] = { spellID = 187707, cd = 15 }, -- Survival: Muzzle
   -- Mage
-  [62] = { spellID = 2139, cd = 25 },
-  [63] = { spellID = 2139, cd = 25 },
-  [64] = { spellID = 2139, cd = 25 },
+  [62] = { spellID = 2139, cd = 20 }, -- Counterspell (20s base)
+  [63] = { spellID = 2139, cd = 20 },
+  [64] = { spellID = 2139, cd = 20 },
   -- Monk
-  [268] = { spellID = 116705, cd = 15 },
-  [269] = { spellID = 116705, cd = 15 },
-  [270] = { spellID = 116705, cd = 15 },
+  [268] = { spellID = 116705, cd = 15 }, -- Brewmaster: Spear Hand Strike
+  [269] = { spellID = 116705, cd = 15 }, -- Windwalker: Spear Hand Strike
+  [270] = nil, -- Mistweaver: no interrupt
   -- Paladin
-  [65] = { spellID = 96231, cd = 15 }, -- Holy: Rebuke
-  [66] = { spellID = 96231, cd = 15 }, -- Prot
-  [70] = { spellID = 96231, cd = 15 }, -- Ret
+  [65] = nil, -- Holy: no Rebuke in Midnight
+  [66] = { spellID = 96231, cd = 15 }, -- Protection: Rebuke
+  [70] = { spellID = 96231, cd = 15 }, -- Retribution: Rebuke
   -- Priest
   [256] = nil, -- Discipline
   [257] = nil, -- Holy
@@ -70,7 +72,7 @@ local SPEC_DATA = {
     castUnit = "pet",
     requireAvailability = true,
     spells = {
-      { spellID = 89766, cd = 30 }, -- Axe Toss
+      { spellID = 119914, cd = 30 }, -- Axe Toss (player-facing ID; pet-cast event ID is 89766)
       { spellID = 19647, cd = 24 }, -- Spell Lock (e.g. Fel Ravager path)
     },
   },
