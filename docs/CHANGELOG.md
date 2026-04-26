@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-04-26 - Version 0.9.194 (minor)
+
+- **Multi-Kick-Tracking fuer Specs mit zusaetzlichen Interrupts ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua), [logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua), [ui/isiLive_roster_tooltip.lua](../ui/isiLive_roster_tooltip.lua)):**
+  - Bisher hat der KickTracker pro Spec nur einen Interrupt-Spell getrackt. Klassen mit Talent-Bonus-Kicks (Prot Paladin Avenger's Shield) hatten den Spell unsichtbar im Roster, obwohl er im Encounter zaehlt. Inspiriert vom external interrupt tracker-`extraKicks`-Modell, aber konservativer auf eine Class-Whitelist beschraenkt.
+  - Neue `CLASS_INTERRUPT_LIST` listet aktuell `PALADIN = {96231, 31935}` (Rebuke + Avenger's Shield) und `WARLOCK = {19647, 119914}` (Spell Lock + Axe Toss). Andere Klassen sind explizit nicht gelistet, ihr Spec-Switch laeuft weiterhin ueber `RefreshSpec` auf `PLAYER_SPECIALIZATION_CHANGED`.
+  - **OnCast-Pfad** in `KickTracker` ist jetzt zweistufig: 1) primary-Match wie bisher, 2) Fallback auf `FindExtraKickSpell(spellID)` der die `CLASS_INTERRUPT_LIST` durchgeht. Bei Treffer wird `extras[spellID] = {cd, cdEnd}` gesetzt, ohne den primary zu beruehren. CD kommt aus `EXTRA_KICK_CD`-Lookup mit Fallback auf SPEC_DATA-Suche fuer cross-spec-Spells. `Scan()` raeumt expirierte Eintraege automatisch auf, sodass `GetKickInfo().extras` immer nur lebende CDs liefert. `ResolvePlayerClass` cached die Klasse via `UnitClass("player")` einmalig im Constructor (dann immun gegen Test-WithGlobals-Sandbox-Reset).
+  - **Sync-Payload-Erweiterung** ([logic/isiLive_sync.lua](../logic/isiLive_sync.lua)) `KICK:<state>:<remain>` -> optional `KICK:<state>:<remain>:E:<spellID,remain>;<spellID,remain>`. Backwards-compatible: aeltere isiLive-Peers parsen `parts[4]/parts[5]` nicht und ignorieren das Suffix. Neuere Peers extrahieren extras via `gmatch("[^;]+")`. Empty-Extras-Map fuegt das `:E:`-Suffix nicht an, damit der Common-Single-Kick-Case keine Bytes verschwendet.
+  - **Faktorhandshake** ([factory/isiLive_factory_kick_tracker.lua](../factory/isiLive_factory_kick_tracker.lua)): der bestehende SendKick-Pfad reicht jetzt `info.extras` durch zu `Sync.SendKick({extras=…})` und gleichzeitig zu `Sync.SetPlayerKickInfo(self, …, extras)`, sodass die lokale Anzeige die eigenen extras sofort sieht ohne Round-Trip ueber den Addon-Channel.
+  - **Peer-State** ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)): `ApplyKnownKeyToRosterEntry` interpoliert die extras analog zum primary-Remain (subtract elapsed time von receivedAtGetTime), filtert expirierte raus, und persistiert die Map als `info.syncKickExtras` auf dem Roster-Entry. Drift-Detection (>0.6s) triggert ein UI-Refresh.
+  - **Roster-Tooltip** ([ui/isiLive_roster_tooltip.lua](../ui/isiLive_roster_tooltip.lua)): die existierende `ShowRosterInfoTooltip`-Funktion zeigt jetzt direkt nach der Rio-Zeile einen lokalisierten "Extra kicks:"-Header gefolgt von einer Zeile pro extra, formatiert als `  <SpellName>: <remain>s`. SpellName kommt aus `C_Spell.GetSpellName(spellID)` (mit pcall-Guard), Fallback auf `Spell <ID>` falls die API fehlt. Header in 8 Sprachen lokalisiert (`TOOLTIP_KICK_EXTRAS_HEADER`); der Format-String selbst (sprach-neutral, SpellName ist von Blizzard automatisch lokalisiert) ist via `-- i18n-ok` annotiert.
+  - **Bekannter Constraint dokumentiert**: Demonology Warlock Inner Demons (beide Pets gleichzeitig, Axe Toss + Spell Lock parallel auf CD) wird aktuell **nicht** als Multi-Kick gehandhabt, weil `Spell Lock 19647` in `SPEC_DATA[266].spells` als alternativer Primary gelistet ist (fuer den Pet-Switch-Fall mit Felhunter ohne Felguard). Den Array auf einen Spell zu reduzieren wuerde den Pet-Switch-Pfad brechen. Future-Work falls Inner-Demons-Tracking gewuenscht wird.
+
+- **Tests:**
+  - 4 neue Scenarios in [testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua):
+    - `KickTracker tracks Avenger's Shield as an extra kick for Protection Paladin` (Class-Lookup + extras-Map populated)
+    - `KickTracker drops expired extras on Scan` (clock-advance + Scan-Cleanup)
+    - `KickTracker ignores casts of non-class-interrupt spells` (random spellID 999999 -> false)
+    - Plus implicit: existing OnCast-Tests weiterhin gruen.
+  - 2 neue Sync-Scenarios in [testmodul/isilive_test_scenarios_sync.lua](../testmodul/isilive_test_scenarios_sync.lua):
+    - `Sync SendKick appends extras suffix when multi-kick extras are on cooldown` (single + multiple + empty cases, sortiert + ';' separated)
+    - `Sync ProcessAddonMessage parses KICK extras suffix and stores it on the peer` (round-trip + backwards-compat: absent suffix clears stored extras)
+  - 1086 / 1086 -> 1088 / 1088. Stylua, luacheck, hardcoded-strings clean.
+
 ## 2026-04-25 - Version 0.9.193 (patch)
 
 - **Kick-Tracker Spec-Daten an aktuelle Midnight-Realitaet angeglichen ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua)):**
