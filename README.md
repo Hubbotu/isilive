@@ -69,7 +69,7 @@ Columns in order: **Spec · Name · Lang · Key · iLvl · RIO · DPS · Kick**
 - **iLvl** — equipped item level
 - **RIO** — current Raider.IO score. After a run, a green `(+X)` shows the gain: `(+12)3521`
 - **DPS** — overall DPS from the last dungeon, read from Blizzard's in-game damage meter
-- **Kick** — green `ready`, red seconds on cooldown, or `-` if the spec has no interrupt
+- **Kick** — green `ready`, red seconds on cooldown, or `-` if the spec has no interrupt. Heal specs without interrupt (Holy Paladin, Mistweaver Monk, Restoration Druid, Discipline / Holy Priest) correctly show `-` instead of a stale cooldown. **Hover** over the cell to see extra interrupts the player has via talents (e.g. Protection Paladin's Avenger's Shield) — synced live across the group through isiLive.
 
 ### Markers next to names
 
