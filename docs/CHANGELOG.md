@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-04-25 - Version 0.9.193 (patch)
+
+- **Kick-Tracker Spec-Daten an aktuelle Midnight-Realitaet angeglichen ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua)):**
+  - Cross-Check gegen external interrupt tracker Spec-Registry ergab vier Diskrepanzen, die wir uebersehen hatten. external interrupt tracker pflegt das Mapping aktiv pro Patch; ihre 3.3.7-Notiz erwaehnte explizit den Mistweaver-Fix.
+  - **Zwei Heal-Specs hatten faelschlich einen Interrupt:**
+    1. **Spec 65 (Holy Paladin)** war auf `spellID=96231` (Rebuke) gemappt. Holy Paladin hat in Midnight kein Rebuke mehr; bisher haben wir fuer Holy-Paladine im Roster `ready` / Cooldown getracked, obwohl der Spell gar nicht existiert. Jetzt `noKick=true` analog zu den Priest-Heal-Specs.
+    2. **Spec 270 (Mistweaver Monk)** war auf `spellID=116705` (Spear Hand Strike) gemappt. MW kann Spear Hand Strike nicht casten — der Spell ist Brewmaster/Windwalker only. Jetzt `noKick=true` analog zu Restoration Druid.
+  - **Drei CDs waren veraltet** (Midnight-Werte verschoben sich gegenueber unserer Original-Tabelle):
+    3. **Balance Druid (102) Solar Beam** `60s` → `45s`
+    4. **Mage Counterspell (62/63/64)** `25s` → `20s` (Base-CD; das `Geistesgegenwaertig`-Talent in `CD_REDUCTION_DEFS` reduziert auf 15 statt 20)
+    5. **Evoker Quell (1467/1468/1473)** `20s` → `18s` (Base-CD; das `Interwoven Threads`-Talent in `CD_REDUCTION_DEFS` reduziert auf 16.2)
+  - **Demonology Warlock (266) Pet-Interrupt** war auf `spellID=89766` (raw pet-cast event ID fuer Felguard's Axe Toss) gemappt. external interrupt tracker nutzt die player-facing ID `119914`. Jetzt auf 119914 umgestellt; 89766 bleibt eine reine Combat-Log-Event-ID die wir nicht mehr im SPEC_DATA brauchen.
+  - `NO_INTERRUPT_SPEC_IDS` jetzt vollstaendig: `{105 Resto Druid, 256 Disc Priest, 257 Holy Priest, 65 Holy Paladin, 270 Mistweaver Monk}`. Alle 5 Healer-Specs ohne Interrupt sind explizit als `noKick`.
+
+- **Tests:**
+  - `mappedSpecs`-Liste in [testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua) entfernt 65 + 270 (jetzt in `noKickSpecs`), Demo Warlock spellID umgestellt auf 119914. `GetSpellBaseCooldown`-Mock liefert jetzt 45000ms fuer Solar Beam, 20000ms fuer Counterspell, 18000ms fuer Quell, 30000ms fuer Axe Toss.
+  - Spezifischer Holy-Paladin-Test umbenannt + umgeschrieben: `KickTracker resolves Holy Paladin to Rebuke` -> `KickTracker reports no interrupt for Holy Paladin (lost Rebuke in Midnight)`. Assertet `info.hasKick == false` und `info.spellID == nil`.
+  - Demo-Warlock-Test asserted jetzt `info.spellID == 119914` mit angepasstem Mock.
+  - `RULE-KICKTRACKER-PERSOENLICHER-INTERRUPT` in [docs/RULES_LOGIC.md](../docs/RULES_LOGIC.md) zieht den umbenannten Test mit, Zusammenfassung erweitert um die 5-Spec-Healer-Liste.
+
 ## 2026-04-25 - Version 0.9.192 (test)
 
 - **Test-Coverage: explizite SetFont-Verifikation fuer das Nameplate-FontSize-Wiring ([testmodul/isilive_test_scenarios_mob_nameplate.lua](../testmodul/isilive_test_scenarios_mob_nameplate.lua)):**
