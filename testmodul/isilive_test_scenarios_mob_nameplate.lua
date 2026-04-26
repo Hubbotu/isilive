@@ -761,6 +761,32 @@ local function RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules
     end)
   end)
 
+  test("MobNameplate ApplyFont falls back to default font when GameFontNormalOutline is missing", function()
+    -- Simulates a runtime context where Blizzard has not (yet) registered the
+    -- GameFontNormalOutline FontObject. ApplyFont must still call SetFont on
+    -- the FontString with the configured size and a hardcoded fallback file
+    -- so the nameplate label remains visible.
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    globals.GameFontNormalOutline = nil
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 14 })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must still be created without the template global")
+      local font = Assert.NotNil(frame.text._font, "ApplyFont must still call SetFont without template")
+      Assert.Equal(font.size, 14, "configured fontSize must still be honored")
+      Assert.True(font.file ~= nil and font.file ~= "", "fallback font file must be non-empty")
+      Assert.Equal(font.flags, "OUTLINE", "fallback flags default to OUTLINE")
+    end)
+  end)
+
   test("MobNameplate font-size pipeline is unaffected by Plater being loaded", function()
     -- Plater/Platynator soft-detect lives in the settings UI, NOT in the
     -- nameplate module itself. The module renders identically regardless of

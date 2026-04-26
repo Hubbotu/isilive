@@ -420,6 +420,33 @@ local function RegisterDbTotalAndMapIdTests(test, Assert, WithGlobals, LoadAddon
     end)
   end)
 
+  test("KillTrack.SetDebugLogger(nil) clears the sink so subsequent drift events are silently swallowed", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 50, total = 450, mapID = 559 } })
+    local driftMessages = {}
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" }, {
+        MPlusForces = {
+          dungeonTotal = { [559] = { total = 596, name = "Nexus Point Xenas" } },
+          byNpcId = {},
+        },
+      })
+      addon.KillTrack.SetDebugLogger(function(fmt, ...)
+        table.insert(driftMessages, string.format(fmt, ...))
+      end)
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      Assert.Equal(#driftMessages, 1, "drift logger fires once on first divergent read")
+
+      -- Now clear the logger by passing nil. The same drift condition must
+      -- not surface again. Force a fresh detection by changing the API total
+      -- so the lastDriftKey changes (otherwise repeat-suppression would mask
+      -- whether the nil-clear actually took effect).
+      addon.KillTrack.SetDebugLogger(nil)
+      env.scenario.SetTotal(440)
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      Assert.Equal(#driftMessages, 1, "after SetDebugLogger(nil), no further drift messages must arrive")
+    end)
+  end)
+
   test("KillTrack stays inactive when API total is missing and DB has no entry for the mapID", function()
     local env = BuildKillTrackEnv({ scenario = { quantity = 25, total = 100, mapID = 99999 } })
     env.globals.C_ScenarioInfo.GetCriteriaInfo = function()

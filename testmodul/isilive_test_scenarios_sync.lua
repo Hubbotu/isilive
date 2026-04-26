@@ -1601,6 +1601,122 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
     end)
   end)
 
+  test("Sync ProcessAddonMessage caps extras list at 8 entries (defense-in-depth)", function()
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      strsplit = function(sep, str, max)
+        local parts = {}
+        local pattern = "([^" .. sep .. "]*)"
+        local count = 0
+        for part in str:gmatch(pattern) do
+          count = count + 1
+          table.insert(parts, part)
+          if max and count >= max then
+            break
+          end
+        end
+        return unpack(parts)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      -- Build a payload with 12 extras; only the first 8 should be accepted.
+      local pieces = {}
+      for i = 1, 12 do
+        table.insert(pieces, string.format("%d,%d", 100000 + i, 5))
+      end
+      local payload = "KICK:0:0:E:" .. table.concat(pieces, ";")
+      local result = addon.Sync.ProcessAddonMessage("ISILIVE", payload, "Peer-Realm", "Me", "Realm")
+      Assert.True(result.kickUpdated, "oversized extras payload still updates the basic kick state")
+
+      local stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+      local count = 0
+      for _ in pairs(stored.extras or {}) do
+        count = count + 1
+      end
+      Assert.Equal(count, 8, "extras receive must cap at 8 entries")
+    end)
+  end)
+
+  test(
+    "Sync multi-kick roundtrip: SendKick payload feeds back through ProcessAddonMessage to the peer entry",
+    function()
+      local sentMessages = {}
+      WithGlobals({
+        GetTime = function()
+          return 100
+        end,
+        IsInGroup = function(_category)
+          return true
+        end,
+        IsInRaid = function()
+          return false
+        end,
+        C_ChatInfo = {
+          SendAddonMessage = function(prefix, message, channel)
+            table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          end,
+        },
+        strsplit = function(sep, str, max)
+          local parts = {}
+          local pattern = "([^" .. sep .. "]*)"
+          local count = 0
+          for part in str:gmatch(pattern) do
+            count = count + 1
+            table.insert(parts, part)
+            if max and count >= max then
+              break
+            end
+          end
+          return unpack(parts)
+        end,
+        GetRealmName = function()
+          return "Realm"
+        end,
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+        -- Sender side: produce a KICK payload with two extras.
+        addon.Sync.SendKick({
+          hasKick = true,
+          onCooldown = false,
+          cooldownRemain = 0,
+          extras = {
+            [31935] = { cooldownRemain = 22 }, -- Avenger's Shield
+            [19647] = { cooldownRemain = 8 }, -- Spell Lock
+          },
+        })
+        Assert.Equal(#sentMessages, 1, "multi-extras kick must publish")
+
+        -- Roundtrip: feed the produced payload back through ProcessAddonMessage
+        -- as if a peer received it. Stored extras must contain BOTH entries
+        -- with the same remain values that went in.
+        local payload = sentMessages[1].message
+        local result = addon.Sync.ProcessAddonMessage("ISILIVE", payload, "Peer-Realm", "Me", "Realm")
+        Assert.True(result.kickUpdated, "roundtrip payload must update peer state")
+
+        local stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+        Assert.NotNil(stored, "peer entry must exist after roundtrip")
+        Assert.NotNil(stored.extras, "peer extras must exist after roundtrip")
+        Assert.Equal(
+          stored.extras[31935] and stored.extras[31935].cooldownRemain,
+          22,
+          "Avenger's Shield remain must roundtrip unchanged"
+        )
+        Assert.Equal(
+          stored.extras[19647] and stored.extras[19647].cooldownRemain,
+          8,
+          "Spell Lock remain must roundtrip unchanged"
+        )
+      end)
+    end
+  )
+
   test("Sync SendKick rejects malformed kick payload inputs without guessing", function()
     local sentMessages = {}
     local now = 200

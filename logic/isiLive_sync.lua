@@ -1250,17 +1250,30 @@ function Sync.SendKick(opts)
   -- ignore parts[4]/parts[5].
   local extrasSuffix = ""
   if type(opts.extras) == "table" then
-    local pieces = {}
+    -- Collect (spellID, remain) tuples, then sort numerically by spellID so
+    -- the dedup-payload hash is deterministic regardless of pairs() order.
+    -- Numerical sort matters when spell IDs differ in digit count (e.g. 1766
+    -- Rogue Kick vs 119914 Axe Toss); a string-based sort would put "1766"
+    -- after "119914" lexicographically, breaking dedup if the same map is
+    -- emitted twice with shuffled pairs() order.
+    local entries = {}
     for spellID, data in pairs(opts.extras) do
       if type(data) == "table" then
+        local sid = tonumber(spellID)
         local r = tonumber(data.cooldownRemain)
-        if tonumber(spellID) and r and r > 0 then
-          pieces[#pieces + 1] = string.format("%d,%d", tonumber(spellID), math.ceil(r))
+        if sid and r and r > 0 then
+          entries[#entries + 1] = { sid = sid, remain = math.ceil(r) }
         end
       end
     end
-    if #pieces > 0 then
-      table.sort(pieces) -- stable order for dedup hashing
+    if #entries > 0 then
+      table.sort(entries, function(a, b)
+        return a.sid < b.sid
+      end)
+      local pieces = {}
+      for _, e in ipairs(entries) do
+        pieces[#pieces + 1] = string.format("%d,%d", e.sid, e.remain)
+      end
       extrasSuffix = ":E:" .. table.concat(pieces, ";")
     end
   end
@@ -1637,15 +1650,23 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
       local hasKick = numericState ~= -1
       -- Optional extras: parts[4] == "E" marks the extras suffix. parts[5]
       -- is `<spellID>,<remain>;<spellID>,<remain>`. Older peers omit both.
+      -- Defense-in-depth: cap at 8 entries to bound memory if a malformed
+      -- or hostile peer were to send an oversized list. Realistic max in Midnight
+      -- is 1-2 extras (Prot Pala Avenger's Shield, Demo Warlock pet swap).
       local extras = nil
       if parts[4] == "E" and type(parts[5]) == "string" and parts[5] ~= "" then
+        local count = 0
         for entry in parts[5]:gmatch("[^;]+") do
+          if count >= 8 then
+            break
+          end
           local sidStr, remainStr = entry:match("^(%d+),(%d+)$")
           local sid = tonumber(sidStr)
           local rem = tonumber(remainStr)
           if sid and rem and rem > 0 then
             extras = extras or {}
             extras[sid] = { cooldownRemain = rem }
+            count = count + 1
           end
         end
       end

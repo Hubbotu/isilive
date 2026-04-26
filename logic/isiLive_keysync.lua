@@ -356,6 +356,12 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
         end
       end
       local extrasChanged = (info.syncKickExtras == nil) ~= (interpolatedExtras == nil)
+      -- Drift threshold for extras is intentionally larger than the primary
+      -- (0.6 s vs 0.05 s for syncKickRemain above). Extras are talent / pet-
+      -- swap interrupts (typically 30 s CDs); a sub-second drift is below
+      -- visual perception in the tooltip and not worth a full re-render burst.
+      -- Primary cooldowns drive the bright Kick column and need tighter sync
+      -- so the displayed countdown ticks smoothly second-by-second.
       if not extrasChanged and interpolatedExtras and info.syncKickExtras then
         for sid, d in pairs(interpolatedExtras) do
           local pd = info.syncKickExtras[sid]
