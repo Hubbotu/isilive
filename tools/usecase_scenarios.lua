@@ -84,6 +84,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_controller_wiring_keystone.lua",
   "testmodul/isilive_test_scenarios_lfg_flags_branches.lua",
   "testmodul/isilive_test_scenarios_kill_row_branches.lua",
+  "testmodul/isilive_test_scenarios_factory_kick_tracker_branches.lua",
 }
 
 return scenarioFiles
