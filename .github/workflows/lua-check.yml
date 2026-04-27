@@ -17,12 +17,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Install StyLua via cargo
+        # Workaround: JohnnyMorganz/stylua-action@v5 downloads from GitHub
+        # Releases, but upstream releases were wiped on 2026-04-27. Build
+        # from crates.io instead until upstream restores release assets.
+        run: cargo install stylua --version 2.3.1 --locked
+
       - name: StyLua (check)
-        uses: JohnnyMorganz/stylua-action@v5
-        with:
-          token: ${{ github.token }}
-          version: "2.3.1"
-          args: --check .
+        run: stylua --check .
 
       - name: Setup Lua
         uses: leafo/gh-actions-lua@v12
