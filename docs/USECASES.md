@@ -39,8 +39,7 @@ Zuletzt aktualisiert: `2026-04-24`
 | UC-15 | LFG-Detektion und Portal-Highlight | LFG-Einladungen und eigene Listings loesen lokalisierte Hinweise und das passende Portal-Highlight deterministisch aus |
 | UC-16 | BR- und Bloodlust-Gruppen-Announce im Mythic+ | Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird innerhalb eines aktiven Keys genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt |
 | UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile aus der DB an den Blizzard-Tooltip an |
-| UC-18 | Nameplate-Forces-Overlay im Mythic+ | Optionales Live-Overlay auf jeder feindlichen Namensplakette zeigt den Mob-Forces-Beitrag und optional den Boss-Target-Remainder |
-| UC-19 | Boss-Target-Marker im Killtracker | Vertikale Markerlinien auf der Forces-Bar visualisieren die kumulativen Boss-Target-Schwellen mit Drei-State-Farbcoding |
+| UC-18 | Nameplate-Forces-Overlay im Mythic+ | Optionales Live-Overlay auf jeder feindlichen Namensplakette zeigt den Mob-Forces-Beitrag |
 | UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
 
@@ -223,30 +222,15 @@ Ziel: Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile an
 Ziel: Eine optionale Live-Anzeige auf jeder feindlichen Namensplakette waehrend eines aktiven M+-Keys zeigt dem Spieler den Forces-Beitrag dieses Mobs ohne Mouseover.
 
 1. Trigger: `NAME_PLATE_UNIT_ADDED` / `NAME_PLATE_UNIT_REMOVED` / `CHALLENGE_MODE_START` / `PLAYER_ENTERING_WORLD` / `SCENARIO_UPDATE` feuern, waehrend `C_ChallengeMode.IsChallengeModeActive()` `true` liefert und der User `mobNameplateEnabled` aktiviert hat.
-2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und liefert `MPlusForces.byNpcId` plus `MPlusForces.dungeonTotal[mapID].total`. Optional `data/isiLive_mplus_boss_targets.lua` fuer Boss-Target-Remainder, ueberschreibbar via `IsiLiveDB.bossTargetsOverride[mapID]`.
+2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und liefert `MPlusForces.byNpcId` plus `MPlusForces.dungeonTotal[mapID].total`.
 3. Aktivierungs-Gate (alle vier muessen halten): aktiver Key, User-Toggle gesetzt, `UnitReaction(unit,"player") <= 4` (hostile/neutral, friendly Units skipped), `UnitGUID` ist ein nicht-leerer String und kein Secret Value.
 4. Verarbeitung: Der GUID wird in eine NpcID umgewandelt (Pattern-Match auf den Blizzard-GUID, akzeptiert nur `Creature` und `Vehicle`), und der `count`-Wert aus `MPlusForces.byNpcId[npcId]` wird durch `MPlusForces.dungeonTotal[mapID].total` geteilt -> `percent = count / total * 100`. Diese DB-basierte Berechnung ist die primaere Quelle; die Blizzard-API `C_ScenarioInfo.GetUnitCriteriaProgressValues` wird nur als Fallback genutzt, wenn die DB den NPC nicht kennt (frischer Patch-Mob vor naechstem MDT-Refresh).
-5. Regel: `BuildText` rendert je nach `format`-Konfiguration `<percent>%`, `<percent>% | +<remainder>%` (Boss-Target-Mode `next` oder `end`) oder versteckt das Frame, wenn keine sichtbaren Anteile vorhanden sind.
+5. Regel: `BuildText` rendert `<percent>%` oder versteckt das Frame, wenn der Anteil nicht ermittelbar ist (Secret Value, leerer String, fehlender NPC im DB).
 6. Regel: 12.0-Secret-Value-Guards greifen vor jedem `==`/`~=`/`<=`/`<`/Pattern-Match-Operator: `mapID`, `numCriteria`, `quantity`, `totalQuantity`, `unitGUID`, `unitReaction`, `percentString`. Die Reihenfolge ist `type() -> IsSecretValue() -> Comparison`, niemals umgekehrt, da der Comparison-Operator den Stack tainted, bevor der Guard laeuft.
 7. Regel: Frame-Pool pro `unit`-Token, sodass `CreateFrame` hoechstens einmal pro gleichzeitig aktivem Nameplate-Slot gerufen wird. `NAME_PLATE_UNIT_REMOVED` versteckt das Frame und entfernt den Pool-Eintrag.
 8. Regel: Plater- oder Platynator-Soft-Detect zeigt eine dezente Warnung in den Settings; `mobNameplateEnabled` defaultet auf `false` fuer Frischinstallationen, damit Nutzer dieser Addons keine Doppel-Anzeige erhalten.
 9. Verarbeitung: `appearance.fontSize` wird via `ApplyFont(fontString)` als `SetFont(file, size, flags)` mit dem Template `GameFontNormalOutline` und Default-Fallback `Fonts\\FRIZQT__.TTF` / `OUTLINE` auf den FontString uebertragen, sowohl bei Frame-Erstellung als auch bei jedem Refresh, sodass Slider-Aenderungen ohne `/reload` durchschlagen.
 10. Erfolgskriterium: Im aktiven Key zeigt jede feindliche Namensplakette eine deterministische, lokalisierungsneutrale Forces-Zahl, die der Mouseover-Tooltip-Zeile entspricht; ausserhalb eines Keys oder bei nicht-feindlichen Units bleibt das Overlay versteckt.
-
-## UC-19 Boss-Target-Marker im Killtracker
-
-Ziel: Visuelles Feedback auf der Killtracker-Forces-Bar, damit der Spieler waehrend eines Pulls sieht, ob die kumulative Forces den naechsten Boss-Target erreichen.
-
-1. Trigger: `KillTrack.OnUpdate` feuert nach `SCENARIO_CRITERIA_UPDATE`, `PLAYER_REGEN_DISABLED`, `PLAYER_REGEN_ENABLED`, `CHALLENGE_MODE_START` oder dem 0.5s-Refresh-Ticker.
-2. Voraussetzung: `data/isiLive_mplus_boss_targets.lua` ist geladen und liefert kumulative Boss-Target-Prozente pro `mapID`, ueberschreibbar via `IsiLiveDB.bossTargetsOverride[mapID]`. `KillTrack.GetData()` exposed `mapID` fuer das Lookup.
-3. Verarbeitung: Pre-allocierter Pool von 8 Marker-Texturen pro Killtracker-Row. Pro Render: aktuelle Container-Breite -> Position `x = floor(w * target / 100 + 0.5)`, `marker:SetPoint("TOP", barContainer, "TOPLEFT", x, 0)` und `marker:SetPoint("BOTTOM", barContainer, "BOTTOMLEFT", x, 0)`.
-4. Regel: Drei-State-Farbcoding basierend auf `accumulated` (`state.percent`) und `pullPct` (`pull.pullPercent`):
-   - **Grau** `(0.6, 0.6, 0.65, 0.9)` -> `pct + pullPct < target` (Boss-Target jenseits des aktuellen Pulls).
-   - **Gelb** `(1.0, 0.85, 0.2, 0.9)` -> `pct < target <= pct + pullPct` (laufender Pull bringt cumulative ueber das Target).
-   - **Gruen** `(0.2, 0.85, 0.3, 0.9)` -> `pct >= target` (Boss-Target bereits erreicht).
-5. Regel: Wenn `mapID` nil ist oder kein Boss-Target-Eintrag fuer die map existiert, werden alle Marker versteckt; keine Fehlerausgabe.
-6. Regel: Marker-Z-Order liegt im OVERLAY-Layer ueber `barFill` (cumulative) und `barPull` (pull), damit sie auch bei voller Bar sichtbar bleiben.
-7. Erfolgskriterium: Im aktiven Key zeigt die Killtracker-Bar 3-4 vertikale Marker pro Dungeon, der naechste Marker laeuft auf gelb, sobald der laufende Pull die Schwelle erreichen wuerde, und auf gruen sobald die Schwelle ueberschritten ist.
 
 ## UC-21 Multi-Kick-Extras im Roster-Tooltip
 

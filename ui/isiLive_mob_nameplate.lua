@@ -12,15 +12,7 @@ local frames = {}
 
 local format = {
   showPercent = true,
-  bossTargetMode = "off", -- "off" | "next" | "end"
 }
-
-local function NormalizeBossTargetMode(val)
-  if val == "off" or val == "next" or val == "end" then
-    return val
-  end
-  return "off"
-end
 
 local appearance = {
   fontSize = 12,
@@ -143,134 +135,6 @@ local function GetActiveChallengeMapID()
   return mapID
 end
 
-local function ResolveBossTargets(mapID)
-  if type(mapID) ~= "number" then
-    return nil
-  end
-  local db = rawget(_G, "IsiLiveDB")
-  if type(db) == "table" and type(db.bossTargetsOverride) == "table" then
-    local override = db.bossTargetsOverride[mapID]
-    if type(override) == "table" and #override > 0 then
-      return override
-    end
-  end
-  local defaults = addonTable.MPlusBossTargets
-  if type(defaults) ~= "table" or type(defaults.byMapID) ~= "table" then
-    return nil
-  end
-  local entry = defaults.byMapID[mapID]
-  if type(entry) ~= "table" or #entry == 0 then
-    return nil
-  end
-  return entry
-end
-
--- Iterates scenario criteria to find:
---   forcesPercent: quantity/totalQuantity of the criteria with totalQuantity > 1
---   nextBossIndex: 1-based index of the first not-completed boss criteria
---                  (totalQuantity == 1). Boss criteria are ordered by bossOrder.
--- Returns forcesPercent (number or nil), nextBossIndex (number or nil).
-local function ResolveScenarioProgress()
-  local api = rawget(_G, "C_ScenarioInfo")
-  if type(api) ~= "table" then
-    return nil, nil
-  end
-  local getStep = api.GetStepInfo
-  local getCriteria = api.GetCriteriaInfo
-  if type(getStep) ~= "function" or type(getCriteria) ~= "function" then
-    return nil, nil
-  end
-
-  local okStep, stepInfo = pcall(getStep)
-  if not okStep or type(stepInfo) ~= "table" then
-    return nil, nil
-  end
-  local rawNum = stepInfo.numCriteria
-  if IsSecretValue(rawNum) then
-    return nil, nil
-  end
-  local numCriteria = tonumber(rawNum)
-  if not numCriteria or numCriteria <= 0 then
-    return nil, nil
-  end
-
-  local forcesPercent = nil
-  local nextBossIndex = nil
-  local bossIndexCounter = 0
-
-  for i = 1, numCriteria do
-    local okCrit, crit = pcall(getCriteria, i)
-    if okCrit and type(crit) == "table" then
-      local total = tonumber(crit.totalQuantity)
-      local qty = tonumber(crit.quantity)
-      local completed = crit.completed == true
-      if total and qty and not IsSecretValue(total) and not IsSecretValue(qty) then
-        if total > 1 then
-          if total > 0 then
-            forcesPercent = (qty / total) * 100
-            if forcesPercent > 100 then
-              forcesPercent = 100
-            end
-          end
-        else
-          bossIndexCounter = bossIndexCounter + 1
-          if nextBossIndex == nil and not completed then
-            nextBossIndex = bossIndexCounter
-          end
-        end
-      end
-    end
-  end
-
-  return forcesPercent, nextBossIndex
-end
-
--- Returns the % points still needed until either:
---   mode "next": the next boss's cumulative target
---   mode "end":  the final 100 %-forces target (end-boss threshold)
--- Returns nil if we cannot determine it (no active map, no targets for
--- "next" mode, all bosses already defeated, scenario API returned nothing).
-local function ResolveBossRemainder(mode)
-  mode = NormalizeBossTargetMode(mode)
-  if mode == "off" then
-    return nil
-  end
-  local mapID = GetActiveChallengeMapID()
-  if not mapID then
-    return nil
-  end
-  local forcesPercent, nextBossIndex = ResolveScenarioProgress()
-  if not forcesPercent then
-    return nil
-  end
-
-  if mode == "end" then
-    local remainder = 100 - forcesPercent
-    if remainder < 0 then
-      remainder = 0
-    end
-    return remainder
-  end
-
-  -- mode == "next"
-  if not nextBossIndex then
-    return nil
-  end
-  local targets = ResolveBossTargets(mapID)
-  if not targets then
-    return nil
-  end
-  local target = tonumber(targets[nextBossIndex])
-  if not target then
-    return nil
-  end
-  local remainder = target - forcesPercent
-  if remainder < 0 then
-    remainder = 0
-  end
-  return remainder
-end
-
 local function IsEligibleUnit(unit)
   local unitExists = rawget(_G, "UnitExists")
   if type(unitExists) ~= "function" then
@@ -301,26 +165,16 @@ local function IsEligibleUnit(unit)
   return true
 end
 
-local function BuildText(percentString, bossRemainder)
-  local parts = {}
-
+local function BuildText(percentString)
   if
-    format.showPercent
-    and type(percentString) == "string"
-    and not IsSecretValue(percentString)
-    and percentString ~= ""
+    not format.showPercent
+    or type(percentString) ~= "string"
+    or IsSecretValue(percentString)
+    or percentString == ""
   then
-    parts[#parts + 1] = percentString .. "%"
-  end
-
-  if format.bossTargetMode ~= "off" and type(bossRemainder) == "number" and bossRemainder > 0 then
-    parts[#parts + 1] = string.format("+%.0f%%", bossRemainder)
-  end
-
-  if #parts == 0 then
     return nil
   end
-  return table.concat(parts, " | ")
+  return percentString .. "%"
 end
 
 local function ApplyFont(fontString)
@@ -436,12 +290,7 @@ local function UpdateNameplate(unit)
     end
   end
 
-  local bossRemainder = nil
-  if format.bossTargetMode ~= "off" then
-    bossRemainder = ResolveBossRemainder(format.bossTargetMode)
-  end
-
-  local text = BuildText(percentString, bossRemainder)
+  local text = BuildText(percentString)
   if not text then
     if frame then
       frame:Hide()
@@ -561,9 +410,6 @@ function MobNameplate.SetFormat(opts)
   if type(opts.showPercent) == "boolean" then
     format.showPercent = opts.showPercent
   end
-  if type(opts.bossTargetMode) == "string" then
-    format.bossTargetMode = NormalizeBossTargetMode(opts.bossTargetMode)
-  end
   if enabled then
     RefreshAll()
   end
@@ -616,7 +462,7 @@ function MobNameplate._Test_GetState()
   return {
     enabled = enabled,
     registered = registered,
-    format = { showPercent = format.showPercent, bossTargetMode = format.bossTargetMode },
+    format = { showPercent = format.showPercent },
     appearance = {
       fontSize = appearance.fontSize,
       position = appearance.position,
@@ -643,7 +489,6 @@ function MobNameplate._Test_Reset()
     frames[unit] = nil
   end
   format.showPercent = true
-  format.bossTargetMode = "off"
   appearance.fontSize = 12
   appearance.position = "RIGHT"
   appearance.xOffset = 0

@@ -28,7 +28,6 @@ core/isiLive_runtime_setup.lua
 factory/isiLive_controller_init.lua
 game/isiLive_season_data.lua
 data/isiLive_mplus_forces.lua
-data/isiLive_mplus_boss_targets.lua
 game/isiLive_lfg_detect.lua
 ui/isiLive_ui_common.lua
 game/isiLive_teleport.lua

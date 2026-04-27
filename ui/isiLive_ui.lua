@@ -90,7 +90,7 @@ local PANEL_UI_ENTRIES = {
     secureMacroText = "/click GameMenuButtonContinue\n/reload",
   },
 }
--- Hearthstone toy IDs sourced from spell-database compilation (github.com/community/spell-database compilation)
+-- Hearthstone toy item IDs (collected from the WoW item database).
 local HEARTHSTONE_TOY_IDS = {
   54452,
   64488,

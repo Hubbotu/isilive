@@ -1360,72 +1360,6 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     "SETTINGS_NAMEPLATE_SHOW_PERCENT"
   )
 
-  local function NormalizeBossTargetMode(val)
-    if val == "off" or val == "next" or val == "end" then
-      return val
-    end
-    return "off"
-  end
-
-  local function ResolveBossTargetModeFromDB(db)
-    if type(db) ~= "table" then
-      return "off"
-    end
-    local mode = db.mobNameplateBossTargetMode
-    if mode == "off" or mode == "next" or mode == "end" then
-      return mode
-    end
-    if db.mobNameplateShowBossTarget == true then
-      return "next"
-    end
-    return "off"
-  end
-
-  controls.nameplateBossTargetMode, yOffset = CreateSettingsOptionSelector(
-    canvas,
-    yOffset,
-    "SETTINGS_NAMEPLATE_BOSS_TARGET_MODE",
-    labels.SETTINGS_NAMEPLATE_BOSS_TARGET_MODE or "Rest-Anzeige (+X%)",
-    {
-      {
-        value = "off",
-        labelKey = "SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_OFF",
-        fallback = labels.SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_OFF or "Off",
-        width = 70,
-      },
-      {
-        value = "next",
-        labelKey = "SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_NEXT",
-        fallback = labels.SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_NEXT or "Next boss",
-        width = 100,
-      },
-      {
-        value = "end",
-        labelKey = "SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_END",
-        fallback = labels.SETTINGS_NAMEPLATE_BOSS_TARGET_MODE_END or "Final boss",
-        width = 100,
-      },
-    },
-    config.getL,
-    function()
-      return ResolveBossTargetModeFromDB(config.getDB())
-    end,
-    function(mode)
-      mode = NormalizeBossTargetMode(mode)
-      local db = config.getDB()
-      db.mobNameplateBossTargetMode = mode
-      db.mobNameplateShowBossTarget = (mode ~= "off")
-      if type(config.onMobNameplateChange) == "function" then
-        config.onMobNameplateChange()
-      end
-      if type(controls.nameplatePreviewUpdate) == "function" then
-        controls.nameplatePreviewUpdate()
-      end
-    end,
-    NormalizeBossTargetMode,
-    true
-  )
-
   controls.nameplateFontSize, yOffset = CreateSettingsSlider(
     canvas,
     yOffset,
@@ -1553,15 +1487,9 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     end
 
     local showPercent = db.mobNameplateShowPercent ~= false
-    local mode = ResolveBossTargetModeFromDB(db)
     local parts = {}
     if showPercent then
       parts[#parts + 1] = "1.16%"
-    end
-    if mode == "next" then
-      parts[#parts + 1] = "+13%"
-    elseif mode == "end" then
-      parts[#parts + 1] = "+83%"
     end
     if #parts == 0 then
       preview.overlay:SetText("")
@@ -2302,9 +2230,6 @@ local function RefreshSettingsControls(controls, config)
   if controls.nameplateShowPercent then
     controls.nameplateShowPercent.label:SetText(freshL.SETTINGS_NAMEPLATE_SHOW_PERCENT or "Show percentage")
     controls.nameplateShowPercent.check:SetChecked(db.mobNameplateShowPercent ~= false)
-  end
-  if controls.nameplateBossTargetMode and type(controls.nameplateBossTargetMode.UpdateHighlight) == "function" then
-    controls.nameplateBossTargetMode.UpdateHighlight()
   end
   if controls.nameplatePosition and type(controls.nameplatePosition.UpdateHighlight) == "function" then
     controls.nameplatePosition.UpdateHighlight()

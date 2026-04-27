@@ -18,7 +18,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
-- Forces percentage with a live pull-prediction bar **and visual boss-target markers** so you see at a glance whether a pull will reach the next boss threshold
+- Forces percentage with a live pull-prediction bar so you see at a glance how much the running pull will add
 - Optional **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus an optional remainder until the next (or final) boss
 - Forces info on the **mouseover tooltip** for any mob in a key
 
@@ -98,12 +98,6 @@ A bottom bar that shows your kill-count percentage:
 
 - **Green** < 80%, **Yellow** < 95%, **Red** ≥ 95%
 - During a pull, a light-blue segment on the right shows **how much the current pull will add** (`+X.XX%`) — so you can see mid-pull whether it's enough
-- **Boss-target markers**: thin vertical lines on the bar at each cumulative boss-target threshold for the current dungeon
-  - **Grey** marker → boss target is beyond the current pull
-  - **Yellow** marker → the running pull will reach the threshold once it lands
-  - **Green** marker → the threshold is already cleared by accumulated forces
-
-Boss-target percentages come from a community-maintained data table (8 Midnight S1 dungeons). You can override them per dungeon via `IsiLiveDB.bossTargetsOverride[mapID] = { 28.07, 52.2, 60.09, 100 }` in the SavedVariables file (no UI for that — manual edit).
 
 ### Teleport Grid
 
@@ -160,12 +154,7 @@ Optional always-on text over every hostile unit's nameplate during a key (off by
 1.16%
 ```
 
-Configurable: percent only, percent + boss-target remainder, font size 8-24, position around the nameplate (LEFT/RIGHT/TOP/BOTTOM). Same DB-based source as the tooltip — deterministic mob contribution, never the cumulative progress.
-
-**Optional remainder mode** (off / next boss / final boss):
-- `off` — only the per-mob percent (default)
-- `next` — appends `+X%` showing how much is still needed until the next not-yet-defeated boss target
-- `end` — appends `+X%` showing remainder until 100% (the end-boss threshold)
+Configurable: percent toggle, font size 8-24, position around the nameplate (LEFT/RIGHT/TOP/BOTTOM). Same DB-based source as the tooltip — deterministic mob contribution, never the cumulative progress.
 
 Plater / Platynator users: a soft warning is shown in Settings if either is loaded — both addons can already display M+ forces on nameplates via their own scripts, so isiLive's overlay defaults to off to avoid duplication.
 
@@ -219,7 +208,7 @@ Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 - **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
 - **Behavior** — addon sync, auto-open on M+ queue, auto-close on key start, raid behavior, column guides
 - **Sounds** — lead transfer, group join, portal available
-- **Nameplates** — enable forces overlay, font size, position, percent toggle, boss-target remainder mode
+- **Nameplates** — enable forces overlay, font size, position, percent toggle
 - **Chat Announcements** — announce Battle Res / announce Bloodlust
 - **Administrative** — queue debug log, runtime log (both reset on reload, for support), plus dedicated **Clear Queue Debug Log** / **Clear Runtime Log** buttons in the panel for one-click log purge without using the slash command
 

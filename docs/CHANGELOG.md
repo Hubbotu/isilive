@@ -2736,7 +2736,7 @@
 - Improved queue join chat visibility by adding white separator lines before and after the message block.
 - Added right-side dungeon difficulty indicator (`Normal`/`Heroic`/`Mythic`) with live updates on instance/difficulty changes and key-readiness color hint.
 - Added a center notice teleport button for queued invites:
-  - maps Season 3 dungeons to their teleport spell IDs (based on spell-database compilation data)
+  - maps Season 3 dungeons to their teleport spell IDs (compiled from the WoW spell database)
   - enables direct click-cast when the dungeon teleport is known
   - shows locked state when teleport is not unlocked yet and handles combat lockdown safely
 

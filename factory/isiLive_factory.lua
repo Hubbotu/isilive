@@ -26,20 +26,6 @@ local function ResolveAutoOpenMainFrameOnKeyEndEnabled(dbRef)
   return not (type(dbRef) == "table" and dbRef.autoOpenMainFrameOnKeyEnd == false)
 end
 
-local function ResolveMobNameplateBossTargetMode(dbRef)
-  if type(dbRef) == "table" then
-    local mode = dbRef.mobNameplateBossTargetMode
-    if mode == "off" or mode == "next" or mode == "end" then
-      return mode
-    end
-    -- Legacy boolean: showBossTarget == true -> "next", else "off".
-    if dbRef.mobNameplateShowBossTarget == true then
-      return "next"
-    end
-  end
-  return "off"
-end
-
 local function ResolveMainFramePositionLockEnabled(dbRef)
   return not (type(dbRef) == "table" and dbRef.lockMainFramePosition == false)
 end
@@ -348,7 +334,6 @@ local function FinalizeFactorySettings(ctx)
       if type(mobNameplate.SetFormat) == "function" then
         mobNameplate.SetFormat({
           showPercent = db.mobNameplateShowPercent ~= false,
-          bossTargetMode = ResolveMobNameplateBossTargetMode(db),
         })
       end
       if type(mobNameplate.SetAppearance) == "function" then
