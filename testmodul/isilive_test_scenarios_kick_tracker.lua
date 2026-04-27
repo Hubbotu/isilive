@@ -4,6 +4,7 @@
 ---@field ResolveKickState fun(): table
 ---@field OnCast fun(unit: string, spellID: number): boolean|nil
 ---@field CacheCooldown fun(): boolean|nil
+---@field Scan fun()
 
 ---@param controller KickController|nil
 ---@param message string

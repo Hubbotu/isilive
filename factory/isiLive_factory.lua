@@ -272,8 +272,6 @@ local function FinalizeFactorySettings(ctx)
         if type(mobNameplate.SetFormat) == "function" then
           mobNameplate.SetFormat({
             showPercent = db.mobNameplateShowPercent ~= false,
-            showCount = db.mobNameplateShowCount == true,
-            showTotal = db.mobNameplateShowTotal == true,
           })
         end
         if type(mobNameplate.SetAppearance) == "function" then
