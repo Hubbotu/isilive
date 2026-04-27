@@ -1096,3 +1096,13 @@ RI.RegisterBlizzardUnitLanguageTooltip = RegisterBlizzardUnitLanguageTooltip
 function RI.SetTooltipFlagsEnabled(enabled)
   RI._blizzardUnitLanguageTooltipEnabled = enabled ~= false
 end
+
+-- Expose pure formatters via _RosterInternal so tests can drive them
+-- directly. The production code paths continue to use the local
+-- references; assigning them is behaviour-neutral.
+RI.IsSecretValue = IsSecretValue
+RI.BuildFallbackTooltipPlayerName = BuildFallbackTooltipPlayerName
+RI.FormatCompactTooltipNumber = FormatCompactTooltipNumber
+RI.FormatSyncAge = FormatSyncAge
+RI.FormatSyncDebugField = FormatSyncDebugField
+RI.ResolveTooltipClassName = ResolveTooltipClassName
