@@ -824,7 +824,7 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
     AssertContains(
       Assert,
       workflowContent,
-      "uses: JohnnyMorganz/stylua-action@v5",
+      "stylua --check .",
       "workflow must keep the StyLua check step"
     )
     AssertContains(
