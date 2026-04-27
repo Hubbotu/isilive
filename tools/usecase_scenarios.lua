@@ -82,6 +82,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_highlight_branches.lua",
   "testmodul/isilive_test_scenarios_demo_branches.lua",
   "testmodul/isilive_test_scenarios_controller_wiring_keystone.lua",
+  "testmodul/isilive_test_scenarios_lfg_flags_branches.lua",
 }
 
 return scenarioFiles
