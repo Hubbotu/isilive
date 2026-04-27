@@ -520,7 +520,6 @@ local function RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.Equal(state.appearance.fontSize, 19, "fontSize must be persisted in module state")
     end)
   end)
-
 end
 
 local function RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules)
