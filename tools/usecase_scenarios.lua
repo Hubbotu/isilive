@@ -86,6 +86,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_kill_row_branches.lua",
   "testmodul/isilive_test_scenarios_factory_kick_tracker_branches.lua",
   "testmodul/isilive_test_scenarios_chrome_branches.lua",
+  "testmodul/isilive_test_scenarios_roster_tooltip_branches.lua",
 }
 
 return scenarioFiles
