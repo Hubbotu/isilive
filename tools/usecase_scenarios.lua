@@ -76,6 +76,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_roster_panel_structure.lua",
   "testmodul/isilive_test_scenarios_roster_panel_render.lua",
   "testmodul/isilive_test_scenarios_roster_panel_helpers.lua",
+  "testmodul/isilive_test_scenarios_event_handlers_queue.lua",
 }
 
 return scenarioFiles
