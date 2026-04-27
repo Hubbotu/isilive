@@ -18,7 +18,7 @@ local function RequireController(controller, message, Assert)
 end
 
 local function RegisterBasicKickTests(test, Assert, WithGlobals, LoadAddonModules)
-  test("KickTracker reports no interrupt for Holy Paladin (lost Rebuke in Midnight)", function()
+  test("KickTracker reports no interrupt for Holy Paladin (no Rebuke in Midnight)", function()
     ---@type KickController|nil
     local controller = nil
     WithGlobals({
@@ -184,13 +184,13 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
               return 30000 -- Demo Warlock Axe Toss (player-facing ID)
             end
             if spellID == 78675 then
-              return 45000 -- Balance Druid Solar Beam (Midnight:45s)
+              return 45000 -- Balance Druid Solar Beam (Midnight: 45s)
             end
             if spellID == 351338 then
-              return 18000 -- Evoker Quell (Midnight:18s)
+              return 18000 -- Evoker Quell (Midnight: 18s)
             end
             if spellID == 2139 then
-              return 20000 -- Mage Counterspell (Midnight:20s)
+              return 20000 -- Mage Counterspell (Midnight: 20s)
             end
             if spellID == 147362 then
               return 24000

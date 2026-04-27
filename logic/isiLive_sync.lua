@@ -1651,8 +1651,8 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
       -- Optional extras: parts[4] == "E" marks the extras suffix. parts[5]
       -- is `<spellID>,<remain>;<spellID>,<remain>`. Older peers omit both.
       -- Defense-in-depth: cap at 8 entries to bound memory if a malformed
-      -- or hostile peer were to send an oversized list. Realistic max in Midnight
-      -- is 1-2 extras (Prot Pala Avenger's Shield, Demo Warlock pet swap).
+      -- or hostile peer were to send an oversized list. Realistic max in
+      -- Midnight is 1-2 extras (Prot Pala Avenger's Shield, Demo Warlock pet swap).
       local extras = nil
       if parts[4] == "E" and type(parts[5]) == "string" and parts[5] ~= "" then
         local count = 0

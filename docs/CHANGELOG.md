@@ -53,7 +53,7 @@
 
 - **Tests:**
   - `mappedSpecs`-Liste in [testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua) entfernt 65 + 270 (jetzt in `noKickSpecs`), Demo Warlock spellID umgestellt auf 119914. `GetSpellBaseCooldown`-Mock liefert jetzt 45000ms fuer Solar Beam, 20000ms fuer Counterspell, 18000ms fuer Quell, 30000ms fuer Axe Toss.
-  - Spezifischer Holy-Paladin-Test umbenannt + umgeschrieben: `KickTracker resolves Holy Paladin to Rebuke` -> `KickTracker reports no interrupt for Holy Paladin (lost Rebuke in Midnight)`. Assertet `info.hasKick == false` und `info.spellID == nil`.
+  - Spezifischer Holy-Paladin-Test umbenannt + umgeschrieben: `KickTracker resolves Holy Paladin to Rebuke` -> `KickTracker reports no interrupt for Holy Paladin (no Rebuke in Midnight)`. Assertet `info.hasKick == false` und `info.spellID == nil`.
   - Demo-Warlock-Test asserted jetzt `info.spellID == 119914` mit angepasstem Mock.
   - `RULE-KICKTRACKER-PERSOENLICHER-INTERRUPT` in [docs/RULES_LOGIC.md](../docs/RULES_LOGIC.md) zieht den umbenannten Test mit, Zusammenfassung erweitert um die 5-Spec-Healer-Liste.
 
@@ -2148,8 +2148,8 @@
 - TOC version bumped to `0.9.48`.
 
 ## 2026-02-23 - Version 0.9.47
-- **Key Mapping Reliability (S3):**
-  - Added explicit challenge-map alias mapping for S3 key IDs:
+- **Key Mapping Reliability (Season 3):**
+  - Added explicit challenge-map alias mapping for Season 3 key IDs:
     - `378 -> 2287` (Halls of Atonement)
     - `391 -> 2441` (Tazavesh: Streets of Wonder)
     - `392 -> 2441` (Tazavesh: So'leah's Gambit)
@@ -2406,7 +2406,7 @@
 ## 2026-02-18 - Version 0.9.30
 - **Key Announce:** Added a speaker button to the roster panel to post all known party keys to chat.
 - **Season Data:** Extracted season data (dungeons, teleports) into `isiLive_season_data.lua` for easier updates.
-- **Season Data:** Updated/locked dungeon list and teleports for **Season 3 (S3)**.
+- **Season Data:** Updated/locked dungeon list and teleports for **Season 3**.
 - **UI Behavior:** The main window is now "frozen" instead of strictly hidden during M+ runs; it can be opened via hotkey (`CTRL+F9`) to view cached data.
 - **Auto-Refresh:** Added automatic group data refresh (iLvl/RIO) 5 seconds after dungeon completion.
 - **UI Layout:** Moved addon version label from bottom-right to top-right in the main window.

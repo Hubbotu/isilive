@@ -9,7 +9,7 @@ local NO_INTERRUPT_SPEC_IDS = {
   [105] = true, -- Restoration Druid
   [256] = true, -- Discipline Priest
   [257] = true, -- Holy Priest
-  [65] = true, -- Holy Paladin (no Rebuke in Midnight)
+  [65] = true, -- Holy Paladin (no Rebuke)
   [270] = true, -- Mistweaver Monk (no Spear Hand Strike)
 }
 
@@ -24,7 +24,7 @@ local SPEC_DATA = {
   [581] = { spellID = 183752, cd = 15 },
   [1480] = { spellID = 183752, cd = 15 },
   -- Druid
-  [102] = { spellID = 78675, cd = 45 }, -- Balance: Solar Beam (45s in current Midnight)
+  [102] = { spellID = 78675, cd = 45 }, -- Balance: Solar Beam (45s in Midnight)
   [103] = { spellID = 106839, cd = 15 }, -- Feral: Skull Bash
   [104] = { spellID = 106839, cd = 15 }, -- Guardian: Skull Bash
   [105] = nil, -- Restoration: no interrupt
@@ -45,7 +45,7 @@ local SPEC_DATA = {
   [269] = { spellID = 116705, cd = 15 }, -- Windwalker: Spear Hand Strike
   [270] = nil, -- Mistweaver: no interrupt
   -- Paladin
-  [65] = nil, -- Holy: no Rebuke in Midnight
+  [65] = nil, -- Holy: no Rebuke
   [66] = { spellID = 96231, cd = 15 }, -- Protection: Rebuke
   [70] = { spellID = 96231, cd = 15 }, -- Retribution: Rebuke
   -- Priest

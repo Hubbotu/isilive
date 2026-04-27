@@ -558,7 +558,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Status: aktiv
 - Zusammenfassung: Der Kick-Tracker bildet den aktuell verfuegbaren Interrupt der aktuellen Spezialisierung ab. Heal-Specs ohne Interrupt (Holy Paladin, Mistweaver Monk, Restoration Druid, Discipline/Holy Priest) muessen `hasKick=false` melden; Devourer Demon Hunter muss `Disrupt` aufloesen; Warlock-Spezialisierungen muessen verfuegbare pet-basierte Interrupts als eigenen Kick behandeln; ohne verfuegbaren Pet-Interrupt bleibt kein aufloesbarer Kick uebrig.
 - Erforderliche Tests:
-  - KickTracker reports no interrupt for Holy Paladin (lost Rebuke in Midnight)
+  - KickTracker reports no interrupt for Holy Paladin (no Rebuke in Midnight)
   - KickTracker resolves interrupt matrix for all mapped specs
   - KickTracker resolves exact no-kick matrix for supported specs
   - KickTracker resolves Warlock pet-based Spell Lock for Affliction and Destruction
