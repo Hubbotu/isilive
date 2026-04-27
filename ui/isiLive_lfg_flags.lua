@@ -4,6 +4,11 @@ addonTable = addonTable or {}
 local LFGFlags = {}
 addonTable.LFGFlags = LFGFlags
 
+-- Internal helpers exposed for tests via addonTable._LFGFlagsInternal.
+-- Production callers continue to use the local references defined below.
+local LI = addonTable._LFGFlagsInternal or {}
+addonTable._LFGFlagsInternal = LI
+
 local FLAG_WIDTH = 16
 local FLAG_HEIGHT = 12
 
@@ -145,6 +150,25 @@ end
 -- -------------------------------------------------------------------------
 -- Panel wiring
 -- -------------------------------------------------------------------------
+
+-- Expose internal helpers under addonTable._LFGFlagsInternal so the
+-- test suite can drive them directly. The production code paths
+-- continue to call the local references; assigning them to LI is
+-- behaviour-neutral.
+LI.SplitNameRealm = SplitNameRealm
+LI.GetTagForResult = GetTagForResult
+LI.EnsureFlagTexture = EnsureFlagTexture
+LI.ApplyFlagToButton = ApplyFlagToButton
+LI.UpdateButton = UpdateButton
+LI.HookButton = HookButton
+LI.HookButtons = HookButtons
+LI.RefreshAll = RefreshAll
+LI.ResetCacheForTests = function()
+  resultTagCache = {}
+end
+LI.GetCacheForTests = function()
+  return resultTagCache
+end
 
 function LFGFlags.HookSearchPanel()
   local LFGListFrameRef = rawget(_G, "LFGListFrame")
