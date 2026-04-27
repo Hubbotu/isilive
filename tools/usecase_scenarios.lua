@@ -79,6 +79,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_event_handlers_queue.lua",
   "testmodul/isilive_test_scenarios_teleport_branches.lua",
   "testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua",
+  "testmodul/isilive_test_scenarios_highlight_branches.lua",
 }
 
 return scenarioFiles
