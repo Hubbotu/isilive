@@ -280,17 +280,6 @@ function KillTrack.OnUpdate(callback)
   table.insert(updateCallbacks, callback)
 end
 
-function KillTrack.ClearCallbacks()
-  for i = #updateCallbacks, 1, -1 do
-    updateCallbacks[i] = nil
-  end
-end
-
--- Exposed for tests: inject a deterministic time source.
-function KillTrack._SetTimeProvider(fn)
-  nowFn = fn
-end
-
 -- Exposed for tests: drive the event loop directly.
 function KillTrack._DispatchEvent(event)
   if event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then

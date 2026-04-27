@@ -539,11 +539,6 @@ function TeleportUI.CreateController(opts)
     BuildButtonsInternal()
   end
 
-  function controller.RebuildButtons()
-    HideExistingButtons()
-    BuildButtonsInternal()
-  end
-
   function controller.SetLayoutMode(layoutMode)
     deps.layoutMode = NormalizeLayoutMode(layoutMode or deps.layoutMode)
     RelayoutButtons()
@@ -555,10 +550,6 @@ function TeleportUI.CreateController(opts)
 
   function controller.GetButtons()
     return buttons
-  end
-
-  function controller.GetEmptyStateLabel()
-    return emptyStateLabel
   end
 
   function controller.SetVisible(visible)

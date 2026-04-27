@@ -476,23 +476,4 @@ function MobNameplate._Test_UpdateNameplate(unit)
   UpdateNameplate(unit)
 end
 
-function MobNameplate._Test_Reset()
-  enabled = false
-  registered = false
-  if eventFrame and eventFrame.UnregisterAllEvents then
-    eventFrame:UnregisterAllEvents()
-  end
-  for unit, frame in pairs(frames) do
-    if frame and frame.Hide then
-      frame:Hide()
-    end
-    frames[unit] = nil
-  end
-  format.showPercent = true
-  appearance.fontSize = 12
-  appearance.position = "RIGHT"
-  appearance.xOffset = 0
-  appearance.yOffset = 0
-end
-
 return MobNameplate

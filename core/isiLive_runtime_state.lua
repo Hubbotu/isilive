@@ -64,15 +64,6 @@ function RuntimeState.CreateController(opts)
     state.roster = type(value) == "table" and value or {}
   end
 
-  function controller.ForEachRosterInfo(visitor)
-    if type(visitor) ~= "function" then
-      return
-    end
-    for _, info in pairs(state.roster) do
-      visitor(info)
-    end
-  end
-
   function controller.GetPendingQueueJoinInfo()
     return state.pendingQueueJoinInfo
   end
