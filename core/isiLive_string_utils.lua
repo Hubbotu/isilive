@@ -36,3 +36,11 @@ function StringUtils.NormalizeRealmName(realm)
   end
   return (realm:gsub("[%s%-%.%(%)'`]", ""))
 end
+
+--- Returns true when value is nil, not a string, or the empty string.
+--- Equivalent to `not value or value == ""` for string-typed inputs.
+--- @param value any
+--- @return boolean
+function StringUtils.IsBlank(value)
+  return type(value) ~= "string" or value == ""
+end

@@ -439,7 +439,7 @@ end
 -- @return boolean true if this is the first HELLO from this peer; false if updated in-place.
 function Sync.SetPlayerHelloInfo(name, realm, addonVersion, protocolVersion, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -481,7 +481,7 @@ end
 -- @return boolean true if the stored version changed; false if unchanged or empty.
 function Sync.SetPlayerHelloAckInfo(name, realm, addonVersion)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -520,7 +520,7 @@ end
 -- @return table|nil {addonVersion, protocolVersion, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerHelloInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return helloInfoByPlayerKey[key]
@@ -536,7 +536,7 @@ end
 -- @return boolean true if the stored key changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerKeyInfo(name, realm, mapID, level, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -576,7 +576,7 @@ end
 -- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerKeyInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return keyInfoByPlayerKey[key]
@@ -593,7 +593,7 @@ end
 -- @return boolean true if stored stats changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerStatsInfo(name, realm, specID, ilvl, rio, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -640,7 +640,7 @@ end
 -- @return table|nil {specID, ilvl, rio, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerStatsInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return statsInfoByPlayerKey[key]
@@ -655,7 +655,7 @@ end
 -- @return boolean true if stored DPS changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerDpsInfo(name, realm, dps, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -693,7 +693,7 @@ end
 -- @return table|nil {dps, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerDpsInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return dpsInfoByPlayerKey[key]
@@ -711,7 +711,7 @@ end
 -- @return boolean true if stored kick state changed; false if unchanged or rejected.
 function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick, extras)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
   if hasKick ~= true and hasKick ~= false then
@@ -793,7 +793,7 @@ end
 -- @return table|nil {hasKick, onCooldown, cooldownRemain, capturedAt, receivedAt, receivedAtGetTime}
 function Sync.GetPlayerKickInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return kickInfoByPlayerKey[key]
@@ -805,7 +805,7 @@ end
 -- @return boolean true if an entry existed and was removed.
 function Sync.ClearPlayerKickInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
   local hadValue = type(kickInfoByPlayerKey[key]) == "table"
@@ -822,7 +822,7 @@ end
 -- @return boolean true if stored location changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerLocInfo(name, realm, mapID, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -860,7 +860,7 @@ end
 -- @return table|nil {mapID, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerLocInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return locInfoByPlayerKey[key]
@@ -876,7 +876,7 @@ end
 -- @return boolean true if stored target changed; false if deduplicated or cleared unchanged.
 function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return false
   end
 
@@ -916,7 +916,7 @@ end
 -- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerTargetInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
   return targetInfoByPlayerKey[key]
@@ -931,7 +931,7 @@ end
 --   intervalSeconds, source, addonVersion, protocolVersion}
 function Sync.GetPlayerSyncSummary(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  if not key or key == "" then
+  if StringUtils.IsBlank(key) then
     return nil
   end
 

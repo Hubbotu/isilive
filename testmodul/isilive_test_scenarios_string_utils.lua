@@ -60,4 +60,20 @@ return function(test, ctx)
       "must strip exactly the canonical character set"
     )
   end)
+
+  test("StringUtils.IsBlank returns true for nil, empty string, and non-strings", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(addon.StringUtils.IsBlank(nil), true, "nil must be blank")
+    Assert.Equal(addon.StringUtils.IsBlank(""), true, "empty string must be blank")
+    Assert.Equal(addon.StringUtils.IsBlank(0), true, "number must be blank (non-string)")
+    Assert.Equal(addon.StringUtils.IsBlank(false), true, "false must be blank (non-string)")
+    Assert.Equal(addon.StringUtils.IsBlank({}), true, "table must be blank (non-string)")
+  end)
+
+  test("StringUtils.IsBlank returns false for any non-empty string", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(addon.StringUtils.IsBlank("x"), false, "single char must not be blank")
+    Assert.Equal(addon.StringUtils.IsBlank(" "), false, "whitespace-only is intentionally NOT blank")
+    Assert.Equal(addon.StringUtils.IsBlank("hello"), false, "regular string must not be blank")
+  end)
 end

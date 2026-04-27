@@ -136,7 +136,7 @@ local function DefaultGetUnitNameAndRealm(unit)
     end
   end
 
-  if not realm or realm == "" then
+  if addonTable.StringUtils.IsBlank(realm) then
     local getRealmName = rawget(_G, "GetRealmName")
     realm = type(getRealmName) == "function" and getRealmName() or ""
   end

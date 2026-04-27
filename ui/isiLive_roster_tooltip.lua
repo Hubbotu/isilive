@@ -313,7 +313,7 @@ RI.AnchorRosterHoverTooltip = AnchorRosterHoverTooltip
 
 local function BuildFallbackTooltipPlayerName(name, realm)
   local playerName = type(name) == "string" and name or nil
-  if not playerName or playerName == "" then
+  if addonTable.StringUtils.IsBlank(playerName) then
     return nil
   end
 

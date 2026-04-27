@@ -212,7 +212,7 @@ function Units.GetUnitNameAndRealm(unit)
   if not name then
     name = UnitName(unit)
   end
-  if not realm or realm == "" then
+  if addonTable.StringUtils.IsBlank(realm) then
     realm = GetRealmName() or ""
   end
   return name, realm

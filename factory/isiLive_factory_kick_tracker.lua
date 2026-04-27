@@ -30,7 +30,7 @@ local function InitializeFactorySecondaryKickTracker(
     end
     local selfName = getUnitName and getUnitName("player") or nil
     local selfRealm = getRealmName and getRealmName() or nil
-    if not selfName or selfName == "" then
+    if addonTable.StringUtils.IsBlank(selfName) then
       return false
     end
     return modules.sync.ClearPlayerKickInfo(selfName, selfRealm)

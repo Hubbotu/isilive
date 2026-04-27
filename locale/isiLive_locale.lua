@@ -205,7 +205,7 @@ function Locale.NormalizeRealmLookupKey(realm)
 end
 
 function Locale.GetRealmLocaleFromStaticData(realm)
-  if not realm or realm == "" then
+  if addonTable.StringUtils.IsBlank(realm) then
     return nil
   end
 
@@ -232,7 +232,7 @@ end
 local IsExistingUnit = addonTable.Validators.IsExistingUnit
 
 function Locale.GetUnitServerLanguage(unit, realm, getRealmInfoLib)
-  if not realm or realm == "" then
+  if addonTable.StringUtils.IsBlank(realm) then
     local getRealmName = rawget(_G, "GetRealmName")
     realm = type(getRealmName) == "function" and getRealmName() or ""
   end
