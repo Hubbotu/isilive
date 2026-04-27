@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-04-27 - Version 0.9.196 (minor)
+
+- **Boss-Target-Overlay vollständig entfernt ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [ui/isiLive_roster_panel_kill_row.lua](../ui/isiLive_roster_panel_kill_row.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [factory/isiLive_factory.lua](../factory/isiLive_factory.lua), [data/isiLive_mplus_boss_targets.lua](../data/isiLive_mplus_boss_targets.lua) gelöscht):**
+  - Der optionale `next` / `end`-Boss-Target-Remainder im Mob-Nameplate-Overlay (`+24%` / `+47%` Zusatz) und die Drei-Farb-Boss-Marker auf der Killtracker-Bar (grau/gelb/grün) sind komplett entfernt. Der Per-Mob-Forces-Beitrag (`+1.50%`) auf Nameplates und die Forces-Bar selbst (Fill + Pull-Predictor + %-Text) bleiben unverändert.
+  - Settings-Dropdown "Rest-Anzeige (off/next/end)" entfernt; 32 zugehörige Locale-Strings (`SETTINGS_NAMEPLATE_BOSS_TARGET_MODE*`) in allen 8 Sprachen gestrichen, Drift-Gate weiterhin clean.
+  - `data/isiLive_mplus_boss_targets.lua` gelöscht plus TOC-Eintrag, Factory-Resolver `ResolveMobNameplateBossTargetMode`, der `bossTargetMode`-Parameter von `MobNameplate.SetFormat`, der `killTrackBossMarkers`-Pool und 6 Boss-Target-Test-Szenarien.
+  - SavedVariable-Keys `mobNameplateBossTargetMode`, `mobNameplateShowBossTarget`, `bossTargetsOverride[mapID]` werden ab dieser Version ignoriert (kein Migrations-Code, alte Werte bleiben in `IsiLiveDB` und werden vom neuen Code nicht mehr gelesen).
+  - Doku entsprechend aktualisiert: UC-19 in [docs/USECASES.md](USECASES.md) entfernt, UC-18 (Nameplate-Overlay) auf den verbleibenden Per-Mob-Beitrag reduziert, ARCHITECTURE.md Schichtüberblick entschärft.
+
+- **Stale TWW-Referenzen auf Midnight migriert ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua), [logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua), [docs/RULES_LOGIC.md](RULES_LOGIC.md)):**
+  - 3 Code-Kommentare im Kick-Tracker (`since TWW`, `current TWW`) und der Extras-Cap-Kommentar in `Sync.ProcessAddonMessage` haben den Vorgänger-Expansion-Namen entfernt — das Addon läuft seit Patch 12.0 gegen Midnight, "TWW values" als Kommentar war faktisch falsch.
+  - Test-Name `KickTracker reports no interrupt for Holy Paladin (lost Rebuke since TWW)` umbenannt zu `(no Rebuke in Midnight)`; gepaartes Mapping in `RULES_LOGIC.md` (RULE-KICKTRACKER-PERSOENLICHER-INTERRUPT) angepasst, sonst hätte der Rule-Validator den Test nicht mehr gefunden.
+  - 10 historische CHANGELOG-Einträge mit `TWW S3` / `TWW Season 3` / `TWW-Werte` / `The War Within` generalisiert auf `Season 3` / `Midnight`.
+
+- **LuaLS-Diagnostik-Aufräumen (mehrere Stellen):**
+  - `Assert.NotNil(...)` Aufrufe in [testmodul/isilive_test_scenarios_mob_nameplate.lua](../testmodul/isilive_test_scenarios_mob_nameplate.lua) und [testmodul/isilive_test_scenarios_tank_helper.lua](../testmodul/isilive_test_scenarios_tank_helper.lua) erfassen jetzt den Return-Value, damit LuaLS `eventFrame` / `tankButton` / `collapseButton` / `horizontalCollapseButton` korrekt von `nil` narrowt — folgt dem Idiom aus Commit `fdf0857`.
+  - `KickController` `@class`-Annotation in [testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua) enthält jetzt `Scan` als `@field`, sodass der Avenger's-Shield-Extras-Expiry-Test den `kickController.Scan()`-Aufruf nicht mehr als undefined-field flaggt.
+  - [ui/isiLive_settings.lua](../ui/isiLive_settings.lua) Preview-Update: `preview.overlay:GetFont()` darf `nil` als `fontPath` zurückgeben — Guard mit `Fonts\\FRIZQT__.TTF` Fallback (gleiches Default wie `ApplyFont` im Nameplate-Modul).
+  - Trailing Blank-Line zwischen `end)` und `end` aus Test-Block-Löschung gefixt (Stylua-Gate-Failure).
+
+- **Factory-Cleanup ([factory/isiLive_factory.lua](../factory/isiLive_factory.lua)):**
+  - Tote `showCount` / `showTotal` Argumente an `MobNameplate.SetFormat` aus dem `onMobNameplateChange`-Callback entfernt. `SetFormat` wurde beim Boss-Target-Strip vereinfacht und liest nur noch `showPercent`. Die zugehörigen DB-Keys (`mobNameplateShowCount` / `mobNameplateShowTotal`) wurden nie irgendwo gesetzt — pure Leiche aus einem älteren ungelaunchten Feature-Stub.
+
+- **Drittanbieter-Attributionen aufgeräumt ([data/isiLive_mplus_boss_targets.lua](../data/isiLive_mplus_boss_targets.lua) gelöscht, [ui/isiLive_ui.lua](../ui/isiLive_ui.lua), [docs/CHANGELOG.md](CHANGELOG.md)):**
+  - Die Boss-Target-Datei (vorher mit Attribution an einen externen Community-Datensatz) ist mit dem Feature-Strip ohnehin weg.
+  - Der Source-Comment für die 32 Hearthstone-Toy-Item-IDs in [ui/isiLive_ui.lua:93](../ui/isiLive_ui.lua#L93) wurde von der Verweis-auf-anderes-Addon-Form auf einen generischen "WoW item database"-Hinweis umgestellt; die Liste der IDs selbst bleibt unverändert.
+  - Toter Markdown-Link auf eine nicht-existierende CurseForge-URL in einem historischen v0.9.193-Eintrag in [docs/CHANGELOG.md](CHANGELOG.md) zu reinem Klartext aufgelöst, plus zwei weitere clunky-hyphenated-Phrasen ("external-interrupt-tracker-extraKicks-Modell") in lesbare Form gebracht.
+
+- **History-Aufräumung (4 filter-repo-Läufe, alle 497 Commits umgeschrieben):** Frühere Erwähnungen externer Addon-Namen aus dem kompletten Repo-Verlauf entfernt — Working Tree und gesamte History sind jetzt frei von solchen Verweisen außerhalb der explizit erlaubten Liste (LibKS / LibKeystone / MDT / Raider.IO / ChatThrottleLib / Plater / Platynator / DBM / BigWigs / WeakAuras / BugGrabber / `Lib*` / `AceComm*` / `MinimapButton*`). Folge: alle SHAs ab `0.9.116` haben sich geändert; alle 94 Release-Tags sind force-gepusht. Vier Backup-Bundles liegen in `d:/Git/isilive-pre-*-2026-04-27.bundle`.
+
+- **Tests:** 1092 → 1086 (sechs Boss-Target-Szenarien gelöscht, alle anderen unverändert grün). Stylua, Locale-Drift, M+ Forces DB Lifetime, validate_usecases, validate_rules_logic, validate_architecture_rules durchweg clean.
+
 ## 2026-04-26 - Version 0.9.195 (patch)
 
 - **Code-Review-Followups aus dem 0.9.194-Audit ([logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
