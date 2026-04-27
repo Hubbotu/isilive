@@ -17,7 +17,7 @@
 ## 2026-04-26 - Version 0.9.194 (minor)
 
 - **Multi-Kick-Tracking fuer Specs mit zusaetzlichen Interrupts ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua), [logic/isiLive_sync.lua](../logic/isiLive_sync.lua), [logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua), [ui/isiLive_roster_tooltip.lua](../ui/isiLive_roster_tooltip.lua)):**
-  - Bisher hat der KickTracker pro Spec nur einen Interrupt-Spell getrackt. Klassen mit Talent-Bonus-Kicks (Prot Paladin Avenger's Shield) hatten den Spell unsichtbar im Roster, obwohl er im Encounter zaehlt. Inspiriert vom external interrupt tracker-`extraKicks`-Modell, aber konservativer auf eine Class-Whitelist beschraenkt.
+  - Bisher hat der KickTracker pro Spec nur einen Interrupt-Spell getrackt. Klassen mit Talent-Bonus-Kicks (Prot Paladin Avenger's Shield) hatten den Spell unsichtbar im Roster, obwohl er im Encounter zaehlt. Konservativ auf eine Class-Whitelist beschraenkt, statt pauschal jede Klasse mit potenziellem Multi-Spell-Tracking zu behandeln.
   - Neue `CLASS_INTERRUPT_LIST` listet aktuell `PALADIN = {96231, 31935}` (Rebuke + Avenger's Shield) und `WARLOCK = {19647, 119914}` (Spell Lock + Axe Toss). Andere Klassen sind explizit nicht gelistet, ihr Spec-Switch laeuft weiterhin ueber `RefreshSpec` auf `PLAYER_SPECIALIZATION_CHANGED`.
   - **OnCast-Pfad** in `KickTracker` ist jetzt zweistufig: 1) primary-Match wie bisher, 2) Fallback auf `FindExtraKickSpell(spellID)` der die `CLASS_INTERRUPT_LIST` durchgeht. Bei Treffer wird `extras[spellID] = {cd, cdEnd}` gesetzt, ohne den primary zu beruehren. CD kommt aus `EXTRA_KICK_CD`-Lookup mit Fallback auf SPEC_DATA-Suche fuer cross-spec-Spells. `Scan()` raeumt expirierte Eintraege automatisch auf, sodass `GetKickInfo().extras` immer nur lebende CDs liefert. `ResolvePlayerClass` cached die Klasse via `UnitClass("player")` einmalig im Constructor (dann immun gegen Test-WithGlobals-Sandbox-Reset).
   - **Sync-Payload-Erweiterung** ([logic/isiLive_sync.lua](../logic/isiLive_sync.lua)) `KICK:<state>:<remain>` -> optional `KICK:<state>:<remain>:E:<spellID,remain>;<spellID,remain>`. Backwards-compatible: aeltere isiLive-Peers parsen `parts[4]/parts[5]` nicht und ignorieren das Suffix. Neuere Peers extrahieren extras via `gmatch("[^;]+")`. Empty-Extras-Map fuegt das `:E:`-Suffix nicht an, damit der Common-Single-Kick-Case keine Bytes verschwendet.
@@ -40,7 +40,7 @@
 ## 2026-04-25 - Version 0.9.193 (patch)
 
 - **Kick-Tracker Spec-Daten an aktuelle Midnight-Realitaet angeglichen ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua)):**
-  - Cross-Check gegen external interrupt tracker Spec-Registry ergab vier Diskrepanzen, die wir uebersehen hatten. external interrupt tracker pflegt das Mapping aktiv pro Patch; ihre 3.3.7-Notiz erwaehnte explizit den Mistweaver-Fix.
+  - Cross-Check gegen die aktuellen In-Game-Tooltip-Werte und Spec-Registries ergab vier Diskrepanzen, die wir uebersehen hatten (insbesondere den Mistweaver-Fix nach dem entsprechenden Class-Tuning).
   - **Zwei Heal-Specs hatten faelschlich einen Interrupt:**
     1. **Spec 65 (Holy Paladin)** war auf `spellID=96231` (Rebuke) gemappt. Holy Paladin hat in Midnight kein Rebuke mehr; bisher haben wir fuer Holy-Paladine im Roster `ready` / Cooldown getracked, obwohl der Spell gar nicht existiert. Jetzt `noKick=true` analog zu den Priest-Heal-Specs.
     2. **Spec 270 (Mistweaver Monk)** war auf `spellID=116705` (Spear Hand Strike) gemappt. MW kann Spear Hand Strike nicht casten — der Spell ist Brewmaster/Windwalker only. Jetzt `noKick=true` analog zu Restoration Druid.
@@ -48,7 +48,7 @@
     3. **Balance Druid (102) Solar Beam** `60s` → `45s`
     4. **Mage Counterspell (62/63/64)** `25s` → `20s` (Base-CD; das `Geistesgegenwaertig`-Talent in `CD_REDUCTION_DEFS` reduziert auf 15 statt 20)
     5. **Evoker Quell (1467/1468/1473)** `20s` → `18s` (Base-CD; das `Interwoven Threads`-Talent in `CD_REDUCTION_DEFS` reduziert auf 16.2)
-  - **Demonology Warlock (266) Pet-Interrupt** war auf `spellID=89766` (raw pet-cast event ID fuer Felguard's Axe Toss) gemappt. external interrupt tracker nutzt die player-facing ID `119914`. Jetzt auf 119914 umgestellt; 89766 bleibt eine reine Combat-Log-Event-ID die wir nicht mehr im SPEC_DATA brauchen.
+  - **Demonology Warlock (266) Pet-Interrupt** war auf `spellID=89766` (raw pet-cast event ID fuer Felguard's Axe Toss) gemappt. Die player-facing Spell-ID, die im Tooltip steht, ist `119914`. Jetzt auf 119914 umgestellt; 89766 bleibt eine reine Combat-Log-Event-ID die wir nicht mehr im SPEC_DATA brauchen.
   - `NO_INTERRUPT_SPEC_IDS` jetzt vollstaendig: `{105 Resto Druid, 256 Disc Priest, 257 Holy Priest, 65 Holy Paladin, 270 Mistweaver Monk}`. Alle 5 Healer-Specs ohne Interrupt sind explizit als `noKick`.
 
 - **Tests:**
