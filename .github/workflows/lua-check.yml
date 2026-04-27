@@ -91,6 +91,10 @@ jobs:
         run: |
           lua tools/coverage_summary.lua luacov.report.out >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Coverage Threshold (>=80% per file)
+        run: |
+          lua tools/coverage_below.lua 80 luacov.report.out
+
       - name: Upload Coverage Report
         if: always()
         uses: actions/upload-artifact@v6

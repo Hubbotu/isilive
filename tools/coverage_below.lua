@@ -1,4 +1,5 @@
 #!/usr/bin/env lua
+---@diagnostic disable: undefined-global
 -- Lists every production file with coverage < THRESHOLD from luacov.report.out.
 -- Usage: lua tools/coverage_below.lua [threshold] [report-path]
 local threshold = tonumber(arg[1]) or 80
@@ -49,3 +50,12 @@ for _, e in ipairs(entries) do
   end
 end
 io.write(string.format("\nTotal: %d files below %.0f%%\n", count, threshold))
+
+-- Exit non-zero when at least one file is below the threshold, so this
+-- script can be wired straight into CI as a gate (e.g. .github/workflows/
+-- lua-check.yml's "Coverage Threshold" step). Pass-through 0 keeps it
+-- usable as a list-only command for local inspection too — the count
+-- line above tells the caller whether the gate would fail.
+if count > 0 then
+  os.exit(1)
+end
