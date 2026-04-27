@@ -495,12 +495,12 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
         break
       end
     end
-    Assert.NotNil(tankButton, "Tank helper button should exist")
+    tankButton = Assert.NotNil(tankButton, "Tank helper button should exist")
 
     local collapseButton = FindFrameByProperty(createdFrames, "_collapseLayoutMode", "compact_vertical")
     local horizontalCollapseButton = FindFrameByProperty(createdFrames, "_collapseLayoutMode", "compact_horizontal")
-    Assert.NotNil(collapseButton, "Collapse button should exist")
-    Assert.NotNil(horizontalCollapseButton, "Horizontal collapse button should exist")
+    collapseButton = Assert.NotNil(collapseButton, "Collapse button should exist")
+    horizontalCollapseButton = Assert.NotNil(horizontalCollapseButton, "Horizontal collapse button should exist")
     local titleFontString = FindFontStringByPoint(createdFontStrings, "TOPLEFT", 10, -10)
     local versionFontString = FindFontStringByPoint(createdFontStrings, "LEFT", 5, 0)
     titleFontString = Assert.NotNil(titleFontString, "Title font string should exist")

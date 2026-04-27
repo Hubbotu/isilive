@@ -227,7 +227,7 @@ local function RegisterLifecycleTests(test, Assert, WithGlobals, LoadAddonModule
           break
         end
       end
-      Assert.True(eventFrame ~= nil, "SetEnabled(true) must register events on a dedicated frame")
+      eventFrame = Assert.NotNil(eventFrame, "SetEnabled(true) must register events on a dedicated frame")
       Assert.True(eventFrame._events["NAME_PLATE_UNIT_ADDED"] == true, "NAME_PLATE_UNIT_ADDED must be registered")
       Assert.True(eventFrame._events["NAME_PLATE_UNIT_REMOVED"] == true, "NAME_PLATE_UNIT_REMOVED must be registered")
       Assert.True(eventFrame._events["CHALLENGE_MODE_START"] == true, "CHALLENGE_MODE_START must be registered")

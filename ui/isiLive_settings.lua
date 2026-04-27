@@ -1521,6 +1521,9 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     local fontSize = tonumber(db.mobNameplateFontSize) or 12
     if type(preview.overlay.GetFont) == "function" and type(preview.overlay.SetFont) == "function" then
       local fontPath, _, flags = preview.overlay:GetFont()
+      if type(fontPath) ~= "string" or fontPath == "" then
+        fontPath = "Fonts\\FRIZQT__.TTF"
+      end
       preview.overlay:SetFont(fontPath, fontSize, flags or "OUTLINE")
     end
   end
