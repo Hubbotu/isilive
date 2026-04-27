@@ -821,12 +821,7 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       'branches: ["main"]',
       "workflow must run on push and pull_request against main"
     )
-    AssertContains(
-      Assert,
-      workflowContent,
-      "stylua --check .",
-      "workflow must keep the StyLua check step"
-    )
+    AssertContains(Assert, workflowContent, "stylua --check .", "workflow must keep the StyLua check step")
     AssertContains(
       Assert,
       workflowContent,
