@@ -54,6 +54,7 @@ local FILE_PATHS = {
   ["isiLive_roster_panel_render.lua"] = "ui/isiLive_roster_panel_render.lua",
   ["isiLive_ui.lua"] = "ui/isiLive_ui.lua",
   ["isiLive_settings.lua"] = "ui/isiLive_settings.lua",
+  ["isiLive_lfg_flags.lua"] = "ui/isiLive_lfg_flags.lua",
   -- logic
   ["isiLive_leader_watch.lua"] = "logic/isiLive_leader_watch.lua",
   ["isiLive_demo.lua"] = "logic/isiLive_demo.lua",
