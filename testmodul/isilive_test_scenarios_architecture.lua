@@ -773,6 +773,12 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       "function controller.RefreshKickColumn()",
       "RosterPanel must expose a dedicated kick-column refresh helper"
     )
+    AssertContains(
+      Assert,
+      rosterPanelContent,
+      "SetKickCellText(row.kick, info, getL)",
+      "RosterPanel dedicated kick-column refresh must use the same localized ready label as full roster renders"
+    )
     local rosterPanelRenderContent = ReadFile("isiLive_roster_panel_render.lua")
     AssertContains(
       Assert,

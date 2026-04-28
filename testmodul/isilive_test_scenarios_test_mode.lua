@@ -14,6 +14,8 @@ local function BuildTestModeController(LoadAddonModules, overrides)
     uiUpdates = 0,
     captureRioBaselineCalls = 0,
     clearRioBaselineCalls = 0,
+    setDemoTimerDataCalls = 0,
+    clearDemoTimerDataCalls = 0,
     buildDummyRosterCalls = 0,
     lastBuildDummyRosterOpts = nil,
   }
@@ -85,6 +87,12 @@ local function BuildTestModeController(LoadAddonModules, overrides)
     clearRioBaselineSnapshot = function()
       state.clearRioBaselineCalls = state.clearRioBaselineCalls + 1
     end,
+    setDemoTimerData = function()
+      state.setDemoTimerDataCalls = state.setDemoTimerDataCalls + 1
+    end,
+    clearDemoTimerData = function()
+      state.clearDemoTimerDataCalls = state.clearDemoTimerDataCalls + 1
+    end,
   })
 
   return controller, state
@@ -100,6 +108,7 @@ local function RegisterTestModeToggleTests(test, Assert, LoadAddonModules)
     Assert.True(state.mainFrameVisible, "frame must be visible in test mode")
     Assert.Equal(state.uiUpdates, 1, "UI must update on enter")
     Assert.Equal(state.captureRioBaselineCalls, 1, "test-mode enter must capture one RIO baseline snapshot")
+    Assert.Equal(state.setDemoTimerDataCalls, 1, "test-mode enter must enable demo module data")
     Assert.Equal(state.lastBuildDummyRosterOpts.previewVariant, "full", "standard toggle must request full preview")
     Assert.NotNil(state.roster["ghost:DummyLeaver-Realm"], "standard toggle must include a ghost member")
     Assert.Equal(state.roster.player.rio, 1015, "test-mode preview should apply visible positive RIO delta")
@@ -108,6 +117,7 @@ local function RegisterTestModeToggleTests(test, Assert, LoadAddonModules)
     Assert.False(state.isTestMode, "isTestMode must be false after toggle off")
     Assert.False(state.mainFrameVisible, "frame must be hidden after exit")
     Assert.Equal(state.clearRioBaselineCalls, 1, "test-mode exit must clear RIO baseline snapshot")
+    Assert.Equal(state.clearDemoTimerDataCalls, 1, "test-mode exit must clear demo module data")
   end)
 
   test("TestMode full dummy preview sets testall state", function()
@@ -125,6 +135,7 @@ local function RegisterTestModeToggleTests(test, Assert, LoadAddonModules)
     )
     Assert.NotNil(state.roster["ghost:DummyLeaver-Realm"], "testall preview must include a ghost member")
     Assert.Equal(state.captureRioBaselineCalls, 1, "testall preview must capture one RIO baseline snapshot")
+    Assert.Equal(state.setDemoTimerDataCalls, 1, "testall preview must enable demo module data")
     Assert.Equal(state.roster.party1.rio, 2012, "testall preview should apply visible positive RIO delta")
   end)
 
@@ -166,6 +177,7 @@ local function RegisterTestModeToggleTests(test, Assert, LoadAddonModules)
     Assert.True(refreshed, "active demo preview refresh must report success")
     Assert.Equal(state.buildDummyRosterCalls, 2, "refresh must rebuild the preview roster from scratch")
     Assert.Equal(state.captureRioBaselineCalls, 2, "refresh must capture a fresh RIO baseline snapshot")
+    Assert.Equal(state.setDemoTimerDataCalls, 2, "refresh must restore demo module data")
     Assert.Equal(state.roster.player.rio, 1015, "refresh must rebuild the dummy roster instead of reusing mutated rows")
     Assert.NotNil(state.roster["ghost:DummyLeaver-Realm"], "refresh must restore the ghost member for unified preview")
   end)
@@ -270,6 +282,46 @@ local function RegisterDemoRosterTests(test, Assert, WithGlobals, LoadAddonModul
       Assert.True(
         type(ghostUnit) == "string" and ghostUnit:find("^ghost:") == 1,
         "ghost should use ghost unit key format"
+      )
+    end)
+  end)
+
+  test("Demo dummy roster exposes multi-kick extras for tooltip preview", function()
+    WithGlobals({
+      UnitClass = function(_unit)
+        return "Warrior", "WARRIOR"
+      end,
+      UnitName = function(_unit)
+        return "Player"
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_demo.lua" })
+      local roster = addon.Demo.BuildDummyRoster({
+        getUnitNameAndRealm = function(unit)
+          if unit == "player" then
+            return "Player", "Realm"
+          end
+          return nil, nil
+        end,
+        getUnitClass = function()
+          return "Warrior", "WARRIOR"
+        end,
+        getUnitRole = function()
+          return "DAMAGER"
+        end,
+      })
+
+      Assert.NotNil(roster.party4, "DAMAGER preview must include the paladin demo row")
+      Assert.Equal(roster.party4.class, "PALADIN", "party4 must be the paladin demo row")
+      Assert.True(roster.party4.syncHasKick, "multi-kick demo row must expose kick availability")
+      Assert.NotNil(roster.party4.syncKickExtras, "multi-kick demo row must expose extra kick cooldowns")
+      Assert.Equal(
+        roster.party4.syncKickExtras[31935].cooldownRemain,
+        21,
+        "Avenger's Shield demo cooldown must be available for tooltip rendering"
       )
     end)
   end)

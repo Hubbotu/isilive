@@ -1,8 +1,41 @@
 # Changelog
 
+## 2026-04-28 - Version 0.9.201 (patch)
+
+Test-mode preview completeness, kick-label localization parity, and an architecture pass that decouples logic-layer event handlers from direct game-module access.
+
+- **Bugfix: ingame test mode now fills the full combat preview ([factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua), [logic/isiLive_demo.lua](../logic/isiLive_demo.lua)):**
+  - The `/isilive test` / `/isilive testall` preview already populated the roster, RIO delta, ghost row, M+ timer and combat cooldown row, but the lower M+ forces tracker stayed empty because `KillTrack.SetDemoData` was never called from the test-mode entry path.
+  - Fix: entering test mode now sets demo data for the M+ timer, CD tracker and bottom forces tracker together, and exiting test mode clears all three demo overrides. The demo roster also includes a Paladin extra-kick cooldown so the multi-kick tooltip path is visible in the preview.
+  - New rule `RULE-TESTMODE-DEMO-MODULE-VOLLSTAENDIG` (#57) in [docs/RULES_LOGIC.md](RULES_LOGIC.md) and a UC-07 amendment in [docs/USECASES.md](USECASES.md).
+  - Regression tests cover the full factory path and the dummy-roster multi-kick payload.
+
+- **Bugfix: Kick ready label no longer flickers between English and localized text ([ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua)):**
+  - The full roster render used the localized `SYNC_KICK_READY` label (`bereit` in deDE), while the dedicated kick-column refresh path called the same render helper without `getL` and fell back to hardcoded English `ready`.
+  - Fix: `RefreshKickColumn()` now passes `getL`, so full renders and lightweight kick refreshes use the same localized label. The local `SetKickCellText` fallback signature was widened to 3 parameters so the IDE diagnostic at the call site is silenced.
+  - `RULE-KICK-UI-UND-SYNC` (#50) reworded to mention the localized `SYNC_KICK_READY` text instead of the hardcoded English string.
+
+- **Architecture: route game-layer event handling through injected `ctx` callbacks ([logic/isiLive_event_handlers*](../logic/), [factory/isiLive_controller_wiring.lua](../factory/isiLive_controller_wiring.lua)):**
+  - LFG-detect, kill-track, combat-events, kick-tracker, mplus-timer and leader-watch dispatch flows now run via `ctx.handle*Event` callbacks wired through `ControllerWiring` instead of grepping `addonTable.*` from the lifecycle handlers. Default no-op stubs (`function(_event, ...) end`) keep optional callers safe.
+  - Five new event-stub files get a per-file `ignore = { "212" }` in `.luacheckrc` — vararg cannot be underscore-prefixed, but the stubs intentionally accept the WoW event vararg signature so live handlers can drop in without call-site arity checks.
+
+- **Architecture: remove logic→ui leak in `ADDON_LOADED` bg-alpha restore ([logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua), [ui/isiLive_ui_common.lua](../ui/isiLive_ui_common.lua), [factory/isiLive_factory_frame_bridge.lua](../factory/isiLive_factory_frame_bridge.lua)):**
+  - The runtime lifecycle handler used to reach `addonTable.UICommon` directly to mirror `IsiLiveDB.bgAlpha` into the `BG_PRIMARY` palette and repaint main / panel / settings backdrops. The panel/settings branches were also dead code since `BuildContext` never propagates `ctx.panelUI` / `ctx.settingsPanel` into the EventHandlers ctx.
+  - Replaced with `UICommon.ApplyBgAlpha(frames, alpha)` (single helper for palette + paints) and a `ctx.restoreBgAlpha` bridge wired through `ControllerWiring`. Result: `logic/`, `core/`, `game/`, `locale/` have zero `addonTable.UI*` reaches.
+
+- **Architecture: centralize runtime event dispatch ([logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua)):**
+  - Final cleanup pass on the runtime event handler so `OnEvent` is the single dispatch point — no more parallel direct-call paths into per-event handlers.
+
+- **Tests: cover `touchedRowSlots` branch in `RenderRosterImpl` ([testmodul/isilive_test_scenarios_roster_panel_render.lua](../testmodul/isilive_test_scenarios_roster_panel_render.lua)):**
+  - Two new scenarios (5-member render that touches all slots, 3→2 group-shrink that leaves one untouched slot) restore the 80% per-file coverage gate after the readycheck-hold fix in 0.9.200.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md)):** Versionsbasis bumped to 0.9.201, validator baseline updated to 1322 usecase scenarios.
+
+- **Tests:** 1320 → 1322 (+2 testmode demo scenarios). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
 ## 2026-04-28 - Version 0.9.200 (patch)
 
-Three roster-UI audit fixes shipped together (0.9.199 was an internal stepping-stone release that never reached CurseForge — its share-keys fix is included here as well):
+Two roster-UI audit fixes shipped together (0.9.199 was an internal stepping-stone release that never reached CurseForge — its share-keys fix is included here as well):
 
 - **Bugfix: ghost roster rows lost their last-known DPS after a group disband ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
   - Symptom: after the group disbanded post-run, the UI kept showing each former member as a gray "ghost" row with name + ilvl + rio, but the DPS cell went blank — even though it had been populated seconds earlier.

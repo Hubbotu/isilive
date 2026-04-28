@@ -62,7 +62,11 @@ local DUMMY_MEMBERS = {
     rio = 2870,
     keyMapID = 558, -- Magisters' Terrace
     keyLevel = 8,
+    syncHasKick = true,
     syncKickOnCooldown = false,
+    syncKickExtras = {
+      [31935] = { cooldownRemain = 21 },
+    },
     syncDps = 152000,
     isDemoEntry = true,
   },

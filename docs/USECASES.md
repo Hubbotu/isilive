@@ -1,6 +1,6 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.200`
+Versionsbasis: `0.9.201`
 Zuletzt aktualisiert: `2026-04-28`
 
 ## Akteure
@@ -124,7 +124,7 @@ Ziel: Rating-Aenderungen vor und nach einem Run pro Spieler im Roster zeigen, oh
 5. Trigger: Das Roster wird nach Rating-Updates gerendert.
 6. Output: Die `RIO`-Spalte zeigt `(+X)RIO`, wenn Baseline und aktueller Wert vorhanden sind.
 7. Regel: Delta wird auf nicht-negative Werte geklemmt; Minimum ist `+0`, Minus-Rendering ist verboten.
-8. Regel: Testmodi (`/isilive test`, `/isilive testall`) verwenden denselben Full-Dummy-Preview-Pfad, inklusive sichtbarem positivem Dummy-Delta und einer Ghost-/Leaver-Zeile.
+8. Regel: Testmodi (`/isilive test`, `/isilive testall`) verwenden denselben Full-Dummy-Preview-Pfad, inklusive sichtbarem positivem Dummy-Delta, einer Ghost-/Leaver-Zeile, Demo-Daten fuer M+-Timer, Combat-CDs und den unteren M+-Forces-Tracker.
 9. Erfolgskriterium: Die Anzeige bleibt pro Spieler ueber Unit-Slot-Wechsel stabil und zeigt niemals ein negatives Delta.
 
 ## UC-08 Post-Run-Stats-Snapshot
@@ -280,7 +280,7 @@ Ziel: Den User die beiden On-Reload-Debug-Logs (Queue-Debug, Runtime-Log) per Kl
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1320` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1322` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

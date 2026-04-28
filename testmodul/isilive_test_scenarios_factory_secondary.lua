@@ -196,10 +196,19 @@ local function BuildControllerContext(state, addon, initial)
         end,
       },
       testMode = {
-        CreateController = function(_opts)
+        CreateController = function(opts)
+          state.testModeOpts = opts
           return {
-            EnterFullDummyPreview = function() end,
-            ExitTestMode = function() end,
+            EnterFullDummyPreview = function()
+              if type(opts.setDemoTimerData) == "function" then
+                opts.setDemoTimerData()
+              end
+            end,
+            ExitTestMode = function()
+              if type(opts.clearDemoTimerData) == "function" then
+                opts.clearDemoTimerData()
+              end
+            end,
             ToggleStandardTestMode = function() end,
             RefreshActivePreview = function()
               return false
@@ -238,8 +247,13 @@ local function BuildControllerContext(state, addon, initial)
             GetLustInfo = function()
               return nil
             end,
-            SetDemoData = function() end,
-            ClearDemoData = function() end,
+            SetDemoData = function(data)
+              state.cdTrackerDemoData = data
+            end,
+            ClearDemoData = function()
+              state.cdTrackerDemoData = nil
+              state.cdTrackerDemoCleared = (state.cdTrackerDemoCleared or 0) + 1
+            end,
           }
         end,
       },
@@ -408,6 +422,24 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
         GetTimerData = function()
           return state.mplusTimerData
         end,
+        SetDemoData = function(data)
+          state.mplusDemoData = data
+        end,
+        ClearDemoData = function()
+          state.mplusDemoData = nil
+          state.mplusDemoCleared = (state.mplusDemoCleared or 0) + 1
+        end,
+      },
+      KillTrack = {
+        SetDemoData = function(data)
+          state.killTrackDemoData = data
+        end,
+        ClearDemoData = function()
+          state.killTrackDemoData = nil
+          state.killTrackDemoCleared = (state.killTrackDemoCleared or 0) + 1
+        end,
+        OnUpdate = function() end,
+        SetDebugLogger = function() end,
       },
     })
 
@@ -422,6 +454,35 @@ end
 
 addonTable._FactorySecondaryTests = addonTable._FactorySecondaryTests or {}
 addonTable._FactorySecondaryTests.BuildFactorySecondaryControllerState = BuildFactorySecondaryControllerState
+
+local function RegisterTestModeDemoDataTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Factory test mode populates timer, cooldown and kill-track demo data", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = true,
+    })
+
+    Assert.NotNil(state.testModeOpts, "factory must pass test-mode options into the controller")
+    WithGlobals(BuildGlobalsEnv(state), function()
+      state.ctx.EnterFullDummyPreview()
+    end)
+
+    Assert.NotNil(state.mplusDemoData, "test mode must populate M+ timer demo data")
+    Assert.True(state.mplusDemoData.running, "M+ timer demo data must represent a running key")
+    Assert.NotNil(state.killTrackDemoData, "test mode must populate bottom M+ forces tracker demo data")
+    Assert.True(state.killTrackDemoData.active, "kill-track demo data must be active")
+    Assert.Equal(state.killTrackDemoData.percent, 47.34, "kill-track demo percent must match the preview value")
+
+    Assert.NotNil(state.afterCallbacks, "test mode must defer CD tracker demo data until controller creation")
+    state.afterCallbacks[1]()
+    Assert.NotNil(state.cdTrackerDemoData, "test mode must populate combat cooldown demo data")
+
+    state.ctx.ExitTestMode()
+    Assert.Nil(state.mplusDemoData, "test mode exit must clear M+ timer demo data")
+    Assert.Nil(state.killTrackDemoData, "test mode exit must clear kill-track demo data")
+    Assert.Equal(state.mplusDemoCleared, 1, "M+ timer demo data must be cleared once")
+    Assert.Equal(state.killTrackDemoCleared, 1, "kill-track demo data must be cleared once")
+  end)
+end
 
 local function RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Factory post-raid kick reply stays unresolved until exact recovery succeeds", function()
@@ -807,5 +868,6 @@ return function(test, ctx)
       "post-raid explicit reply must send the recovered cooldown remain"
     )
   end)
+  RegisterTestModeDemoDataTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
 end

@@ -120,7 +120,7 @@ local CreateTankHelperButtons = RI.CreateTankHelperButtons
 -- Render imports (defined in isiLive_roster_panel_render.lua).
 local RenderRosterImpl = RI.RenderRosterImpl or function(_state, _roster) end
 local RefreshReadyCheckStateImpl = RI.RefreshReadyCheckStateImpl or function(_state, _roster) end
-local SetKickCellText = RI.SetKickCellText or function(_cell, _info) end
+local SetKickCellText = RI.SetKickCellText or function(_cell, _info, _getL) end
 
 -- These settings are temporarily hidden from Blizzard Settings.
 -- Keep the runtime behavior hard-forced until the controls are re-enabled.
@@ -985,7 +985,7 @@ function RosterPanel.CreateController(opts)
         if type(applyKnownKeyToRosterEntry) == "function" then
           applyKnownKeyToRosterEntry(info)
         end
-        SetKickCellText(row.kick, info)
+        SetKickCellText(row.kick, info, getL)
       end
     end
   end

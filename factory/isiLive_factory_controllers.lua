@@ -1271,6 +1271,18 @@ local function InitializeFactorySecondaryTestModeAndBindings(ctx, modules, runti
           deathTimeLost = 8,
         })
       end
+      local KillTrack = ctx.addonTable and ctx.addonTable.KillTrack
+      if type(KillTrack) == "table" and type(KillTrack.SetDemoData) == "function" then
+        KillTrack.SetDemoData({
+          active = true,
+          percent = 47.34,
+          rawCount = 204,
+          total = 431,
+          mapID = 559,
+          inCombat = true,
+          pullPercent = 3.21,
+        })
+      end
       -- cdTrackerController is created after testModeController, so always defer.
       local C_Timer_ref = rawget(_G, "C_Timer")
       if type(C_Timer_ref) == "table" and type(C_Timer_ref.After) == "function" then
@@ -1291,6 +1303,10 @@ local function InitializeFactorySecondaryTestModeAndBindings(ctx, modules, runti
       local MplusTimer = ctx.addonTable and ctx.addonTable.MplusTimer
       if type(MplusTimer) == "table" and type(MplusTimer.ClearDemoData) == "function" then
         MplusTimer.ClearDemoData()
+      end
+      local KillTrack = ctx.addonTable and ctx.addonTable.KillTrack
+      if type(KillTrack) == "table" and type(KillTrack.ClearDemoData) == "function" then
+        KillTrack.ClearDemoData()
       end
       if ctx.cdTrackerController and type(ctx.cdTrackerController.ClearDemoData) == "function" then
         ctx.cdTrackerController.ClearDemoData()
