@@ -340,7 +340,11 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
       info.syncDps = dpsInfo.dps
       changed = true
     end
-  elseif info.syncDps ~= nil then
+  elseif info.syncDps ~= nil and not info.isGhost then
+    -- Ghosts must keep their last-known syncDps so the UI keeps showing it after
+    -- a group disband (clearKnownUsers wipes the sync cache, but the ghost row
+    -- still represents historical state — symmetric to how ilvl/rio are handled
+    -- above: no reset branch, so they stick when the sync cache returns nil).
     info.syncDps = nil
     changed = true
   end

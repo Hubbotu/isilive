@@ -1144,6 +1144,57 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
     end
   )
 
+  test(
+    "KeySync ApplyKnownKeyToRosterEntry KEEPS syncDps on a ghost when sync cache is empty (post-disband UI continuity)",
+    function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "GhostPlayer",
+        realm = "GhostRealm",
+        isGhost = true,
+        ilvl = 630,
+        rio = 3400,
+        syncDps = 45000,
+      }
+
+      -- Simulate post-disband state: sync cache cleared by clearKnownUsers, ghost still in roster.
+      sync.SetPlayerDpsInfo("GhostPlayer", "GhostRealm", nil)
+      ctrl.ApplyKnownKeyToRosterEntry(info)
+
+      Assert.Equal(
+        info.syncDps,
+        45000,
+        "ghost must keep its last-known syncDps after sync cache wipe — symmetric to ilvl/rio"
+      )
+      Assert.Equal(info.ilvl, 630, "ghost ilvl must be untouched (symmetry baseline)")
+      Assert.Equal(info.rio, 3400, "ghost rio must be untouched (symmetry baseline)")
+    end
+  )
+
+  test(
+    "KeySync ApplyKnownKeyToRosterEntry STILL clears syncDps on an active member when sync data disappears",
+    function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "ActivePlayer",
+        realm = "ActiveRealm",
+        isGhost = false,
+        syncDps = 45000,
+      }
+
+      sync.SetPlayerDpsInfo("ActivePlayer", "ActiveRealm", nil)
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+
+      Assert.True(changed, "active member: clearing syncDps must still report a change")
+      Assert.Nil(
+        info.syncDps,
+        "active member: syncDps reset behavior must be preserved (not regressed by the ghost fix)"
+      )
+    end
+  )
+
   test("KeySync ApplyKnownKeyToRosterEntry preserves synced no-interrupt state", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)

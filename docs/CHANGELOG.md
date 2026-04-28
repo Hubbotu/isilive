@@ -7,12 +7,37 @@
   - Fix: `GetOwnedKeystoneSnapshot` now falls back to a bag scan on item ID `180653` and parses `mapID`/`level` directly from the `|Hkeystone:180653:<mapID>:<level>:…|h` link. Symmetric to the existing link-fallback in `ContextHelpers.BuildKeystoneChatLink`. The C_MythicPlus API is still preferred when it returns a valid (mapID, level); the bag scan only runs when the API yields empty.
   - Safety: `C_Container.GetContainerItemLink` is classified `AllowedWhenUntainted` per warcraft.wiki — safe to call in combat and during a Mythic+ keystone from untainted callers (the button click is a hardware event; `CHAT_MSG_ADDON` dispatch is not protected). No button-lock or combat gate required.
   - Reproduction: offline via `lua tools/simulate_sender_receiver.lua share_pipeline` — Scenario 4 (`snapshot_missing`) shows the pre-fix `abort_reason=no_line`.
-  - Regression tests in [testmodul/isilive_test_scenarios_keysync.lua](../testmodul/isilive_test_scenarios_keysync.lua): API empty + bag has key → bag values returned; API absent + bag has key → bag values returned; both empty → returns nil; both populated → API takes precedence.
+  - Regression tests in [testmodul/isilive_test_scenarios_keysync.lua](../testmodul/isilive_test_scenarios_keysync.lua) cover the bag-scan fallback in five blocks (20 tests total for the share-keys path):
+    - **Snapshot resolution** (4): API empty + bag has key, API absent + bag has key, both empty → nil, both populated → API has precedence.
+    - **API edge cases** (4): C_MythicPlus absent, level=0, mapID=0, API throws — all must trigger bag fallback.
+    - **Bag iteration** (3): keystone in reagent bag (bagID=5), keystone in mid-bag (bagID=3) skipping empty bags, multiple keystones → first-found is returned deterministically.
+    - **Defensive guards** (3): partial C_Container API → safe nil; pcall failure on `GetContainerNumSlots` / `GetContainerItemID` → continues scanning.
+    - **Malformed bag links** (3): missing mapID/level in pattern, encoded `mapID=0`, encoded `level=0` — all reject, snapshot stays nil.
+    - **End-to-end + sender/receiver parity** (3): bag-scan snapshot → `BuildOwnKeystoneAnnounceLine` produces a sendable line embedding the real `|Hkeystone:` hyperlink; sender path and receiver path produce **byte-identical** output for identical inputs (proof there is only one implementation, so the historical sender-side fixes — bag-scan link, no `|cff…|r` wrap around bare brackets — apply to the receiver automatically); plain-text fallback path also stays compliant with the no-color-around-brackets server-filter rule.
 
 - **Tooling: offline share-keys pipeline simulator ([tools/simulate_sender_receiver.lua](../tools/simulate_sender_receiver.lua)):**
   - New `share_pipeline` mode exercises the seven realistic build/send permutations of `BuildOwnKeystoneAnnounceLine` + `SendPartyChatMessage` (owned-link API hit, bag-scan hit, plain-text fallback, snapshot missing, not-in-group, send failure with and without `C_ChatInfo` fallback) and prints which abort reason each scenario surfaces. Lets us reproduce share-keys regressions without an in-game live trace.
 
-- **Tests:** 1298 → 1302 (four new keysync regression scenarios). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean.
+- **Bugfix: ghost roster rows lost their last-known DPS after a group disband ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
+  - Symptom: after the group disbanded post-run, the UI kept showing each former member as a gray "ghost" row with name + ilvl + rio, but the DPS cell went blank — even though it had been populated seconds earlier.
+  - Root cause: an asymmetry in `ApplyKnownKeyToRosterEntry`. The ilvl/rio update branches only WRITE on incoming sync data and never reset on an empty cache (so they survive a `clearKnownUsers()` wipe), but the `syncDps` branch had a `elseif info.syncDps ~= nil then info.syncDps = nil` else-reset that fired on every render-pass against the now-empty sync cache, nuking the cached value.
+  - Fix: the syncDps reset branch now skips ghosts (`elseif info.syncDps ~= nil and not info.isGhost then`). Active members keep the existing reset behavior; ghosts retain their last-known sync DPS — symmetric to ilvl/rio.
+  - Regression tests in [testmodul/isilive_test_scenarios_keysync.lua](../testmodul/isilive_test_scenarios_keysync.lua): ghost keeps syncDps after sync wipe (with ilvl/rio symmetry baseline); active member still gets syncDps cleared (the existing behavior is not regressed by the ghost guard).
+
+- **Bugfix: ready-check status background flickered out 1–2s after `READY_CHECK_FINISHED` ([ui/isiLive_roster_panel_render.lua](../ui/isiLive_roster_panel_render.lua)):**
+  - Symptom: after a ready check, each row briefly showed the green/red hold background (per the 20-second persistence rule) and then the background disappeared on the next generic UI rerender (e.g. triggered by `GROUP_ROSTER_UPDATE` / `INSPECT_READY` / a `CHAT_MSG_ADDON` sync update) — long before the 20s hold expiry.
+  - Root cause: `RenderRosterImpl` opened with an unconditional `ClearMemberRow` loop over every member row. `ClearMemberRow` hides `row.hoverFrame`, and `row.readyCheckBackground` is created as a child of that hoverFrame. The subsequent re-render loop did call `hoverFrame:Show()` and `ApplyRowReadyCheckDisplay` for the active rows, but the brief parent-Hide → child-`SetColorTexture` → child-`Show` cycle in WoW's frame system left the background-layer texture stuck on its hidden state for the new frame paint.
+  - Fix: only clear the row slots that the re-render does NOT refill. A `touchedRowSlots` table tracks which `memberRows[i]` got reused by `orderedRoster`; the cleanup loop now runs AFTER the re-render and only on untouched slots (the group-shrink case). Active members never see a parent-Hide between the FINISHED-time hold render and the next generic render → the readyCheck-hold background stays visible for the full 20-second window.
+  - Reproduction: offline via `lua tools/simulate_ready_check_frame_overrides.lua` (frame-mock simulator). Pre-fix Phase 3b shows 5 `Background:Hide` calls between `RefreshReadyCheckStateImpl` and `RenderRosterImpl`; post-fix the Hide calls are gone (10 calls instead of 15, no hide → show → hide → show oscillation).
+
+- **Cleanup: dead `_readyCheckLingerSeq` counter removed ([logic/isiLive_event_handlers_challenge.lua](../logic/isiLive_event_handlers_challenge.lua)):**
+  - One-line set in the `READY_CHECK` handler that was never read anywhere — leftover from an earlier ready-check linger experiment.
+
+- **Tooling: two new offline ready-check simulators ([tools/simulate_ready_check_lifecycle.lua](../tools/simulate_ready_check_lifecycle.lua), [tools/simulate_ready_check_frame_overrides.lua](../tools/simulate_ready_check_frame_overrides.lua)):**
+  - The lifecycle simulator drives `READY_CHECK` → `READY_CHECK_CONFIRM` → `READY_CHECK_FINISHED` and prints the resulting `BuildDisplayData` background per row across the 20-second hold window.
+  - The frame-overrides simulator goes one level deeper: it mocks `row.readyCheckBackground` with a Show/Hide/SetColorTexture recorder and runs `RefreshReadyCheckStateImpl` followed by `RenderRosterImpl`, surfacing exactly which frame call sequence the hold goes through. This is what pinpointed the parent-Hide → child-Show ordering bug above.
+
+- **Tests:** 1298 → 1319 (15 keysync share-keys + 2 ghost DPS + 4 from the initial share-keys fix). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
 
 ## 2026-04-28 - Version 0.9.198 (patch)
 

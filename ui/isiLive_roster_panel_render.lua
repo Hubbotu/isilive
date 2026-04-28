@@ -496,9 +496,12 @@ local function RenderRosterImpl(state, roster)
     end
   end
 
-  for _, row in pairs(memberRows) do
-    ClearMemberRow(row)
-  end
+  -- Track which row slots get refilled by the re-render below; the legacy
+  -- "clear everything first" pass caused the readyCheck background (a child
+  -- of row.hoverFrame) to lose its ApplyRowReadyCheckDisplay-set visibility
+  -- when the parent hoverFrame was hidden mid-render. Now we only clear
+  -- the slots that orderedRoster does NOT touch (group shrink case).
+  local touchedRowSlots = {}
 
   local index = 1
   local orderedRoster = buildOrderedRoster(roster, rolePriority, unitPriority)
@@ -617,7 +620,18 @@ local function RenderRosterImpl(state, roster)
         row.hoverFrame:Hide()
       end
     end
+    touchedRowSlots[index] = true
     index = index + 1
+  end
+
+  -- Clear only the slots that did NOT get refilled (group shrink, etc.).
+  -- Slots that were re-rendered above already have correct visibility from
+  -- ApplyRowReadyCheckDisplay; clearing them would re-trigger the parent-Hide
+  -- that caused the readyCheck-hold background to flicker out after FINISHED.
+  for slot, row in pairs(memberRows) do
+    if not touchedRowSlots[slot] then
+      ClearMemberRow(row)
+    end
   end
 
   if not hasAnyKey and getOwnedKeystoneSnapshot then

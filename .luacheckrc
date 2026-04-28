@@ -15,6 +15,16 @@ return {
         "211/_modules",
       },
     },
+    ["tools/simulate_ready_check_frame_overrides.lua"] = {
+      ignore = {
+        "212", -- unused argument (frame-mock stubs intentionally match WoW Frame method signatures)
+      },
+    },
+    ["tools\\simulate_ready_check_frame_overrides.lua"] = {
+      ignore = {
+        "212",
+      },
+    },
   },
 
   exclude_files = {

@@ -519,7 +519,6 @@ function ChallengeLifecycle.BuildHandlers(ctx)
       if IsRaidModeActive(ctx) then
         return
       end
-      ctx._readyCheckLingerSeq = (ctx._readyCheckLingerSeq or 0) + 1
       ctx.setReadyCheckActive(true)
       ResetReadyCheckDeclinedTracking(ctx)
       LogReadyCheckTrace(ctx, "READY_CHECK", nil, nil, "reset=1")
