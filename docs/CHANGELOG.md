@@ -2,36 +2,36 @@
 
 ## 2026-04-28 - Version 0.9.198 (patch)
 
-- **Bugfix: Debug-Log-Checkboxes haben den Live-State ignoriert ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
-  - `ResolveSettingsOptions` hat zwei weitere Getter verschluckt: `getQueueDebugEnabled` und `getRuntimeLogEnabled`. Effekt: die "Queue Debug Log" und "Runtime Log" Checkboxen haben beim Öffnen der Settings-UI **immer** unchecked angezeigt, auch wenn der Logger gerade aktiv war (z.B. nach `/isilive log start` oder per Vorgänger-Checkbox-Toggle in der gleichen Session). Das Toggeln selbst funktionierte (`onQueueDebugToggle`/`onRuntimeLogToggle` waren im Resolver), nur der Anzeige-State war kaputt. Auch `Refresh()` ([:2243-2248](../ui/isiLive_settings.lua#L2243)) war davon betroffen.
-  - Fix: zwei Zeilen im Resolver, plus `_settingKey` auf beiden Checkbox-Frames konsistent zum Rest der UI.
-  - Regressionstest in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua) verifiziert dass beide Checkboxen ihren Initial-State aus den Getter-Funktionen lesen.
+- **Bugfix: debug-log checkboxes ignored the live state ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `ResolveSettingsOptions` swallowed two more getters: `getQueueDebugEnabled` and `getRuntimeLogEnabled`. Effect: the "Queue Debug Log" and "Runtime Log" checkboxes always rendered unchecked when the settings panel was opened, even when the loggers were actively capturing (e.g. after `/isilive log start` or after a previous toggle in the same session). The toggles themselves worked (`onQueueDebugToggle` / `onRuntimeLogToggle` were in the resolver), only the displayed state was broken. `Refresh()` ([:2243-2248](../ui/isiLive_settings.lua#L2243)) was affected too.
+  - Fix: two lines in the resolver, plus `_settingKey` markers on both checkbox frames so they are reachable via the standard test-iteration pattern.
+  - Regression test in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua) verifies that both checkboxes mirror their getter result on initial render.
 
-- **Bugfix: Chat-Announce-Checkboxes nach Reset nicht resync'd ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
-  - `Refresh()` hat für `chatAnnounceBR` und `chatAnnounceLust` zwar das Label-Text aktualisiert, aber kein `check:SetChecked(db.…)` aufgerufen. Folge: nach `/isilive reset` (DB → Defaults) blieb die Checkbox visuell auf dem alten Zustand stehen, bis das Settings-Panel zu/auf gemacht wurde. Alle anderen Checkboxes haben das `SetChecked`-in-Refresh-Pattern.
-  - Fix: zwei `SetChecked`-Calls in `RefreshSettingsControls`. Regressionstest verifiziert: DB-Wert ändern → `Refresh()` → Checkbox sieht den neuen Wert.
+- **Bugfix: chat-announce checkboxes were not resynced after a reset ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `Refresh()` updated the labels for `chatAnnounceBR` and `chatAnnounceLust` but never called `check:SetChecked(db.…)`. As a result, after `/isilive reset` (DB → defaults) the checkboxes visually lagged behind the DB until the settings panel was reopened. Every other checkbox in the panel follows the `SetChecked`-in-Refresh pattern.
+  - Fix: two `SetChecked` calls in `RefreshSettingsControls`. Regression test: flip DB value → `Refresh()` → checkbox reflects the new value.
 
-- **Tote Locale-Keys raus ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua), [testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua), [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua)):**
-  - `SETTINGS_MPLUS_FORCES` ("Mythic+: Show enemy forces in tooltip") in allen 8 Sprachen entfernt — alte Tooltip-Checkbox vor dem 3-Wege-Display-Mode-Selector, nirgendwo mehr referenziert.
-  - `SETTINGS_DEFAULT_OPEN_UI_M` ("M") in allen 8 Sprachen entfernt — der Default-Layout-Selector hat nur noch `LAST` / `V` / `H` / `M2`, der reine "M"-Mode wurde gestrichen. Auch die Test-Stub-Lokalisierungen in beiden UI-Test-Dateien (9× insgesamt) gesäubert.
+- **Dead locale keys removed ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua), [testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua), [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua)):**
+  - `SETTINGS_MPLUS_FORCES` ("Mythic+: Show enemy forces in tooltip") removed from all 8 languages — old tooltip checkbox label, replaced by the 3-way display-mode selector, no longer referenced anywhere.
+  - `SETTINGS_DEFAULT_OPEN_UI_M` ("M") removed from all 8 languages — the default-layout selector now only offers `LAST` / `V` / `H` / `M2`; the plain "M" mode was retired. Stale stub localizations in both UI test files (9 occurrences total) cleaned up alongside.
 
-- **Tests:** 1296 → 1298 (zwei neue Regressionsszenarien). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules durchweg clean.
+- **Tests:** 1296 → 1298 (two new regression scenarios). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules all clean.
 
 ## 2026-04-28 - Version 0.9.197 (patch)
 
-- **Bugfix: Nameplate-Settings griffen erst nach `/reload` ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
-  - `ResolveSettingsOptions` hat den `onMobNameplateChange`-Callback nicht durchgereicht. Effekt: Slider/Checkbox/Selector der Nameplate-Sektion (Display-Mode, Show-Percent, Font-Size, Position) haben zwar in die SavedVariables geschrieben, aber `MobNameplate.SetAppearance` / `SetFormat` / `SetEnabled` wurde live nie aufgerufen — die Änderungen waren erst nach `/reload` sichtbar (Factory-Init liest die DB einmalig in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua)). Reproduziert vom User mit Platynator beim Versuch, die Schriftgröße der Forces-%-Anzeige zu ändern.
-  - Fix: eine Zeile (`onMobNameplateChange = opts.onMobNameplateChange`) im Resolver. Alle vier Nameplate-Controls greifen jetzt sofort.
-  - Regressionstest in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua): Slider-Drag muss `onMobNameplateChange` exakt 1× feuern.
-  - Coverage-Liste in [testmodul/isilive_test_scenarios_factory_composition.lua](../testmodul/isilive_test_scenarios_factory_composition.lua) um `onMobNameplateChange` erweitert, damit dieser Pfad auch im Composition-Test mitgetrieben wird.
+- **Bugfix: nameplate settings only applied after `/reload` ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `ResolveSettingsOptions` did not forward the `onMobNameplateChange` callback. Effect: slider / checkbox / selector inputs in the nameplate section (display-mode, show-percent, font-size, position) wrote to SavedVariables but `MobNameplate.SetAppearance` / `SetFormat` / `SetEnabled` were never invoked live — changes only became visible after `/reload` (factory init reads the DB once in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua)). Reproduced by the user with Platynator while trying to change the font size of the forces-% overlay.
+  - Fix: one line (`onMobNameplateChange = opts.onMobNameplateChange`) in the resolver. All four nameplate controls now apply immediately.
+  - Regression test in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua): a slider drag must invoke `onMobNameplateChange` exactly once.
+  - Coverage list in [testmodul/isilive_test_scenarios_factory_composition.lua](../testmodul/isilive_test_scenarios_factory_composition.lua) extended with `onMobNameplateChange` so the path is exercised by the composition test as well.
 
-- **Tote Locale-Keys raus ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
-  - `SETTINGS_NAMEPLATE_FORCES` ("Mythic+: Show enemy forces on nameplates") in allen 8 Sprachen entfernt — nirgendwo referenziert, Rückstand aus der ursprünglichen Checkbox-UI vor dem 3-Wege-Display-Mode-Selector.
+- **Dead locale keys removed ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - `SETTINGS_NAMEPLATE_FORCES` ("Mythic+: Show enemy forces on nameplates") removed from all 8 languages — never referenced, leftover from the original checkbox UI before the 3-way display-mode selector replaced it.
 
-- **Nameplate-Position fein-tunbar ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
-  - Zwei neue Slider unter dem Position-Selector: `SETTINGS_NAMEPLATE_X_OFFSET` und `SETTINGS_NAMEPLATE_Y_OFFSET` (Range -50..+50 px, Step 1, Default 0). Damit lassen sich die DB-Keys `mobNameplateXOffset` / `mobNameplateYOffset` jetzt auch ohne `/run IsiLiveDB.…` setzen — vorher wurden sie zwar in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua) gelesen und an `MobNameplate.SetAppearance` durchgereicht, aber kein UI-Control hat sie gesetzt, also waren sie immer `0`.
-  - Locale-Keys (`SETTINGS_NAMEPLATE_X_OFFSET` / `SETTINGS_NAMEPLATE_Y_OFFSET`) in allen 8 Sprachen ergänzt; Drift-Gate clean.
-  - `Refresh()` in der Settings-UI re-syncht die Slider-Labels und -Werte beim Sprachwechsel.
+- **Nameplate position fine-tuning ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - Two new sliders below the Position selector: `SETTINGS_NAMEPLATE_X_OFFSET` and `SETTINGS_NAMEPLATE_Y_OFFSET` (range -50..+50 px, step 1, default 0). The DB keys `mobNameplateXOffset` / `mobNameplateYOffset` are now reachable without `/run IsiLiveDB.…` — previously the factory read them in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua) and forwarded them to `MobNameplate.SetAppearance`, but no UI control set them, so they were always `0`.
+  - Locale keys (`SETTINGS_NAMEPLATE_X_OFFSET` / `SETTINGS_NAMEPLATE_Y_OFFSET`) added in all 8 languages; drift gate clean.
+  - `Refresh()` in the settings UI resyncs the slider labels and values on language change.
 
 - **Tests:** 1294 → 1296 (zwei neue Szenarien). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules durchweg clean.
 
