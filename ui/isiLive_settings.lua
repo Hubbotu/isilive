@@ -813,7 +813,9 @@ local function ResolveSettingsOptions(opts)
     onMarkersLeaderOnlyToggle = opts.onMarkersLeaderOnlyToggle,
     onRosterColumnGuidesToggle = opts.onRosterColumnGuidesToggle,
     onTeleportColumnsChange = opts.onTeleportColumnsChange,
+    getQueueDebugEnabled = opts.getQueueDebugEnabled,
     onQueueDebugToggle = opts.onQueueDebugToggle,
+    getRuntimeLogEnabled = opts.getRuntimeLogEnabled,
     onRuntimeLogToggle = opts.onRuntimeLogToggle,
     onClearRuntimeLog = opts.onClearRuntimeLog,
     onClearQueueDebugLog = opts.onClearQueueDebugLog,
@@ -1938,7 +1940,8 @@ local function BuildDebugSettingsSection(canvas, yOffset, labels, config, contro
       if type(config.onQueueDebugToggle) == "function" then
         config.onQueueDebugToggle(checked)
       end
-    end
+    end,
+    "SETTINGS_QUEUE_DEBUG"
   )
 
   controls.clearQueueDebugBtn, yOffset = CreateSettingsActionButton(
@@ -1969,7 +1972,8 @@ local function BuildDebugSettingsSection(canvas, yOffset, labels, config, contro
       if type(config.onRuntimeLogToggle) == "function" then
         config.onRuntimeLogToggle(checked)
       end
-    end
+    end,
+    "SETTINGS_RUNTIME_LOG"
   )
 
   controls.clearRuntimeLogBtn, yOffset = CreateSettingsActionButton(
@@ -2132,11 +2136,13 @@ local function RefreshSettingsControls(controls, config)
   end
   if controls.chatAnnounceBR and controls.chatAnnounceBR.label then
     controls.chatAnnounceBR.label:SetText(freshL.SETTINGS_CHAT_BR_ANNOUNCE or "Chat: Announce Battle Res usage in M+")
+    controls.chatAnnounceBR.check:SetChecked(db.chatAnnounceBR ~= false)
   end
   if controls.chatAnnounceLust and controls.chatAnnounceLust.label then
     controls.chatAnnounceLust.label:SetText(
       freshL.SETTINGS_CHAT_LUST_ANNOUNCE or "Chat: Announce Bloodlust casts in M+"
     )
+    controls.chatAnnounceLust.check:SetChecked(db.chatAnnounceLust ~= false)
   end
   controls.debugHeader:SetText(freshL.SETTINGS_SECTION_DEBUG or "Debug")
   if controls.debugHint then

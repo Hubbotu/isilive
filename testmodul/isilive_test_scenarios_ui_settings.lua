@@ -53,7 +53,6 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -304,7 +303,6 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -514,7 +512,6 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -589,7 +586,6 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -676,7 +672,6 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -777,7 +772,6 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -868,7 +862,6 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -962,7 +955,6 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
@@ -1432,6 +1424,141 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
         1,
         "slider drag must invoke onMobNameplateChange so the live MobNameplate module reapplies SetAppearance"
       )
+    end)
+  end)
+
+  test(
+    "Settings debug-log checkboxes reflect live controller state via getQueueDebugEnabled / getRuntimeLogEnabled",
+    function()
+      -- Regression: ResolveSettingsOptions used to drop both getters, so the
+      -- queue-debug + runtime-log checkboxes always rendered unchecked when
+      -- the settings panel was opened, even if the loggers were actively
+      -- capturing.
+      local createFrameStub, createdFrames = BuildCreateFrameStub()
+      local db = {}
+
+      WithGlobals({
+        UIParent = {},
+        IsiLiveDB = db,
+        CreateFrame = createFrameStub,
+        Settings = {
+          RegisterCanvasLayoutCategory = function(canvas, name)
+            return { canvas = canvas, name = name }
+          end,
+          RegisterAddOnCategory = function() end,
+        },
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+        local panel = addon.SettingsPanel.Create({
+          getL = function()
+            return {
+              SETTINGS_SECTION_DEBUG = "Debug",
+              SETTINGS_QUEUE_DEBUG = "Queue Debug Log",
+              SETTINGS_RUNTIME_LOG = "Runtime Log",
+            }
+          end,
+          getCurrentLocale = function()
+            return "enUS"
+          end,
+          setLanguage = function() end,
+          getDB = function()
+            return db
+          end,
+          getQueueDebugEnabled = function()
+            return true
+          end,
+          getRuntimeLogEnabled = function()
+            return true
+          end,
+        })
+
+        Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+
+        local queueCheck, runtimeCheck = nil, nil
+        for _, frame in ipairs(createdFrames) do
+          if frame._settingKey == "SETTINGS_QUEUE_DEBUG" then
+            queueCheck = frame
+          elseif frame._settingKey == "SETTINGS_RUNTIME_LOG" then
+            runtimeCheck = frame
+          end
+        end
+        queueCheck = Assert.NotNil(queueCheck, "settings should expose the queue-debug checkbox")
+        runtimeCheck = Assert.NotNil(runtimeCheck, "settings should expose the runtime-log checkbox")
+
+        ---@diagnostic disable: undefined-field
+        Assert.True(
+          queueCheck:GetChecked() == true,
+          "queue-debug checkbox must mirror getQueueDebugEnabled() == true on initial render"
+        )
+        Assert.True(
+          runtimeCheck:GetChecked() == true,
+          "runtime-log checkbox must mirror getRuntimeLogEnabled() == true on initial render"
+        )
+        ---@diagnostic enable: undefined-field
+      end)
+    end
+  )
+
+  test("Settings Refresh resyncs chatAnnounce checkboxes from DB after a reset", function()
+    -- Regression: Refresh() updated the chat-announce checkbox labels but
+    -- never called SetChecked, so the visible state could lag DB after
+    -- /isilive reset until the panel was reopened.
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { chatAnnounceBR = true, chatAnnounceLust = true }
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_CHAT_BR_ANNOUNCE = "Chat BR",
+            SETTINGS_CHAT_LUST_ANNOUNCE = "Chat Lust",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+
+      Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+
+      local brCheck, lustCheck = nil, nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_CHAT_BR_ANNOUNCE" then
+          brCheck = frame
+        elseif frame._settingKey == "SETTINGS_CHAT_LUST_ANNOUNCE" then
+          lustCheck = frame
+        end
+      end
+      brCheck = Assert.NotNil(brCheck, "settings should expose the chatAnnounceBR checkbox")
+      lustCheck = Assert.NotNil(lustCheck, "settings should expose the chatAnnounceLust checkbox")
+
+      ---@diagnostic disable: undefined-field
+      Assert.True(brCheck:GetChecked(), "chatAnnounceBR should start checked when DB says true")
+      Assert.True(lustCheck:GetChecked(), "chatAnnounceLust should start checked when DB says true")
+
+      -- Simulate /isilive reset: DB defaults flip to nil/false; Refresh must resync.
+      db.chatAnnounceBR = false
+      db.chatAnnounceLust = false
+      panel.Refresh()
+
+      Assert.False(brCheck:GetChecked(), "Refresh must resync chatAnnounceBR to false after DB reset")
+      Assert.False(lustCheck:GetChecked(), "Refresh must resync chatAnnounceLust to false after DB reset")
+      ---@diagnostic enable: undefined-field
     end)
   end)
 end

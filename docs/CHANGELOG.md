@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-04-28 - Version 0.9.198 (patch)
+
+- **Bugfix: Debug-Log-Checkboxes haben den Live-State ignoriert ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `ResolveSettingsOptions` hat zwei weitere Getter verschluckt: `getQueueDebugEnabled` und `getRuntimeLogEnabled`. Effekt: die "Queue Debug Log" und "Runtime Log" Checkboxen haben beim Öffnen der Settings-UI **immer** unchecked angezeigt, auch wenn der Logger gerade aktiv war (z.B. nach `/isilive log start` oder per Vorgänger-Checkbox-Toggle in der gleichen Session). Das Toggeln selbst funktionierte (`onQueueDebugToggle`/`onRuntimeLogToggle` waren im Resolver), nur der Anzeige-State war kaputt. Auch `Refresh()` ([:2243-2248](../ui/isiLive_settings.lua#L2243)) war davon betroffen.
+  - Fix: zwei Zeilen im Resolver, plus `_settingKey` auf beiden Checkbox-Frames konsistent zum Rest der UI.
+  - Regressionstest in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua) verifiziert dass beide Checkboxen ihren Initial-State aus den Getter-Funktionen lesen.
+
+- **Bugfix: Chat-Announce-Checkboxes nach Reset nicht resync'd ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `Refresh()` hat für `chatAnnounceBR` und `chatAnnounceLust` zwar das Label-Text aktualisiert, aber kein `check:SetChecked(db.…)` aufgerufen. Folge: nach `/isilive reset` (DB → Defaults) blieb die Checkbox visuell auf dem alten Zustand stehen, bis das Settings-Panel zu/auf gemacht wurde. Alle anderen Checkboxes haben das `SetChecked`-in-Refresh-Pattern.
+  - Fix: zwei `SetChecked`-Calls in `RefreshSettingsControls`. Regressionstest verifiziert: DB-Wert ändern → `Refresh()` → Checkbox sieht den neuen Wert.
+
+- **Tote Locale-Keys raus ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua), [testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua), [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua)):**
+  - `SETTINGS_MPLUS_FORCES` ("Mythic+: Show enemy forces in tooltip") in allen 8 Sprachen entfernt — alte Tooltip-Checkbox vor dem 3-Wege-Display-Mode-Selector, nirgendwo mehr referenziert.
+  - `SETTINGS_DEFAULT_OPEN_UI_M` ("M") in allen 8 Sprachen entfernt — der Default-Layout-Selector hat nur noch `LAST` / `V` / `H` / `M2`, der reine "M"-Mode wurde gestrichen. Auch die Test-Stub-Lokalisierungen in beiden UI-Test-Dateien (9× insgesamt) gesäubert.
+
+- **Tests:** 1296 → 1298 (zwei neue Regressionsszenarien). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules durchweg clean.
+
 ## 2026-04-28 - Version 0.9.197 (patch)
 
 - **Bugfix: Nameplate-Settings griffen erst nach `/reload` ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**

@@ -1194,7 +1194,6 @@ local function RegisterMainFrameLockTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_M = "M",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
