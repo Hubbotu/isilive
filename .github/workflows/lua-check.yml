@@ -97,6 +97,10 @@ jobs:
         run: |
           lua tools/coverage_below.lua 80 luacov.report.out
 
+      - name: Coverage Threshold (>=88% total)
+        run: |
+          lua tools/coverage_total_gate.lua 88 luacov.report.out
+
       - name: Upload Coverage Report
         if: always()
         uses: actions/upload-artifact@v6
