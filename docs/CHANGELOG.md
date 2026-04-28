@@ -1,22 +1,8 @@
 # Changelog
 
-## 2026-04-28 - Version 0.9.199 (patch)
+## 2026-04-28 - Version 0.9.200 (patch)
 
-- **Bugfix: Share-Keys receivers no longer post their own key after a `SHAREKEYS` broadcast ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
-  - Root cause: `GetOwnedKeystoneSnapshot` returned `nil, nil` whenever `C_MythicPlus.GetOwnedKeystoneLevel` / `C_MythicPlus.GetOwnedKeystoneChallengeMapID` came back empty, which is the typical state on a receiver client right after a `SHAREKEYS` sync (the per-client keystone cache has not been populated yet). Symptom matched the open `[KEYSTONE] aborted reason=no_line` case in [todo.md](../todo.md): the sender's "Share Keys" button worked, but other isiLive clients in the group never posted their own key.
-  - Fix: `GetOwnedKeystoneSnapshot` now falls back to a bag scan on item ID `180653` and parses `mapID`/`level` directly from the `|Hkeystone:180653:<mapID>:<level>:…|h` link. Symmetric to the existing link-fallback in `ContextHelpers.BuildKeystoneChatLink`. The C_MythicPlus API is still preferred when it returns a valid (mapID, level); the bag scan only runs when the API yields empty.
-  - Safety: `C_Container.GetContainerItemLink` is classified `AllowedWhenUntainted` per warcraft.wiki — safe to call in combat and during a Mythic+ keystone from untainted callers (the button click is a hardware event; `CHAT_MSG_ADDON` dispatch is not protected). No button-lock or combat gate required.
-  - Reproduction: offline via `lua tools/simulate_sender_receiver.lua share_pipeline` — Scenario 4 (`snapshot_missing`) shows the pre-fix `abort_reason=no_line`.
-  - Regression tests in [testmodul/isilive_test_scenarios_keysync.lua](../testmodul/isilive_test_scenarios_keysync.lua) cover the bag-scan fallback in five blocks (20 tests total for the share-keys path):
-    - **Snapshot resolution** (4): API empty + bag has key, API absent + bag has key, both empty → nil, both populated → API has precedence.
-    - **API edge cases** (4): C_MythicPlus absent, level=0, mapID=0, API throws — all must trigger bag fallback.
-    - **Bag iteration** (3): keystone in reagent bag (bagID=5), keystone in mid-bag (bagID=3) skipping empty bags, multiple keystones → first-found is returned deterministically.
-    - **Defensive guards** (3): partial C_Container API → safe nil; pcall failure on `GetContainerNumSlots` / `GetContainerItemID` → continues scanning.
-    - **Malformed bag links** (3): missing mapID/level in pattern, encoded `mapID=0`, encoded `level=0` — all reject, snapshot stays nil.
-    - **End-to-end + sender/receiver parity** (3): bag-scan snapshot → `BuildOwnKeystoneAnnounceLine` produces a sendable line embedding the real `|Hkeystone:` hyperlink; sender path and receiver path produce **byte-identical** output for identical inputs (proof there is only one implementation, so the historical sender-side fixes — bag-scan link, no `|cff…|r` wrap around bare brackets — apply to the receiver automatically); plain-text fallback path also stays compliant with the no-color-around-brackets server-filter rule.
-
-- **Tooling: offline share-keys pipeline simulator ([tools/simulate_sender_receiver.lua](../tools/simulate_sender_receiver.lua)):**
-  - New `share_pipeline` mode exercises the seven realistic build/send permutations of `BuildOwnKeystoneAnnounceLine` + `SendPartyChatMessage` (owned-link API hit, bag-scan hit, plain-text fallback, snapshot missing, not-in-group, send failure with and without `C_ChatInfo` fallback) and prints which abort reason each scenario surfaces. Lets us reproduce share-keys regressions without an in-game live trace.
+Three roster-UI audit fixes shipped together (0.9.199 was an internal stepping-stone release that never reached CurseForge — its share-keys fix is included here as well):
 
 - **Bugfix: ghost roster rows lost their last-known DPS after a group disband ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
   - Symptom: after the group disbanded post-run, the UI kept showing each former member as a gray "ghost" row with name + ilvl + rio, but the DPS cell went blank — even though it had been populated seconds earlier.
@@ -37,7 +23,27 @@
   - The lifecycle simulator drives `READY_CHECK` → `READY_CHECK_CONFIRM` → `READY_CHECK_FINISHED` and prints the resulting `BuildDisplayData` background per row across the 20-second hold window.
   - The frame-overrides simulator goes one level deeper: it mocks `row.readyCheckBackground` with a Show/Hide/SetColorTexture recorder and runs `RefreshReadyCheckStateImpl` followed by `RenderRosterImpl`, surfacing exactly which frame call sequence the hold goes through. This is what pinpointed the parent-Hide → child-Show ordering bug above.
 
-- **Tests:** 1298 → 1319 (15 keysync share-keys + 2 ghost DPS + 4 from the initial share-keys fix). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+- **Tests:** 1317 → 1319 (+2 ghost DPS regression scenarios on top of the 19 share-keys scenarios already shipped in 0.9.199 below). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
+## 2026-04-28 - Version 0.9.199 (patch, internal — superseded by 0.9.200, never released to CurseForge)
+
+- **Bugfix: Share-Keys receivers no longer post their own key after a `SHAREKEYS` broadcast ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua)):**
+  - Root cause: `GetOwnedKeystoneSnapshot` returned `nil, nil` whenever `C_MythicPlus.GetOwnedKeystoneLevel` / `C_MythicPlus.GetOwnedKeystoneChallengeMapID` came back empty, which is the typical state on a receiver client right after a `SHAREKEYS` sync (the per-client keystone cache has not been populated yet). Symptom matched the open `[KEYSTONE] aborted reason=no_line` case in [todo.md](../todo.md): the sender's "Share Keys" button worked, but other isiLive clients in the group never posted their own key.
+  - Fix: `GetOwnedKeystoneSnapshot` now falls back to a bag scan on item ID `180653` and parses `mapID`/`level` directly from the `|Hkeystone:180653:<mapID>:<level>:…|h` link. Symmetric to the existing link-fallback in `ContextHelpers.BuildKeystoneChatLink`. The C_MythicPlus API is still preferred when it returns a valid (mapID, level); the bag scan only runs when the API yields empty.
+  - Safety: `C_Container.GetContainerItemLink` is classified `AllowedWhenUntainted` per warcraft.wiki — safe to call in combat and during a Mythic+ keystone from untainted callers (the button click is a hardware event; `CHAT_MSG_ADDON` dispatch is not protected). No button-lock or combat gate required.
+  - Reproduction: offline via `lua tools/simulate_sender_receiver.lua share_pipeline` — Scenario 4 (`snapshot_missing`) shows the pre-fix `abort_reason=no_line`.
+  - Regression tests in [testmodul/isilive_test_scenarios_keysync.lua](../testmodul/isilive_test_scenarios_keysync.lua) cover the bag-scan fallback in five blocks (19 tests total for the share-keys path):
+    - **Snapshot resolution** (4): API empty + bag has key, API absent + bag has key, both empty → nil, both populated → API has precedence.
+    - **API edge cases** (4): C_MythicPlus absent, level=0, mapID=0, API throws — all must trigger bag fallback.
+    - **Bag iteration** (3): keystone in reagent bag (bagID=5), keystone in mid-bag (bagID=3) skipping empty bags, multiple keystones → first-found is returned deterministically.
+    - **Defensive guards** (3): partial C_Container API → safe nil; pcall failure on `GetContainerNumSlots` / `GetContainerItemID` → continues scanning.
+    - **Malformed bag links** (3): missing mapID/level in pattern, encoded `mapID=0`, encoded `level=0` — all reject, snapshot stays nil.
+    - **End-to-end + sender/receiver parity** (2): bag-scan snapshot → `BuildOwnKeystoneAnnounceLine` produces a sendable line embedding the real `|Hkeystone:` hyperlink; sender path and receiver path produce **byte-identical** output for identical inputs (proof there is only one implementation, so the historical sender-side fixes — bag-scan link, no `|cff…|r` wrap around bare brackets — apply to the receiver automatically); plain-text fallback path also stays compliant with the no-color-around-brackets server-filter rule.
+
+- **Tooling: offline share-keys pipeline simulator ([tools/simulate_sender_receiver.lua](../tools/simulate_sender_receiver.lua)):**
+  - New `share_pipeline` mode exercises the seven realistic build/send permutations of `BuildOwnKeystoneAnnounceLine` + `SendPartyChatMessage` (owned-link API hit, bag-scan hit, plain-text fallback, snapshot missing, not-in-group, send failure with and without `C_ChatInfo` fallback) and prints which abort reason each scenario surfaces. Lets us reproduce share-keys regressions without an in-game live trace.
+
+- **Tests:** 1298 → 1317 (15 keysync share-keys regression scenarios + 4 from the initial fix). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean.
 
 ## 2026-04-28 - Version 0.9.198 (patch)
 
