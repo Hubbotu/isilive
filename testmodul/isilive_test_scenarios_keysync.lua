@@ -500,6 +500,491 @@ local function RegisterKeySyncOwnedKeyTests(test, Assert, WithGlobals, LoadAddon
     end)
   end)
 
+  -- API edge cases that must trigger the bag fallback ----------------------------------
+
+  test("KeySync GetOwnedKeystoneSnapshot falls back to bag when API returns level=0", function()
+    WithGlobals({
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          return 0
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          return 500
+        end,
+      },
+      C_Container = MakeBagApiWithKeystone(2649, 14),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "level=0 must trigger bag fallback")
+      Assert.Equal(level, 14, "level=0 must trigger bag fallback")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot falls back to bag when API returns mapID=0", function()
+    WithGlobals({
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          return 14
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          return 0
+        end,
+      },
+      C_Container = MakeBagApiWithKeystone(2649, 14),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "mapID=0 must trigger bag fallback")
+      Assert.Equal(level, 14, "mapID=0 must trigger bag fallback")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot falls back to bag when API throws", function()
+    WithGlobals({
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          error("API tainted", 0)
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          error("API tainted", 0)
+        end,
+      },
+      C_Container = MakeBagApiWithKeystone(2649, 14),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "pcall failure must trigger bag fallback")
+      Assert.Equal(level, 14, "pcall failure must trigger bag fallback")
+    end)
+  end)
+
+  -- Bag scan: spread across bag indices --------------------------------------------------
+
+  test("KeySync GetOwnedKeystoneSnapshot finds keystone in the reagent bag (bagID=5)", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag == 5 and 8 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 5 and slot == 3 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 5 and slot == 3 then
+            return "|Hkeystone:180653:2660:11:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2660, "must find key in bag 5 (reagent bag)")
+      Assert.Equal(level, 11, "must find key in bag 5 (reagent bag)")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot iterates past empty bags (key in bagID=3)", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          if bag == 3 then
+            return 12
+          end
+          return bag <= 2 and 0 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 3 and slot == 7 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 3 and slot == 7 then
+            return "|Hkeystone:180653:2649:13:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "must find key in bag 3 after skipping empty bags 0..2")
+      Assert.Equal(level, 13, "must find key in bag 3 after skipping empty bags 0..2")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot returns the first keystone found when multiple exist", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag <= 5 and 16 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 0 and slot == 4 then
+            return 180653
+          end
+          if bag == 2 and slot == 9 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 0 and slot == 4 then
+            return "|Hkeystone:180653:2649:14:0:0:0:0|h[Keystone +14]|h"
+          end
+          if bag == 2 and slot == 9 then
+            return "|Hkeystone:180653:2660:18:0:0:0:0|h[Keystone +18]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "must return the first keystone found (bag 0 before bag 2)")
+      Assert.Equal(level, 14, "must return the first keystone found (bag 0 before bag 2)")
+    end)
+  end)
+
+  -- Bag scan: defensive guards against partial / failing C_Container API -----------------
+
+  test("KeySync GetOwnedKeystoneSnapshot returns nil when C_Container is partially missing", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function()
+          return 16
+        end,
+        -- GetContainerItemID intentionally missing
+        GetContainerItemLink = function()
+          return "|Hkeystone:180653:2649:14|h[Keystone]|h"
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, nil, "partial bag API must short-circuit safely")
+      Assert.Equal(level, nil, "partial bag API must short-circuit safely")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot survives pcall failure on GetContainerNumSlots", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          if bag == 0 then
+            error("slots tainted", 0)
+          end
+          return bag == 1 and 8 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 1 and slot == 4 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 1 and slot == 4 then
+            return "|Hkeystone:180653:2649:9:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "must continue scanning after a bag throws on slot count")
+      Assert.Equal(level, 9, "must continue scanning after a bag throws on slot count")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot survives pcall failure on GetContainerItemID", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag == 0 and 4 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 0 and slot == 1 then
+            error("itemID tainted", 0)
+          end
+          if bag == 0 and slot == 3 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 0 and slot == 3 then
+            return "|Hkeystone:180653:2700:7:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2700, "must skip slots that throw and continue scanning")
+      Assert.Equal(level, 7, "must skip slots that throw and continue scanning")
+    end)
+  end)
+
+  -- Bag scan: malformed keystone links -----------------------------------------------------
+
+  test("KeySync GetOwnedKeystoneSnapshot returns nil when bag link is missing the mapID/level", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag == 0 and 4 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return "|Hkeystone:180653:|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, nil, "malformed keystone link must not yield a snapshot")
+      Assert.Equal(level, nil, "malformed keystone link must not yield a snapshot")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot returns nil when bag link encodes mapID=0", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag == 0 and 4 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return "|Hkeystone:180653:0:14:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, nil, "mapID=0 in the bag link must not be accepted")
+      Assert.Equal(level, nil, "mapID=0 in the bag link must not be accepted")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot returns nil when bag link encodes level=0", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function(bag)
+          return bag == 0 and 4 or 0
+        end,
+        GetContainerItemID = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return 180653
+          end
+          return nil
+        end,
+        GetContainerItemLink = function(bag, slot)
+          if bag == 0 and slot == 2 then
+            return "|Hkeystone:180653:2649:0:0:0:0:0|h[Keystone]|h"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, nil, "level=0 in the bag link must not be accepted")
+      Assert.Equal(level, nil, "level=0 in the bag link must not be accepted")
+    end)
+  end)
+
+  -- End-to-end: receiver pipeline that the original bug broke ------------------------------
+
+  test(
+    "KeySync receiver pipeline: empty API + bag with key → BuildOwnKeystoneAnnounceLine produces a sendable line",
+    function()
+      WithGlobals({
+        C_MythicPlus = {
+          GetOwnedKeystoneLevel = function()
+            return nil
+          end,
+          GetOwnedKeystoneChallengeMapID = function()
+            return nil
+          end,
+        },
+        C_Container = MakeBagApiWithKeystone(2649, 14),
+        C_ChallengeMode = false,
+      }, function()
+        local sync = BuildMockSync()
+        local ctrl = BuildController(LoadAddonModules, sync)
+        local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+        Assert.Equal(mapID, 2649, "snapshot must come from bag")
+        Assert.Equal(level, 14, "snapshot must come from bag")
+
+        local addon = LoadAddonModules({ "isiLive_context_helpers.lua" })
+        local line = addon.ContextHelpers.BuildOwnKeystoneAnnounceLine({
+          getOwnedKeystoneSnapshot = ctrl.GetOwnedKeystoneSnapshot,
+          getL = function()
+            return { ANNOUNCE_PREFIX = "PartyKeys:" }
+          end,
+        })
+        Assert.True(type(line) == "string" and #line > 0, "line must be built end-to-end after bag fallback")
+        Assert.True(
+          line:find("|Hkeystone:", 1, true) ~= nil,
+          "line must embed the real keystone hyperlink from the bag, not a manually built one"
+        )
+      end)
+    end
+  )
+
+  -- Sender-vs-receiver format parity: both paths route through the same
+  -- ContextHelpers.BuildOwnKeystoneAnnounceLine, so the chat output for
+  -- a button click and a SHAREKEYS-triggered post must be byte-identical
+  -- and must satisfy the two server-side filter rules:
+  --   1. Real |Hkeystone:...|h hyperlink (no manually constructed link)
+  --   2. No |cffXXXXXX...|r color codes wrapping bare [brackets]
+  test(
+    "KeySync sender vs receiver: both paths produce byte-identical chat lines and pass server-filter rules",
+    function()
+      WithGlobals({
+        C_MythicPlus = {
+          GetOwnedKeystoneLevel = function()
+            return nil
+          end,
+          GetOwnedKeystoneChallengeMapID = function()
+            return nil
+          end,
+        },
+        C_Container = MakeBagApiWithKeystone(2649, 14),
+        C_ChallengeMode = false,
+      }, function()
+        local sync = BuildMockSync()
+        local ctrl = BuildController(LoadAddonModules, sync)
+        local addon = LoadAddonModules({ "isiLive_context_helpers.lua" })
+
+        local senderLine = addon.ContextHelpers.BuildOwnKeystoneAnnounceLine({
+          getOwnedKeystoneSnapshot = ctrl.GetOwnedKeystoneSnapshot,
+          getL = function()
+            return { ANNOUNCE_PREFIX = "PartyKeys:" }
+          end,
+        })
+
+        local receiverLine = addon.ContextHelpers.BuildOwnKeystoneAnnounceLine({
+          getOwnedKeystoneSnapshot = ctrl.GetOwnedKeystoneSnapshot,
+          getL = function()
+            return { ANNOUNCE_PREFIX = "PartyKeys:" }
+          end,
+        })
+
+        Assert.Equal(senderLine, receiverLine, "sender and receiver must emit byte-identical chat lines")
+        Assert.True(
+          type(senderLine) == "string" and senderLine:find("|Hkeystone:", 1, true) ~= nil,
+          "format-rule-1: line must embed a real keystone hyperlink, not a manually constructed |Hkeystone string"
+        )
+
+        -- Format-rule-2 detector: any |cff... that opens BEFORE a [ but is not part of a |H...|h hyperlink.
+        -- A real hyperlink looks like |cff…|Hkeystone:…|h[…]|h|r — the [ sits inside |H…|h, which is allowed.
+        -- A faked link that the chat server drops looks like |cff…[…]|r with no |H…|h around the brackets.
+        local function HasColorWrappingBareBrackets(line)
+          local searchStart = 1
+          while true do
+            local colorOpen = line:find("|cff", searchStart, true)
+            if not colorOpen then
+              return false
+            end
+            local nextBracket = line:find("[", colorOpen, true)
+            local nextHyperlink = line:find("|H", colorOpen, true)
+            if not nextBracket then
+              return false
+            end
+            if not nextHyperlink or nextBracket < nextHyperlink then
+              return true
+            end
+            searchStart = colorOpen + 1
+          end
+        end
+
+        Assert.True(
+          not HasColorWrappingBareBrackets(senderLine),
+          "format-rule-2: no |cff... color code may wrap bare [brackets] without an enclosing |H...|h hyperlink"
+        )
+      end)
+    end
+  )
+
+  test("KeySync sender vs receiver: plain-text fallback path also stays format-rule-2 compliant", function()
+    WithGlobals({
+      C_MythicPlus = false,
+      C_Container = false,
+      C_ChallengeMode = false,
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      -- Seed the roster with a synced own-key so ResolveOwnedKeystoneSnapshot's roster fallback fires.
+      local addon = LoadAddonModules({ "isiLive_context_helpers.lua" })
+
+      local line = addon.ContextHelpers.BuildOwnKeystoneAnnounceLine({
+        getOwnedKeystoneSnapshot = function()
+          return 2649, 12
+        end,
+        getL = function()
+          return { ANNOUNCE_PREFIX = "PartyKeys:" }
+        end,
+      })
+      Assert.True(type(line) == "string", "plain-text fallback must still produce a string")
+      Assert.Equal(
+        line:find("|cff", 1, true),
+        nil,
+        "plain-text fallback must NOT contain any |cff color code (would trigger server-side fake-link filter)"
+      )
+      Assert.True(
+        line:find("[", 1, true) ~= nil,
+        "plain-text fallback must still contain bare brackets — only |cff...|r wrapping triggers the filter"
+      )
+      -- Sanity: ctrl is loaded just to mirror the test-setup of the parity test (suppresses
+      -- a luacheck unused-warning and proves the controller is reachable in this scope too).
+      Assert.NotNil(ctrl)
+    end)
+  end)
+
   test("KeySync SendRefreshRequest delegates to sync and LibKeystone request", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)
