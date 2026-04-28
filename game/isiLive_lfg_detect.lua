@@ -434,26 +434,9 @@ local function CheckActiveGroup()
   end
 end
 
--- ---------------------------------------------------------------------------
--- Event frame
--- ---------------------------------------------------------------------------
-
-local frame = CreateFrame("Frame")
-frame:RegisterEvent("PLAYER_LOGIN")
-frame:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
-frame:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-frame:RegisterEvent("CHALLENGE_MODE_START")
-frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-
-frame:SetScript("OnEvent", function(_self, event, ...)
+function LFGDetect.HandleEvent(event, ...)
   if event == "PLAYER_LOGIN" then
-    -- 30s safety-net ticker. Primary triggers are event-driven
-    -- (LFG_LIST_ACTIVE_ENTRY_UPDATE + GROUP_ROSTER_UPDATE); this catches
-    -- state transitions the API does not emit events for.
-    local C_Timer_ref = rawget(_G, "C_Timer")
-    if type(C_Timer_ref) == "table" and type(C_Timer_ref.NewTicker) == "function" then
-      C_Timer_ref.NewTicker(30, CheckActiveGroup)
-    end
+    CheckActiveGroup()
   elseif event == "LFG_LIST_APPLICATION_STATUS_UPDATED" then
     local searchResultID, newStatus = ...
     HandleApplicationStatus(searchResultID, newStatus)
@@ -515,4 +498,16 @@ frame:SetScript("OnEvent", function(_self, event, ...)
     end
     EmitGroupRosterTrace(true, groupMemberCount, detectedBefore)
   end
-end)
+end
+
+if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+  local testFrame = CreateFrame("Frame")
+  testFrame:RegisterEvent("PLAYER_LOGIN")
+  testFrame:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
+  testFrame:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+  testFrame:RegisterEvent("CHALLENGE_MODE_START")
+  testFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+  testFrame:SetScript("OnEvent", function(_self, event, ...)
+    LFGDetect.HandleEvent(event, ...)
+  end)
+end

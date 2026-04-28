@@ -93,6 +93,7 @@ local EVENT_REGISTRY = {
   { "ZONE_CHANGED_NEW_AREA", false, true, false },
   { "UPDATE_INSTANCE_INFO", false, false, false },
   { "GROUP_ROSTER_UPDATE", false, "cond", false },
+  { "PARTY_LEADER_CHANGED", false, "cond", false },
   { "LFG_LIST_SEARCH_RESULT_UPDATED", false, false, false },
   { "LFG_LIST_APPLICATION_STATUS_UPDATED", false, false, false },
   { "LFG_LIST_ACTIVE_ENTRY_UPDATE", false, false, false },
@@ -101,13 +102,18 @@ local EVENT_REGISTRY = {
   { "CHALLENGE_MODE_START", true, false, false },
   { "CHALLENGE_MODE_COMPLETED", true, true, false },
   { "CHALLENGE_MODE_RESET", true, true, false },
+  { "CHALLENGE_MODE_DEATH_COUNT_UPDATED", true, true, false },
+  { "SCENARIO_CRITERIA_UPDATE", false, true, false },
   { "BAG_UPDATE_DELAYED", false, true, false },
   { "CHALLENGE_MODE_MAPS_UPDATE", false, true, false },
   { "PLAYER_EQUIPMENT_CHANGED", false, true, false },
   { "PLAYER_SPECIALIZATION_CHANGED", false, true, false },
   { "SPELL_UPDATE_COOLDOWN", false, false, false },
   { "SPELL_UPDATE_CHARGES", true, false, false },
+  { "SPELLS_CHANGED", false, true, false },
   { "UNIT_AURA", true, false, false, "player" },
+  { "UNIT_PET", false, true, false, "player" },
+  { "UNIT_SPELLCAST_SUCCEEDED", true, true, false, { "player", "pet" } },
   { "READY_CHECK", true, false, false },
   { "READY_CHECK_CONFIRM", true, false, false },
   { "READY_CHECK_FINISHED", true, false, false },
@@ -164,7 +170,7 @@ function Bootstrap.CreateGatedOnEvent(opts)
     allowInCombat = allowInCombat,
     allowWhenHidden = allowWhenHidden,
     shouldAllowWhenHidden = function(_, event)
-      if event ~= "GROUP_ROSTER_UPDATE" then
+      if event ~= "GROUP_ROSTER_UPDATE" and event ~= "PARTY_LEADER_CHANGED" then
         return false
       end
       local inChallenge = getActiveChallengeMapID()

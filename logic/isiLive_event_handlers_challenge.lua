@@ -450,10 +450,20 @@ function ChallengeLifecycle.ResumeDeferredPostChallengeRefresh(ctx, frame)
 end
 
 function ChallengeLifecycle.BuildHandlers(ctx)
+  ctx.handleMplusTimerEvent = type(ctx.handleMplusTimerEvent) == "function" and ctx.handleMplusTimerEvent
+    or function(_event, ...) end
+  ctx.handleKillTrackEvent = type(ctx.handleKillTrackEvent) == "function" and ctx.handleKillTrackEvent
+    or function(_event, ...) end
+  ctx.handleCombatEventsEvent = type(ctx.handleCombatEventsEvent) == "function" and ctx.handleCombatEventsEvent
+    or function(_event, ...) end
+
   local function HandleChallengeModeStart(_self)
     if IsRaidModeActive(ctx) then
       return
     end
+    ctx.handleMplusTimerEvent("CHALLENGE_MODE_START")
+    ctx.handleKillTrackEvent("CHALLENGE_MODE_START")
+    ctx.handleCombatEventsEvent("CHALLENGE_MODE_START")
     if type(ctx.logRuntimeTrace) == "function" then
       ctx.logRuntimeTrace("[RC] challenge_mode_start state_set var=readyCheckActive val=false")
     end
@@ -480,10 +490,13 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.updateMPlusTeleportButton()
   end
 
-  local function HandleChallengeModeCompletedOrReset(frame)
+  local function HandleChallengeModeCompletedOrReset(frame, event)
     if IsRaidModeActive(ctx) then
       return
     end
+    ctx.handleMplusTimerEvent(event)
+    ctx.handleKillTrackEvent(event)
+    ctx.handleCombatEventsEvent(event)
     local runInfo = ResolveCompletedRunInfo()
     if type(ctx.logRuntimeTracef) == "function" then
       ctx.logRuntimeTracef(
@@ -513,8 +526,12 @@ function ChallengeLifecycle.BuildHandlers(ctx)
 
   return {
     CHALLENGE_MODE_START = HandleChallengeModeStart,
-    CHALLENGE_MODE_COMPLETED = HandleChallengeModeCompletedOrReset,
-    CHALLENGE_MODE_RESET = HandleChallengeModeCompletedOrReset,
+    CHALLENGE_MODE_COMPLETED = function(frame)
+      HandleChallengeModeCompletedOrReset(frame, "CHALLENGE_MODE_COMPLETED")
+    end,
+    CHALLENGE_MODE_RESET = function(frame)
+      HandleChallengeModeCompletedOrReset(frame, "CHALLENGE_MODE_RESET")
+    end,
     READY_CHECK = function(_self)
       if IsRaidModeActive(ctx) then
         return

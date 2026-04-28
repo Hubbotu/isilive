@@ -155,6 +155,9 @@ end
 
 function Harness.WithGlobals(stubs, fn)
   stubs = stubs or {}
+  if stubs.ISILIVE_TEST_MODE == nil then
+    stubs.ISILIVE_TEST_MODE = true
+  end
 
   local previous = {}
   local existed = {}

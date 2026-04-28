@@ -192,6 +192,10 @@ return function(test, ctx)
     end)
     -- ctx.addonTable.KickTracker hat sich nach Load geändert (LoadAddonModules
     -- überschreibt das im seed). Wir restoring den Stub:
+    state.fireEvent = function(event, ...)
+      Assert.True(type(_ctx.HandleKickTrackerEvent) == "function", "kick event handler must be exposed on ctx")
+      _ctx.HandleKickTrackerEvent(event, ...)
+    end
     return _ctx, modules, state
   end
 
@@ -272,14 +276,13 @@ return function(test, ctx)
 
   test("kick tracker: SPELL_UPDATE_COOLDOWN re-caches cooldown via the controller", function()
     local _ctx, _modules, state = LoadFactoryKickTracker({})
-    Assert.True(state.frames[1] ~= nil, "cast frame must be created")
-    state.frames[1]:FireEvent("SPELL_UPDATE_COOLDOWN")
+    state.fireEvent("SPELL_UPDATE_COOLDOWN")
     Assert.Equal(state.cacheCooldownCalls, 1, "cooldown event must call CacheCooldown once")
   end)
 
   test("kick tracker: PLAYER_REGEN_ENABLED also re-caches cooldown", function()
     local _ctx, _modules, state = LoadFactoryKickTracker({})
-    state.frames[1]:FireEvent("PLAYER_REGEN_ENABLED")
+    state.fireEvent("PLAYER_REGEN_ENABLED")
     Assert.Equal(state.cacheCooldownCalls, 1, "regen-enabled event must call CacheCooldown once")
   end)
 
@@ -291,7 +294,7 @@ return function(test, ctx)
       kickInfo = { availabilityResolved = false }, -- previousInfo
       resolveResult = { availabilityResolved = true, hasKick = true, spellID = 6552 },
     })
-    state.frames[1]:FireEvent("SPELLS_CHANGED")
+    state.fireEvent("SPELLS_CHANGED")
     Assert.Equal(state.resolveCalls, 1, "SPELLS_CHANGED must drive ResolveKickState")
     Assert.True(#state.sentKick >= 1, "newly resolved availability must trigger broadcast")
   end)
@@ -301,7 +304,7 @@ return function(test, ctx)
       kickInfo = { availabilityResolved = false },
       resolveResult = { availabilityResolved = false }, -- still unresolved after re-resolve
     })
-    state.frames[1]:FireEvent("SPELLS_CHANGED")
+    state.fireEvent("SPELLS_CHANGED")
     Assert.True(#state.cleared >= 1, "still-unresolved must clear sync cache")
     Assert.Equal(#state.sentKick, 0, "still-unresolved must not broadcast")
   end)
@@ -311,7 +314,7 @@ return function(test, ctx)
       kickInfo = { availabilityResolved = true, hasKick = true, spellID = 6552 },
       resolveResult = { availabilityResolved = true, hasKick = true, spellID = 6552 },
     })
-    state.frames[1]:FireEvent("SPELLS_CHANGED")
+    state.fireEvent("SPELLS_CHANGED")
     Assert.Equal(#state.sentKick, 0, "no change in availability/spellID must skip broadcast")
   end)
 
@@ -320,7 +323,7 @@ return function(test, ctx)
       kickInfo = { availabilityResolved = true, hasKick = true, spellID = 6552 },
       resolveResult = { availabilityResolved = true, hasKick = true, spellID = 47528 }, -- mind freeze
     })
-    state.frames[1]:FireEvent("SPELLS_CHANGED")
+    state.fireEvent("SPELLS_CHANGED")
     Assert.True(#state.sentKick >= 1, "spellID change must trigger broadcast")
   end)
 end

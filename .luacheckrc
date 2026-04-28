@@ -25,6 +25,19 @@ return {
         "212",
       },
     },
+    -- Optional event-handler callback stubs intentionally accept and discard
+    -- the WoW event vararg signature so live handlers can be drop-in
+    -- replacements without the call sites checking arity.
+    ["factory/isiLive_controller_wiring.lua"] = { ignore = { "212" } },
+    ["factory\\isiLive_controller_wiring.lua"] = { ignore = { "212" } },
+    ["logic/isiLive_event_handlers.lua"] = { ignore = { "212" } },
+    ["logic\\isiLive_event_handlers.lua"] = { ignore = { "212" } },
+    ["logic/isiLive_event_handlers_runtime.lua"] = { ignore = { "212" } },
+    ["logic\\isiLive_event_handlers_runtime.lua"] = { ignore = { "212" } },
+    ["logic/isiLive_event_handlers_challenge.lua"] = { ignore = { "212" } },
+    ["logic\\isiLive_event_handlers_challenge.lua"] = { ignore = { "212" } },
+    ["logic/isiLive_event_handlers_queue.lua"] = { ignore = { "212" } },
+    ["logic\\isiLive_event_handlers_queue.lua"] = { ignore = { "212" } },
   },
 
   exclude_files = {

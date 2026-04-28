@@ -41,6 +41,12 @@ end
 
 local ContextHelpers = addonTable.ContextHelpers or {}
 
+local function DispatchModuleEvent(moduleValue, event, ...)
+  if type(moduleValue) == "table" and type(moduleValue.HandleEvent) == "function" then
+    moduleValue.HandleEvent(event, ...)
+  end
+end
+
 function ControllerWiring.CreateGroupController(groupModule, deps)
   assert(groupModule, "isiLive: ControllerWiring.CreateGroupController requires groupModule")
   deps = deps or {}
@@ -388,6 +394,18 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
   config.restoreRioBaseline = callbacks.restoreRioBaseline
   config.enableRioDeltaDisplay = callbacks.enableRioDeltaDisplay
   config.updateCdTracker = type(callbacks.updateCdTracker) == "function" and callbacks.updateCdTracker or function() end
+  config.handleLFGDetectEvent = type(deps.handleLFGDetectEvent) == "function" and deps.handleLFGDetectEvent
+    or function(_event, ...) end
+  config.handleMplusTimerEvent = type(deps.handleMplusTimerEvent) == "function" and deps.handleMplusTimerEvent
+    or function(_event, ...) end
+  config.handleKillTrackEvent = type(deps.handleKillTrackEvent) == "function" and deps.handleKillTrackEvent
+    or function(_event, ...) end
+  config.handleCombatEventsEvent = type(deps.handleCombatEventsEvent) == "function" and deps.handleCombatEventsEvent
+    or function(_event, ...) end
+  config.handleKickTrackerEvent = type(deps.handleKickTrackerEvent) == "function" and deps.handleKickTrackerEvent
+    or function(_event, ...) end
+  config.handleLeaderWatchEvent = type(deps.handleLeaderWatchEvent) == "function" and deps.handleLeaderWatchEvent
+    or function(_event, ...) end
   config.isReadyCheckActive = type(callbacks.isReadyCheckActive) == "function" and callbacks.isReadyCheckActive
     or function()
       return false
@@ -588,11 +606,28 @@ local function BuildEventHandlersDepsFromContext(ctx)
     getPlayerSpecName = ctx.getPlayerSpecName,
     getAddonVersionRaw = ctx.getAddonVersionRaw,
     getCombatLogEventInfo = ctx.GetCombatLogEventInfo,
-    kickTrackerController = ctx.kickTrackerController,
-    HandleKickCastSucceeded = ctx.HandleKickCastSucceeded,
-    HandleKickPetChanged = ctx.HandleKickPetChanged,
-    RefreshKickState = ctx.RefreshKickState,
-    CacheKickCooldown = ctx.CacheKickCooldown,
+    handleLFGDetectEvent = function(event, ...)
+      DispatchModuleEvent(ctx.modules and ctx.modules.lfgDetect, event, ...)
+    end,
+    handleMplusTimerEvent = function(event, ...)
+      DispatchModuleEvent(ctx.modules and ctx.modules.mplusTimer, event, ...)
+    end,
+    handleKillTrackEvent = function(event, ...)
+      DispatchModuleEvent(ctx.modules and ctx.modules.killTrack, event, ...)
+    end,
+    handleCombatEventsEvent = function(event, ...)
+      DispatchModuleEvent(ctx.modules and ctx.modules.combatEvents, event, ...)
+    end,
+    handleKickTrackerEvent = function(event, ...)
+      if type(ctx.HandleKickTrackerEvent) == "function" then
+        ctx.HandleKickTrackerEvent(event, ...)
+      end
+    end,
+    handleLeaderWatchEvent = function(event, ...)
+      if ctx.leaderWatchController and type(ctx.leaderWatchController.HandleEvent) == "function" then
+        ctx.leaderWatchController.HandleEvent(event, ...)
+      end
+    end,
     getTime = ctx.getTime,
     recordRun = ctx.recordRun,
     applyKnownKeyToRosterEntry = ctx.applyKnownKeyToRosterEntry,

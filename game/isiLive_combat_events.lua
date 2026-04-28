@@ -156,20 +156,12 @@ function CombatEvents.CreateController(opts)
   return controller
 end
 
--- Event frame: bound on file load so the module self-installs. The factory
--- wires getL/getDB/print through CombatEvents.SetDependencies().
---
 -- COMBAT_LOG_EVENT_UNFILTERED was removed from the public addon API in patch
 -- 12.0.0 (Midnight) and raises ADDON_ACTION_FORBIDDEN on every
--- RegisterEvent() attempt, so we listen to UNIT_SPELLCAST_SUCCEEDED instead.
+-- registration attempt, so we listen to UNIT_SPELLCAST_SUCCEEDED instead.
 -- That event is not taint-sensitive, fires once per completed cast, and
 -- exposes enough info (unit token + spell ID) to announce BR / Bloodlust
 -- without needing combat-log access.
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-eventFrame:RegisterEvent("CHALLENGE_MODE_START")
-eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-
 local controllerInstance = nil
 
 function CombatEvents.SetDependencies(deps)
@@ -179,7 +171,7 @@ function CombatEvents.SetDependencies(deps)
   controllerInstance = CombatEvents.CreateController(deps)
 end
 
-eventFrame:SetScript("OnEvent", function(_, event, ...)
+function CombatEvents.HandleEvent(event, ...)
   if not controllerInstance then
     return
   end
@@ -187,7 +179,17 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
     controllerInstance.HandleUnitSpellcastSucceeded(...)
     return
   end
-  if event == "CHALLENGE_MODE_START" or event == "CHALLENGE_MODE_COMPLETED" then
+  if event == "CHALLENGE_MODE_START" or event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
     controllerInstance.Reset()
   end
-end)
+end
+
+if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+  local eventFrame = CreateFrame("Frame")
+  eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_START")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+  eventFrame:SetScript("OnEvent", function(_, event, ...)
+    CombatEvents.HandleEvent(event, ...)
+  end)
+end

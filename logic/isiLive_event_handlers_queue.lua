@@ -66,6 +66,8 @@ local function IsRaidModeActive(ctx)
 end
 
 function QueueLifecycle.BuildHandlers(ctx)
+  ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
+    or function(_event, ...) end
   local logf = type(ctx.logRuntimeTracef) == "function" and ctx.logRuntimeTracef or nil
   return {
     LFG_LIST_APPLICATION_STATUS_UPDATED = function(_self, ...)
@@ -81,6 +83,7 @@ function QueueLifecycle.BuildHandlers(ctx)
       if ctx.isInChallengeMode() or IsRaidModeActive(ctx) then
         return
       end
+      ctx.handleLFGDetectEvent("LFG_LIST_APPLICATION_STATUS_UPDATED", ...)
       if ctx.isTestMode() or ctx.isTestAllMode() then
         ctx.exitTestMode()
       end
@@ -119,6 +122,7 @@ function QueueLifecycle.BuildHandlers(ctx)
       if ctx.isInChallengeMode() or IsRaidModeActive(ctx) then
         return
       end
+      ctx.handleLFGDetectEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
       local entryInfo = ctx.getNormalizedActiveEntryInfo()
       local hadActiveJoinedKey = ctx.getActiveJoinedKeyMapID() ~= nil
       local activityID = type(entryInfo) == "table"

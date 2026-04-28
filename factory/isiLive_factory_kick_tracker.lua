@@ -166,15 +166,7 @@ local function InitializeFactorySecondaryKickTracker(
     return SyncOwnKickState(force ~= false)
   end
 
-  -- Event frame: UNIT_SPELLCAST_SUCCEEDED for player/pet is untainted.
-  local castFrame = CreateFrame("Frame")
-  castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
-  castFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
-  castFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-  castFrame:RegisterEvent("SPELLS_CHANGED")
-  castFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
-  castFrame:RegisterUnitEvent("UNIT_PET", "player")
-  castFrame:SetScript("OnEvent", function(_, event, unit, _, spellID)
+  ctx.HandleKickTrackerEvent = function(event, unit, _, spellID)
     if IsRaidModeActive() then
       EnterRaidKickSuppression()
       return
@@ -229,7 +221,20 @@ local function InitializeFactorySecondaryKickTracker(
         end
       end
     end
-  end)
+  end
+
+  if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+    local castFrame = CreateFrame("Frame")
+    castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")
+    castFrame:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+    castFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+    castFrame:RegisterEvent("SPELLS_CHANGED")
+    castFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    castFrame:RegisterUnitEvent("UNIT_PET", "player")
+    castFrame:SetScript("OnEvent", function(_, event, unit, _, spellID)
+      ctx.HandleKickTrackerEvent(event, unit, _, spellID)
+    end)
+  end
 
   -- Ticker: scan own kick state + refresh kick column every 0.5s.
   local C_Timer_ref = rawget(_G, "C_Timer")

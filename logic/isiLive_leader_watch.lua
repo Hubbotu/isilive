@@ -84,29 +84,35 @@ function LeaderWatch.CreateController(opts)
     updateLeaderButtons()
   end
 
+  function controller.HandleEvent(event)
+    if isStopped() then
+      setWasGroupLeader(nil)
+      return
+    end
+    if not isMainFrameShown() then
+      local isLeader, wasGroupLeader = GetLeaderState()
+      if wasGroupLeader ~= nil and not wasGroupLeader and isLeader then
+        HandleLeaderGain(false)
+      end
+      SyncLeaderStateSilently()
+      return
+    end
+    controller.UpdateLeaderState(event)
+  end
+
   function controller.Start()
     SyncLeaderStateSilently()
-
-    local frame = CreateFrame("Frame")
-    controller.frame = frame
-    frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-    frame:RegisterEvent("PARTY_LEADER_CHANGED")
-    frame:SetScript("OnEvent", function(_, event)
-      if isStopped() then
-        setWasGroupLeader(nil)
-        return
-      end
-      if not isMainFrameShown() then
-        local isLeader, wasGroupLeader = GetLeaderState()
-        if wasGroupLeader ~= nil and not wasGroupLeader and isLeader then
-          HandleLeaderGain(false)
-        end
-        SyncLeaderStateSilently()
-        return
-      end
-      controller.UpdateLeaderState(event)
-    end)
-    return frame
+    if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+      local frame = CreateFrame("Frame")
+      controller.frame = frame
+      frame:RegisterEvent("GROUP_ROSTER_UPDATE")
+      frame:RegisterEvent("PARTY_LEADER_CHANGED")
+      frame:SetScript("OnEvent", function(_, event)
+        controller.HandleEvent(event)
+      end)
+      return frame
+    end
+    return controller
   end
 
   return controller

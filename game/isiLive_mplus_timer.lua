@@ -19,6 +19,13 @@ local state = {
 local tickFrame
 local tickAccum = 0
 
+local function EnsureTickFrame()
+  if not tickFrame then
+    tickFrame = CreateFrame("Frame")
+  end
+  return tickFrame
+end
+
 -- Called every 0.1s while the key is running
 local function OnUpdate()
   if not state.running then
@@ -77,7 +84,7 @@ local function StartTimer()
   state.running = true
   state.completed = false
   tickAccum = 0
-  tickFrame:SetScript("OnUpdate", function(_, elapsed)
+  EnsureTickFrame():SetScript("OnUpdate", function(_, elapsed)
     tickAccum = tickAccum + elapsed
     if tickAccum >= 0.1 then
       tickAccum = 0
@@ -89,7 +96,9 @@ end
 local function StopTimer(completed)
   state.running = false
   state.completed = completed == true
-  tickFrame:SetScript("OnUpdate", nil)
+  if tickFrame then
+    tickFrame:SetScript("OnUpdate", nil)
+  end
   tickAccum = 0
 end
 
@@ -131,14 +140,7 @@ function MplusTimer.GetTimerData()
   }
 end
 
--- Event registration
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("CHALLENGE_MODE_START")
-eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-eventFrame:RegisterEvent("CHALLENGE_MODE_RESET")
-eventFrame:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
-
-eventFrame:SetScript("OnEvent", function(_, event)
+function MplusTimer.HandleEvent(event)
   if event == "CHALLENGE_MODE_START" then
     StartTimer()
   elseif event == "CHALLENGE_MODE_COMPLETED" then
@@ -153,6 +155,16 @@ eventFrame:SetScript("OnEvent", function(_, event)
   elseif event == "CHALLENGE_MODE_DEATH_COUNT_UPDATED" then
     UpdateDeaths()
   end
-end)
+end
 
-tickFrame = CreateFrame("Frame")
+if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+  local eventFrame = CreateFrame("Frame")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_START")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_RESET")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
+  eventFrame:SetScript("OnEvent", function(_, event)
+    MplusTimer.HandleEvent(event)
+  end)
+  tickFrame = CreateFrame("Frame")
+end

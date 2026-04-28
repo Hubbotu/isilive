@@ -281,6 +281,19 @@ local function ApplyCombatFade(ctx, targetAlpha)
 end
 
 function RuntimeLifecycle.BuildHandlers(ctx)
+  ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
+    or function(_event, ...) end
+  ctx.handleKillTrackEvent = type(ctx.handleKillTrackEvent) == "function" and ctx.handleKillTrackEvent
+    or function(_event, ...) end
+  ctx.handleCombatEventsEvent = type(ctx.handleCombatEventsEvent) == "function" and ctx.handleCombatEventsEvent
+    or function(_event, ...) end
+  ctx.handleKickTrackerEvent = type(ctx.handleKickTrackerEvent) == "function" and ctx.handleKickTrackerEvent
+    or function(_event, ...) end
+  ctx.handleMplusTimerEvent = type(ctx.handleMplusTimerEvent) == "function" and ctx.handleMplusTimerEvent
+    or function(_event, ...) end
+  ctx.handleLeaderWatchEvent = type(ctx.handleLeaderWatchEvent) == "function" and ctx.handleLeaderWatchEvent
+    or function(_event, ...) end
+
   local function HandleGroupRosterUpdateEvent(frame)
     if ctx.isInGroup() and (ctx.isTestMode() or ctx.isTestAllMode()) then
       ctx.exitTestMode()
@@ -288,6 +301,8 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
 
     ctx.handleGroupRosterUpdate()
+    ctx.handleLeaderWatchEvent("GROUP_ROSTER_UPDATE")
+    ctx.handleLFGDetectEvent("GROUP_ROSTER_UPDATE")
     if
       type(ChallengeLifecycle) == "table"
       and type(ChallengeLifecycle.ResumeDeferredPostChallengeRefresh) == "function"
@@ -349,6 +364,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
 
   local function HandlePlayerLoginEvent(_self)
     ApplyBindingStartupRefresh(ctx)
+    ctx.handleLFGDetectEvent("PLAYER_LOGIN")
     if not IsRaidModeActive(ctx) and ctx.shouldShowMainFrameOnStartup() then
       ctx.setMainFrameVisible(true)
     end
@@ -378,6 +394,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       ctx.wasInPartyInstance = inPartyInstance
       return
     end
+    ctx.handleKillTrackEvent("PLAYER_ENTERING_WORLD")
     ctx.updateCdTracker()
     UpdateTrackedMythicZeroRun(ctx)
     ScheduleBindingStartupRefresh(ctx)
@@ -407,6 +424,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if type(ctx.logRuntimeTrace) == "function" then
       ctx.logRuntimeTrace("[RUNTIME] player_regen_disabled")
     end
+    ctx.handleKillTrackEvent("PLAYER_REGEN_DISABLED")
     ApplyCombatFade(ctx, 0)
   end
 
@@ -425,6 +443,8 @@ function RuntimeLifecycle.BuildHandlers(ctx)
         ctx.setMainFrameVisible(pendingVisible)
       end
     end
+    ctx.handleKickTrackerEvent("PLAYER_REGEN_ENABLED")
+    ctx.handleKillTrackEvent("PLAYER_REGEN_ENABLED")
     ApplyCombatFade(ctx, 1)
     if IsRaidModeActive(ctx) then
       return
@@ -474,6 +494,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if IsRaidModeActive(ctx) then
       return
     end
+    ctx.handleKickTrackerEvent("PLAYER_SPECIALIZATION_CHANGED", unit)
     ctx.sendOwnBackgroundSnapshot("player-state")
   end
 
@@ -554,6 +575,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if IsRaidModeActive(ctx) then
       return
     end
+    ctx.handleKickTrackerEvent("SPELL_UPDATE_COOLDOWN")
     ctx.updateMPlusTeleportButton()
   end
 
@@ -596,5 +618,36 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     SPELL_UPDATE_COOLDOWN = HandleSpellUpdateCooldownEvent,
     SPELL_UPDATE_CHARGES = HandleSpellUpdateChargesEvent,
     UNIT_AURA = HandleUnitAuraEvent,
+    SPELLS_CHANGED = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleKickTrackerEvent("SPELLS_CHANGED", ...)
+      end
+    end,
+    UNIT_PET = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleKickTrackerEvent("UNIT_PET", ...)
+      end
+    end,
+    UNIT_SPELLCAST_SUCCEEDED = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleKickTrackerEvent("UNIT_SPELLCAST_SUCCEEDED", ...)
+        ctx.handleCombatEventsEvent("UNIT_SPELLCAST_SUCCEEDED", ...)
+      end
+    end,
+    SCENARIO_CRITERIA_UPDATE = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleKillTrackEvent("SCENARIO_CRITERIA_UPDATE", ...)
+      end
+    end,
+    CHALLENGE_MODE_DEATH_COUNT_UPDATED = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleMplusTimerEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED", ...)
+      end
+    end,
+    PARTY_LEADER_CHANGED = function(_self, ...)
+      if not IsRaidModeActive(ctx) then
+        ctx.handleLeaderWatchEvent("PARTY_LEADER_CHANGED", ...)
+      end
+    end,
   }
 end

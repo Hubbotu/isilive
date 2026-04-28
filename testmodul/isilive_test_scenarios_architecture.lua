@@ -746,20 +746,20 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
     AssertContains(
       Assert,
       helpersContent,
-      'castFrame:RegisterEvent("PLAYER_SPECIALIZATION_CHANGED")',
-      "factory kick tracking must refresh spell resolution on specialization changes"
+      "ctx.HandleKickTrackerEvent = function(event, unit, _, spellID)",
+      "factory kick tracking must expose a central-gate kick event handler"
     )
     AssertContains(
       Assert,
       helpersContent,
-      'castFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "pet")',
-      "factory kick tracking must also watch pet interrupt casts"
+      'event == "UNIT_SPELLCAST_SUCCEEDED"',
+      "factory kick tracking must handle player/pet interrupt casts through the central event path"
     )
     AssertContains(
       Assert,
       helpersContent,
-      'castFrame:RegisterUnitEvent("UNIT_PET", "player")',
-      "factory kick tracking must refresh interrupt availability when the player's pet changes"
+      'event == "SPELLS_CHANGED" or event == "PLAYER_SPECIALIZATION_CHANGED" or event == "UNIT_PET"',
+      "factory kick tracking must refresh interrupt availability through central events"
     )
     AssertContains(
       Assert,

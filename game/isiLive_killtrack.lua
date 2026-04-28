@@ -335,15 +335,20 @@ function KillTrack._DispatchEvent(event)
   end
 end
 
-local eventFrame = CreateFrame("Frame")
-eventFrame:RegisterEvent("CHALLENGE_MODE_START")
-eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-eventFrame:RegisterEvent("CHALLENGE_MODE_RESET")
-eventFrame:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
-eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
-
-eventFrame:SetScript("OnEvent", function(_, event)
+function KillTrack.HandleEvent(event)
   KillTrack._DispatchEvent(event)
-end)
+end
+
+if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
+  local eventFrame = CreateFrame("Frame")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_START")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
+  eventFrame:RegisterEvent("CHALLENGE_MODE_RESET")
+  eventFrame:RegisterEvent("SCENARIO_CRITERIA_UPDATE")
+  eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+  eventFrame:RegisterEvent("PLAYER_REGEN_DISABLED")
+  eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+  eventFrame:SetScript("OnEvent", function(_, event)
+    KillTrack.HandleEvent(event)
+  end)
+end

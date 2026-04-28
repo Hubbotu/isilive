@@ -29,6 +29,7 @@ function RuntimeSetup.Configure(ctx)
   ctx.groupController = groupController
 
   local leaderWatchController = leaderWatchModule.CreateController(configBuilders.BuildLeaderWatchControllerOpts(ctx))
+  ctx.leaderWatchController = leaderWatchController
   leaderWatchController.Start()
 
   local eventHandlersController = controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, ctx)

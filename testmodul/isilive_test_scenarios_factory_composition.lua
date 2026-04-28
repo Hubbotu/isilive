@@ -783,6 +783,8 @@ local function GetAllIsiLiveFiles()
     "isiLive_roster.lua",
     "isiLive_roster_tooltip.lua",
     "isiLive_mob_tooltip.lua",
+    "isiLive_lfg_flags.lua",
+    "isiLive_mob_nameplate.lua",
     "isiLive_roster_layout.lua",
     "isiLive_roster_panel_helpers.lua",
     "isiLive_roster_panel_chrome.lua",
