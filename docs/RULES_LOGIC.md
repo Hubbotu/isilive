@@ -328,7 +328,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Config builders gate allows sparse local change events while frame is hidden
   - KeySync SendRefreshResponse can answer hidden refresh requests
   - KeySync SendRefreshResponse skips while paused or stopped
-  - Bootstrap gate keeps hidden auto-open triggers for group join and key end
+  - Bootstrap gate keeps hidden lifecycle triggers for group join and key start/end
   - Event handlers run regen teleport refresh when frame is visible
   - Factory hidden CD ticker skips polling while frame is hidden
   - Factory hidden explicit CD refresh keeps pre-rendered state current

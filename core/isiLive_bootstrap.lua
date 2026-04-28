@@ -99,7 +99,7 @@ local EVENT_REGISTRY = {
   { "LFG_LIST_ACTIVE_ENTRY_UPDATE", false, false, false },
   { "CHAT_MSG_ADDON", false, false, false },
   { "INSPECT_READY", false, false, true },
-  { "CHALLENGE_MODE_START", true, false, false },
+  { "CHALLENGE_MODE_START", true, true, false },
   { "CHALLENGE_MODE_COMPLETED", true, true, false },
   { "CHALLENGE_MODE_RESET", true, true, false },
   { "CHALLENGE_MODE_DEATH_COUNT_UPDATED", true, true, false },

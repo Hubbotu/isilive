@@ -74,9 +74,24 @@ local function BuildEnv(overrides)
 end
 
 local function AfterLoad(frames)
-  -- The module creates exactly two frames in order: eventFrame first,
-  -- tickFrame second.
-  return frames[1], frames[2]
+  local eventFrame = {
+    GetScript = function(_, scriptName)
+      if scriptName ~= "OnEvent" then
+        return nil
+      end
+      return function(_, event)
+        local addon = rawget(_G, "__isilive_last_loaded_addon")
+        addon.MplusTimer.HandleEvent(event)
+      end
+    end,
+  }
+  local tickFrame = {
+    GetScript = function(_, scriptName)
+      local frame = frames[1]
+      return frame and frame:GetScript(scriptName) or nil
+    end,
+  }
+  return eventFrame, tickFrame
 end
 
 return function(test, ctx)
@@ -84,15 +99,15 @@ return function(test, ctx)
   local LoadAddonModules = ctx.load_modules
   local WithGlobals = ctx.with_globals
 
-  test("mplus_timer: on load registers the four challenge-mode events", function()
+  test("mplus_timer: exposes central event handler and creates no direct event frame on load", function()
     local globals, state = BuildEnv()
+    local addon
     WithGlobals(globals, function()
-      LoadAddonModules({ "isiLive_mplus_timer.lua" })
+      addon = LoadAddonModules({ "isiLive_mplus_timer.lua" })
     end)
-    Assert.Equal(state.registeredEvents["CHALLENGE_MODE_START"], true)
-    Assert.Equal(state.registeredEvents["CHALLENGE_MODE_COMPLETED"], true)
-    Assert.Equal(state.registeredEvents["CHALLENGE_MODE_RESET"], true)
-    Assert.Equal(state.registeredEvents["CHALLENGE_MODE_DEATH_COUNT_UPDATED"], true)
+    Assert.Equal(type(addon.MplusTimer.HandleEvent), "function", "MplusTimer must expose HandleEvent")
+    Assert.Nil(state.registeredEvents["CHALLENGE_MODE_START"], "module load must not directly register events")
+    Assert.Equal(#state.createdFrames, 0, "module load must not create event/tick frames before runtime start")
   end)
 
   test("mplus_timer: idle snapshot before CHALLENGE_MODE_START reports zeros", function()

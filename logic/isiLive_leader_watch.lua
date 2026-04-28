@@ -102,16 +102,6 @@ function LeaderWatch.CreateController(opts)
 
   function controller.Start()
     SyncLeaderStateSilently()
-    if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
-      local frame = CreateFrame("Frame")
-      controller.frame = frame
-      frame:RegisterEvent("GROUP_ROSTER_UPDATE")
-      frame:RegisterEvent("PARTY_LEADER_CHANGED")
-      frame:SetScript("OnEvent", function(_, event)
-        controller.HandleEvent(event)
-      end)
-      return frame
-    end
     return controller
   end
 

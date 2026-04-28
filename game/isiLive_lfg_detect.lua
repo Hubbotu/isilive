@@ -499,15 +499,3 @@ function LFGDetect.HandleEvent(event, ...)
     EmitGroupRosterTrace(true, groupMemberCount, detectedBefore)
   end
 end
-
-if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
-  local testFrame = CreateFrame("Frame")
-  testFrame:RegisterEvent("PLAYER_LOGIN")
-  testFrame:RegisterEvent("LFG_LIST_APPLICATION_STATUS_UPDATED")
-  testFrame:RegisterEvent("LFG_LIST_ACTIVE_ENTRY_UPDATE")
-  testFrame:RegisterEvent("CHALLENGE_MODE_START")
-  testFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
-  testFrame:SetScript("OnEvent", function(_self, event, ...)
-    LFGDetect.HandleEvent(event, ...)
-  end)
-end

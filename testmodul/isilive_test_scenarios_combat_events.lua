@@ -49,7 +49,10 @@ local function BuildCombatEventsEnv(overrides)
 
   return globals,
     function(event, ...)
-      if onEvent then
+      local addon = rawget(_G, "__isilive_last_loaded_addon")
+      if addon and addon.CombatEvents and type(addon.CombatEvents.HandleEvent) == "function" then
+        addon.CombatEvents.HandleEvent(event, ...)
+      elseif onEvent then
         onEvent(nil, event, ...)
       end
     end,
@@ -62,17 +65,25 @@ local function RegisterCombatEventsAutoRegistrationTests(test, ctx)
   local WithGlobals = ctx.with_globals
   local LoadAddonModules = ctx.load_modules
 
-  test("CombatEvents registers UNIT_SPELLCAST_SUCCEEDED and challenge-mode events on load", function()
+  test("CombatEvents exposes central event handler and creates no direct event frame on load", function()
     local globals, _, _, registered = BuildCombatEventsEnv()
+    local addon
     WithGlobals(globals, function()
-      LoadAddonModules({ "isiLive_combat_events.lua" })
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
     end)
     -- COMBAT_LOG_EVENT_UNFILTERED was removed from the addon API in 12.0.0
     -- and raises ADDON_ACTION_FORBIDDEN on registration. We listen to
     -- UNIT_SPELLCAST_SUCCEEDED (not taint-sensitive) instead.
-    Assert.True(registered["UNIT_SPELLCAST_SUCCEEDED"], "must register UNIT_SPELLCAST_SUCCEEDED")
-    Assert.True(registered["CHALLENGE_MODE_START"], "must register CHALLENGE_MODE_START")
-    Assert.True(registered["CHALLENGE_MODE_COMPLETED"], "must register CHALLENGE_MODE_COMPLETED")
+    Assert.Equal(type(addon.CombatEvents.HandleEvent), "function", "must expose HandleEvent for central dispatch")
+    Assert.Nil(
+      registered["UNIT_SPELLCAST_SUCCEEDED"],
+      "module load must not directly register UNIT_SPELLCAST_SUCCEEDED"
+    )
+    Assert.Nil(registered["CHALLENGE_MODE_START"], "module load must not directly register CHALLENGE_MODE_START")
+    Assert.Nil(
+      registered["CHALLENGE_MODE_COMPLETED"],
+      "module load must not directly register CHALLENGE_MODE_COMPLETED"
+    )
     Assert.Nil(registered["COMBAT_LOG_EVENT_UNFILTERED"], "must NOT register CLEU (forbidden in 12.0.0)")
   end)
 end

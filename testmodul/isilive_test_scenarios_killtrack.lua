@@ -125,17 +125,14 @@ local function BuildKillTrackEnv(overrides)
 end
 
 local function RegisterEventRegistrationTests(test, Assert, WithGlobals, LoadAddonModules)
-  test("KillTrack registers the expected challenge-mode and combat events", function()
+  test("KillTrack exposes central event handler and creates no direct event frame", function()
     local env = BuildKillTrackEnv()
+    local addon
     WithGlobals(env.globals, function()
-      LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon = LoadAddonModules({ "isiLive_killtrack.lua" })
     end)
-    Assert.True(env.registered["CHALLENGE_MODE_START"], "must register CHALLENGE_MODE_START")
-    Assert.True(env.registered["CHALLENGE_MODE_COMPLETED"], "must register CHALLENGE_MODE_COMPLETED")
-    Assert.True(env.registered["CHALLENGE_MODE_RESET"], "must register CHALLENGE_MODE_RESET")
-    Assert.True(env.registered["SCENARIO_CRITERIA_UPDATE"], "must register SCENARIO_CRITERIA_UPDATE")
-    Assert.True(env.registered["PLAYER_REGEN_DISABLED"], "must register PLAYER_REGEN_DISABLED")
-    Assert.True(env.registered["PLAYER_REGEN_ENABLED"], "must register PLAYER_REGEN_ENABLED")
+    Assert.Equal(type(addon.KillTrack.HandleEvent), "function", "KillTrack must expose HandleEvent")
+    Assert.Nil(env.registered["CHALLENGE_MODE_START"], "module load must not directly register events")
   end)
 end
 

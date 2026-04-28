@@ -46,11 +46,16 @@ local function BuildLFGDetectEnv(overrides)
     end
   end
 
-  return globals, function(event, ...)
-    if onEvent then
-      onEvent(nil, event, ...)
-    end
-  end, prints
+  return globals,
+    function(event, ...)
+      local addon = rawget(_G, "__isilive_last_loaded_addon")
+      if addon and addon.LFGDetect and type(addon.LFGDetect.HandleEvent) == "function" then
+        addon.LFGDetect.HandleEvent(event, ...)
+      elseif onEvent then
+        onEvent(nil, event, ...)
+      end
+    end,
+    prints
 end
 
 -- Builds a minimal C_LFGList stub for invite scenarios.

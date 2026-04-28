@@ -156,15 +156,3 @@ function MplusTimer.HandleEvent(event)
     UpdateDeaths()
   end
 end
-
-if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
-  local eventFrame = CreateFrame("Frame")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_START")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_RESET")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_DEATH_COUNT_UPDATED")
-  eventFrame:SetScript("OnEvent", function(_, event)
-    MplusTimer.HandleEvent(event)
-  end)
-  tickFrame = CreateFrame("Frame")
-end

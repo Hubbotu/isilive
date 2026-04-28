@@ -183,13 +183,3 @@ function CombatEvents.HandleEvent(event, ...)
     controllerInstance.Reset()
   end
 end
-
-if rawget(_G, "ISILIVE_TEST_MODE") == true and type(CreateFrame) == "function" then
-  local eventFrame = CreateFrame("Frame")
-  eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_START")
-  eventFrame:RegisterEvent("CHALLENGE_MODE_COMPLETED")
-  eventFrame:SetScript("OnEvent", function(_, event, ...)
-    CombatEvents.HandleEvent(event, ...)
-  end)
-end

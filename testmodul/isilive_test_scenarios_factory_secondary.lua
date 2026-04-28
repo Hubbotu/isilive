@@ -615,20 +615,15 @@ local function RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, Load
     if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
       return
     end
-    local castFrame = state.createdFrames[1]
-    Assert.NotNil(castFrame, "kick tracker init must create a dedicated cast frame")
-    if
-      type(castFrame) ~= "table"
-      or type(castFrame.scripts) ~= "table"
-      or type(castFrame.scripts.OnEvent) ~= "function"
-    then
+    Assert.Equal(type(state.ctx.HandleKickTrackerEvent), "function", "kick tracker must expose central event handler")
+    if type(state.ctx.HandleKickTrackerEvent) ~= "function" then
       return
     end
 
     ticker.callback()
     state.isRaidGroup = false
 
-    castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", nil, 133)
+    state.ctx.HandleKickTrackerEvent("UNIT_SPELLCAST_SUCCEEDED", "player", nil, 133)
     Assert.Equal(state.kickOnCastCalls or 0, 1, "post-raid unrelated casts must still reach the kick tracker")
     Assert.Equal(#state.sentKick, 0, "unrelated post-raid casts must not resume stale kick sync")
     Assert.Equal(
@@ -645,7 +640,7 @@ local function RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, Load
     )
     Assert.Equal(#state.sentKick, 0, "unresolved post-raid state must stay unsent after unrelated casts")
 
-    castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
+    state.ctx.HandleKickTrackerEvent("UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
     Assert.Equal(
       state.kickOnCastCooldownChangedCallbacks or 0,
       1,
@@ -747,18 +742,13 @@ return function(test, ctx)
     if type(ticker) ~= "table" or type(ticker.callback) ~= "function" then
       return
     end
-    local castFrame = state.createdFrames[1]
-    Assert.NotNil(castFrame, "kick tracker init must create a dedicated cast frame")
-    if
-      type(castFrame) ~= "table"
-      or type(castFrame.scripts) ~= "table"
-      or type(castFrame.scripts.OnEvent) ~= "function"
-    then
+    Assert.Equal(type(state.ctx.HandleKickTrackerEvent), "function", "kick tracker must expose central event handler")
+    if type(state.ctx.HandleKickTrackerEvent) ~= "function" then
       return
     end
 
     ticker.callback()
-    castFrame.scripts.OnEvent(castFrame, "UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
+    state.ctx.HandleKickTrackerEvent("UNIT_SPELLCAST_SUCCEEDED", "player", nil, 6552)
 
     Assert.Equal(#state.sentKick, 0, "raid mode must suppress outgoing kick sync")
     Assert.Nil(state.lastSetKickInfo, "raid mode must not mutate the local kick sync cache")

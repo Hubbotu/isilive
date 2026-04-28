@@ -155,9 +155,6 @@ end
 
 function Harness.WithGlobals(stubs, fn)
   stubs = stubs or {}
-  if stubs.ISILIVE_TEST_MODE == nil then
-    stubs.ISILIVE_TEST_MODE = true
-  end
 
   local previous = {}
   local existed = {}
@@ -236,6 +233,7 @@ function Harness.LoadAddonModules(files, seedAddonTable)
       Fail(string.format("cannot execute %s: %s", file, tostring(runErr)))
     end
   end
+  _G.__isilive_last_loaded_addon = addonTable
   return addonTable
 end
 
