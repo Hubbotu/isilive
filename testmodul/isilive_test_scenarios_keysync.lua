@@ -404,6 +404,102 @@ local function RegisterKeySyncOwnedKeyTests(test, Assert, WithGlobals, LoadAddon
     end)
   end)
 
+  local function MakeBagApiWithKeystone(mapID, level)
+    return {
+      GetContainerNumSlots = function(bagID)
+        return bagID == 0 and 16 or 0
+      end,
+      GetContainerItemID = function(bagID, slotID)
+        if bagID == 0 and slotID == 5 then
+          return 180653
+        end
+        return nil
+      end,
+      GetContainerItemLink = function(bagID, slotID)
+        if bagID == 0 and slotID == 5 then
+          return string.format("|cffa335ee|Hkeystone:180653:%d:%d:10:10:10:10|h[Keystone]|h|r", mapID, level)
+        end
+        return nil
+      end,
+    }
+  end
+
+  test("KeySync GetOwnedKeystoneSnapshot falls back to bag scan when C_MythicPlus returns nil", function()
+    WithGlobals({
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          return nil
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          return nil
+        end,
+      },
+      C_Container = MakeBagApiWithKeystone(2649, 14),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2649, "must parse mapID from bag link when API empty")
+      Assert.Equal(level, 14, "must parse level from bag link when API empty")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot falls back to bag scan when C_MythicPlus is absent", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = MakeBagApiWithKeystone(2660, 12),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 2660, "must parse mapID from bag link without API")
+      Assert.Equal(level, 12, "must parse level from bag link without API")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot returns nil when both API and bag are empty", function()
+    WithGlobals({
+      C_MythicPlus = nil,
+      C_Container = {
+        GetContainerNumSlots = function()
+          return 0
+        end,
+        GetContainerItemID = function()
+          return nil
+        end,
+        GetContainerItemLink = function()
+          return nil
+        end,
+      },
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, nil, "mapID must be nil when API and bag are empty")
+      Assert.Equal(level, nil, "level must be nil when API and bag are empty")
+    end)
+  end)
+
+  test("KeySync GetOwnedKeystoneSnapshot prefers C_MythicPlus over bag when both have data", function()
+    WithGlobals({
+      C_MythicPlus = {
+        GetOwnedKeystoneLevel = function()
+          return 16
+        end,
+        GetOwnedKeystoneChallengeMapID = function()
+          return 500
+        end,
+      },
+      C_Container = MakeBagApiWithKeystone(2649, 14),
+    }, function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local mapID, level = ctrl.GetOwnedKeystoneSnapshot()
+      Assert.Equal(mapID, 500, "must prefer API mapID over bag")
+      Assert.Equal(level, 16, "must prefer API level over bag")
+    end)
+  end)
+
   test("KeySync SendRefreshRequest delegates to sync and LibKeystone request", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)

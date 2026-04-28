@@ -7,20 +7,66 @@ addonTable.KeySync = KeySync
 
 local SeasonData = addonTable.SeasonData or {}
 
+-- Fallback for when C_MythicPlus.GetOwnedKeystone* returns nil/0 (observed
+-- on receivers after SHAREKEYS broadcast: API is present but returns empty
+-- because the per-client cache has not been populated yet). The bag link
+-- itself carries mapID and level: |Hkeystone:180653:<mapID>:<level>:...|h.
+-- C_Container.GetContainerItemLink is "AllowedWhenUntainted" — safe to call
+-- in combat and during M+ keystones from untainted callers (button click,
+-- CHAT_MSG_ADDON dispatch).
+local function ScanBagsForKeystoneSnapshot()
+  local containerApi = rawget(_G, "C_Container")
+  if
+    not containerApi
+    or type(containerApi.GetContainerNumSlots) ~= "function"
+    or type(containerApi.GetContainerItemID) ~= "function"
+    or type(containerApi.GetContainerItemLink) ~= "function"
+  then
+    return nil, nil
+  end
+  for bagID = 0, 5 do
+    local okSlots, numSlots = pcall(containerApi.GetContainerNumSlots, bagID)
+    if okSlots and type(numSlots) == "number" and numSlots > 0 then
+      for slotID = 1, numSlots do
+        local okID, itemID = pcall(containerApi.GetContainerItemID, bagID, slotID)
+        if okID and itemID == 180653 then
+          local okLink, link = pcall(containerApi.GetContainerItemLink, bagID, slotID)
+          if okLink and type(link) == "string" then
+            local mapID, level = link:match("|Hkeystone:180653:(%d+):(%d+)")
+            mapID = tonumber(mapID)
+            level = tonumber(level)
+            if mapID and level and mapID > 0 and level > 0 then
+              return mapID, level
+            end
+          end
+        end
+      end
+    end
+  end
+  return nil, nil
+end
+
 local function GetOwnedKeystoneSnapshot()
+  local mapID, level = nil, nil
+
   local mythicPlusApi = rawget(_G, "C_MythicPlus")
-  if not mythicPlusApi then
+  if mythicPlusApi then
+    local okLevel, apiLevel = pcall(mythicPlusApi.GetOwnedKeystoneLevel)
+    local okMapID, apiMapID = pcall(mythicPlusApi.GetOwnedKeystoneChallengeMapID)
+    if okLevel and okMapID then
+      level = tonumber(apiLevel)
+      mapID = tonumber(apiMapID)
+    end
+  end
+
+  if not level or level <= 0 or not mapID or mapID <= 0 then
+    mapID, level = ScanBagsForKeystoneSnapshot()
+  end
+
+  if not mapID or not level then
     return nil, nil
   end
 
-  local okLevel, level = pcall(mythicPlusApi.GetOwnedKeystoneLevel)
-  local okMapID, mapID = pcall(mythicPlusApi.GetOwnedKeystoneChallengeMapID)
-  if not okLevel or not okMapID then
-    return nil, nil
-  end
-
-  level = tonumber(level)
-  mapID = tonumber(mapID)
   -- Apply NormalizeMapID on read; sync.lua NormalizeKeyPayload applies it again
   -- (idempotent) to normalize incoming messages uniformly.
   if type(SeasonData.NormalizeMapID) == "function" then

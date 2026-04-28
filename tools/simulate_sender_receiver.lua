@@ -127,6 +127,167 @@ local function SimulateKick()
   end, {})
 end
 
+local function LoadContextHelpers()
+  return Harness.LoadAddonModules({ "isiLive_context_helpers.lua" })
+end
+
+local function MakeBagApi(hasKey)
+  return {
+    GetContainerNumSlots = function(bagID)
+      return bagID == 0 and 16 or 0
+    end,
+    GetContainerItemID = function(bagID, slotID)
+      if hasKey and bagID == 0 and slotID == 5 then
+        return 180653
+      end
+      return nil
+    end,
+    GetContainerItemLink = function(bagID, slotID)
+      if hasKey and bagID == 0 and slotID == 5 then
+        return "|cffa335ee|Hkeystone:180653:2649:12:10:10:10:10|h[Keystone: Ara-Kara +12]|h|r"
+      end
+      return nil
+    end,
+  }
+end
+
+local function MakeChallengeModeApi()
+  return {
+    GetMapUIInfo = function(mapID)
+      if mapID == 2649 then
+        return "Ara-Kara, City of Echoes"
+      end
+      return nil
+    end,
+  }
+end
+
+local function RunPipelineScenario(name, opts)
+  local sentMessages = {}
+  local sentChannels = {}
+
+  local globals = {
+    GetTime = function()
+      return 100
+    end,
+    IsInGroup = function(category)
+      if category == 2 then
+        return opts.inInstance == true
+      end
+      return opts.inGroup ~= false
+    end,
+    LE_PARTY_CATEGORY_INSTANCE = 2,
+    C_MythicPlus = opts.ownedKeystoneLink and {
+      GetOwnedKeystoneLink = function()
+        return opts.ownedKeystoneLink
+      end,
+    } or nil,
+    C_Container = MakeBagApi(opts.bagHasKey == true),
+    C_ChallengeMode = MakeChallengeModeApi(),
+    SendChatMessage = opts.sendChatMessageFails and function()
+      error("simulated SendChatMessage failure", 0)
+    end or function(message, channel)
+      sentMessages[#sentMessages + 1] = message
+      sentChannels[#sentChannels + 1] = channel
+    end,
+    C_ChatInfo = opts.chatInfoFallbackOnly and {
+      SendChatMessage = function(message, channel)
+        sentMessages[#sentMessages + 1] = "[fallback]" .. message
+        sentChannels[#sentChannels + 1] = channel
+      end,
+    } or nil,
+  }
+
+  local resultLine, sendOk
+  Harness.WithGlobals(globals, function()
+    local addon = LoadContextHelpers()
+    local Helpers = addon.ContextHelpers
+
+    resultLine = Helpers.BuildOwnKeystoneAnnounceLine({
+      getL = function()
+        return { ANNOUNCE_PREFIX = "PartyKeys:" }
+      end,
+      getOwnedKeystoneSnapshot = function()
+        if opts.snapshotMissing then
+          return nil
+        end
+        return 2649, 12
+      end,
+      getDungeonShortCode = function(mapID)
+        return mapID == 2649 and "ARA" or nil
+      end,
+    })
+
+    if type(resultLine) == "string" and resultLine ~= "" then
+      sendOk = Helpers.SendPartyChatMessage(resultLine)
+    end
+  end)
+
+  print("---- " .. name)
+  print("  line     = " .. tostring(resultLine))
+  print("  sendOk   = " .. tostring(sendOk))
+  print("  channels = [" .. table.concat(sentChannels, ", ") .. "]")
+  print("  messages = " .. tostring(#sentMessages) .. " sent")
+  for i, msg in ipairs(sentMessages) do
+    print(string.format("    msg[%d] = %s", i, msg))
+  end
+  if not resultLine then
+    print("  >> abort_reason = no_line")
+  elseif sendOk == false then
+    print("  >> abort_reason = send_failed")
+  end
+end
+
+local function SimulateSharePipeline()
+  RunPipelineScenario("1. happy_path: owned-keystone-link API liefert echten Link", {
+    ownedKeystoneLink = "|cffa335ee|Hkeystone:180653:2649:14|h[Keystone: Ara-Kara +14]|h|r",
+    inGroup = true,
+    inInstance = true,
+  })
+
+  RunPipelineScenario("2. happy_path: kein API, Bag-Scan findet 180653", {
+    bagHasKey = true,
+    inGroup = true,
+    inInstance = true,
+  })
+
+  RunPipelineScenario("3. plain-text-fallback: kein API, kein Key im Bag", {
+    inGroup = true,
+    inInstance = true,
+  })
+
+  RunPipelineScenario(
+    "4. snapshot_missing: getOwnedKeystoneSnapshot=nil (keysync bag-scan-fallback abgefedert — siehe keysync tests)",
+    {
+      snapshotMissing = true,
+      bagHasKey = true,
+      inGroup = true,
+      inInstance = true,
+    }
+  )
+
+  RunPipelineScenario("5. not_in_group: solo, sollte PARTY channel resolven", {
+    bagHasKey = true,
+    inGroup = false,
+    inInstance = false,
+  })
+
+  RunPipelineScenario("6. send_fails: SendChatMessage wirft, kein C_ChatInfo-Fallback", {
+    bagHasKey = true,
+    inGroup = true,
+    inInstance = true,
+    sendChatMessageFails = true,
+  })
+
+  RunPipelineScenario("7. send_fails_with_fallback: SendChatMessage wirft, C_ChatInfo greift", {
+    bagHasKey = true,
+    inGroup = true,
+    inInstance = true,
+    sendChatMessageFails = true,
+    chatInfoFallbackOnly = true,
+  })
+end
+
 local function SimulateShareKeysEventHandler()
   local counts = {
     keystoneChatShares = 0,
@@ -177,10 +338,13 @@ elseif mode == "kick" then
   SimulateKick()
 elseif mode == "event" then
   SimulateShareKeysEventHandler()
+elseif mode == "share_pipeline" then
+  SimulateSharePipeline()
 else
   SimulateShareKeys()
   SimulateKey()
   SimulateStats()
   SimulateKick()
   SimulateShareKeysEventHandler()
+  SimulateSharePipeline()
 end
