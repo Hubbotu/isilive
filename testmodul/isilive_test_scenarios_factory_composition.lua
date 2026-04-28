@@ -1246,6 +1246,7 @@ return function(test, ctx)
           "onLfgFlagsToggle",
           "onTooltipFlagsToggle",
           "onMplusForcesToggle",
+          "onMobNameplateChange",
         }
         local scalarArgs = {
           onBgAlphaChange = 0.75,

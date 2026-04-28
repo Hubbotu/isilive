@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-04-28 - Version 0.9.197 (patch)
+
+- **Bugfix: Nameplate-Settings griffen erst nach `/reload` ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `ResolveSettingsOptions` hat den `onMobNameplateChange`-Callback nicht durchgereicht. Effekt: Slider/Checkbox/Selector der Nameplate-Sektion (Display-Mode, Show-Percent, Font-Size, Position) haben zwar in die SavedVariables geschrieben, aber `MobNameplate.SetAppearance` / `SetFormat` / `SetEnabled` wurde live nie aufgerufen — die Änderungen waren erst nach `/reload` sichtbar (Factory-Init liest die DB einmalig in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua)). Reproduziert vom User mit Platynator beim Versuch, die Schriftgröße der Forces-%-Anzeige zu ändern.
+  - Fix: eine Zeile (`onMobNameplateChange = opts.onMobNameplateChange`) im Resolver. Alle vier Nameplate-Controls greifen jetzt sofort.
+  - Regressionstest in [testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua): Slider-Drag muss `onMobNameplateChange` exakt 1× feuern.
+  - Coverage-Liste in [testmodul/isilive_test_scenarios_factory_composition.lua](../testmodul/isilive_test_scenarios_factory_composition.lua) um `onMobNameplateChange` erweitert, damit dieser Pfad auch im Composition-Test mitgetrieben wird.
+
+- **Tote Locale-Keys raus ([locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - `SETTINGS_NAMEPLATE_FORCES` ("Mythic+: Show enemy forces on nameplates") in allen 8 Sprachen entfernt — nirgendwo referenziert, Rückstand aus der ursprünglichen Checkbox-UI vor dem 3-Wege-Display-Mode-Selector.
+
+- **Nameplate-Position fein-tunbar ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - Zwei neue Slider unter dem Position-Selector: `SETTINGS_NAMEPLATE_X_OFFSET` und `SETTINGS_NAMEPLATE_Y_OFFSET` (Range -50..+50 px, Step 1, Default 0). Damit lassen sich die DB-Keys `mobNameplateXOffset` / `mobNameplateYOffset` jetzt auch ohne `/run IsiLiveDB.…` setzen — vorher wurden sie zwar in [factory/isiLive_factory.lua](../factory/isiLive_factory.lua) gelesen und an `MobNameplate.SetAppearance` durchgereicht, aber kein UI-Control hat sie gesetzt, also waren sie immer `0`.
+  - Locale-Keys (`SETTINGS_NAMEPLATE_X_OFFSET` / `SETTINGS_NAMEPLATE_Y_OFFSET`) in allen 8 Sprachen ergänzt; Drift-Gate clean.
+  - `Refresh()` in der Settings-UI re-syncht die Slider-Labels und -Werte beim Sprachwechsel.
+
+- **Tests:** 1294 → 1296 (zwei neue Szenarien). Stylua, luacheck, locale-drift, validate_usecases, validate_rules_logic, validate_architecture_rules durchweg clean.
+
 ## 2026-04-27 - Version 0.9.196 (minor)
 
 - **Boss-Target-Overlay vollständig entfernt ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [ui/isiLive_roster_panel_kill_row.lua](../ui/isiLive_roster_panel_kill_row.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [factory/isiLive_factory.lua](../factory/isiLive_factory.lua), [data/isiLive_mplus_boss_targets.lua](../data/isiLive_mplus_boss_targets.lua) gelöscht):**

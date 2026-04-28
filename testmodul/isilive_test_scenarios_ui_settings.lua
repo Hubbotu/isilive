@@ -1342,8 +1342,9 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(scrollFrameCount, 1, "settings should allocate exactly one content scroll frame")
       Assert.Equal(
         sliderCount,
-        3,
-        "settings should expose the background opacity, UI scale, and nameplate font-size sliders"
+        5,
+        "settings should expose bg-alpha, UI-scale, nameplate font-size,"
+          .. " nameplate X-offset, and nameplate Y-offset sliders"
       )
       Assert.Equal(
         checkboxCount,
@@ -1355,12 +1356,81 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
 
       panel.Refresh()
-      Assert.Equal(sliderCount, 3, "refresh should keep the nameplate font-size slider visible")
+      Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
         23,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, and nameplate-subtoggle checkboxes"
+      )
+    end)
+  end)
+
+  test("Settings nameplate font-size slider invokes onMobNameplateChange so live MobNameplate refreshes", function()
+    -- Regression: ResolveSettingsOptions previously dropped onMobNameplateChange,
+    -- so dragging the slider only persisted to DB but never reapplied SetAppearance
+    -- on the live module — the rendered font size only changed after /reload.
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { mobNameplateEnabled = true, mobNameplateFontSize = 12 }
+    local nameplateChangeCalls = 0
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_SECTION_DISPLAY = "Display",
+            SETTINGS_SECTION_BEHAVIOR = "Behavior",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Language",
+            SETTINGS_NAMEPLATE_FONT_SIZE = "Font size",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+        onMobNameplateChange = function()
+          nameplateChangeCalls = nameplateChangeCalls + 1
+        end,
+      })
+
+      Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+
+      local slider = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._frameType == "Slider" and frame._settingKey == "SETTINGS_NAMEPLATE_FONT_SIZE" then
+          slider = frame
+          break
+        end
+      end
+      slider = Assert.NotNil(slider, "settings should create the nameplate font-size slider")
+
+      ---@diagnostic disable: undefined-field
+      local onValueChanged = slider._scripts and slider._scripts.OnValueChanged or nil
+      onValueChanged = Assert.NotNil(onValueChanged, "font-size slider should define OnValueChanged")
+      onValueChanged(slider, 18)
+      ---@diagnostic enable: undefined-field
+
+      Assert.Equal(db.mobNameplateFontSize, 18, "slider drag should persist the new font size")
+      Assert.Equal(
+        nameplateChangeCalls,
+        1,
+        "slider drag must invoke onMobNameplateChange so the live MobNameplate module reapplies SetAppearance"
       )
     end)
   end)

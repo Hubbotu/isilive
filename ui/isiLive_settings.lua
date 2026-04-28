@@ -820,6 +820,7 @@ local function ResolveSettingsOptions(opts)
     onLfgFlagsToggle = opts.onLfgFlagsToggle,
     onTooltipFlagsToggle = opts.onTooltipFlagsToggle,
     onMplusForcesToggle = opts.onMplusForcesToggle,
+    onMobNameplateChange = opts.onMobNameplateChange,
     onResetDB = opts.onResetDB,
     onResetMainFramePosition = opts.onResetMainFramePosition,
   }
@@ -1433,6 +1434,52 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     end,
     NormalizeNameplatePosition,
     true
+  )
+
+  controls.nameplateXOffset, yOffset = CreateSettingsSlider(
+    canvas,
+    yOffset,
+    labels.SETTINGS_NAMEPLATE_X_OFFSET or "X offset",
+    -50,
+    50,
+    1,
+    function()
+      return tonumber(config.getDB().mobNameplateXOffset) or 0
+    end,
+    function(val)
+      local db = config.getDB()
+      db.mobNameplateXOffset = tonumber(val) or 0
+      if type(config.onMobNameplateChange) == "function" then
+        config.onMobNameplateChange()
+      end
+    end,
+    function(val)
+      return string.format("%d", val)
+    end,
+    "SETTINGS_NAMEPLATE_X_OFFSET"
+  )
+
+  controls.nameplateYOffset, yOffset = CreateSettingsSlider(
+    canvas,
+    yOffset,
+    labels.SETTINGS_NAMEPLATE_Y_OFFSET or "Y offset",
+    -50,
+    50,
+    1,
+    function()
+      return tonumber(config.getDB().mobNameplateYOffset) or 0
+    end,
+    function(val)
+      local db = config.getDB()
+      db.mobNameplateYOffset = tonumber(val) or 0
+      if type(config.onMobNameplateChange) == "function" then
+        config.onMobNameplateChange()
+      end
+    end,
+    function(val)
+      return string.format("%d", val)
+    end,
+    "SETTINGS_NAMEPLATE_Y_OFFSET"
   )
 
   yOffset = yOffset - 4
@@ -2240,6 +2287,14 @@ local function RefreshSettingsControls(controls, config)
   if controls.nameplateFontSize then
     controls.nameplateFontSize.label:SetText(freshL.SETTINGS_NAMEPLATE_FONT_SIZE or "Font size")
     controls.nameplateFontSize.SetValueSilently(tonumber(db.mobNameplateFontSize) or 12)
+  end
+  if controls.nameplateXOffset then
+    controls.nameplateXOffset.label:SetText(freshL.SETTINGS_NAMEPLATE_X_OFFSET or "X offset")
+    controls.nameplateXOffset.SetValueSilently(tonumber(db.mobNameplateXOffset) or 0)
+  end
+  if controls.nameplateYOffset then
+    controls.nameplateYOffset.label:SetText(freshL.SETTINGS_NAMEPLATE_Y_OFFSET or "Y offset")
+    controls.nameplateYOffset.SetValueSilently(tonumber(db.mobNameplateYOffset) or 0)
   end
   if controls.nameplatePreviewLabel then
     controls.nameplatePreviewLabel:SetText(freshL.SETTINGS_NAMEPLATE_PREVIEW or "Preview")
