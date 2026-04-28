@@ -284,6 +284,7 @@ local function BuildEventHandlersBaseConfig(deps, state, refs, controllers, call
       callbacks.updateCountdownCancelButton,
       "callbacks.updateCountdownCancelButton"
     ),
+    restoreBgAlpha = type(callbacks.restoreBgAlpha) == "function" and callbacks.restoreBgAlpha or function(_alpha) end,
   }
 end
 
@@ -652,6 +653,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
       applyLocalizationToUI = ctx.applyLocalizationToUI,
       restoreLayoutState = ctx.restoreLayoutState,
       updateCountdownCancelButton = ctx.updateCountdownCancelButton,
+      restoreBgAlpha = ctx.RestoreBgAlpha,
       checkIfEnteredTargetDungeon = ctx.checkIfEnteredTargetDungeon,
       captureRioBaselineSnapshot = ctx.captureRioBaselineSnapshot,
       restoreRioBaseline = ctx.restoreRioBaseline,

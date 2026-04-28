@@ -477,6 +477,17 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.SetMainFrameWidthSafe = function(width)
     frameBridgeContext.SetMainFrameWidthSafe(width)
   end
+  ctx.RestoreBgAlpha = function(alpha)
+    local uiCommon = ctx.addonTable and ctx.addonTable.UICommon
+    if type(uiCommon) ~= "table" or type(uiCommon.ApplyBgAlpha) ~= "function" then
+      return
+    end
+    uiCommon.ApplyBgAlpha({
+      mainFrame = ctx.mainFrame,
+      panelFrame = ctx.panelUI and ctx.panelUI.panelFrame,
+      settingsCanvas = ctx.settingsPanel and ctx.settingsPanel.canvas,
+    }, alpha)
+  end
   ctx.ToggleMainFrameVisibility = function()
     frameBridgeContext.ToggleMainFrameVisibility()
     local isNowVisible = frameBridgeContext.IsMainFrameVisible and frameBridgeContext.IsMainFrameVisible()

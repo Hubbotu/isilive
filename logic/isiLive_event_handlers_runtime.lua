@@ -335,31 +335,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
         mainFrame:SetScale(IsiLiveDB.uiScale)
       end
       if type(IsiLiveDB.bgAlpha) == "number" then
-        if type(mainFrame.SetBackdropColor) == "function" then
-          mainFrame:SetBackdropColor(0, 0, 0, IsiLiveDB.bgAlpha)
-        end
-        local uiCommon = addonTable.UICommon
-        if
-          type(uiCommon) == "table"
-          and type(uiCommon.Colors) == "table"
-          and type(uiCommon.Colors.BG_PRIMARY) == "table"
-        then
-          uiCommon.Colors.BG_PRIMARY[4] = IsiLiveDB.bgAlpha
-        end
-        if ctx.panelUI and ctx.panelUI.panelFrame and type(ctx.panelUI.panelFrame.SetBackdropColor) == "function" then
-          local bg = uiCommon and uiCommon.Colors and uiCommon.Colors.BG_PRIMARY
-            or { 0.08, 0.08, 0.12, IsiLiveDB.bgAlpha }
-          ctx.panelUI.panelFrame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
-        end
-        if
-          ctx.settingsPanel
-          and ctx.settingsPanel.canvas
-          and type(ctx.settingsPanel.canvas.SetBackdropColor) == "function"
-        then
-          local bg = uiCommon and uiCommon.Colors and uiCommon.Colors.BG_PRIMARY
-            or { 0.08, 0.08, 0.12, IsiLiveDB.bgAlpha }
-          ctx.settingsPanel.canvas:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
-        end
+        ctx.restoreBgAlpha(IsiLiveDB.bgAlpha)
       end
     end
     RegisterSyncPrefixAndBindings(ctx)

@@ -22,7 +22,7 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 
 ## Regeluebersicht
 
-1. `isiLive.lua` bleibt Composition Root und verdrahtet Runtime-State und Runtime-Setup zentral.
+1. `isiLive.lua` bleibt Composition Root und delegiert an `Factory.InitializeAddon`, das Runtime-State und Runtime-Setup zentral verdrahtet.
 2. `isiLive_event_handlers.lua` bleibt Aggregator fuer Lifecycle-Handler und enthaelt keine direkten Event-Bodies.
 3. `isiLive_runtime_setup.lua` erstellt Group- und Event-Controller nur ueber Context-Factories aus `ControllerWiring`.
 4. `RuntimeState` bleibt die zentrale API fuer gemeinsam genutzten, mutierbaren Runtime-State.
@@ -35,7 +35,7 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 ### RULE-ARCH-COMPOSITION-ROOT
 - Regelnummer: 1
 - Status: aktiv
-- Zusammenfassung: `isiLive.lua` bleibt Composition Root und verdrahtet Runtime-State und Runtime-Setup zentral.
+- Zusammenfassung: `isiLive.lua` bleibt Composition Root und delegiert an `Factory.InitializeAddon`, das Runtime-State und Runtime-Setup zentral verdrahtet.
 - Erforderliche Tests:
   - Architecture root wires runtime through RuntimeState and RuntimeSetup
 

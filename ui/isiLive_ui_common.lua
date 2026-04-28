@@ -49,6 +49,39 @@ function UICommon.GetBackgroundAlpha()
   return UICommon.DEFAULT_BG_ALPHA
 end
 
+-- Apply the configured background alpha to the BG_PRIMARY palette and to the
+-- main / panel / settings frames in one place. Used by the ADDON_LOADED
+-- restore path as well as the live settings slider and the reset-defaults
+-- action — keeping the palette mutation and the frame paints in sync.
+function UICommon.ApplyBgAlpha(frames, alpha)
+  if type(alpha) ~= "number" then
+    return
+  end
+
+  if type(UICommon.Colors) == "table" and type(UICommon.Colors.BG_PRIMARY) == "table" then
+    UICommon.Colors.BG_PRIMARY[4] = alpha
+  end
+
+  frames = type(frames) == "table" and frames or {}
+
+  local mainFrame = frames.mainFrame
+  if mainFrame and type(mainFrame.SetBackdropColor) == "function" then
+    mainFrame:SetBackdropColor(0, 0, 0, alpha)
+  end
+
+  local bg = UICommon.Colors and UICommon.Colors.BG_PRIMARY or { 0.08, 0.08, 0.12, alpha }
+
+  local panelFrame = frames.panelFrame
+  if panelFrame and type(panelFrame.SetBackdropColor) == "function" then
+    panelFrame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
+  end
+
+  local settingsCanvas = frames.settingsCanvas
+  if settingsCanvas and type(settingsCanvas.SetBackdropColor) == "function" then
+    settingsCanvas:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
+  end
+end
+
 local BACKDROP_PANEL = {
   bgFile = "Interface\\Buttons\\WHITE8X8",
   edgeFile = "Interface\\Buttons\\WHITE8X8",

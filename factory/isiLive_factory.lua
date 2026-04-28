@@ -50,31 +50,20 @@ local function ResetMainFrameDefaults(ctx)
   if mainFrame and type(mainFrame.SetScale) == "function" then
     mainFrame:SetScale(1.0)
   end
-  if mainFrame and type(mainFrame.SetBackdropColor) == "function" then
-    mainFrame:SetBackdropColor(0, 0, 0, defaultBgAlpha)
-  end
 
   local mainUI = ctx.mainUI
   if mainUI and type(mainUI.ResetPosition) == "function" then
     mainUI.ResetPosition()
   end
 
-  local colors = uiCommon and uiCommon.Colors
-  if type(colors) == "table" and type(colors.BG_PRIMARY) == "table" then
-    colors.BG_PRIMARY[4] = defaultBgAlpha
+  if type(uiCommon) == "table" and type(uiCommon.ApplyBgAlpha) == "function" then
+    uiCommon.ApplyBgAlpha({
+      mainFrame = mainFrame,
+      panelFrame = ctx.panelUI and ctx.panelUI.panelFrame,
+      settingsCanvas = ctx.settingsPanel and ctx.settingsPanel.canvas,
+    }, defaultBgAlpha)
   end
 
-  local bg = colors and colors.BG_PRIMARY or { 0.08, 0.08, 0.12, defaultBgAlpha }
-  if ctx.panelUI and ctx.panelUI.panelFrame and type(ctx.panelUI.panelFrame.SetBackdropColor) == "function" then
-    ctx.panelUI.panelFrame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
-  end
-  if
-    ctx.settingsPanel
-    and ctx.settingsPanel.canvas
-    and type(ctx.settingsPanel.canvas.SetBackdropColor) == "function"
-  then
-    ctx.settingsPanel.canvas:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
-  end
   if ctx.settingsPanel and type(ctx.settingsPanel.Refresh) == "function" then
     ctx.settingsPanel.Refresh()
   end
@@ -150,22 +139,12 @@ local function FinalizeFactorySettings(ctx)
           logf("[SETTINGS] bg_alpha val=%s", tostring(val))
         end
         local uiCommon = ctx.addonTable and ctx.addonTable.UICommon
-        if type(uiCommon) == "table" and type(uiCommon.Colors) == "table" then
-          uiCommon.Colors.BG_PRIMARY[4] = val
-        end
-        if ctx.mainFrame and type(ctx.mainFrame.SetBackdropColor) == "function" then
-          ctx.mainFrame:SetBackdropColor(0, 0, 0, val)
-        end
-        local bg = uiCommon and uiCommon.Colors and uiCommon.Colors.BG_PRIMARY or { 0.08, 0.08, 0.12, val }
-        if ctx.panelUI and ctx.panelUI.panelFrame and type(ctx.panelUI.panelFrame.SetBackdropColor) == "function" then
-          ctx.panelUI.panelFrame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
-        end
-        if
-          ctx.settingsPanel
-          and ctx.settingsPanel.canvas
-          and type(ctx.settingsPanel.canvas.SetBackdropColor) == "function"
-        then
-          ctx.settingsPanel.canvas:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
+        if type(uiCommon) == "table" and type(uiCommon.ApplyBgAlpha) == "function" then
+          uiCommon.ApplyBgAlpha({
+            mainFrame = ctx.mainFrame,
+            panelFrame = ctx.panelUI and ctx.panelUI.panelFrame,
+            settingsCanvas = ctx.settingsPanel and ctx.settingsPanel.canvas,
+          }, val)
         end
       end,
       onUiScaleChange = function(val)

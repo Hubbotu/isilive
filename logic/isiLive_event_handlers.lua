@@ -101,6 +101,7 @@ local function BuildContext(opts)
   ctx.applyLocalizationToUI = RequireFunction(opts.applyLocalizationToUI, "applyLocalizationToUI")
   ctx.restoreLayoutState = RequireFunction(opts.restoreLayoutState, "restoreLayoutState")
   ctx.updateCountdownCancelButton = RequireFunction(opts.updateCountdownCancelButton, "updateCountdownCancelButton")
+  ctx.restoreBgAlpha = OptionalFunction(opts.restoreBgAlpha, function(_alpha) end)
   ctx.getUnitNameAndRealm = RequireFunction(opts.getUnitNameAndRealm, "getUnitNameAndRealm")
   ctx.markIsiLiveUser = RequireFunction(opts.markIsiLiveUser, "markIsiLiveUser")
   ctx.maybeShowNonMythicDungeonEntryNotice =
