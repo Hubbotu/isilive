@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-29 - Version 0.9.204 (patch)
+
+Pinned the M+ forces nameplate font size against FontObject re-assertion so the size slider's value actually renders, and scaled the host frame to fit larger fonts.
+
+- **Bugfix: nameplate percent text rendered tiny regardless of `mobNameplateFontSize` ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - The percent FontString was created with `CreateFontString(nil, "OVERLAY", "GameFontNormalOutline")` — i.e. inheriting from a FontObject whose `.height = 12`. On some Blizzard internal refresh paths the FontObject re-asserts its inherited size after our `SetFont(file, size, flags)` call, so the slider's value (e.g. 24) appeared to take effect once but was silently reverted to 12 on the next render. Symptom: the text was visibly there but stayed at the template size, the size slider in Settings did not change anything, and the strata bump from 0.9.203 only fixed visibility (not size).
+  - Fix: `ApplyFont` now detaches the FontObject template via `pcall(SetFontObject, fontString, nil)` before calling `SetFont`, then re-pins the height with `SetTextHeight(size)` as a belt-and-suspenders. Once the inheritance is severed the size argument sticks across refreshes.
+  - The host frame size also scales with the font now (`height = max(20, size + 6)`, `width = max(80, size * 4)`) via the new `ApplyFrameSizeForFont(frame, size)` helper, so a 24-pt "99.9%" cannot get clipped against the previously hardcoded 80×20 rectangle. Both `CreateOrGetFrame` (initial layout) and `UpdateNameplate` (per-update refresh) call it, so size changes from the slider take effect on the next nameplate update without needing a re-creation.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md)):** Versionsbasis bumped to 0.9.204.
+
+- **Tests:** 1322 → 1322 (existing nameplate scenarios continue to pass — the FontObject-detach + SetTextHeight calls are guarded by `pcall` so the assertion target `font.size = N` still resolves through the SetFont path the harness mocks). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
 ## 2026-04-29 - Version 0.9.203 (patch)
 
 Hardened active-key resolution against same-dungeon level conflicts in mixed groups, added a free-form group-title fallback for the level hint, kept the ready-check initiator from being auto-promoted to declined, and lifted the M+ forces nameplate text above third-party plate addons.

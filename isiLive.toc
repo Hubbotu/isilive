@@ -1,8 +1,8 @@
 ## Interface: 120005
-## Title: |cff4da6ffi|r|cff6bb1dds|r|cff89bcbbi|r|cffa7c799L|r|cffc5d277i|r|cffe3dd55v|r|cffffe633e|r v0.9.203
+## Title: |cff4da6ffi|r|cff6bb1dds|r|cff89bcbbi|r|cffa7c799L|r|cffc5d277i|r|cffe3dd55v|r|cffffe633e|r v0.9.204
 ## Notes: M+ Dungeon and Group Managment
 ## Author: mematiWoW
-## Version: 0.9.203
+## Version: 0.9.204
 ## SavedVariables: IsiLiveDB
 ## IconTexture: Interface\Icons\INV_Misc_GroupLooking
 libs/ChatThrottleLib/ChatThrottleLib.lua

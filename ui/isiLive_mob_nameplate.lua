@@ -177,9 +177,32 @@ local function BuildText(percentString)
   return percentString .. "%"
 end
 
+local function ResolveFontSize()
+  return tonumber(appearance.fontSize) or 12
+end
+
+local function ApplyFrameSizeForFont(frame, size)
+  if not frame or type(frame.SetSize) ~= "function" then
+    return
+  end
+  -- Scale the host frame so larger fonts have enough room. Height ≈ size + 6
+  -- (small visual padding); width grows linearly so 4-character percent text
+  -- ("99.9%") never gets clipped on the side.
+  local height = math.max(20, math.ceil(size + 6))
+  local width = math.max(80, math.ceil(size * 4))
+  pcall(frame.SetSize, frame, width, height)
+end
+
 local function ApplyFont(fontString)
   if type(fontString) ~= "table" or type(fontString.SetFont) ~= "function" then
     return
+  end
+  -- Detach from the FontObject template the FontString inherited from at
+  -- creation. Without this the FontObject's `.height` re-asserts itself on
+  -- some Blizzard internal refresh paths and our SetFont call is silently
+  -- reverted, leaving the slider visually inert.
+  if type(fontString.SetFontObject) == "function" then
+    pcall(fontString.SetFontObject, fontString, nil)
   end
   local file, flags
   local template = rawget(_G, "GameFontNormalOutline")
@@ -195,8 +218,13 @@ local function ApplyFont(fontString)
   if type(flags) ~= "string" or flags == "" then
     flags = "OUTLINE"
   end
-  local size = tonumber(appearance.fontSize) or 12
+  local size = ResolveFontSize()
   pcall(fontString.SetFont, fontString, file, size, flags)
+  -- Belt-and-suspenders: SetTextHeight pins the rendered height even if
+  -- SetFont's size argument is overruled by inherited scaling.
+  if type(fontString.SetTextHeight) == "function" then
+    pcall(fontString.SetTextHeight, fontString, size)
+  end
 end
 
 local function CreateOrGetFrame(unit)
@@ -213,7 +241,7 @@ local function CreateOrGetFrame(unit)
   if not ok or type(f) ~= "table" then
     return nil
   end
-  f:SetSize(80, 20)
+  ApplyFrameSizeForFont(f, ResolveFontSize())
   -- Render above third-party nameplate addons (Plater/Platynator) which
   -- typically draw their visuals on TOOLTIP-1 / HIGH; staying on MEDIUM
   -- left our percent text occluded by their plate art.
@@ -321,6 +349,7 @@ local function UpdateNameplate(unit)
   end
 
   ApplyPosition(frame, nameplate)
+  ApplyFrameSizeForFont(frame, ResolveFontSize())
   ApplyFont(frame.text)
   if frame.text and frame.text.SetText then
     frame.text:SetText(text)
