@@ -429,6 +429,58 @@ local function UpdateReadyCheckUnits(ctx, unit, readyValue, declinedValue)
   declinedUnits[unit] = declinedValue
 end
 
+-- Pre-marks the player who started the ready check as ready. Blizzard does
+-- not fire READY_CHECK_CONFIRM for the initiator (they are implicit), so
+-- without this pre-mark PromoteUnansweredReadyCheckUnitsToDeclined would
+-- flip the initiator's row to "declined" red on READY_CHECK_FINISHED — which
+-- in M+ groups is typically the leader / active key holder.
+--
+-- initiatorName is Blizzard's READY_CHECK first arg, e.g. "Mematiwow" (same
+-- realm) or "Mematiwow-Blackmoore" (cross-realm). The roster's info.name is
+-- the bare name, info.realm the realm; we accept either form.
+local function MarkReadyCheckInitiatorReady(ctx, initiatorName)
+  if type(initiatorName) ~= "string" or initiatorName == "" then
+    return
+  end
+  local getRoster = type(ctx.getRoster) == "function" and ctx.getRoster or nil
+  if not getRoster then
+    return
+  end
+  local roster = getRoster()
+  if type(roster) ~= "table" then
+    return
+  end
+
+  local hintName, hintRealm
+  local dash = string.find(initiatorName, "-", 1, true)
+  if dash then
+    hintName = string.sub(initiatorName, 1, dash - 1)
+    hintRealm = string.sub(initiatorName, dash + 1)
+    if hintRealm == "" then
+      hintRealm = nil
+    end
+  else
+    hintName = initiatorName
+  end
+  if hintName == "" then
+    return
+  end
+
+  for unit, info in pairs(roster) do
+    if
+      type(unit) == "string"
+      and unit ~= ""
+      and type(info) == "table"
+      and not info.isGhost
+      and info.name == hintName
+      and (hintRealm == nil or info.realm == nil or info.realm == hintRealm)
+    then
+      UpdateReadyCheckUnits(ctx, unit, true, nil)
+      return
+    end
+  end
+end
+
 IsRaidModeActive = function(ctx)
   return type(ctx.isRaidGroup) == "function" and ctx.isRaidGroup() == true
 end
@@ -532,13 +584,14 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     CHALLENGE_MODE_RESET = function(frame)
       HandleChallengeModeCompletedOrReset(frame, "CHALLENGE_MODE_RESET")
     end,
-    READY_CHECK = function(_self)
+    READY_CHECK = function(_self, initiatorName)
       if IsRaidModeActive(ctx) then
         return
       end
       ctx.setReadyCheckActive(true)
       ResetReadyCheckDeclinedTracking(ctx)
-      LogReadyCheckTrace(ctx, "READY_CHECK", nil, nil, "reset=1")
+      MarkReadyCheckInitiatorReady(ctx, initiatorName)
+      LogReadyCheckTrace(ctx, "READY_CHECK", nil, nil, string.format("reset=1 initiator=%s", tostring(initiatorName)))
       RefreshReadyCheckUI(ctx)
     end,
     READY_CHECK_CONFIRM = function(_self, unit, status)
@@ -549,7 +602,14 @@ function ChallengeLifecycle.BuildHandlers(ctx)
         return
       end
 
-      if status == "notready" then
+      -- Blizzard fires status as a boolean (true=ready, false=notready); the
+      -- "ready"/"notready" string form is kept for the test simulator. A nil
+      -- value falls through to the generic-refresh branch the same way the
+      -- previous string-only check did.
+      local isReady = status == true or status == 1 or status == "ready"
+      local isNotReady = status == false or status == 0 or status == "notready"
+
+      if isNotReady then
         if ctx.isReadyCheckActive() then
           UpdateReadyCheckUnits(ctx, unit, nil, true)
           LogReadyCheckTrace(ctx, "READY_CHECK_CONFIRM", unit, status, "active=1")
@@ -560,7 +620,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
         return
       end
 
-      if status == "ready" then
+      if isReady then
         if ctx.isReadyCheckActive() then
           UpdateReadyCheckUnits(ctx, unit, true, nil)
           LogReadyCheckTrace(ctx, "READY_CHECK_CONFIRM", unit, status, "active=1")

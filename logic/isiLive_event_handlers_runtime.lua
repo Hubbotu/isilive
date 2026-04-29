@@ -303,6 +303,14 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     ctx.handleGroupRosterUpdate()
     ctx.handleLeaderWatchEvent("GROUP_ROSTER_UPDATE")
     ctx.handleLFGDetectEvent("GROUP_ROSTER_UPDATE")
+    -- Refresh status line after roster settles so the "Ziel-Dungeon: X +Y"
+    -- chat announce fires as soon as the group is formed (post-invite-accept),
+    -- not only when a peer's key sync arrives later. Skipped in raid mode so
+    -- the suppression contract for background hooks stays intact (raid exit
+    -- still flows via handleGroupRosterUpdate above).
+    if not IsRaidModeActive(ctx) then
+      ctx.updateStatusLine()
+    end
     if
       type(ChallengeLifecycle) == "table"
       and type(ChallengeLifecycle.ResumeDeferredPostChallengeRefresh) == "function"

@@ -100,6 +100,11 @@ local pendingAcceptedInviteMapID = nil
 -- Consumers use this to disambiguate ResolveActiveKeyOwnerUnit when the roster
 -- contains multiple members with the same keyMapID.
 local activeInviteLeader = nil
+-- Hint key level parsed from the LFG group title (e.g. "+13 Competitive" → 13).
+-- Used as a last-resort fallback for the "Ziel-Dungeon: X +N" announce when
+-- neither a roster owner nor a synced target supplies a level (typical for
+-- groups whose leader does not run isiLive). nil = no hint available.
+local activeInviteTitleLevel = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -210,6 +215,39 @@ end
 -- Invite detection
 -- ---------------------------------------------------------------------------
 
+-- Best-effort parser that pulls a key-level hint out of an LFG group title.
+-- LFG leaders by convention encode the level as "+N", "+N something", "(+N)",
+-- "N+" etc. We pick the highest plausible match (1..40) so descriptive prefixes
+-- like "+12 / +13 swap" still resolve to the actual played level. nil = no hint.
+local function ParseTitleKeyLevel(title)
+  if type(title) ~= "string" or title == "" then
+    return nil
+  end
+  local best = nil
+  -- Pattern A: "+N" with optional whitespace separator. Captures the digits.
+  for digits in string.gmatch(title, "%+%s*(%d+)") do
+    local n = tonumber(digits)
+    if n and n >= 1 and n <= 40 then
+      if not best or n > best then
+        best = n
+      end
+    end
+  end
+  if best then
+    return best
+  end
+  -- Pattern B: "N+" trailing-plus form (less common but still seen).
+  for digits in string.gmatch(title, "(%d+)%s*%+") do
+    local n = tonumber(digits)
+    if n and n >= 1 and n <= 40 then
+      if not best or n > best then
+        best = n
+      end
+    end
+  end
+  return best
+end
+
 local function OnInvited(searchResultID)
   local C_LFGList_ref = rawget(_G, "C_LFGList")
   if type(C_LFGList_ref) ~= "table" then
@@ -248,13 +286,18 @@ local function OnInvited(searchResultID)
     if type(info) == "table" and type(info.leaderName) == "string" and info.leaderName ~= "" then
       leaderName = info.leaderName
     end
-    pendingInvites[searchResultID] = { mapID = mapID, leaderName = leaderName }
+    local titleLevel = nil
+    if type(info) == "table" then
+      titleLevel = ParseTitleKeyLevel(info.name)
+    end
+    pendingInvites[searchResultID] = { mapID = mapID, leaderName = leaderName, titleLevel = titleLevel }
     Log(
       "state_set",
-      "var=pendingInvites[%s] mapID=%s leader=%s",
+      "var=pendingInvites[%s] mapID=%s leader=%s titleLevel=%s",
       tostring(searchResultID),
       tostring(mapID),
-      tostring(leaderName)
+      tostring(leaderName),
+      tostring(titleLevel)
     )
   end
 end
@@ -272,12 +315,14 @@ local function OnInviteAccepted(searchResultID)
   local entry = pendingInvites[searchResultID]
   local mapID = type(entry) == "table" and entry.mapID or nil
   local leaderName = type(entry) == "table" and entry.leaderName or nil
+  local titleLevel = type(entry) == "table" and entry.titleLevel or nil
   Log(
     "invite_accepted",
-    "searchResultID=%s mapID=%s leader=%s",
+    "searchResultID=%s mapID=%s leader=%s titleLevel=%s",
     tostring(searchResultID),
     tostring(mapID),
-    tostring(leaderName)
+    tostring(leaderName),
+    tostring(titleLevel)
   )
   if mapID then
     pendingInvites[searchResultID] = nil
@@ -286,8 +331,10 @@ local function OnInviteAccepted(searchResultID)
       detectedMapID = mapID
       pendingAcceptedInviteMapID = mapID
       activeInviteLeader = leaderName
+      activeInviteTitleLevel = titleLevel
       Log("state_set", "var=pendingAcceptedInviteMapID val=%s", tostring(mapID))
       Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
+      Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
       TriggerHighlightUpdate("invite")
     end
   end
@@ -301,6 +348,7 @@ local function OnInviteDeclined(searchResultID)
   if mapID and detectedMapID == mapID then
     detectedMapID = nil
     activeInviteLeader = nil
+    activeInviteTitleLevel = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -349,6 +397,7 @@ local function ClearDetectedState()
     detectedMapID = nil
     lastQueueMapID = nil
     activeInviteLeader = nil
+    activeInviteTitleLevel = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -361,11 +410,13 @@ local function ClearAllStateImpl()
     or next(pendingInvites) ~= nil
     or pendingAcceptedInviteMapID ~= nil
     or activeInviteLeader ~= nil
+    or activeInviteTitleLevel ~= nil
   Log("clear_all_state", "hadState=%s", tostring(hadState))
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
   activeInviteLeader = nil
+  activeInviteTitleLevel = nil
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
@@ -378,6 +429,15 @@ end
 
 function LFGDetect.GetActiveInviteLeader()
   return activeInviteLeader
+end
+
+-- Hint level parsed from the leader's free-form LFG group title
+-- (e.g. "+13 Competitive" → 13). Used as a last-resort fallback for the
+-- "Ziel-Dungeon: X +N" announce when no roster owner / synced target supplies
+-- a level. nil = no hint available (no invite-accepted state, or no "+N"
+-- pattern in the title).
+function LFGDetect.GetActiveInviteTitleLevel()
+  return activeInviteTitleLevel
 end
 
 function LFGDetect.ClearAllState()

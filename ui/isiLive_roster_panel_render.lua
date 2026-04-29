@@ -552,12 +552,12 @@ local function RenderRosterImpl(state, roster)
           row.roleButton:SetAttribute("type2", "macro")
           if role == "TANK" then
             -- Blue Square = 6
-            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 6\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext1", "/target [@" .. entry.unit .. "]\n/tm 6\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target [@" .. entry.unit .. "]\n/tm 0\n/targetlasttarget")
           elseif role == "HEALER" then
             -- Green Triangle = 4
-            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 4\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext1", "/target [@" .. entry.unit .. "]\n/tm 4\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target [@" .. entry.unit .. "]\n/tm 0\n/targetlasttarget")
           else
             row.roleButton:SetAttribute("macrotext1", nil)
             row.roleButton:SetAttribute("macrotext2", nil)

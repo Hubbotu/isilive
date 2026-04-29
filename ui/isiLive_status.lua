@@ -262,15 +262,23 @@ local function BuildTargetDungeonAnnouncementText(deps, info)
   end
 
   local level = tonumber(info.level)
-  if not level or level <= 0 then
-    return nil
+  if level and level <= 0 then
+    level = nil
   end
 
   local L = deps.getL()
   local template = L.STATUS_TARGET_DUNGEON_TEXT or "Target Dungeon: %s"
-  -- Highlight dungeon name + level in yellow so it stands out in chat.
-  -- The blue "isiLive" brand prefix is supplied by PrintHighlighted.
-  local highlighted = string.format("|cffffd200%s +%d|r", info.name, math.floor(level))
+  -- Highlight dungeon name + (optional) level in yellow so it stands out in
+  -- chat. The blue "isiLive" brand prefix is supplied by PrintHighlighted.
+  -- The level is omitted when no key info is known yet (e.g. the invite was
+  -- just accepted but no peer has synced their key); a re-announce with
+  -- "+level" fires later once the level resolves via the sync flow.
+  local highlighted
+  if level then
+    highlighted = string.format("|cffffd200%s +%d|r", info.name, math.floor(level))
+  else
+    highlighted = string.format("|cffffd200%s|r", info.name)
+  end
   return string.format(template, highlighted)
 end
 
@@ -578,6 +586,7 @@ function Status.CreateController(opts)
       return nil
     end,
     printFn = opts.printFn or print,
+    printHighlighted = opts.printHighlighted or opts.printFn or print,
   }
 
   local state = {

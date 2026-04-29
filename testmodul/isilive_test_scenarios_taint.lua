@@ -463,7 +463,7 @@ local function FindSecureRoleButton(createdFrames, unit)
   for _, frame in ipairs(createdFrames) do
     if frame._template == "SecureActionButtonTemplate" then
       local macrotext1 = frame:GetAttribute("macrotext1")
-      if unit == nil or (type(macrotext1) == "string" and macrotext1:find("/target " .. unit, 1, true) ~= nil) then
+      if unit == nil or (type(macrotext1) == "string" and macrotext1:find("[@" .. unit .. "]", 1, true) ~= nil) then
         return frame
       end
     end
@@ -737,12 +737,12 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
     roleButton = RequireNonNil(roleButton, "tank row should create a role button")
     Assert.Equal(
       roleButton:GetAttribute("macrotext1"),
-      "/target player\n/tm 6\n/targetlasttarget",
+      "/target [@player]\n/tm 6\n/targetlasttarget",
       "tank role button must mark Blue Square"
     )
     Assert.Equal(
       roleButton:GetAttribute("macrotext2"),
-      "/target player\n/tm 0\n/targetlasttarget",
+      "/target [@player]\n/tm 0\n/targetlasttarget",
       "tank role button right click must clear marker"
     )
   end)
@@ -767,12 +767,12 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
     roleButton = RequireNonNil(roleButton, "healer row should create a role button")
     Assert.Equal(
       roleButton:GetAttribute("macrotext1"),
-      "/target party1\n/tm 4\n/targetlasttarget",
+      "/target [@party1]\n/tm 4\n/targetlasttarget",
       "healer role button must mark Green Triangle"
     )
     Assert.Equal(
       roleButton:GetAttribute("macrotext2"),
-      "/target party1\n/tm 0\n/targetlasttarget",
+      "/target [@party1]\n/tm 0\n/targetlasttarget",
       "healer role button right click must clear marker"
     )
   end)

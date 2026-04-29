@@ -437,11 +437,47 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       return nil
     end
 
+    local roster = ctx.GetRoster() or {}
+    local unitIsGroupLeaderFn = rawget(_G, "UnitIsGroupLeader")
+
+    -- Leader-only path: when we can identify the group leader, only their
+    -- target announcement counts. The played key always belongs to the
+    -- leader, so any conflicting broadcast from a member who happens to
+    -- carry a higher-level key for the same dungeon must be ignored.
+    if type(unitIsGroupLeaderFn) == "function" then
+      for unit, info in pairs(roster) do
+        if type(unit) == "string" and unit ~= "" and type(info) == "table" and not info.isGhost then
+          local okLeader, isLeader = pcall(unitIsGroupLeaderFn, unit)
+          if okLeader and isLeader == true then
+            local targetInfo = modules.sync.GetPlayerTargetInfo(info.name, info.realm)
+            if type(targetInfo) == "table" then
+              local mapID = tonumber(targetInfo.mapID)
+              if mapID and mapID > 0 then
+                local level = tonumber(targetInfo.level)
+                if level and level <= 0 then
+                  level = nil
+                end
+                return {
+                  mapID = math.floor(mapID),
+                  level = level and math.floor(level) or nil,
+                }
+              end
+            end
+            -- Leader resolved but has no synced target → fail closed rather
+            -- than fall back to other members' announcements.
+            return nil
+          end
+        end
+      end
+    end
+
+    -- No group leader resolvable (e.g. solo, or UnitIsGroupLeader unavailable):
+    -- fall back to the legacy any-member consensus with the conflict guard.
     local resolvedMapID = nil
     local resolvedLevel = nil
     local levelConflict = false
 
-    for _, info in pairs(ctx.GetRoster() or {}) do
+    for _, info in pairs(roster) do
       if type(info) == "table" then
         local targetInfo = modules.sync.GetPlayerTargetInfo(info.name, info.realm)
         if type(targetInfo) == "table" then
@@ -527,6 +563,19 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       local syncedTargetInfo = ctx.ResolveSyncedTargetInfo and ctx.ResolveSyncedTargetInfo() or nil
       if type(syncedTargetInfo) == "table" and tonumber(syncedTargetInfo.mapID) == tonumber(targetMapID) then
         targetLevel = tonumber(syncedTargetInfo.level)
+      end
+    end
+
+    -- Last-resort hint: parse "+N" out of the leader's free-form LFG group
+    -- title (captured in LFGDetect at invite-accepted). Covers groups whose
+    -- leader does not run isiLive — sync would never resolve a level there.
+    if not targetLevel or targetLevel <= 0 then
+      local lfgDetect = addonTable.LFGDetect
+      if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
+        local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
+        if hint and hint > 0 then
+          targetLevel = math.floor(hint)
+        end
       end
     end
 
@@ -791,6 +840,29 @@ local function InitializeFactoryPrimaryControllers(ctx)
     local lfgDetect = addonTable.LFGDetect
     if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteLeader) == "function" then
       preferredOwnerName = lfgDetect.GetActiveInviteLeader()
+    end
+
+    -- Fallback: when no LFG-leader hint is available (pre-formed group, or
+    -- after invite-accepted state was cleared), use the current group leader
+    -- as the hint. The played key always belongs to the leader, so without
+    -- this fallback the unique-owner scan can pick a random group member who
+    -- happens to hold a higher-level key for the same dungeon.
+    if type(preferredOwnerName) ~= "string" or preferredOwnerName == "" then
+      local roster = ctx.GetRoster() or {}
+      local unitIsGroupLeaderFn = rawget(_G, "UnitIsGroupLeader")
+      if type(unitIsGroupLeaderFn) == "function" then
+        for unit, info in pairs(roster) do
+          if type(unit) == "string" and unit ~= "" and type(info) == "table" and not info.isGhost then
+            local okLeader, isLeader = pcall(unitIsGroupLeaderFn, unit)
+            if okLeader and isLeader == true then
+              if type(info.name) == "string" and info.name ~= "" then
+                preferredOwnerName = info.realm and info.realm ~= "" and (info.name .. "-" .. info.realm) or info.name
+              end
+              break
+            end
+          end
+        end
+      end
     end
 
     return ctx.keySyncController.ResolveActiveKeyOwnerUnit(ctx.GetRoster(), targetMapID, preferredOwnerName)

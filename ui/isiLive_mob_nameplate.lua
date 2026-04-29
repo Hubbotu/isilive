@@ -214,8 +214,14 @@ local function CreateOrGetFrame(unit)
     return nil
   end
   f:SetSize(80, 20)
+  -- Render above third-party nameplate addons (Plater/Platynator) which
+  -- typically draw their visuals on TOOLTIP-1 / HIGH; staying on MEDIUM
+  -- left our percent text occluded by their plate art.
   if f.SetFrameStrata then
-    f:SetFrameStrata("MEDIUM")
+    f:SetFrameStrata("TOOLTIP")
+  end
+  if f.SetFrameLevel then
+    f:SetFrameLevel(1000)
   end
   if f.SetIgnoreParentAlpha then
     f:SetIgnoreParentAlpha(true)
@@ -224,6 +230,9 @@ local function CreateOrGetFrame(unit)
   f.text:SetPoint("CENTER")
   if f.text.SetTextColor then
     f.text:SetTextColor(1, 1, 1, 1)
+  end
+  if f.text.SetDrawLayer then
+    f.text:SetDrawLayer("OVERLAY", 7)
   end
   ApplyFont(f.text)
   frames[unit] = f

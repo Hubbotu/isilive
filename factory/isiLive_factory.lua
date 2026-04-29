@@ -408,6 +408,25 @@ local function FinalizeFactoryRuntime(ctx)
     onDispatchError = function(_frame, event, err)
       ctx.Print(string.format("Event dispatch failed (%s): %s", tostring(event), tostring(err)))
     end,
+    -- BuildEventHandlersDepsFromContext reads these PascalCase fields directly
+    -- off the runtime_setup ctx. Without forwarding them the resolved deps are
+    -- silently nil, breaking dungeon detection, killtrack, M+ timer, readycheck
+    -- hold persistence, BR/Lust announce, key-share cooldown and CD tracker.
+    modules = ctx.modules,
+    HandleKickTrackerEvent = ctx.HandleKickTrackerEvent,
+    GetReadyCheckReadyUntil = ctx.GetReadyCheckReadyUntil,
+    SetReadyCheckReadyUntil = ctx.SetReadyCheckReadyUntil,
+    ClearAllReadyCheckReady = ctx.ClearAllReadyCheckReady,
+    ClearExpiredReadyCheckReady = ctx.ClearExpiredReadyCheckReady,
+    GetReadyCheckDeclinedUntil = ctx.GetReadyCheckDeclinedUntil,
+    SetReadyCheckDeclinedUntil = ctx.SetReadyCheckDeclinedUntil,
+    ClearAllReadyCheckDeclined = ctx.ClearAllReadyCheckDeclined,
+    ClearExpiredReadyCheckDeclined = ctx.ClearExpiredReadyCheckDeclined,
+    ShowCombatAnnounce = ctx.ShowCombatAnnounce,
+    TriggerShareKeysCooldown = ctx.TriggerShareKeysCooldown,
+    GetCombatLogEventInfo = ctx.GetCombatLogEventInfo,
+    RestoreBgAlpha = ctx.RestoreBgAlpha,
+    UpdateCdTracker = ctx.UpdateCdTracker,
     sync = modules.sync,
     events = modules.events,
     commands = modules.commands,

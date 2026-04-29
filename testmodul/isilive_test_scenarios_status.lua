@@ -513,7 +513,13 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         name = "Ara-Kara",
       }
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 0, "missing key level must stay silent until sync resolves")
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "post-invite target without level must announce once (chat fires before level resolves)")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Ara-Kara|r",
+        "level-less invite announce should highlight just the dungeon name in yellow"
+      )
 
       current.targetInfo = {
         name = "Ara-Kara",
@@ -521,9 +527,9 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       }
       controller.MaybeAnnounceTargetDungeonChat()
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 1, "identical grouped target must only print once")
+      Assert.Equal(#prints, 2, "level arriving after the invite announce must produce a level-augmented re-announce")
       Assert.Equal(
-        prints[1],
+        prints[2],
         "Target Dungeon: |cffffd200Ara-Kara +14|r",
         "grouped key chat should highlight the dungeon + key level in yellow (chat-only, status-line stays plain)"
       )
@@ -536,7 +542,7 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         level = 14,
       }
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 2, "clearing the target must allow a fresh grouped key announce later")
+      Assert.Equal(#prints, 3, "clearing the target must allow a fresh grouped key announce later")
     end)
   end)
 
