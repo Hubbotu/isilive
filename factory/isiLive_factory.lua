@@ -255,7 +255,7 @@ local function FinalizeFactorySettings(ctx)
         end
         if type(mobNameplate.SetAppearance) == "function" then
           mobNameplate.SetAppearance({
-            fontSize = tonumber(db.mobNameplateFontSize) or 12,
+            fontSize = tonumber(db.mobNameplateFontSize) or 14,
             position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
             xOffset = tonumber(db.mobNameplateXOffset) or 0,
             yOffset = tonumber(db.mobNameplateYOffset) or 0,
@@ -274,15 +274,40 @@ local function FinalizeFactorySettings(ctx)
     local db = IsiLiveDB or {}
 
     -- One-time M+ forces display-mode migration: if the user never chose a
-    -- mode (both legacy keys are nil), persist "nameplate" as the default.
-    -- After this write, all later reads can safely compare against true/false
-    -- and will stay in sync with the settings-panel selector.
+    -- mode (both legacy keys are nil), persist "off" as the default. The
+    -- nameplate overlay is intentionally OFF on fresh installs so we never
+    -- produce a duplicate display when the user already runs another
+    -- nameplate addon that shows per-mob M+ count. They opt in explicitly
+    -- via the settings panel after seeing the overlay isn't there.
     if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
-      db.mobNameplateEnabled = true
+      db.mobNameplateEnabled = false
       db.mplusForcesEstimate = false
-      if not IsiLiveDB then
-        IsiLiveDB = db
-      end
+    end
+
+    -- Persist sensible nameplate defaults into the DB on first run. Without
+    -- this the slider / position selector / X+Y offsets show "nil" as their
+    -- initial state until the user manually nudges each control. Defaults
+    -- match the values the module would otherwise read at runtime via the
+    -- hardcoded fallbacks, except fontSize which is bumped to 14 (12 is too
+    -- small to read on default UI scale).
+    if db.mobNameplateShowPercent == nil then
+      db.mobNameplateShowPercent = true
+    end
+    if db.mobNameplateFontSize == nil then
+      db.mobNameplateFontSize = 14
+    end
+    if db.mobNameplatePosition == nil then
+      db.mobNameplatePosition = "RIGHT"
+    end
+    if db.mobNameplateXOffset == nil then
+      db.mobNameplateXOffset = 0
+    end
+    if db.mobNameplateYOffset == nil then
+      db.mobNameplateYOffset = 0
+    end
+
+    if not IsiLiveDB then
+      IsiLiveDB = db
     end
 
     local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
@@ -315,7 +340,7 @@ local function FinalizeFactorySettings(ctx)
       end
       if type(mobNameplate.SetAppearance) == "function" then
         mobNameplate.SetAppearance({
-          fontSize = tonumber(db.mobNameplateFontSize) or 12,
+          fontSize = tonumber(db.mobNameplateFontSize) or 14,
           position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
           xOffset = tonumber(db.mobNameplateXOffset) or 0,
           yOffset = tonumber(db.mobNameplateYOffset) or 0,
@@ -362,7 +387,12 @@ local function FinalizeFactoryRuntime(ctx)
     ctx.inspectLoopTimer = ctx.inspectLoopTimer + (elapsed or 0)
     if ctx.inspectLoopTimer >= 0.25 then
       ctx.inspectLoopTimer = 0
-      if ctx.GetActiveChallengeMapID() then
+      -- Inspects are rate-limited to one per second internally; the only real
+      -- cost is the NotifyInspect call. Pause during combat to avoid frame
+      -- impact on pulls, but keep dispatching during dungeon downtime so a
+      -- /reload mid-key can populate ilvl/RIO/spec without waiting for the
+      -- key to end.
+      if InCombatLockdown() then
         return
       end
       ctx.inspectController.OnUpdate()

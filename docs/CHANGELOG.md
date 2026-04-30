@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-04-29 - Version 0.9.206 (patch)
+
+Stops filtering Secret-Value unit data so the M+ forces nameplate text actually renders inside keystones, hardens the data path against tainted-compare crashes, scales the host frame to fit larger fonts, and switches the fresh-install default to OFF to avoid colliding with other nameplate addons.
+
+- **Bugfix: nameplate text never rendered inside M+ keystones ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - WoW 12.0 returns `UnitGUID`, `UnitName` and `C_ScenarioInfo.GetUnitCriteriaProgressValues` as Secret Values for hostile units in the M+ tainted-code context. Our `IsEligibleUnit` and downstream guards filtered those Secret Values out before render — the per-mob percent overlay therefore could never appear in a key (`/il npstate` reported `count=0`). The font-size slider only seemed broken because there was no FontString to size in the first place.
+  - Fix: the data path passes Secret Values straight through to the FontString. WoW's renderer can still display the masked text (only Lua-side reads are blocked). `ResolveMobContributionFromDB` now keeps `NpcIdFromGuid`'s pre-existing `IsSecretValue` guard so a secret GUID gracefully falls through to the API path; the API call result is forwarded as-is. `BuildText` wraps the `..` concatenation in a `pcall` so any rare runtime errors on protected string ops fail soft instead of bubbling.
+  - Companion bugfix: removed two lingering `guid == ""` / `percentString == ""` literal compares that crashed with `attempt to compare local '...' (a secret string value, while execution tainted by 'isiLive')` once the Secret Values reached them.
+  - Test "MobNameplate hides text when percentString is a Secret Value" inverted to "renders Secret-Valued percentString through to the FontString" to match the new contract; the GUID-secret test now verifies the API-fallback render path works when the DB lookup naturally fails for a secret GUID.
+
+- **Feature: `/il nptest` debug overlay + `/il npstate` diagnostic dump ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [logic/isiLive_commands.lua](../logic/isiLive_commands.lua), [factory/isiLive_config_builders.lua](../factory/isiLive_config_builders.lua), [core/isiLive_bootstrap.lua](../core/isiLive_bootstrap.lua)):**
+  - `/il nptest [percent]` toggles a fake-percent overlay on every hostile nameplate (default `1.23`). Bypasses `IsChallengeModeActive` and the forces DB / API lookups so the slider, position selector and X/Y offsets can be verified outside a key. Re-uses the live `RefreshAll` + `ApplyFont` + `ApplyFrameSizeForFont` paths so what the user sees in test mode matches what they would see in a real key.
+  - `/il npstate [unit]` (defaults to `target`) dumps the diagnostic state at every gate: API gates, GUID/Name + their secret status, DB lookup result, API result, resolved percent / text, and a per-frame breakdown via the new `MobNameplate.DumpFrames()` helper (every active frame's `unit`, `frameShown`, frame size, FontString height, current text). Secret-Value fields are redacted to `<secret>` so chat-copy plugins do not strip the line.
+
+- **Polish: pin nameplate font size against FontObject re-assertion + scale frame to font ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - The percent FontString was created inheriting from `GameFontNormalOutline`, whose `.height = 12` re-asserts on internal refresh paths and reverts our `SetFont(file, size, flags)` call. `ApplyFont` now detaches the inheritance via `pcall(SetFontObject, fontString, nil)` before the SetFont call and re-pins the height with `SetTextHeight(size)` as a belt-and-suspenders.
+  - New `ApplyFrameSizeForFont(frame, size)` helper resizes the host frame proportionally (`height = max(20, size + 6)`, `width = max(80, size * 4)`) so a 24-pt percent text cannot get clipped against the previously hardcoded 80×20 rectangle. Both `CreateOrGetFrame` (initial layout) and `UpdateNameplate` (per-update refresh) call it so size changes from the slider take effect on the next nameplate update without re-creation.
+  - Strata bumped to `TOOLTIP` + `SetFrameLevel(1000)` + `SetDrawLayer("OVERLAY", 7)` so third-party nameplate addons (Plater / Platynator) cannot occlude the percent text with their plate art.
+
+- **Polish: sensible nameplate defaults persisted on first run ([factory/isiLive_factory.lua](../factory/isiLive_factory.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - Fresh installs (both legacy keys nil) now persist `mobNameplateEnabled = false`. The nameplate overlay is intentionally OFF on first run so we never produce a duplicate display when the user already runs another nameplate addon that shows per-mob M+ count. They opt in explicitly via the settings panel.
+  - First run also writes sane fallbacks for `mobNameplateShowPercent`, `mobNameplateFontSize` (now `14`, was `12` — too small to read on default UI scale), `mobNameplatePosition`, `mobNameplateXOffset`, `mobNameplateYOffset`. Without this the slider/selector/offsets showed `nil` until the user manually nudged each control.
+  - All hardcoded `or 12` font-size fallbacks across factory, settings panel and the module itself bumped to `or 14` so module default and DB default stay in sync.
+
+- **Hardening: leader-only resolution stays even when `UnitIsGroupLeader` is unavailable ([factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua)):**
+  - Both `ResolveActiveKeyOwnerUnit` and `ResolveSyncedTargetInfo` already preferred the LFG-invite leader hint; this release adds a `UnitIsGroupLeader`-based fallback when the LFG hint is not captured (pre-formed groups, post-zone-transition state reset). Stops a random group member's higher-level key from being announced as the played key.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md)):** Versionsbasis bumped to 0.9.206.
+
+- **Tests:** 1322 → 1322 (two existing nameplate scenarios inverted to the new render-through-Secret-Value contract; no net change in scenario count). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
 ## 2026-04-29 - Version 0.9.205 (patch)
 
 Added an out-of-key debug overlay for the M+ forces nameplate text so the size slider can be verified live without a key run.

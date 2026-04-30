@@ -183,6 +183,118 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
       end
       return mobNameplate.SetTestMode(nil, percent)
     end,
+    dumpNameplateState = function(unit)
+      local mobNameplate = addonTable.MobNameplate
+      if type(mobNameplate) ~= "table" or type(mobNameplate.DumpState) ~= "function" then
+        ctx.printFn("[NP] MobNameplate module unavailable.")
+        return
+      end
+      local state = mobNameplate.DumpState(unit)
+      if type(state) ~= "table" then
+        ctx.printFn("[NP] No state returned.")
+        return
+      end
+      local function fmt(v)
+        if v == nil then
+          return "nil"
+        end
+        local t = type(v)
+        if t == "table" then
+          return "table"
+        end
+        return tostring(v)
+      end
+      ctx.printFn(
+        string.format(
+          "[NP] unit=%s enabled=%s testMode=%s appearanceFontSize=%s",
+          fmt(state.unit),
+          fmt(state.enabled),
+          fmt(state.testMode),
+          fmt(state.appearanceFontSize)
+        )
+      )
+      ctx.printFn(
+        string.format(
+          "[NP] hasNamePlateAPI=%s hasProgressAPI=%s challengeActive=%s activeMapID=%s eligible=%s",
+          fmt(state.hasNamePlateAPI),
+          fmt(state.hasProgressAPI),
+          fmt(state.challengeActive),
+          fmt(state.activeMapID),
+          fmt(state.eligible)
+        )
+      )
+      ctx.printFn(
+        string.format(
+          "[NP] unitName=%s unitNameSecret=%s guid=%s guidIsSecret=%s npcId=%s",
+          fmt(state.unitName),
+          fmt(state.unitNameSecret),
+          fmt(state.guid),
+          fmt(state.guidIsSecret),
+          fmt(state.npcId)
+        )
+      )
+      ctx.printFn(
+        string.format(
+          "[NP] dbHasByNpcId=%s dbEntry=%s dbEntryMatchesMap=%s",
+          fmt(state.dbHasByNpcId),
+          fmt(state.dbEntry),
+          fmt(state.dbEntryMatchesMap)
+        )
+      )
+      ctx.printFn(
+        string.format(
+          "[NP] dbDungeonTotal=%s dbPercent=%s apiPercent=%s apiPercentSecret=%s resolvedPercent=%s resolvedText=%s",
+          fmt(state.dbDungeonTotal),
+          fmt(state.dbPercent),
+          fmt(state.apiPercent),
+          fmt(state.apiPercentSecret),
+          fmt(state.resolvedPercent),
+          fmt(state.resolvedText)
+        )
+      )
+      ctx.printFn(
+        string.format(
+          "[NP] frameExists=%s frameShown=%s fontFile=%s fontHeight=%s fontFlags=%s fontStringText=%s",
+          fmt(state.frameExists),
+          fmt(state.frameShown),
+          fmt(state.fontFile),
+          fmt(state.fontHeight),
+          fmt(state.fontFlags),
+          fmt(state.fontStringText)
+        )
+      )
+
+      -- Dump every actively-rendered nameplate frame so the user can see what
+      -- font height the FontStrings actually have, regardless of whether
+      -- "target" was a unit token we stored in `frames`.
+      if type(mobNameplate.DumpFrames) == "function" then
+        local framesDump = mobNameplate.DumpFrames()
+        if type(framesDump) == "table" then
+          ctx.printFn(
+            string.format(
+              "[NP-FRAMES] count=%s appearanceFontSize=%s",
+              fmt(framesDump.frameCount),
+              fmt(framesDump.appearanceFontSize)
+            )
+          )
+          if type(framesDump.frames) == "table" then
+            for _, row in ipairs(framesDump.frames) do
+              ctx.printFn(
+                string.format(
+                  "[NP-FRAMES] unit=%s shown=%s w=%s h=%s fontHeight=%s text=%s",
+                  fmt(row.unit),
+                  fmt(row.frameShown),
+                  fmt(row.frameWidth),
+                  fmt(row.frameHeight),
+                  fmt(row.fontHeight),
+                  fmt(row.fontStringText)
+                )
+              )
+            end
+          end
+        end
+      end
+    end,
     logRuntimeTrace = ctx.logRuntimeTrace,
     logRuntimeTracef = ctx.logRuntimeTracef,
   }

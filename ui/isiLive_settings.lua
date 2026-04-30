@@ -1242,8 +1242,10 @@ local function ResolveMplusForcesModeFromDB(db)
     return "tooltip"
   end
   if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
-    -- Fresh install: show the nameplate overlay by default.
-    return "nameplate"
+    -- Fresh install: nameplate overlay is OFF by default to avoid colliding
+    -- with another nameplate addon that may already show per-mob M+ count.
+    -- The factory migration writes the same default into the DB once.
+    return "off"
   end
   return "off"
 end
@@ -1371,11 +1373,11 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     24,
     1,
     function()
-      return tonumber(config.getDB().mobNameplateFontSize) or 12
+      return tonumber(config.getDB().mobNameplateFontSize) or 14
     end,
     function(val)
       local db = config.getDB()
-      db.mobNameplateFontSize = tonumber(val) or 12
+      db.mobNameplateFontSize = tonumber(val) or 14
       if type(config.onMobNameplateChange) == "function" then
         config.onMobNameplateChange()
       end
@@ -1567,7 +1569,7 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
       preview.overlay:SetPoint("LEFT", preview, "RIGHT", 4, 0)
     end
 
-    local fontSize = tonumber(db.mobNameplateFontSize) or 12
+    local fontSize = tonumber(db.mobNameplateFontSize) or 14
     if type(preview.overlay.GetFont) == "function" and type(preview.overlay.SetFont) == "function" then
       local fontPath, _, flags = preview.overlay:GetFont()
       if type(fontPath) ~= "string" or fontPath == "" then
@@ -2292,7 +2294,7 @@ local function RefreshSettingsControls(controls, config)
   end
   if controls.nameplateFontSize then
     controls.nameplateFontSize.label:SetText(freshL.SETTINGS_NAMEPLATE_FONT_SIZE or "Font size")
-    controls.nameplateFontSize.SetValueSilently(tonumber(db.mobNameplateFontSize) or 12)
+    controls.nameplateFontSize.SetValueSilently(tonumber(db.mobNameplateFontSize) or 14)
   end
   if controls.nameplateXOffset then
     controls.nameplateXOffset.label:SetText(freshL.SETTINGS_NAMEPLATE_X_OFFSET or "X offset")

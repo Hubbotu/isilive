@@ -40,6 +40,7 @@ function Bootstrap.RegisterSlashCommands(opts)
     or function()
       return false
     end
+  local dumpNameplateState = type(opts.dumpNameplateState) == "function" and opts.dumpNameplateState or function() end
 
   commands.RegisterSlashCommands({
     printFn = printFn,
@@ -79,6 +80,7 @@ function Bootstrap.RegisterSlashCommands(opts)
     addTraceChatFrameMessage = traceChatFrameController and traceChatFrameController.AddMessage or nil,
     resetDB = resetDB,
     toggleNameplateTestMode = toggleNameplateTestMode,
+    dumpNameplateState = dumpNameplateState,
     logRuntimeTracef = runtimeLogController.Logf,
   })
 end

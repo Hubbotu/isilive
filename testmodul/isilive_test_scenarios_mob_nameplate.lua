@@ -293,7 +293,12 @@ local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
     end)
   end)
 
-  test("MobNameplate hides text when UnitGUID is a Secret Value", function()
+  test("MobNameplate falls back to API path when UnitGUID is a Secret Value", function()
+    -- WoW 12.0 M+ keystones return UnitGUID as a Secret Value in the tainted
+    -- addon execution context. The DB lookup correctly bails (it cannot parse
+    -- an NPC id from a secret string), but the API path C_ScenarioInfo.
+    -- GetUnitCriteriaProgressValues stays usable — eligibility no longer
+    -- gates on the GUID's secret state, so the frame still renders.
     local secret = "__ISILIVE_TEST_SECRET_GUID__"
     local globals = BuildEnv({
       units = { nameplate1 = { guid = secret, reaction = 2 } },
@@ -309,14 +314,21 @@ local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
       addon.MobNameplate._Test_UpdateNameplate("nameplate1")
 
       local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
-      Assert.True(frame == nil, "Secret-Valued GUID must not produce a frame")
+      frame = Assert.NotNil(frame, "Secret GUID must not block the API-fallback render path")
+      Assert.True(frame._shown == true, "frame must be visible when the API path supplies a non-secret percent")
     end)
   end)
 
-  test("MobNameplate hides text when percentString is a Secret Value", function()
+  test("MobNameplate renders Secret-Valued percentString through to the FontString", function()
+    -- WoW 12.0 M+ tainted context returns most unit-derived data as Secret
+    -- Values, including the percent string from
+    -- C_ScenarioInfo.GetUnitCriteriaProgressValues. The FontString renderer
+    -- can still display the masked text — only Lua-side reads are blocked.
+    -- Filtering Secret Values out at the data path would leave every M+
+    -- nameplate empty, so the module passes them straight through.
     local secret = "__ISILIVE_TEST_SECRET_PERCENT__"
     local globals = BuildEnv({
-      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      units = { nameplate1 = { guid = "Creature-0-3889-161-99999-99999-0", reaction = 2 } },
       nameplates = { nameplate1 = MakeFrame() },
       progressValues = { nameplate1 = { count = 5, total = 431, percent = secret } },
       issecretvalue = function(v)
@@ -329,7 +341,8 @@ local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
       addon.MobNameplate._Test_UpdateNameplate("nameplate1")
 
       local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
-      Assert.True(frame == nil, "Secret-Valued percentString must not produce a visible frame")
+      frame = Assert.NotNil(frame, "Secret-Valued percentString must still produce a frame")
+      Assert.True(frame._shown == true, "frame must be visible — WoW's renderer handles the masked text")
     end)
   end)
 

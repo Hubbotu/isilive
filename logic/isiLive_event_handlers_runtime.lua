@@ -419,6 +419,14 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if wasInPartyInstance == nil and ctx.isInGroup() then
       -- After a reload, rebuild the roster so the group is shown immediately.
       ctx.handleGroupRosterUpdate()
+      -- A /reload mid-key leaves peers running but unaware that we just lost
+      -- their cached state, and RunFullRefresh is gated off during an active
+      -- challenge (RULE-REFRESH-NO-CHALLENGE). Trigger a one-shot peer-data
+      -- request here so peers re-broadcast their keys / RIO immediately --
+      -- without this, ilvl/key columns stay empty until the key ends.
+      if ctx.isInChallengeMode() and type(ctx.sendRefreshRequest) == "function" then
+        ctx.sendRefreshRequest(true)
+      end
     elseif wasInPartyInstance ~= nil and not wasInPartyInstance and inPartyInstance and not ctx.isInChallengeMode() then
       ctx.setMainFrameVisible(true)
     end

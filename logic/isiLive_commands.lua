@@ -73,6 +73,7 @@ local function BuildDeps(opts)
       or function()
         return false
       end,
+    dumpNameplateState = type(opts.dumpNameplateState) == "function" and opts.dumpNameplateState or function() end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
   }
@@ -443,6 +444,16 @@ local function TryHandleUtilityCommands(ctx, cmd)
     else
       ctx.printFn("Nameplate test mode OFF.")
     end
+    return true
+  end
+
+  if cmd == "npstate" or cmd:find("^npstate%s+") == 1 then
+    local arg = nil
+    local space = cmd:find("%s+")
+    if space then
+      arg = strtrim(cmd:sub(space + 1))
+    end
+    ctx.dumpNameplateState(arg)
     return true
   end
 

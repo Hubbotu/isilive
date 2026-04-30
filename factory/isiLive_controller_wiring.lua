@@ -482,6 +482,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     shouldAutoOpenMainFrameOnKeyEnd = ctx.shouldAutoOpenMainFrameOnKeyEnd,
     shouldAutoCloseMainFrame = ctx.shouldAutoCloseMainFrame,
     sendRefreshResponse = ctx.sendRefreshResponse,
+    sendRefreshRequest = ctx.sendRefreshRequest,
     triggerShareKeysCooldown = ctx.TriggerShareKeysCooldown,
     sendOwnKeystoneToChat = function()
       local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil

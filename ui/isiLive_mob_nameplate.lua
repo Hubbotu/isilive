@@ -15,7 +15,7 @@ local format = {
 }
 
 local appearance = {
-  fontSize = 12,
+  fontSize = 14,
   position = "RIGHT",
   xOffset = 0,
   yOffset = 0,
@@ -105,9 +105,16 @@ local function ResolveMobContributionFromDB(unit, activeMapID)
     return nil, nil
   end
   local okGuid, guid = pcall(unitGUIDFn, unit)
-  if not okGuid or type(guid) ~= "string" or IsSecretValue(guid) or guid == "" then
+  if not okGuid or type(guid) ~= "string" then
     return nil, nil
   end
+  -- Do NOT compare `guid` to "" or any other literal here — in WoW 12.0
+  -- M+ tainted context the GUID is a Secret Value and `==` against a
+  -- literal raises "attempt to compare local 'guid' (a secret string
+  -- value, while execution tainted by 'isiLive')". `NpcIdFromGuid`
+  -- already short-circuits Secret Values via its own `IsSecretValue`
+  -- guard, and `string.match` against an empty string returns nil — so
+  -- both edge cases fall through cleanly into the API-path fallback.
   local npcId = NpcIdFromGuid(guid)
   if not npcId then
     return nil, nil
@@ -152,15 +159,11 @@ local function IsEligibleUnit(unit)
     return false
   end
 
-  local unitGUID = rawget(_G, "UnitGUID")
-  if type(unitGUID) ~= "function" then
-    return false
-  end
-  local okGuid, guid = pcall(unitGUID, unit)
-  if not okGuid or type(guid) ~= "string" or IsSecretValue(guid) or guid == "" then
-    return false
-  end
-
+  -- The GUID is intentionally NOT required here. In WoW 12.0 M+ keystones
+  -- UnitGUID returns a Secret Value on tainted-context targets, which would
+  -- otherwise hide every nameplate during a key. Downstream consumers
+  -- (ResolveMobContributionFromDB) handle a missing GUID with their own
+  -- guard and fall back to the API path.
   local unitReaction = rawget(_G, "UnitReaction")
   if type(unitReaction) == "function" then
     local okReact, reaction = pcall(unitReaction, unit, "player")
@@ -173,19 +176,25 @@ local function IsEligibleUnit(unit)
 end
 
 local function BuildText(percentString)
-  if
-    not format.showPercent
-    or type(percentString) ~= "string"
-    or IsSecretValue(percentString)
-    or percentString == ""
-  then
+  if not format.showPercent or type(percentString) ~= "string" then
     return nil
   end
-  return percentString .. "%"
+  -- Do NOT compare percentString to "" — in WoW 12.0 M+ tainted context the
+  -- API returns it as a Secret Value and `==` raises a tainted-compare
+  -- error. The concatenation below is wrapped in pcall: an empty Secret
+  -- string concatenates to "%" (still rendered), and any genuine string
+  -- runtime errors fall through to nil.
+  local ok, text = pcall(function()
+    return percentString .. "%"
+  end)
+  if not ok or type(text) ~= "string" then
+    return nil
+  end
+  return text
 end
 
 local function ResolveFontSize()
-  return tonumber(appearance.fontSize) or 12
+  return tonumber(appearance.fontSize) or 14
 end
 
 local function ApplyFrameSizeForFont(frame, size)
@@ -337,13 +346,18 @@ local function UpdateNameplate(unit)
     local activeMapID = GetActiveChallengeMapID()
     -- Primary source: bundled MDT-synced forces DB, which is deterministic and
     -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
-    -- when the NPC is missing from the DB (e.g. freshly added patch mob before
-    -- the next scheduled DB refresh).
+    -- when the NPC is missing from the DB (e.g. freshly added patch mob, OR
+    -- the GUID is masked as a Secret Value in 12.0 M+ tainted context).
+    --
+    -- The API result is passed through even when it is a Secret Value: WoW's
+    -- FontString renderer can still display the masked text — only Lua-side
+    -- inspection is blocked. Filtering Secret Values out at this point would
+    -- leave the nameplate empty in M+ keys.
     percentString = ResolveMobContributionFromDB(unit, activeMapID)
     if not percentString then
       local api = rawget(_G, "C_ScenarioInfo")
       local _, _, apiPercent = SafeCall(api.GetUnitCriteriaProgressValues, unit)
-      if not IsSecretValue(apiPercent) then
+      if apiPercent ~= nil then
         percentString = apiPercent
       end
     end
@@ -525,6 +539,151 @@ end
 
 function MobNameplate.IsTestMode()
   return testMode
+end
+
+-- Inspects every active nameplate frame and returns one row per frame with
+-- the actually-rendered font height, text, frame size etc. Used to verify
+-- whether the slider value truly hits the FontString in M+ keys (where the
+-- per-unit data path is masked but the rendering may still be happening).
+function MobNameplate.DumpFrames()
+  local rows = {}
+  for unit, frame in pairs(frames) do
+    local row = { unit = unit }
+    if frame and type(frame) == "table" then
+      row.frameShown = type(frame.IsShown) == "function" and frame:IsShown() == true or false
+      if type(frame.GetSize) == "function" then
+        local okSize, w, h = pcall(frame.GetSize, frame)
+        if okSize then
+          row.frameWidth = w
+          row.frameHeight = h
+        end
+      end
+      if frame.text then
+        if type(frame.text.GetFont) == "function" then
+          local okFont, file, height, flags = pcall(frame.text.GetFont, frame.text)
+          if okFont then
+            row.fontFile = file
+            row.fontHeight = height
+            row.fontFlags = flags
+          end
+        end
+        if type(frame.text.GetText) == "function" then
+          local okText, txt = pcall(frame.text.GetText, frame.text)
+          if okText then
+            row.fontStringText = txt
+          end
+        end
+      end
+    end
+    rows[#rows + 1] = row
+  end
+  return {
+    enabled = enabled,
+    testMode = testMode,
+    appearanceFontSize = appearance.fontSize,
+    frameCount = #rows,
+    frames = rows,
+  }
+end
+
+-- Diagnostic dump for the live data path. `unit` defaults to "target".
+-- Returns a table with the resolved values at every gate so a slash command
+-- can print why a nameplate text might be missing or off-size in real keys.
+function MobNameplate.DumpState(unit)
+  unit = type(unit) == "string" and unit ~= "" and unit or "target"
+
+  local out = {
+    unit = unit,
+    enabled = enabled,
+    testMode = testMode,
+    appearanceFontSize = appearance.fontSize,
+    hasNamePlateAPI = HasNamePlateAPI(),
+    hasProgressAPI = HasProgressAPI(),
+    challengeActive = IsChallengeModeActive(),
+    activeMapID = GetActiveChallengeMapID(),
+    eligible = IsEligibleUnit(unit),
+  }
+
+  local unitGUIDFn = rawget(_G, "UnitGUID")
+  if type(unitGUIDFn) == "function" then
+    local okGuid, guid = pcall(unitGUIDFn, unit)
+    if okGuid then
+      out.guidIsSecret = IsSecretValue(guid)
+      out.guid = out.guidIsSecret and "<secret>" or guid
+      out.npcId = NpcIdFromGuid(guid)
+    end
+  end
+
+  local unitNameFn = rawget(_G, "UnitName")
+  if type(unitNameFn) == "function" then
+    local okName, name = pcall(unitNameFn, unit)
+    if okName then
+      out.unitNameSecret = IsSecretValue(name)
+      out.unitName = out.unitNameSecret and "<secret>" or name
+    end
+  end
+
+  local db = addonTable.MPlusForces
+  if type(db) == "table" and out.npcId then
+    out.dbHasByNpcId = type(db.byNpcId) == "table"
+    if type(db.byNpcId) == "table" then
+      local entry = db.byNpcId[out.npcId]
+      out.dbEntry = entry
+      if type(entry) == "table" and out.activeMapID then
+        out.dbEntryMatchesMap = entry.mapID == out.activeMapID
+      end
+    end
+    if type(db.dungeonTotal) == "table" and out.activeMapID then
+      out.dbDungeonTotal = db.dungeonTotal[out.activeMapID]
+    end
+  end
+
+  local dbPercent = ResolveMobContributionFromDB(unit, out.activeMapID)
+  out.dbPercent = dbPercent
+
+  -- Diagnostic: try the API regardless of eligibility so we can see what it
+  -- returns in M+ tainted context. Redact the value if it comes back as a
+  -- Secret Value so the resulting line does not get filtered out by chat
+  -- copy/paste tools.
+  if HasProgressAPI() then
+    local api = rawget(_G, "C_ScenarioInfo")
+    local _, _, apiPercent = SafeCall(api.GetUnitCriteriaProgressValues, unit)
+    out.apiPercentSecret = IsSecretValue(apiPercent)
+    out.apiPercent = out.apiPercentSecret and "<secret>" or apiPercent
+  end
+
+  local percentString = dbPercent
+  if not percentString and out.apiPercent and not out.apiPercentSecret then
+    percentString = out.apiPercent
+  end
+  out.resolvedPercent = percentString
+  out.resolvedText = BuildText(percentString)
+
+  local frame = frames[unit]
+  if frame then
+    out.frameExists = true
+    out.frameShown = frame.IsShown and frame:IsShown() == true or false
+    if frame.text then
+      if type(frame.text.GetFont) == "function" then
+        local okFont, file, height, flags = pcall(frame.text.GetFont, frame.text)
+        if okFont then
+          out.fontFile = file
+          out.fontHeight = height
+          out.fontFlags = flags
+        end
+      end
+      if type(frame.text.GetText) == "function" then
+        local okText, txt = pcall(frame.text.GetText, frame.text)
+        if okText then
+          out.fontStringText = txt
+        end
+      end
+    end
+  else
+    out.frameExists = false
+  end
+
+  return out
 end
 
 function MobNameplate.Register()
