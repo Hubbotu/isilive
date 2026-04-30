@@ -924,6 +924,164 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI second game-menu hearthstone button picks an owned toy and re-rolls on PreClick", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    -- Player owns three of the listed hearthstone toys; the addon should pick
+    -- one initially and re-pick a different one on every PreClick fire. The
+    -- production code's anti-repeat guard (`repeat … until pick ~= current`)
+    -- guarantees `post ~= pre` regardless of math.random's actual sequence,
+    -- so the test can rely on the live RNG without patching it.
+    local ownedToys = { [54452] = true, [64488] = true, [93672] = true }
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(itemID)
+        return ownedToys[itemID] == true
+      end,
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton =
+        RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button should exist when toys are owned")
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("type"),
+        "toy",
+        "secure type must be 'toy' when at least one hearthstone toy is owned"
+      )
+      local initialToy = hearthstoneButton:GetAttribute("toy")
+      Assert.True(
+        ownedToys[initialToy] == true,
+        "initial bound toy must be one of the owned ids (got " .. tostring(initialToy) .. ")"
+      )
+
+      local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
+      preClick = Assert.NotNil(preClick, "PreClick handler must be installed for re-rolling")
+
+      local pre = hearthstoneButton:GetAttribute("toy")
+      preClick(hearthstoneButton)
+      local post = hearthstoneButton:GetAttribute("toy")
+      Assert.True(ownedToys[post] == true, "re-rolled toy must still come from the owned pool")
+      Assert.True(post ~= pre, "re-roll must produce a toy different from the previous one")
+
+      local pre2 = post
+      preClick(hearthstoneButton)
+      local post2 = hearthstoneButton:GetAttribute("toy")
+      Assert.True(ownedToys[post2] == true, "second re-roll must stay within the owned pool")
+      Assert.True(post2 ~= pre2, "second re-roll must produce a toy different from the previous one")
+    end)
+  end)
+
+  test("UI second game-menu hearthstone button skips re-roll while in combat", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    local ownedToys = { [54452] = true, [64488] = true }
+    local inCombat = false
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(itemID)
+        return ownedToys[itemID] == true
+      end,
+      InCombatLockdown = function()
+        return inCombat
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      local initialToy = hearthstoneButton:GetAttribute("toy")
+
+      inCombat = true
+      local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
+      preClick = Assert.NotNil(preClick, "PreClick handler must be installed")
+      preClick(hearthstoneButton)
+
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("toy"),
+        initialToy,
+        "in-combat re-roll must be a no-op so secure attributes are not rewritten"
+      )
+    end)
+  end)
+
+  test("UI second game-menu hearthstone button falls back to item:6948 when no toys are owned", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(_itemID)
+        return false
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      Assert.Equal(hearthstoneButton:GetAttribute("type"), "item", "no owned toy must fall back to a plain item action")
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("item"),
+        "item:6948",
+        "fallback must bind the classic Hearthstone item id"
+      )
+      local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
+      Assert.True(preClick == nil, "PreClick must not be installed when no toys are owned")
+    end)
+  end)
+
   test("UI game-menu reload button refreshes secure click mode when panel UI is reused", function()
     local useKeyDown = false
     local createFrameStub = BuildCreateFrameStub()
