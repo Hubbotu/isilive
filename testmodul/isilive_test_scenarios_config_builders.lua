@@ -336,4 +336,137 @@ return function(test, ctx)
       end)
     end
   )
+
+  -- =====================================================
+  -- BuildSlashCommandsOpts: nameplate debug closures
+  -- =====================================================
+
+  -- Loads ConfigBuilders into a private addonTable seeded with a MobNameplate
+  -- stub so the toggleNameplateTestMode / dumpNameplateState closures find a
+  -- module to delegate to.
+  local function LoadBuildersWithMobNameplate(stub)
+    local seed = { MobNameplate = stub }
+    local addon = LoadAddonModules({ "isiLive_config_builders.lua" }, seed)
+    return addon.ConfigBuilders
+  end
+
+  test("ConfigBuilders slash toggleNameplateTestMode forwards to MobNameplate.SetTestMode", function()
+    local lastArgs = nil
+    local stub = {
+      SetTestMode = function(flag, percent)
+        lastArgs = { flag = flag, percent = percent }
+        return true
+      end,
+    }
+    local builders = LoadBuildersWithMobNameplate(stub)
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local result = opts.toggleNameplateTestMode("42.5")
+    Assert.True(result == true, "must propagate SetTestMode return value")
+    Assert.NotNil(lastArgs, "SetTestMode must be called")
+    Assert.Equal(lastArgs.flag, nil, "flag must be nil so SetTestMode toggles the current state")
+    Assert.Equal(lastArgs.percent, "42.50", "numeric arg must be normalized to %.2f format")
+  end)
+
+  test("ConfigBuilders slash toggleNameplateTestMode passes non-numeric arg verbatim", function()
+    local lastPercent = nil
+    local stub = {
+      SetTestMode = function(_flag, percent)
+        lastPercent = percent
+        return false
+      end,
+    }
+    local builders = LoadBuildersWithMobNameplate(stub)
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local result = opts.toggleNameplateTestMode("abc")
+    Assert.True(result == false, "must propagate SetTestMode false")
+    Assert.Equal(lastPercent, "abc", "non-numeric arg must be passed through unchanged")
+  end)
+
+  test("ConfigBuilders slash toggleNameplateTestMode is a no-op when MobNameplate module is missing", function()
+    local builders = LoadBuildersWithMobNameplate(nil)
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local result = opts.toggleNameplateTestMode(nil)
+    Assert.True(result == false, "must return false when no MobNameplate module is wired")
+  end)
+
+  test("ConfigBuilders slash dumpNameplateState prints MobNameplate.DumpState fields", function()
+    local lines = {}
+    local stub = {
+      DumpState = function(_unit)
+        return {
+          unit = "target",
+          enabled = true,
+          testMode = false,
+          appearanceFontSize = 14,
+          hasNamePlateAPI = true,
+          hasProgressAPI = true,
+          challengeActive = true,
+          activeMapID = 161,
+          eligible = true,
+          unitName = "Test Mob",
+          unitNameSecret = false,
+          guid = "Creature-0-0-161-12345-76132-0",
+          guidIsSecret = false,
+          npcId = 76132,
+          dbHasByNpcId = true,
+          dbEntry = { count = 5, mapID = 161 },
+          dbEntryMatchesMap = true,
+          dbDungeonTotal = { total = 431 },
+          dbPercent = "1.16",
+          apiPercent = "1.16",
+          apiPercentSecret = false,
+          resolvedPercent = "1.16",
+          resolvedText = "1.16%",
+          frameExists = true,
+          frameShown = true,
+          fontFile = "Fonts\\\\FRIZQT__.TTF",
+          fontHeight = 14,
+          fontFlags = "OUTLINE",
+          fontStringText = "1.16%",
+        }
+      end,
+      DumpFrames = function()
+        return {
+          frameCount = 1,
+          appearanceFontSize = 14,
+          frames = {
+            {
+              unit = "nameplate1",
+              frameShown = true,
+              frameWidth = 80,
+              frameHeight = 20,
+              fontHeight = 14,
+              fontStringText = "1.16%",
+            },
+          },
+        }
+      end,
+    }
+    local builders = LoadBuildersWithMobNameplate(stub)
+    local builderCtx = BuildSlashCtx()
+    builderCtx.printFn = function(msg)
+      lines[#lines + 1] = tostring(msg or "")
+    end
+    local opts = builders.BuildSlashCommandsOpts(builderCtx)
+    opts.dumpNameplateState("target")
+    Assert.True(#lines >= 5, "dumpNameplateState must emit several diagnostic lines")
+    Assert.True(lines[1]:find("[NP] unit=target", 1, true) ~= nil, "first line must report the queried unit")
+    Assert.True(
+      lines[#lines]:find("text=1.16%", 1, true) ~= nil or lines[#lines - 1]:find("text=1.16%", 1, true) ~= nil,
+      "frames dump must include the rendered text"
+    )
+  end)
+
+  test("ConfigBuilders slash dumpNameplateState fails soft when MobNameplate is unavailable", function()
+    local lines = {}
+    local builders = LoadBuildersWithMobNameplate(nil)
+    local builderCtx = BuildSlashCtx()
+    builderCtx.printFn = function(msg)
+      lines[#lines + 1] = tostring(msg or "")
+    end
+    local opts = builders.BuildSlashCommandsOpts(builderCtx)
+    opts.dumpNameplateState("target")
+    Assert.Equal(#lines, 1, "must emit a single explanatory line")
+    Assert.True(lines[1]:find("unavailable", 1, true) ~= nil, "line must mention the module is unavailable")
+  end)
 end

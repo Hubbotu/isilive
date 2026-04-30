@@ -22,6 +22,25 @@ local function MakeFontString()
     self._font = { file = file, size = size, flags = flags }
     self._setFontCallCount = self._setFontCallCount + 1
   end
+  function fs:GetFont()
+    if not self._font then
+      return nil, nil, nil
+    end
+    return self._font.file, self._font.size, self._font.flags
+  end
+  function fs:SetTextHeight(size)
+    if self._font then
+      self._font.size = size
+    else
+      self._font = { file = nil, size = size, flags = nil }
+    end
+  end
+  function fs:SetFontObject(_obj)
+    -- Mock: detaching the FontObject template is a no-op for these tests.
+  end
+  function fs:SetDrawLayer(_layer, _sublayer)
+    -- Mock: draw layer is captured implicitly, no behaviour needed.
+  end
   function fs:GetText()
     return self._text
   end
@@ -647,6 +666,153 @@ local function RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules
   end)
 end
 
+local function RegisterDebugSurfaceTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("MobNameplate.SetTestMode toggles testMode and renders the fake percent", function()
+    local globals = BuildEnv({
+      challengeActive = false,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      Assert.False(addon.MobNameplate.IsTestMode(), "test mode is off by default")
+
+      local active = addon.MobNameplate.SetTestMode(true, "42.50")
+      Assert.True(active == true, "SetTestMode(true) must return the resulting on state")
+      Assert.True(addon.MobNameplate.IsTestMode(), "IsTestMode() must reflect the toggle")
+
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "test mode must produce a frame even outside an active key")
+      Assert.True(frame._shown == true, "test-mode frame must be visible")
+      Assert.Equal(frame.text._text, "42.50%", "frame text must show the supplied test percent with %")
+
+      local off = addon.MobNameplate.SetTestMode(false)
+      Assert.True(off == false, "SetTestMode(false) must return the resulting off state")
+      Assert.False(addon.MobNameplate.IsTestMode(), "IsTestMode() must be false after toggling off")
+    end)
+  end)
+
+  test("MobNameplate.SetTestMode(nil) inverts the current state", function()
+    local globals = BuildEnv({ challengeActive = false })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      local first = addon.MobNameplate.SetTestMode(nil)
+      Assert.True(first == true, "first nil-toggle must turn test mode on")
+      local second = addon.MobNameplate.SetTestMode(nil)
+      Assert.True(second == false, "second nil-toggle must turn test mode off again")
+    end)
+  end)
+
+  test("MobNameplate.DumpFrames returns appearance state and one row per active frame", function()
+    local globals = BuildEnv({
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 18 })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local dump = addon.MobNameplate.DumpFrames()
+      dump = Assert.NotNil(dump, "DumpFrames must return a table")
+      Assert.Equal(dump.appearanceFontSize, 18, "appearance.fontSize must surface in the dump")
+      Assert.Equal(dump.frameCount, 1, "exactly one frame should be active for nameplate1")
+      Assert.Equal(type(dump.frames), "table", "frames field must be a table")
+      local row = dump.frames[1]
+      row = Assert.NotNil(row, "first frame row must exist")
+      Assert.Equal(row.unit, "nameplate1", "row.unit must match the rendered unit")
+      Assert.True(row.frameShown == true, "row.frameShown must reflect the rendered state")
+      Assert.Equal(row.fontHeight, 18, "row.fontHeight must reflect the configured size")
+      Assert.Equal(row.fontStringText, "1.16%", "row.fontStringText must reflect the rendered text")
+    end)
+  end)
+
+  test("MobNameplate.DumpState reports gates and per-frame state for the queried unit", function()
+    local globals = BuildEnv({
+      units = { target = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { target = MakeFrame() },
+      progressValues = { target = { count = 5, total = 431, percent = "1.16" } },
+    })
+    globals.UnitName = function(_unit)
+      return "Test Mob"
+    end
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 16 })
+      addon.MobNameplate.SetEnabled(true)
+
+      local state = addon.MobNameplate.DumpState("target")
+      state = Assert.NotNil(state, "DumpState must return a table")
+      Assert.Equal(state.unit, "target", "unit must be echoed")
+      Assert.True(state.enabled == true, "enabled flag must reflect SetEnabled(true)")
+      Assert.Equal(state.appearanceFontSize, 16, "appearance.fontSize must surface")
+      Assert.True(state.hasNamePlateAPI == true, "C_NamePlate stub must be detected")
+      Assert.True(state.hasProgressAPI == true, "C_ScenarioInfo stub must be detected")
+      Assert.True(state.challengeActive == true, "challenge stub must report active")
+      Assert.True(state.eligible == true, "hostile target with valid GUID must be eligible")
+      Assert.Equal(state.unitName, "Test Mob", "non-secret UnitName must propagate")
+      Assert.Equal(state.npcId, 76132, "GUID must parse to the embedded NPC id")
+      Assert.True(state.unitNameSecret == false, "non-secret UnitName must report unitNameSecret=false")
+      Assert.True(state.guidIsSecret == false, "non-secret GUID must report guidIsSecret=false")
+    end)
+  end)
+
+  test("MobNameplate.DumpState redacts Secret-Value GUID, Name and apiPercent", function()
+    local secretGuid = "__ISILIVE_TEST_SECRET_GUID__"
+    local secretName = "__ISILIVE_TEST_SECRET_NAME__"
+    local secretPercent = "__ISILIVE_TEST_SECRET_PERCENT__"
+    local globals = BuildEnv({
+      units = { target = { guid = secretGuid, reaction = 2 } },
+      nameplates = { target = MakeFrame() },
+      progressValues = { target = { count = 5, total = 431, percent = secretPercent } },
+      issecretvalue = function(v)
+        return v == secretGuid or v == secretName or v == secretPercent
+      end,
+    })
+    globals.UnitName = function(_unit)
+      return secretName
+    end
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+
+      local state = addon.MobNameplate.DumpState("target")
+      Assert.Equal(state.guid, "<secret>", "Secret GUID must be redacted")
+      Assert.True(state.guidIsSecret == true, "guidIsSecret must be true")
+      Assert.Equal(state.unitName, "<secret>", "Secret UnitName must be redacted")
+      Assert.True(state.unitNameSecret == true, "unitNameSecret must be true")
+      Assert.Equal(state.apiPercent, "<secret>", "Secret apiPercent must be redacted")
+      Assert.True(state.apiPercentSecret == true, "apiPercentSecret must be true")
+    end)
+  end)
+
+  test("MobNameplate test mode bypasses challenge guard and renders the test percent", function()
+    -- challengeActive = false simulates the "not in a key" state. With test
+    -- mode on, the module must still render so the user can verify the size
+    -- slider outside of a real M+.
+    local globals = BuildEnv({
+      challengeActive = false,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetAppearance({ fontSize = 22 })
+      addon.MobNameplate.SetTestMode(true, "9.99")
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "test mode must render even without an active challenge")
+      Assert.True(frame._shown == true, "test-mode frame must be visible")
+      Assert.Equal(frame.text._text, "9.99%", "test percent must render with %% suffix")
+      Assert.Equal(frame.text._font.size, 22, "test-mode frame must honour the configured font size")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -656,4 +822,5 @@ return function(test, ctx)
   RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterDebugSurfaceTests(test, Assert, WithGlobals, LoadAddonModules)
 end
