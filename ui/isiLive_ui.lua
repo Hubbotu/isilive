@@ -1237,20 +1237,64 @@ function UI.EnsureSecondPanelUI(opts)
     end
 
     if entry.id == "hearthstone" and type(button.SetAttribute) == "function" then
+      -- Collect every owned hearthstone toy. Picking just the first match
+      -- via `break` made the button bind the same toy forever; the user
+      -- expects each click to roll a different one. We re-roll lazily in
+      -- the PreClick hook below so the secure action button still casts
+      -- in a single click without an extra round-trip.
       local playerHasToy = rawget(_G, "PlayerHasToy")
-      local foundToy = false
+      local ownedToys = {}
       if type(playerHasToy) == "function" then
         for _, toyId in ipairs(HEARTHSTONE_TOY_IDS) do
           if playerHasToy(toyId) then
-            button:SetAttribute("type", "toy")
-            button:SetAttribute("toy", toyId)
-            foundToy = true
-            break
+            ownedToys[#ownedToys + 1] = toyId
           end
         end
       end
-      if not foundToy then
-        -- Fallback to default Hearthstone item (item ID 6948) if no toy found
+
+      if #ownedToys > 0 then
+        button._hearthstoneOwnedToys = ownedToys
+        -- Initial selection: random index so the very first click is also
+        -- non-deterministic, not just subsequent ones.
+        local initialIndex = math.random(1, #ownedToys)
+        button:SetAttribute("type", "toy")
+        button:SetAttribute("toy", ownedToys[initialIndex])
+
+        if type(button.HookScript) == "function" or type(button.SetScript) == "function" then
+          local function PickRandomHearthstoneToy()
+            local pool = button._hearthstoneOwnedToys
+            if type(pool) ~= "table" or #pool == 0 then
+              return
+            end
+            local inCombat = rawget(_G, "InCombatLockdown")
+            if type(inCombat) == "function" and inCombat() then
+              -- Cannot rewrite a secure attribute in combat; the previous
+              -- selection stays bound and the click still works.
+              return
+            end
+            -- Avoid re-picking the same toy twice in a row when the user
+            -- owns more than one.
+            local current = button:GetAttribute("toy")
+            local pick
+            if #pool == 1 then
+              pick = pool[1]
+            else
+              repeat
+                pick = pool[math.random(1, #pool)]
+              until pick ~= current
+            end
+            button:SetAttribute("type", "toy")
+            button:SetAttribute("toy", pick)
+          end
+
+          if type(button.HookScript) == "function" then
+            button:HookScript("PreClick", PickRandomHearthstoneToy)
+          else
+            button:SetScript("PreClick", PickRandomHearthstoneToy)
+          end
+        end
+      else
+        -- Fallback to default Hearthstone item (item ID 6948) if no toy found.
         button:SetAttribute("type", "item")
         button:SetAttribute("item", "item:6948")
       end

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-04-30 - Version 0.9.207 (patch)
+
+Restored the random-hearthstone behaviour in the ESC panel: each click now rolls a different owned hearthstone toy instead of always firing the same one.
+
+- **Bugfix: ESC-panel "Hearthstone" entry always cast the same toy ([ui/isiLive_ui.lua](../ui/isiLive_ui.lua)):**
+  - The secure-button setup walked `HEARTHSTONE_TOY_IDS` with `ipairs` and `break`-ed on the first owned toy. The button was wired exactly once at panel-creation time, so every later click cast that one toy forever — the previously-shipped random selection never re-rolled.
+  - Fix: collect all owned hearthstones into `button._hearthstoneOwnedToys` and re-pick on every click via a `PreClick` hook. The first attribute write at button creation is also seeded with `math.random(1, #ownedToys)` so the very first cast is non-deterministic, not just subsequent ones. When two or more toys are owned, the new pick is forced to differ from the current attribute value via a small `repeat … until pick ~= current` loop, avoiding "the same toy twice in a row" surprises.
+  - Combat-safe: `InCombatLockdown()` short-circuits the re-roll so we do not attempt to rewrite a secure attribute mid-combat (which would taint the click). The previously-bound toy stays active in that case and the click still works.
+  - Item-fallback unchanged: when the player owns none of the listed toys the button keeps its `item:6948` (classic Hearthstone) fallback so the entry is still functional on fresh accounts.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md)):** Versionsbasis bumped to 0.9.207.
+
+- **Tests:** 1333 → 1333 (the secure-button PreClick path runs against the live `SetAttribute` API and is exercised in-game; no test-harness scenario added for it). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
 ## 2026-04-29 - Version 0.9.206 (patch)
 
 Stops filtering Secret-Value unit data so the M+ forces nameplate text actually renders inside keystones, hardens the data path against tainted-compare crashes, scales the host frame to fit larger fonts, and switches the fresh-install default to OFF to avoid colliding with other nameplate addons.
