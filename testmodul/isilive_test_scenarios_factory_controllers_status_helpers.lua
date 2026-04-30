@@ -863,6 +863,85 @@ return function(test, ctx)
     end)
   end)
 
+  test("factory_controllers.status: GetStatusTargetDungeonInfo prefers LFG title level over roster owner", function()
+    -- LFG group title "+13" must win over a +14 roster owner: the listing
+    -- title is authoritative for the played key level (boost runs, leader
+    -- is not the key owner), and once the invite is accepted the level must
+    -- not flip when later roster/sync updates settle.
+    local addon = Load()
+    local rs = BuildRuntimeStateStub({ latestDungeonName = "Ara-Kara", latestQueueMapID = 2649 })
+    local roster = { party1 = { name = "Bob", realm = "D", keyLevel = 14 } }
+    rs.rosterRef = roster
+    addon.LFGDetect = {
+      GetActiveInviteTitleLevel = function()
+        return 13
+      end,
+    }
+    local c = BuildCtx(rs, BuildModulesStub(), {})
+    WithGlobals({}, function()
+      Init(addon, c)
+      c.ResolveActiveKeyOwnerUnit = function()
+        return "party1"
+      end
+      local info = c.GetStatusTargetDungeonInfo()
+      Assert.Equal(info.level, 13)
+    end)
+  end)
+
+  test("factory_controllers.status: GetStatusTargetDungeonInfo prefers LFG title level over synced level", function()
+    local addon = Load()
+    local rs = BuildRuntimeStateStub({ latestDungeonName = "Ara-Kara", latestQueueMapID = 2649 })
+    local roster = { player = { name = "Alice", realm = "D" } }
+    rs.rosterRef = roster
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        GetPlayerTargetInfo = function()
+          return { mapID = 2649, level = 15 }
+        end,
+      },
+    })
+    addon.LFGDetect = {
+      GetActiveInviteTitleLevel = function()
+        return 12
+      end,
+    }
+    local c = BuildCtx(rs, mods)
+    WithGlobals({}, function()
+      Init(addon, c)
+      local info = c.GetStatusTargetDungeonInfo()
+      Assert.Equal(info.level, 12)
+    end)
+  end)
+
+  test(
+    "factory_controllers.status: GetStatusTargetDungeonInfo falls back to roster owner when title hint missing",
+    function()
+      -- Manual /invite or no LFG context: GetActiveInviteTitleLevel returns nil
+      -- and the roster-owner level remains the source of truth.
+      local addon = Load()
+      local rs = BuildRuntimeStateStub({ latestDungeonName = "Ara-Kara", latestQueueMapID = 2649 })
+      local roster = { party1 = { name = "Bob", realm = "D", keyLevel = 14 } }
+      rs.rosterRef = roster
+      addon.LFGDetect = {
+        GetActiveInviteTitleLevel = function()
+          return nil
+        end,
+      }
+      local c = BuildCtx(rs, BuildModulesStub(), {})
+      WithGlobals({}, function()
+        Init(addon, c)
+        c.ResolveActiveKeyOwnerUnit = function()
+          return "party1"
+        end
+        local info = c.GetStatusTargetDungeonInfo()
+        Assert.Equal(info.level, 14)
+      end)
+    end
+  )
+
   -- =====================================================
   -- SendOwnTargetSnapshot
   -- =====================================================
@@ -917,6 +996,53 @@ return function(test, ctx)
     Assert.Equal(sent.isVisible, true)
     Assert.Equal(sent.allowHidden, false)
     Assert.Equal(sent.source, "unit-test")
+  end)
+
+  test("factory_controllers.status: SendOwnTargetSnapshot prefers LFG title level over roster owner", function()
+    -- Sync payload must mirror the local announce: LFG title-level wins so
+    -- peers without a local title hint (joined by /invite) receive the
+    -- correct level instead of an arbitrary roster-owner level.
+    local addon = Load()
+    local rs = BuildRuntimeStateStub({ latestQueueMapID = 2649 })
+    local roster = { party1 = { name = "Bob", realm = "D", keyLevel = 14 } }
+    rs.rosterRef = roster
+    local sent
+    local mods = BuildModulesStub({
+      sync = {
+        NormalizePlayerKey = function(n, r)
+          return (n or "") .. "-" .. (r or "")
+        end,
+        SendTarget = function(payload)
+          sent = payload
+        end,
+      },
+    })
+    addon.LFGDetect = {
+      GetActiveInviteTitleLevel = function()
+        return 13
+      end,
+      GetActiveInviteLeader = function()
+        return nil
+      end,
+    }
+    local c = BuildCtx(rs, mods, {
+      keySyncController = {
+        ResolveActiveKeyOwnerUnit = function(_, _, _)
+          return "party1"
+        end,
+      },
+      mainFrame = {
+        IsShown = function()
+          return true
+        end,
+      },
+    })
+    WithGlobals({}, function()
+      Init(addon, c)
+      c.SendOwnTargetSnapshot(true, "title-wins", false)
+    end)
+    Assert.Equal(sent.mapID, 2649)
+    Assert.Equal(sent.level, 13, "LFG title-level (+13) must win over roster owner +14")
   end)
 
   test("factory_controllers.status: SendOwnTargetSnapshot marks allowHidden when frame is hidden", function()

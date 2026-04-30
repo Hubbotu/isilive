@@ -553,29 +553,35 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       return nil
     end
 
+    -- Level resolution priority:
+    --   1. LFG group title "+N" (authoritative): the listing title carries the
+    --      played key level independent of who owns it. Leader != key owner is
+    --      common (boost runs, weak-aura groups). Once the invite is accepted
+    --      the level is locked-in and must not be overridden by later
+    --      roster/sync updates that would otherwise flip the announce mid-flight.
+    --   2. Roster owner key level: fallback when no title hint exists (manual
+    --      /invite, no LFG context).
+    --   3. Synced target level: last fallback for peers that publish a target.
     local targetLevel = nil
-    local ownerUnit = ctx.ResolveActiveKeyOwnerUnit and ctx.ResolveActiveKeyOwnerUnit() or nil
-    if ownerUnit and type(roster[ownerUnit]) == "table" then
-      targetLevel = tonumber(roster[ownerUnit].keyLevel)
+    local lfgDetect = addonTable.LFGDetect
+    if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
+      local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
+      if hint and hint > 0 then
+        targetLevel = math.floor(hint)
+      end
+    end
+
+    if not targetLevel or targetLevel <= 0 then
+      local ownerUnit = ctx.ResolveActiveKeyOwnerUnit and ctx.ResolveActiveKeyOwnerUnit() or nil
+      if ownerUnit and type(roster[ownerUnit]) == "table" then
+        targetLevel = tonumber(roster[ownerUnit].keyLevel)
+      end
     end
 
     if not targetLevel or targetLevel <= 0 then
       local syncedTargetInfo = ctx.ResolveSyncedTargetInfo and ctx.ResolveSyncedTargetInfo() or nil
       if type(syncedTargetInfo) == "table" and tonumber(syncedTargetInfo.mapID) == tonumber(targetMapID) then
         targetLevel = tonumber(syncedTargetInfo.level)
-      end
-    end
-
-    -- Last-resort hint: parse "+N" out of the leader's free-form LFG group
-    -- title (captured in LFGDetect at invite-accepted). Covers groups whose
-    -- leader does not run isiLive — sync would never resolve a level there.
-    if not targetLevel or targetLevel <= 0 then
-      local lfgDetect = addonTable.LFGDetect
-      if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
-        local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
-        if hint and hint > 0 then
-          targetLevel = math.floor(hint)
-        end
       end
     end
 
@@ -596,13 +602,25 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     local isVisible = ctx.mainFrame and ctx.mainFrame:IsShown() or false
     local targetMapID = ctx.ResolveLocalStatusTargetMapID()
     local targetLevel = nil
+
+    -- Mirror GetStatusTargetDungeonInfo's level-resolution priority so the
+    -- payload broadcast to peers matches the local announce: LFG-title hint
+    -- (authoritative) wins over the roster-owner key level.
+    local lfgDetect = addonTable.LFGDetect
+    if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
+      local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
+      if hint and hint > 0 then
+        targetLevel = math.floor(hint)
+      end
+    end
+
     if
-      targetMapID
+      (not targetLevel or targetLevel <= 0)
+      and targetMapID
       and ctx.keySyncController
       and type(ctx.keySyncController.ResolveActiveKeyOwnerUnit) == "function"
     then
       local preferredOwnerName = nil
-      local lfgDetect = addonTable.LFGDetect
       if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteLeader) == "function" then
         preferredOwnerName = lfgDetect.GetActiveInviteLeader()
       end

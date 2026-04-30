@@ -366,6 +366,15 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     ctx.restoreLayoutState()
     ctx.updateCountdownCancelButton()
     ctx.updateLeaderButtons()
+    -- Re-apply user-controlled flags now that SavedVariables are restored.
+    -- The first ApplyDBSettings call ran at file-load with IsiLiveDB still
+    -- nil (WoW restores SavedVariables only after the addon's lua files
+    -- finish), so MobNameplate/MobTooltip/LFGFlags/RosterInternal got the
+    -- defaults applied. Without this second call, a saved
+    -- mobNameplateEnabled = true would never reach MobNameplate.SetEnabled
+    -- and the user would see the overlay revert to the off default after
+    -- every /reload.
+    ctx.applyDBSettings()
     -- IsiLiveDB is now available; apply minimap button visibility before PLAYER_LOGIN
     -- so MinimapButtonButton sees the correct shown-state when it scans.
   end

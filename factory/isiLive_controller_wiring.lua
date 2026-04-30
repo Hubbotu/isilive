@@ -286,6 +286,7 @@ local function BuildEventHandlersBaseConfig(deps, state, refs, controllers, call
     startBindingWatchdog = RequireFunction(deps.startBindingWatchdog, "startBindingWatchdog"),
     restoreLayoutState = RequireFunction(callbacks.restoreLayoutState, "callbacks.restoreLayoutState"),
     applyLocalizationToUI = RequireFunction(callbacks.applyLocalizationToUI, "callbacks.applyLocalizationToUI"),
+    applyDBSettings = type(callbacks.applyDBSettings) == "function" and callbacks.applyDBSettings or function() end,
     updateCountdownCancelButton = RequireFunction(
       callbacks.updateCountdownCancelButton,
       "callbacks.updateCountdownCancelButton"
@@ -687,6 +688,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
       updateLeaderButtons = ctx.updateLeaderButtons,
       updateStatusLine = ctx.updateStatusLine,
       applyLocalizationToUI = ctx.applyLocalizationToUI,
+      applyDBSettings = ctx.applyDBSettings,
       restoreLayoutState = ctx.restoreLayoutState,
       updateCountdownCancelButton = ctx.updateCountdownCancelButton,
       restoreBgAlpha = ctx.RestoreBgAlpha,

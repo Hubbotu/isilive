@@ -270,89 +270,99 @@ local function FinalizeFactorySettings(ctx)
       end,
     })
 
-    -- Apply initial DB values for flag features.
-    local db = IsiLiveDB or {}
+    -- Apply initial DB values for flag features and re-apply them on every
+    -- ADDON_LOADED. The first invocation (here, at file-load time) runs
+    -- BEFORE the WoW SavedVariables loader has restored IsiLiveDB, so it
+    -- only sees nil values and writes defaults into a local table. The
+    -- second invocation, dispatched from event_handlers_runtime when
+    -- ADDON_LOADED fires, reads the now-restored IsiLiveDB and re-applies
+    -- the user's actual saved values to MobNameplate/MobTooltip/LFGFlags/
+    -- RosterInternal — without this re-apply step, the modules stay locked
+    -- to the file-load defaults regardless of what the user saved last
+    -- session.
+    ctx.ApplyDBSettings = function()
+      local db = IsiLiveDB or {}
 
-    -- One-time M+ forces display-mode migration: if the user never chose a
-    -- mode (both legacy keys are nil), persist "off" as the default. The
-    -- nameplate overlay is intentionally OFF on fresh installs so we never
-    -- produce a duplicate display when the user already runs another
-    -- nameplate addon that shows per-mob M+ count. They opt in explicitly
-    -- via the settings panel after seeing the overlay isn't there.
-    if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
-      db.mobNameplateEnabled = false
-      db.mplusForcesEstimate = false
+      -- One-time M+ forces display-mode migration: if the user never chose a
+      -- mode (both legacy keys are nil), persist "off" as the default. The
+      -- nameplate overlay is intentionally OFF on fresh installs so we never
+      -- produce a duplicate display when the user already runs another
+      -- nameplate addon that shows per-mob M+ count. They opt in explicitly
+      -- via the settings panel after seeing the overlay isn't there.
+      if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
+        db.mobNameplateEnabled = false
+        db.mplusForcesEstimate = false
+      end
+
+      -- Persist sensible nameplate defaults into the DB on first run. Without
+      -- this the slider / position selector / X+Y offsets show "nil" as their
+      -- initial state until the user manually nudges each control.
+      if db.mobNameplateShowPercent == nil then
+        db.mobNameplateShowPercent = true
+      end
+      if db.mobNameplateFontSize == nil then
+        db.mobNameplateFontSize = 14
+      end
+      if db.mobNameplatePosition == nil then
+        db.mobNameplatePosition = "RIGHT"
+      end
+      if db.mobNameplateXOffset == nil then
+        db.mobNameplateXOffset = 0
+      end
+      if db.mobNameplateYOffset == nil then
+        db.mobNameplateYOffset = 0
+      end
+
+      if not IsiLiveDB then
+        IsiLiveDB = db
+      end
+
+      local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
+      if type(lfgFlags) == "table" and type(lfgFlags.SetEnabled) == "function" then
+        lfgFlags.SetEnabled(db.lfgFlagsEnabled ~= false)
+      end
+      local rosterInternal = ctx.addonTable and ctx.addonTable._RosterInternal
+      if type(rosterInternal) == "table" and type(rosterInternal.SetTooltipFlagsEnabled) == "function" then
+        rosterInternal.SetTooltipFlagsEnabled(db.tooltipFlagsEnabled ~= false)
+      end
+      local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
+      if type(mobTooltip) == "table" then
+        if type(mobTooltip.SetLocaleGetter) == "function" and type(ctx.GetL) == "function" then
+          mobTooltip.SetLocaleGetter(ctx.GetL)
+        end
+        if type(mobTooltip.Register) == "function" then
+          mobTooltip.Register()
+        end
+        if type(mobTooltip.SetEnabled) == "function" then
+          mobTooltip.SetEnabled(db.mplusForcesEstimate == true)
+        end
+      end
+
+      local mobNameplate = ctx.addonTable and ctx.addonTable.MobNameplate
+      if type(mobNameplate) == "table" then
+        if type(mobNameplate.SetFormat) == "function" then
+          mobNameplate.SetFormat({
+            showPercent = db.mobNameplateShowPercent ~= false,
+          })
+        end
+        if type(mobNameplate.SetAppearance) == "function" then
+          mobNameplate.SetAppearance({
+            fontSize = tonumber(db.mobNameplateFontSize) or 14,
+            position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
+            xOffset = tonumber(db.mobNameplateXOffset) or 0,
+            yOffset = tonumber(db.mobNameplateYOffset) or 0,
+          })
+        end
+        if type(mobNameplate.Register) == "function" then
+          mobNameplate.Register()
+        end
+        if type(mobNameplate.SetEnabled) == "function" then
+          mobNameplate.SetEnabled(db.mobNameplateEnabled == true)
+        end
+      end
     end
 
-    -- Persist sensible nameplate defaults into the DB on first run. Without
-    -- this the slider / position selector / X+Y offsets show "nil" as their
-    -- initial state until the user manually nudges each control. Defaults
-    -- match the values the module would otherwise read at runtime via the
-    -- hardcoded fallbacks, except fontSize which is bumped to 14 (12 is too
-    -- small to read on default UI scale).
-    if db.mobNameplateShowPercent == nil then
-      db.mobNameplateShowPercent = true
-    end
-    if db.mobNameplateFontSize == nil then
-      db.mobNameplateFontSize = 14
-    end
-    if db.mobNameplatePosition == nil then
-      db.mobNameplatePosition = "RIGHT"
-    end
-    if db.mobNameplateXOffset == nil then
-      db.mobNameplateXOffset = 0
-    end
-    if db.mobNameplateYOffset == nil then
-      db.mobNameplateYOffset = 0
-    end
-
-    if not IsiLiveDB then
-      IsiLiveDB = db
-    end
-
-    local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
-    if type(lfgFlags) == "table" and type(lfgFlags.SetEnabled) == "function" then
-      lfgFlags.SetEnabled(db.lfgFlagsEnabled ~= false)
-    end
-    local rosterInternal = ctx.addonTable and ctx.addonTable._RosterInternal
-    if type(rosterInternal) == "table" and type(rosterInternal.SetTooltipFlagsEnabled) == "function" then
-      rosterInternal.SetTooltipFlagsEnabled(db.tooltipFlagsEnabled ~= false)
-    end
-    local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
-    if type(mobTooltip) == "table" then
-      if type(mobTooltip.SetLocaleGetter) == "function" and type(ctx.GetL) == "function" then
-        mobTooltip.SetLocaleGetter(ctx.GetL)
-      end
-      if type(mobTooltip.Register) == "function" then
-        mobTooltip.Register()
-      end
-      if type(mobTooltip.SetEnabled) == "function" then
-        mobTooltip.SetEnabled(db.mplusForcesEstimate == true)
-      end
-    end
-
-    local mobNameplate = ctx.addonTable and ctx.addonTable.MobNameplate
-    if type(mobNameplate) == "table" then
-      if type(mobNameplate.SetFormat) == "function" then
-        mobNameplate.SetFormat({
-          showPercent = db.mobNameplateShowPercent ~= false,
-        })
-      end
-      if type(mobNameplate.SetAppearance) == "function" then
-        mobNameplate.SetAppearance({
-          fontSize = tonumber(db.mobNameplateFontSize) or 14,
-          position = type(db.mobNameplatePosition) == "string" and db.mobNameplatePosition or "RIGHT",
-          xOffset = tonumber(db.mobNameplateXOffset) or 0,
-          yOffset = tonumber(db.mobNameplateYOffset) or 0,
-        })
-      end
-      if type(mobNameplate.Register) == "function" then
-        mobNameplate.Register()
-      end
-      if type(mobNameplate.SetEnabled) == "function" then
-        mobNameplate.SetEnabled(db.mobNameplateEnabled == true)
-      end
-    end
+    ctx.ApplyDBSettings()
   end
 
   -- Minimap Button: create with correct initial visibility so MinimapButtonButton
@@ -603,6 +613,7 @@ local function FinalizeFactoryRuntime(ctx)
     exitTestMode = ctx.ExitTestMode,
     updateStatusLine = ctx.UpdateStatusLine,
     applyLocalizationToUI = ctx.ApplyLocalizationToUI,
+    applyDBSettings = ctx.ApplyDBSettings,
     updateCountdownCancelButton = ctx.UpdateCountdownCancelButton,
     restoreLayoutState = ctx.RestoreLayoutState,
     checkIfEnteredTargetDungeon = ctx.CheckIfEnteredTargetDungeon,
