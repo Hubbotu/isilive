@@ -21,6 +21,13 @@ local appearance = {
   yOffset = 0,
 }
 
+-- Debug overlay: when active, UpdateNameplate skips the challenge-mode and
+-- DB/API checks and renders `testPercent` on every eligible (hostile/neutral)
+-- nameplate. Drives the ApplyFont / ApplyFrameSizeForFont path live so the
+-- size slider can be verified outside a key.
+local testMode = false
+local testPercent = "1.23"
+
 local function IsSecretValue(v)
   local fn = rawget(_G, "issecretvalue")
   return type(fn) == "function" and fn(v) == true
@@ -291,14 +298,25 @@ end
 local function UpdateNameplate(unit)
   local frame = frames[unit]
 
-  if enabled == false or not HasProgressAPI() or not HasNamePlateAPI() then
+  -- testMode keeps the API/nameplate guards (we still need a real plate to
+  -- anchor against and the WoW namplate API to be present) but bypasses the
+  -- challenge-mode + forces-DB checks so the slider can be verified outside
+  -- a key.
+  if enabled == false or not HasNamePlateAPI() then
     if frame then
       frame:Hide()
     end
     return
   end
 
-  if not IsChallengeModeActive() then
+  if not testMode and not HasProgressAPI() then
+    if frame then
+      frame:Hide()
+    end
+    return
+  end
+
+  if not testMode and not IsChallengeModeActive() then
     if frame then
       frame:Hide()
     end
@@ -312,18 +330,22 @@ local function UpdateNameplate(unit)
     return
   end
 
-  local activeMapID = GetActiveChallengeMapID()
-
-  -- Primary source: bundled MDT-synced forces DB, which is deterministic and
-  -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
-  -- when the NPC is missing from the DB (e.g. freshly added patch mob before
-  -- the next scheduled DB refresh).
-  local percentString = ResolveMobContributionFromDB(unit, activeMapID)
-  if not percentString then
-    local api = rawget(_G, "C_ScenarioInfo")
-    local _, _, apiPercent = SafeCall(api.GetUnitCriteriaProgressValues, unit)
-    if not IsSecretValue(apiPercent) then
-      percentString = apiPercent
+  local percentString
+  if testMode then
+    percentString = testPercent
+  else
+    local activeMapID = GetActiveChallengeMapID()
+    -- Primary source: bundled MDT-synced forces DB, which is deterministic and
+    -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
+    -- when the NPC is missing from the DB (e.g. freshly added patch mob before
+    -- the next scheduled DB refresh).
+    percentString = ResolveMobContributionFromDB(unit, activeMapID)
+    if not percentString then
+      local api = rawget(_G, "C_ScenarioInfo")
+      local _, _, apiPercent = SafeCall(api.GetUnitCriteriaProgressValues, unit)
+      if not IsSecretValue(apiPercent) then
+        percentString = apiPercent
+      end
     end
   end
 
@@ -472,6 +494,37 @@ function MobNameplate.SetAppearance(opts)
   if enabled then
     RefreshAll()
   end
+end
+
+-- Toggle the debug overlay. When `flag` is omitted, the current state is
+-- inverted. `percent` is optional and defaults to "1.23" — pass any string
+-- (e.g. "42") to control the rendered text. Auto-enables the module if it
+-- was off so the events get registered before the first refresh.
+function MobNameplate.SetTestMode(flag, percent)
+  local nextMode
+  if flag == nil then
+    nextMode = not testMode
+  else
+    nextMode = flag == true
+  end
+  testMode = nextMode
+  if type(percent) == "string" and percent ~= "" then
+    testPercent = percent
+  end
+  if testMode and not enabled then
+    MobNameplate.SetEnabled(true)
+  elseif enabled then
+    if testMode then
+      RefreshAll()
+    else
+      HideAll()
+    end
+  end
+  return testMode
+end
+
+function MobNameplate.IsTestMode()
+  return testMode
 end
 
 function MobNameplate.Register()

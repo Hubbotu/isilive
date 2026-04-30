@@ -69,6 +69,10 @@ local function BuildDeps(opts)
     addTraceChatFrameMessage = type(opts.addTraceChatFrameMessage) == "function" and opts.addTraceChatFrameMessage
       or nil,
     resetDB = opts.resetDB or function() end,
+    toggleNameplateTestMode = type(opts.toggleNameplateTestMode) == "function" and opts.toggleNameplateTestMode
+      or function()
+        return false
+      end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
   }
@@ -424,6 +428,21 @@ local function TryHandleUtilityCommands(ctx, cmd)
 
   if cmd == "reset" then
     ctx.resetDB()
+    return true
+  end
+
+  if cmd == "nptest" or cmd:find("^nptest%s+") == 1 then
+    local arg = nil
+    local space = cmd:find("%s+")
+    if space then
+      arg = strtrim(cmd:sub(space + 1))
+    end
+    local active = ctx.toggleNameplateTestMode(arg)
+    if active then
+      ctx.printFn("Nameplate test mode ON — target/mouseover any hostile mob to see the fake percent.")
+    else
+      ctx.printFn("Nameplate test mode OFF.")
+    end
     return true
   end
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-04-29 - Version 0.9.205 (patch)
+
+Added an out-of-key debug overlay for the M+ forces nameplate text so the size slider can be verified live without a key run.
+
+- **Feature: `/il nptest` toggles a fake-percent debug overlay on every hostile nameplate ([ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [logic/isiLive_commands.lua](../logic/isiLive_commands.lua), [factory/isiLive_config_builders.lua](../factory/isiLive_config_builders.lua), [core/isiLive_bootstrap.lua](../core/isiLive_bootstrap.lua)):**
+  - New module-local state (`testMode`, `testPercent` defaulting to `"1.23"`) and `MobNameplate.SetTestMode(flag, percent)` / `IsTestMode()` accessors. When `testMode` is on, `UpdateNameplate` bypasses the `IsChallengeModeActive` and `HasProgressAPI` guards (the namplate-API guard + `IsEligibleUnit` hostile/neutral filter still apply) and renders the `testPercent` directly. The module is auto-enabled if it was off so the events get registered before the first refresh.
+  - Slash-command `/il nptest` toggles on/off; `/il nptest <number>` (e.g. `/il nptest 24`) sets the rendered percent. Wired through `Bootstrap.RegisterSlashCommands` → `Commands.RegisterSlashCommands` → `ConfigBuilders.BuildSlashCommandsOpts.toggleNameplateTestMode` (closure that calls `addonTable.MobNameplate.SetTestMode`). Returns the resulting state so the chat output can confirm ON / OFF.
+  - Lets the size slider, position selector and X/Y offset sliders be verified without queuing a key.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md)):** Versionsbasis bumped to 0.9.205.
+
+- **Tests:** 1322 → 1322 (no new scenarios; the `nptest` slash command is a thin closure around the existing `MobNameplate.SetEnabled` + `RefreshAll` paths already covered by the nameplate test suite). Stylua, validate_usecases, validate_rules_logic, validate_architecture_rules all clean. Local CI preflight passed.
+
 ## 2026-04-29 - Version 0.9.204 (patch)
 
 Pinned the M+ forces nameplate font size against FontObject re-assertion so the size slider's value actually renders, and scaled the host frame to fit larger fonts.

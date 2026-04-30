@@ -167,6 +167,22 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     setRuntimeLogWatch = ctx.setRuntimeLogWatch,
     getRuntimeLogWatchActive = ctx.getRuntimeLogWatchActive,
     resetDB = ctx.resetDB,
+    toggleNameplateTestMode = function(arg)
+      local mobNameplate = addonTable.MobNameplate
+      if type(mobNameplate) ~= "table" or type(mobNameplate.SetTestMode) ~= "function" then
+        return false
+      end
+      local percent = nil
+      if type(arg) == "string" and arg ~= "" then
+        local n = tonumber(arg)
+        if n and n >= 0 then
+          percent = string.format("%.2f", n)
+        else
+          percent = arg
+        end
+      end
+      return mobNameplate.SetTestMode(nil, percent)
+    end,
     logRuntimeTrace = ctx.logRuntimeTrace,
     logRuntimeTracef = ctx.logRuntimeTracef,
   }
