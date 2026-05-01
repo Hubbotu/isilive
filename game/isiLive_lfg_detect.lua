@@ -70,13 +70,22 @@ local function MapIDFromActivityIDs(activityIDs)
   if type(activityIDs) ~= "table" then
     return nil
   end
+
+  local resolvedMapID = nil
   for _, actID in pairs(activityIDs) do
-    local mapID = MapIDFromActivityID(actID)
-    if mapID then
-      return mapID
+    local numericActivityID = tonumber(actID)
+    if numericActivityID and numericActivityID > 0 then
+      local mapID = MapIDFromActivityID(numericActivityID)
+      if not mapID then
+        return nil
+      end
+      if resolvedMapID and resolvedMapID ~= mapID then
+        return nil
+      end
+      resolvedMapID = mapID
     end
   end
-  return nil
+  return resolvedMapID
 end
 
 -- ---------------------------------------------------------------------------
@@ -264,13 +273,15 @@ local function OnInvited(searchResultID)
 
   local mapID = nil
 
+  local hasActivityIDs = type(info) == "table" and type(info.activityIDs) == "table" and next(info.activityIDs) ~= nil
+
   -- Try activityIDs table first (most reliable)
-  if type(info) == "table" and type(info.activityIDs) == "table" then
+  if hasActivityIDs then
     mapID = MapIDFromActivityIDs(info.activityIDs)
   end
 
   -- Try single activityID
-  if not mapID and type(info) == "table" and info.activityID then
+  if not mapID and not hasActivityIDs and type(info) == "table" and info.activityID then
     mapID = MapIDFromActivityID(info.activityID)
   end
 
@@ -326,17 +337,17 @@ local function OnInviteAccepted(searchResultID)
   )
   if mapID then
     pendingInvites[searchResultID] = nil
+    activeInviteLeader = leaderName
+    activeInviteTitleLevel = titleLevel
+    pendingAcceptedInviteMapID = mapID
     if detectedMapID ~= mapID then
       Log("state_set", "var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID))
       detectedMapID = mapID
-      pendingAcceptedInviteMapID = mapID
-      activeInviteLeader = leaderName
-      activeInviteTitleLevel = titleLevel
       Log("state_set", "var=pendingAcceptedInviteMapID val=%s", tostring(mapID))
-      Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
-      Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
-      TriggerHighlightUpdate("invite")
     end
+    Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
+    Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
+    TriggerHighlightUpdate("invite")
   end
 end
 
@@ -472,10 +483,11 @@ local function CheckActiveGroup()
 
   local mapID = nil
 
-  if type(info.activityIDs) == "table" then
+  local hasActivityIDs = type(info.activityIDs) == "table" and next(info.activityIDs) ~= nil
+  if hasActivityIDs then
     mapID = MapIDFromActivityIDs(info.activityIDs)
   end
-  if not mapID and info.activityID then
+  if not mapID and not hasActivityIDs and info.activityID then
     mapID = MapIDFromActivityID(info.activityID)
   end
 
@@ -550,6 +562,7 @@ function LFGDetect.HandleEvent(event, ...)
       if resultID and type(entry) == "table" and entry.mapID then
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
+        activeInviteTitleLevel = entry.titleLevel
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")
       else

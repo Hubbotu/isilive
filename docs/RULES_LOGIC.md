@@ -145,6 +145,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Highlight joined-key resolver requires activity-based map context
   - Highlight listing resolver requires unique activity map
+  - Highlight listing resolver rejects partially unresolved activity maps
   - Highlight queue fallback is disabled while not in group
   - Highlight invite-accepted state survives transient non-group roster updates
   - Highlight invite-accepted state survives late roster false negatives while group members are still present
@@ -382,6 +383,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Zusammenfassung: spieler, die sich bereits im zieldungeon befinden, werden mit einem portal-icon markiert.
 - Erforderliche Tests:
   - Roster shows at-dungeon marker when unit map matches target
+  - KeySync ApplyKnownKeyToRosterEntry clears stale synced LOC fallback fields when sync data disappears
 
 ### RULE-ROSTER-READY-CHECK-INDICATOR
 - Regelnummer: 34
@@ -636,14 +638,16 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Zusammenfassung: Wenn fuer eine Runtime-Aufloesung keine eindeutige, belastbare Quelle vorliegt, muss das Ergebnis unresolved bleiben. Fehlende oder mehrdeutige Laufzeitdaten duerfen nicht durch spekulative Fallbacks, Namens-/Token-Raten, heuristische Standardwerte oder synthetische Cooldown-/Map-Zustaende ersetzt werden. Eindeutige Aufloesungen duerfen nur aus beobachteten Live-Daten, explizit persistierten verifizierten Daten oder eindeutig bestimmten Runtime-Zusammenhaengen entstehen.
 - Erforderliche Tests:
   - Factory target dungeon stays unresolved without queue or joined-key map context
-- Factory target dungeon resolves from synced exact target context
-- Factory target dungeon stays unresolved on conflicting synced exact targets
-- Teleport does not resolve by dungeon name without activityID
-- Teleport keeps activity unresolved when mapID is missing and retries unresolved lookups
-- Teleport short-code resolver keeps unknown maps unresolved instead of showing map ids
-- LFGDetect keeps unknown invite activity unresolved instead of guessing from dungeon name
-- LFGDetect active listing stays unresolved when only dungeon name text is available
-- LFGDetect exact invite stays pending until inviteaccepted and then highlights without sound
+  - Factory target dungeon resolves from synced exact target context
+  - Factory target dungeon stays unresolved on conflicting synced exact targets
+  - Teleport does not resolve by dungeon name without activityID
+  - Teleport keeps activity unresolved when mapID is missing and retries unresolved lookups
+  - Teleport short-code resolver keeps unknown maps unresolved instead of showing map ids
+  - LFGDetect keeps unknown invite activity unresolved instead of guessing from dungeon name
+  - LFGDetect keeps conflicting invite activity maps unresolved
+  - LFGDetect keeps partially unresolved invite activity maps unresolved
+  - LFGDetect active listing stays unresolved when only dungeon name text is available
+  - LFGDetect exact invite stays pending until inviteaccepted and then highlights without sound
 
 ### RULE-MAIN-UI-POSITION-LOCK
 - Regelnummer: 55

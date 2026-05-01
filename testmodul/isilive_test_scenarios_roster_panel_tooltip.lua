@@ -156,9 +156,6 @@ local function BuildTooltipController(addon, options)
     buildOrderedRoster = options.buildOrderedRoster or function()
       return { { unit = "party1", info = { name = "Buddy", realm = "Realm", class = "WARRIOR" } } }
     end,
-    hasFullSync = function()
-      return false
-    end,
     buildDisplayData = options.buildDisplayData or function()
       return {
         colorHex = "ffffffff",

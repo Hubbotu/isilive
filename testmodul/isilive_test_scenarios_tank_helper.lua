@@ -309,9 +309,6 @@ local function RegisterNativeWorldMarkerButtonTests(test, Assert, WithGlobals, L
         buildOrderedRoster = function()
           return {}
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function(info)
           return {
             colorHex = "ffffffff",
@@ -438,9 +435,6 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
         end,
         buildOrderedRoster = function()
           return {}
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function(info)
           return {
@@ -605,9 +599,6 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
         end,
         buildOrderedRoster = function()
           return {}
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function(info)
           return {
@@ -784,9 +775,6 @@ local function RegisterHorizontalModernLayoutTests(test, Assert, WithGlobals, Lo
         end,
         buildOrderedRoster = function()
           return {}
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function(info)
           return {

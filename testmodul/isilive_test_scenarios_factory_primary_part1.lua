@@ -157,9 +157,6 @@ local function RegisterFactoryPrimaryHighlightTests(test, Assert, LoadAddonModul
             BuildOrderedRoster = function()
               return {}
             end,
-            HasFullSync = function()
-              return false
-            end,
             BuildDisplayData = function()
               return {}
             end,

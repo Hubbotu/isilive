@@ -75,9 +75,6 @@ local function RegisterShareKeysGlobalPathTest()
             { unit = "player", info = roster.player },
           }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -228,9 +225,6 @@ local function RegisterShareKeysDeterministicLinkTest()
           return {
             { unit = "player", info = roster.player },
           }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function()
           return {
@@ -394,9 +388,6 @@ local function RegisterShareKeysFallbackLinkTest()
             { unit = "player", info = roster.player },
           }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -547,9 +538,6 @@ local function RegisterShareKeysLiveSnapshotTest()
           return {
             { unit = "player", info = roster.player },
           }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function()
           return {
@@ -702,9 +690,6 @@ local function RegisterShareKeysDebounceTests()
             { unit = "player", info = roster.player },
           }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -842,9 +827,6 @@ local function RegisterShareKeysDebounceTests()
             { unit = "player", info = roster.player },
           }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -981,9 +963,6 @@ local function RegisterShareKeysNoOpAndRemoteTests()
             { unit = "player", info = roster.player },
             { unit = "party1", info = roster.party1 },
           }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function(info)
           return {
@@ -1130,9 +1109,6 @@ RegisterShareKeysRemoteCooldownTests = function()
         buildOrderedRoster = function(roster)
           return { { unit = "player", info = roster.player } }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -1247,9 +1223,6 @@ RegisterShareKeysRemoteCooldownTests = function()
         setMainFrameWidthSafe = function() end,
         buildOrderedRoster = function(currentRoster)
           return { { unit = "player", info = currentRoster.player } }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function()
           return {

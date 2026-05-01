@@ -966,9 +966,6 @@ local function RegisterRosterPanelLeaderInteractionTests(test, Assert, WithGloba
         buildOrderedRoster = function()
           return {}
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {}
         end,
@@ -1134,9 +1131,6 @@ local function RegisterRosterPanelRowInteractionTests(test, Assert, WithGlobals,
         buildOrderedRoster = function()
           return { { unit = "party1", info = { name = "Buddy", role = "DAMAGER" } } }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -1227,9 +1221,6 @@ local function BuildHiddenSettingTestController(addon, createdFontStrings, opts)
     setMainFrameWidthSafe = function() end,
     buildOrderedRoster = opts.buildOrderedRoster or function()
       return {}
-    end,
-    hasFullSync = function()
-      return false
     end,
     buildDisplayData = opts.buildDisplayData or function()
       return {}

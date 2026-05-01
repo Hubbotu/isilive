@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-05-01 - Version 0.9.209 (patch)
+
+- **Code review hardening: target resolution, map lookups, and dead fallbacks ([game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua), [logic/isiLive_highlight.lua](../logic/isiLive_highlight.lua), [factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua), [ui/isiLive_roster.lua](../ui/isiLive_roster.lua), [ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua)):**
+  - LFG invite acceptance now captures `activeInviteLeader` and `activeInviteTitleLevel` even when the same map was already detected through the own-listing path, preventing same-map races from dropping the authoritative `+N` title hint.
+  - Same-map invite acceptance now refreshes consumers immediately after capturing the invite metadata, so status text, sync snapshots, and teleport UI do not wait for a later unrelated refresh.
+  - Same-map invite acceptance now also arms the pending-accepted-invite guard, so a transient active-listing drop before `GROUP_ROSTER_UPDATE` cannot clear the accepted target, leader hint, or title level.
+  - Player-map lookups in highlight resolution and target-dungeon clearing are wrapped in `pcall`, so transient Blizzard API errors fail closed instead of aborting the event path.
+  - Removed the unused `Roster.HasFullSync` runtime export/wiring and the duplicated local Keystone announce fallback in the roster panel; Keystone chat text now flows through `ContextHelpers.BuildOwnKeystoneAnnounceLine`.
+  - Removed stale `hasFullSync` test-fixture parameters so the deleted runtime contract cannot be accidentally masked by tests.
+  - Tests added for the same-map invite title race and refresh callback, `GetBestMapForUnit` error handling in highlight/factory target paths, stale LOC fallback clearing, and conflicting/partially unresolved LFG activity-map resolution.
+  - Documentation baselines synced to the `0.9.209` TOC version across `README.md`, `docs/ARCHITECTURE.md`, `docs/USECASES.md`, `docs/RELEASE.md`, and `CHANGELOG_RELEASE.md`.
+
 ## 2026-04-30 - Version 0.9.208 (patch)
 
 LFG group title `+N` is now the authoritative source for the played key level in the "Ziel-Dungeon" announce and the sync payload, fixing a regression where joining a premade produced two or three back-to-back announces with shifting key levels (e.g. "+13" → "+14" within seconds). Nameplate / tooltip / LFG-flags / tooltip-flags settings now actually survive a `/reload` — the apply step was running before SavedVariables had restored, so the user's saved values never reached the live modules. The other reload-mid-key bug — half-loaded roster with empty Key / iLvl / RIO columns until the key ends — is fixed by letting the inspect queue dispatch out of combat and triggering a one-shot peer-data request after `/reload` is detected. And the tank/healer role-icon click placing markers on the row's player works again after the 0.9.203 macro form regressed it.

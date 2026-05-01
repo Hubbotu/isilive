@@ -159,55 +159,6 @@ local function SendPartyChatMessage(message)
   return false
 end
 
-local function BuildKeystoneLinkText(shortCode, keyLevel)
-  local level = math.floor(tonumber(keyLevel) or 0)
-  return string.format("%s +%d", tostring(shortCode or "?"), level)
-end
-
-local function ResolveOwnedKeystoneSnapshot(opts)
-  if type(opts.getOwnedKeystoneSnapshot) == "function" then
-    local mapID, level = opts.getOwnedKeystoneSnapshot()
-    local numericMapID = tonumber(mapID)
-    local numericLevel = tonumber(level)
-    if numericMapID and numericMapID > 0 and numericLevel and numericLevel > 0 then
-      return math.floor(numericMapID), math.floor(numericLevel)
-    end
-  end
-
-  local roster = opts.getRoster()
-  local playerInfo = roster and roster.player
-  local keyMapID = tonumber(playerInfo and playerInfo.keyMapID)
-  local keyLevel = tonumber(playerInfo and playerInfo.keyLevel)
-  if keyMapID and keyMapID > 0 and keyLevel and keyLevel > 0 then
-    return math.floor(keyMapID), math.floor(keyLevel)
-  end
-
-  return nil, nil
-end
-
-local function BuildOwnKeyAnnounceLine(opts)
-  if type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function" then
-    return ContextHelpers.BuildOwnKeystoneAnnounceLine(opts)
-  end
-
-  local keyMapID, keyLevel = ResolveOwnedKeystoneSnapshot(opts)
-  if not keyMapID or not keyLevel then
-    return nil
-  end
-
-  local buildKeystoneChatLink = type(ContextHelpers.BuildKeystoneChatLink) == "function"
-      and ContextHelpers.BuildKeystoneChatLink
-    or nil
-  local keyLink = buildKeystoneChatLink and buildKeystoneChatLink(keyMapID, keyLevel) or nil
-  if not keyLink then
-    local short = opts.getDungeonShortCode(keyMapID)
-    keyLink = BuildKeystoneLinkText(short, keyLevel)
-  end
-
-  local L = opts.getL()
-  local announcePrefix = tostring(L.ANNOUNCE_PREFIX or "PartyKeys:"):gsub("%s+", "")
-  return string.format("[isiLive] %s %s", announcePrefix, keyLink)
-end
 local function CreateStatusLine(mainFrame)
   local statusLine = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   statusLine:SetPoint("BOTTOMLEFT", 10, 6)
@@ -343,12 +294,15 @@ local function CreateShareKeysButton(mainFrame, deps)
       return
     end
     local announcedOwnKey = false
-    local ownLine = BuildOwnKeyAnnounceLine({
-      getL = deps.getL,
-      getRoster = deps.getRoster,
-      getOwnedKeystoneSnapshot = deps.getOwnedKeystoneSnapshot,
-      getDungeonShortCode = deps.getDungeonShortCode,
-    })
+    local ownLine = nil
+    if type(ContextHelpers.BuildOwnKeystoneAnnounceLine) == "function" then
+      ownLine = ContextHelpers.BuildOwnKeystoneAnnounceLine({
+        getL = deps.getL,
+        getRoster = deps.getRoster,
+        getOwnedKeystoneSnapshot = deps.getOwnedKeystoneSnapshot,
+        getDungeonShortCode = deps.getDungeonShortCode,
+      })
+    end
     local inGroup = deps.isInGroup() == true
     if ownLine then
       if inGroup then

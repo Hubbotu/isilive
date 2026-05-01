@@ -237,9 +237,6 @@ local function RegisterRosterPanelWrappingLayoutTests(test, Assert, WithGlobals,
             },
           }
         end,
-        hasFullSync = function()
-          return false
-        end,
         buildDisplayData = function()
           return {
             colorHex = "ffffffff",
@@ -345,9 +342,6 @@ local function RegisterRosterPanelWrappingLayoutTests(test, Assert, WithGlobals,
               },
             },
           }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function()
           return {
@@ -466,9 +460,6 @@ local function RegisterRosterPanelWrappingDpsTests(test, Assert, WithGlobals, Lo
               },
             },
           }
-        end,
-        hasFullSync = function()
-          return false
         end,
         buildDisplayData = function()
           return {

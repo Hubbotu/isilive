@@ -109,6 +109,41 @@ return function(test, ctx)
     end)
   end)
 
+  test("ResolveCurrentMapID treats GetBestMapForUnit errors as unresolved", function()
+    WithGlobals({
+      UnitExists = function()
+        return true
+      end,
+      C_Map = {
+        GetBestMapForUnit = function()
+          error("map lookup unavailable")
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_highlight.lua" })
+      local controller = addon.Highlight.CreateController({
+        isInGroup = function()
+          return true
+        end,
+        resolveTeleportSpellIDByMapID = function(mapID)
+          if mapID == 5 then
+            return 999
+          end
+          return nil
+        end,
+        resolveMapIDByActivityID = function()
+          return 5
+        end,
+      })
+
+      Assert.Equal(
+        controller.ResolveActiveTeleportSpellID(123, nil),
+        999,
+        "map lookup errors must not abort queue-based highlight resolution"
+      )
+    end)
+  end)
+
   -- ResolveMapIDFromActivityID guards ------------------------------------------
 
   test("ResolveMapIDFromActivityID returns nil for non-positive activity id", function()

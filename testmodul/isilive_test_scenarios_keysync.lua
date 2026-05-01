@@ -1195,6 +1195,26 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
     end
   )
 
+  test(
+    "KeySync ApplyKnownKeyToRosterEntry clears stale synced LOC fallback fields when sync data disappears",
+    function()
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "ActivePlayer",
+        realm = "ActiveRealm",
+        isGhost = false,
+        syncLocMapID = 300,
+      }
+
+      sync.SetPlayerLocInfo("ActivePlayer", "ActiveRealm", nil)
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+
+      Assert.True(changed, "active member: clearing syncLocMapID must report a roster change")
+      Assert.Nil(info.syncLocMapID, "stale syncLocMapID must be cleared when sync data disappears")
+    end
+  )
+
   test("KeySync ApplyKnownKeyToRosterEntry preserves synced no-interrupt state", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)

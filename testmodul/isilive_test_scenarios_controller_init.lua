@@ -148,9 +148,6 @@ return function(test, ctx)
       buildOrderedRoster = function()
         return {}
       end,
-      hasFullSync = function()
-        return false
-      end,
       buildDisplayData = function()
         return {}
       end,

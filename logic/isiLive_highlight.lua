@@ -115,8 +115,8 @@ local function ResolveCurrentMapID()
   -- challenge map can become available before the player actually enters the
   -- dungeon, which would otherwise clear the highlight too early.
   if IsExistingPlayerUnit() and C_Map and C_Map.GetBestMapForUnit then
-    local mapID = C_Map.GetBestMapForUnit("player")
-    if type(mapID) == "number" and mapID > 0 then
+    local ok, mapID = pcall(C_Map.GetBestMapForUnit, "player")
+    if ok and type(mapID) == "number" and mapID > 0 then
       return mapID
     end
   end
@@ -183,7 +183,10 @@ local function ResolveActiveListingTarget(deps, entryInfo)
     local seenMaps = {}
     for _, activityID in ipairs(CollectUniqueActivityIDs(entryInfo)) do
       local activityMapID = ResolveMapIDFromActivityID(deps, activityID)
-      if activityMapID and not seenMaps[activityMapID] then
+      if not activityMapID then
+        return nil
+      end
+      if not seenMaps[activityMapID] then
         seenMaps[activityMapID] = true
         table.insert(uniqueMaps, activityMapID)
       end

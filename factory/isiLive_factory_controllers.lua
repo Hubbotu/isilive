@@ -716,7 +716,6 @@ local function InitializeFactoryPrimaryControllers(ctx)
     setMainFrameWidthSafe = ctx.SetMainFrameWidthSafe,
     minFrameHeight = ctx.MIN_FRAME_HEIGHT,
     buildOrderedRoster = modules.roster.BuildOrderedRoster,
-    hasFullSync = modules.roster.HasFullSync,
     buildDisplayData = modules.roster.BuildDisplayData,
     truncateName = function(name, maxChars)
       return ctx.TruncateName(name, maxChars)
@@ -1498,8 +1497,8 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
     if not currentMapID and C_Map and C_Map.GetBestMapForUnit and type(UnitExists) == "function" then
       local okUnit, playerExists = pcall(UnitExists, "player")
       if okUnit and playerExists then
-        local mapID = C_Map.GetBestMapForUnit("player")
-        if type(mapID) == "number" and mapID > 0 then
+        local okMap, mapID = pcall(C_Map.GetBestMapForUnit, "player")
+        if okMap and type(mapID) == "number" and mapID > 0 then
           currentMapID = mapID
         end
       end

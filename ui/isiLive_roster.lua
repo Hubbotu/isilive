@@ -111,20 +111,6 @@ function Roster.BuildOrderedRoster(roster, rolePriority, unitPriority)
   return orderedRoster
 end
 
-function Roster.HasFullSync(roster)
-  local totalMembers = 0
-  local syncedMembers = 0
-  for _, info in pairs(roster or {}) do
-    if not info.isGhost then
-      totalMembers = totalMembers + 1
-      if info.hasIsiLive then
-        syncedMembers = syncedMembers + 1
-      end
-    end
-  end
-  return totalMembers >= 2 and syncedMembers == totalMembers
-end
-
 function Roster.BuildDisplayData(info, opts)
   opts = opts or {}
   local unit = opts.unit

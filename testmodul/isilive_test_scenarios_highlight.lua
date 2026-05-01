@@ -306,6 +306,24 @@ local function RegisterHighlightResolverTests(test, Assert, WithGlobals, LoadAdd
     Assert.Equal(unique, 367416, "unique activity map should produce deterministic highlight")
   end)
 
+  test("Highlight listing resolver rejects partially unresolved activity maps", function()
+    local addon = LoadAddonModules({ "isiLive_highlight.lua" })
+    local controller = BuildHighlightController(addon, {
+      resolveMapIDByActivityID = function(activityID)
+        if activityID == 1001 then
+          return 2441
+        end
+        return nil
+      end,
+    })
+
+    local partiallyUnresolved = controller.ResolveActiveListingTeleportSpellID({
+      active = true,
+      activityIDs = { 1001, 9999 },
+    })
+    Assert.Nil(partiallyUnresolved, "partially unresolved activity map sets must not produce a highlight")
+  end)
+
   test("Highlight map resolver does not bypass injected resolver with direct API fallback", function()
     WithGlobals({
       C_LFGList = {

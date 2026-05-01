@@ -215,54 +215,6 @@ return function(test, ctx)
     end)
   end)
 
-  test.describe("Roster.HasFullSync", function()
-    local function loadRoster(modules)
-      return LoadAddonModules(modules or { "isiLive_roster.lua" }).Roster
-    end
-
-    test.it("HasFullSync returns true when all non-ghost members have isiLive", function()
-      local Roster = loadRoster()
-      local roster = {
-        p1 = { isGhost = false, hasIsiLive = true },
-        p2 = { isGhost = false, hasIsiLive = true },
-        p3 = { isGhost = true, hasIsiLive = false },
-      }
-      Assert.True(Roster.HasFullSync(roster), "all living members synced must return true")
-    end)
-
-    test.it("HasFullSync returns false when any non-ghost member lacks isiLive", function()
-      local Roster = loadRoster()
-      local roster = {
-        p1 = { isGhost = false, hasIsiLive = true },
-        p2 = { isGhost = false, hasIsiLive = false },
-      }
-      Assert.False(Roster.HasFullSync(roster), "one unsynced living member must return false")
-    end)
-
-    test.it("HasFullSync returns false when fewer than 2 living members exist", function()
-      local Roster = loadRoster()
-      local roster = {
-        p1 = { isGhost = false, hasIsiLive = true },
-      }
-      Assert.False(Roster.HasFullSync(roster), "single member group must return false")
-    end)
-
-    test.it("HasFullSync returns false for empty roster", function()
-      local Roster = loadRoster()
-      Assert.False(Roster.HasFullSync({}), "empty roster must return false")
-      Assert.False(Roster.HasFullSync(nil), "nil roster must return false")
-    end)
-
-    test.it("HasFullSync ignores ghost players even when they have isiLive", function()
-      local Roster = loadRoster()
-      local roster = {
-        p1 = { isGhost = false, hasIsiLive = true },
-        ghost = { isGhost = true, hasIsiLive = true },
-      }
-      Assert.False(Roster.HasFullSync(roster), "ghost members must not count toward living member threshold")
-    end)
-  end)
-
   test.describe("Roster.BuildOrderedRoster", function()
     local rolePriority = { TANK = 1, HEALER = 2, DPS = 3, NONE = 99 }
 

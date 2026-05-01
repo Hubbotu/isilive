@@ -133,6 +133,54 @@ local function RegisterLFGDetectResolutionTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect keeps conflicting invite activity maps unresolved", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityIDs = { 1542, 182 }, name = "Windrunner Spire" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local callbackCount = 0
+      addon.LFGDetect.SetHighlightCallback(function()
+        callbackCount = callbackCount + 1
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "conflicting activity maps must stay unresolved")
+      Assert.Equal(callbackCount, 0, "ambiguous invite must not trigger a highlight update")
+    end)
+  end)
+
+  test("LFGDetect keeps partially unresolved invite activity maps unresolved", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, activityIDs = { 1542, 9999 }, name = "Windrunner Spire" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local callbackCount = 0
+      addon.LFGDetect.SetHighlightCallback(function()
+        callbackCount = callbackCount + 1
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "partially unresolved activity maps must stay unresolved")
+      Assert.Equal(callbackCount, 0, "partially unresolved invite must not trigger a highlight update")
+    end)
+  end)
+
   -- ---------------------------------------------------------------------------
   -- Status normalization (BUG-3)
   -- ---------------------------------------------------------------------------
@@ -873,6 +921,116 @@ local function RegisterLFGDetectResetTests(test, ctx)
         addon.LFGDetect.GetDetectedMapID(),
         557,
         "GROUP_ROSTER_UPDATE fallback must apply pendingInvites when detectedMapID is unset"
+      )
+    end)
+  end)
+
+  test("LFGDetect GROUP_ROSTER_UPDATE preserves pending invite title level", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+13 vault", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "GROUP_ROSTER_UPDATE fallback must apply pending invite map"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        13,
+        "GROUP_ROSTER_UPDATE fallback must preserve the LFG title level"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Leader-Realm",
+        "GROUP_ROSTER_UPDATE fallback must preserve the LFG leader hint"
+      )
+    end)
+  end)
+
+  test("LFGDetect inviteaccepted preserves title level when own listing already set the same map", function()
+    local currentActiveEntry = { activityID = 1542 }
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return false
+      end,
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 1 then
+              return { activityID = 1542, name = "+13 vault", leaderName = "Leader-Realm" }
+            end
+            return nil
+          end,
+          GetActiveEntryInfo = function()
+            return currentActiveEntry
+          end,
+          GetActivityInfoTable = function()
+            return nil
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local callbackCount = 0
+      local lastSoundContext = nil
+      addon.LFGDetect.SetHighlightCallback(function(soundContext)
+        callbackCount = callbackCount + 1
+        lastSoundContext = soundContext
+      end)
+
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "own listing must set detectedMapID first")
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "same-map invite must keep the detected map")
+      Assert.Equal(callbackCount, 2, "same-map inviteaccepted must refresh consumers after capturing invite metadata")
+      Assert.Equal(lastSoundContext, "invite", "same-map inviteaccepted refresh must use invite sound context")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        13,
+        "same-map inviteaccepted must still capture the LFG title level"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Leader-Realm",
+        "same-map inviteaccepted must still capture the LFG leader hint"
+      )
+
+      currentActiveEntry = nil
+      fire("LFG_LIST_ACTIVE_ENTRY_UPDATE")
+
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "same-map inviteaccepted must protect the target when the listing drops before group settle"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        13,
+        "same-map inviteaccepted must keep the title level across the pre-settle listing drop"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Leader-Realm",
+        "same-map inviteaccepted must keep the leader hint across the pre-settle listing drop"
       )
     end)
   end)

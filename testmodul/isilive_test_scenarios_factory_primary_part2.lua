@@ -150,9 +150,6 @@ local function RegisterFactoryPrimaryGroupSettleTests(test, Assert, LoadAddonMod
             BuildOrderedRoster = function()
               return {}
             end,
-            HasFullSync = function()
-              return false
-            end,
             BuildDisplayData = function()
               return {}
             end,

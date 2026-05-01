@@ -73,4 +73,45 @@ return function(test, ctx)
       Assert.Equal(updateCalls, 1, "actual player map entry must refresh the teleport button once")
     end)
   end)
+
+  test("Factory target dungeon check treats player map lookup errors as unresolved", function()
+    local clearCalls = 0
+    local updateCalls = 0
+    local latestQueueClears = 0
+
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = true,
+    })
+
+    state.ctx.addonTable.LFGDetect = {
+      ClearAllState = function()
+        clearCalls = clearCalls + 1
+      end,
+    }
+    state.ctx.ResolveStatusTargetMapID = function()
+      return 557
+    end
+    state.ctx.ClearLatestQueueTarget = function()
+      latestQueueClears = latestQueueClears + 1
+    end
+    state.ctx.UpdateMPlusTeleportButton = function()
+      updateCalls = updateCalls + 1
+    end
+
+    WithGlobals({
+      UnitExists = function()
+        return true
+      end,
+      C_Map = {
+        GetBestMapForUnit = function()
+          error("map lookup unavailable")
+        end,
+      },
+    }, function()
+      state.ctx.CheckIfEnteredTargetDungeon()
+      Assert.Equal(clearCalls, 0, "map lookup errors must not clear the target highlight")
+      Assert.Equal(latestQueueClears, 0, "map lookup errors must not clear the latest queue target")
+      Assert.Equal(updateCalls, 0, "map lookup errors must not refresh the teleport button")
+    end)
+  end)
 end

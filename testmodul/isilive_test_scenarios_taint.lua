@@ -417,9 +417,6 @@ local function BuildRosterPanelController(WithGlobals, LoadAddonModules, overrid
       buildOrderedRoster = function(roster)
         return BuildOrderedRosterFromTable(roster)
       end,
-      hasFullSync = function()
-        return false
-      end,
       buildDisplayData = function(info)
         return BuildRosterDisplayData(info)
       end,

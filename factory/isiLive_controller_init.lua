@@ -60,7 +60,6 @@ local function CreateRosterPanelController(ctx, keySyncResult)
     setMainFrameWidthSafe = ctx.setMainFrameWidthSafe,
     minFrameHeight = ctx.minFrameHeight,
     buildOrderedRoster = ctx.buildOrderedRoster,
-    hasFullSync = ctx.hasFullSync,
     buildDisplayData = ctx.buildDisplayData,
     truncateName = ctx.truncateName,
     getShortSpecLabel = ctx.getShortSpecLabel,

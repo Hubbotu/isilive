@@ -356,6 +356,9 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
       info.syncLocMapID = newLocMapID
       changed = true
     end
+  elseif info.syncLocMapID ~= nil and not info.isGhost then
+    info.syncLocMapID = nil
+    changed = true
   end
 
   local kickInfo = type(sync.GetPlayerKickInfo) == "function" and sync.GetPlayerKickInfo(info.name, info.realm)
