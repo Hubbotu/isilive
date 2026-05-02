@@ -25,6 +25,16 @@ return {
         "212",
       },
     },
+    ["tools/simulate_nameplate_keystart.lua"] = {
+      ignore = {
+        "212", -- frame-mock stubs intentionally match WoW Frame method signatures
+      },
+    },
+    ["tools\\simulate_nameplate_keystart.lua"] = {
+      ignore = {
+        "212",
+      },
+    },
     -- Optional event-handler callback stubs intentionally accept and discard
     -- the WoW event vararg signature so live handlers can be drop-in
     -- replacements without the call sites checking arity.

@@ -855,6 +855,7 @@ end
 local function RegisterArchitectureWorkflowTests(test, Assert)
   test("Architecture GitHub Lua Check workflow keeps CI validation steps wired", function()
     local workflowContent = ReadFile(".github/workflows/lua-check.yml")
+    local syncWorkflowContent = ReadFile(".github/workflows/sync-mplus-forces.yml")
 
     AssertContains(Assert, workflowContent, "name: Lua Check", "workflow must keep the Lua Check name")
     AssertContains(
@@ -881,6 +882,210 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       workflowContent,
       "lua tools/validate_usecases.lua",
       "workflow must keep deterministic usecase and rules validation"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_nameplate_keystart.lua all",
+      "workflow must keep the nameplate key-start simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_savedvariables_reload.lua",
+      "workflow must keep the SavedVariables reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_key_start_lifecycle.lua",
+      "workflow must keep the key-start lifecycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_hidden_sync_reload.lua",
+      "workflow must keep the hidden-sync reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_raid_party_cycle.lua",
+      "workflow must keep the raid-party cycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_lfg_join_target_chain.lua",
+      "workflow must keep the LFG join target-chain simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_reload_storm.lua",
+      "workflow must keep the reload-storm simulator gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_sound_channel.lua",
+      "workflow must keep the sound-channel gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_chat_color_safety.lua",
+      "workflow must keep the chat-color-safety gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_wow_api_compliance.lua",
+      "workflow must keep the WoW 12.0 API compliance gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_format_string_consistency.lua",
+      "workflow must keep the format-string consistency gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_secret_value_guards.lua",
+      "workflow must keep the secret-value guards gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_addon_message_size.lua",
+      "workflow must keep the addon-message-size gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_button_label_length.lua",
+      "workflow must keep the button-label-length gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_toc_file_list.lua",
+      "workflow must keep the TOC file-list gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/check_dead_locale_keys.lua",
+      "workflow must keep the dead-locale-keys gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
+      "lua tools/simulate_key_completion_lifecycle.lua",
+      "workflow must keep the key-completion lifecycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_nameplate_keystart.lua all",
+      "M+ forces sync workflow must keep the nameplate key-start simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_savedvariables_reload.lua",
+      "M+ forces sync workflow must keep the SavedVariables reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_key_start_lifecycle.lua",
+      "M+ forces sync workflow must keep the key-start lifecycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_hidden_sync_reload.lua",
+      "M+ forces sync workflow must keep the hidden-sync reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_raid_party_cycle.lua",
+      "M+ forces sync workflow must keep the raid-party cycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_lfg_join_target_chain.lua",
+      "M+ forces sync workflow must keep the LFG join target-chain simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_reload_storm.lua",
+      "M+ forces sync workflow must keep the reload-storm simulator gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_sound_channel.lua",
+      "M+ forces sync workflow must keep the sound-channel gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_chat_color_safety.lua",
+      "M+ forces sync workflow must keep the chat-color-safety gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_wow_api_compliance.lua",
+      "M+ forces sync workflow must keep the WoW 12.0 API compliance gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_format_string_consistency.lua",
+      "M+ forces sync workflow must keep the format-string consistency gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_secret_value_guards.lua",
+      "M+ forces sync workflow must keep the secret-value guards gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_addon_message_size.lua",
+      "M+ forces sync workflow must keep the addon-message-size gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_button_label_length.lua",
+      "M+ forces sync workflow must keep the button-label-length gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_toc_file_list.lua",
+      "M+ forces sync workflow must keep the TOC file-list gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_dead_locale_keys.lua",
+      "M+ forces sync workflow must keep the dead-locale-keys gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/simulate_key_completion_lifecycle.lua",
+      "M+ forces sync workflow must keep the key-completion lifecycle simulator gate"
     )
     AssertContains(
       Assert,
@@ -943,6 +1148,108 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       localPreflightContent,
       'Invoke-CheckedCommand "Deterministic Usecase + Rules Logic Validation" "lua tools/validate_usecases.lua"',
       "local preflight must run the same deterministic validation step as the workflow"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Nameplate Key-Start Simulator" "lua tools/simulate_nameplate_keystart.lua all"',
+      "local preflight must run the nameplate key-start simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "SavedVariables Reload Simulator" "lua tools/simulate_savedvariables_reload.lua"',
+      "local preflight must run the SavedVariables reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Key-Start Lifecycle Simulator" "lua tools/simulate_key_start_lifecycle.lua"',
+      "local preflight must run the key-start lifecycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Hidden-Sync Reload Simulator" "lua tools/simulate_hidden_sync_reload.lua"',
+      "local preflight must run the hidden-sync reload simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Raid-Party Cycle Simulator" "lua tools/simulate_raid_party_cycle.lua"',
+      "local preflight must run the raid-party cycle simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "LFG Join Target Chain Simulator" "lua tools/simulate_lfg_join_target_chain.lua"',
+      "local preflight must run the LFG join target-chain simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Reload-Storm Simulator" "lua tools/simulate_reload_storm.lua"',
+      "local preflight must run the reload-storm simulator gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Sound Channel Check" "lua tools/check_sound_channel.lua"',
+      "local preflight must run the sound-channel gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Chat Color Safety Check" "lua tools/check_chat_color_safety.lua"',
+      "local preflight must run the chat-color-safety gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "WoW 12.0 API Compliance Check" "lua tools/check_wow_api_compliance.lua"',
+      "local preflight must run the WoW 12.0 API compliance gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Format String Consistency Check" "lua tools/check_format_string_consistency.lua"',
+      "local preflight must run the format-string consistency gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Secret Value Guards Check" "lua tools/check_secret_value_guards.lua"',
+      "local preflight must run the secret-value guards gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Addon Message Size Check" "lua tools/check_addon_message_size.lua"',
+      "local preflight must run the addon-message-size gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Button Label Length Check" "lua tools/check_button_label_length.lua"',
+      "local preflight must run the button-label-length gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "TOC File List Check" "lua tools/check_toc_file_list.lua"',
+      "local preflight must run the TOC file-list gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Dead Locale Keys Check" "lua tools/check_dead_locale_keys.lua"',
+      "local preflight must run the dead-locale-keys gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Key-Completion Lifecycle Simulator" "lua tools/simulate_key_completion_lifecycle.lua"',
+      "local preflight must run the key-completion lifecycle simulator gate"
     )
     AssertContains(
       Assert,

@@ -72,9 +72,77 @@ jobs:
         run: |
           lua tools/check_hardcoded_strings.lua
 
+      - name: Sound Channel Check
+        run: |
+          lua tools/check_sound_channel.lua
+
+      - name: Chat Color Safety Check
+        run: |
+          lua tools/check_chat_color_safety.lua
+
+      - name: WoW 12.0 API Compliance Check
+        run: |
+          lua tools/check_wow_api_compliance.lua
+
+      - name: Format String Consistency Check
+        run: |
+          lua tools/check_format_string_consistency.lua
+
+      - name: Secret Value Guards Check
+        run: |
+          lua tools/check_secret_value_guards.lua
+
+      - name: Addon Message Size Check
+        run: |
+          lua tools/check_addon_message_size.lua
+
+      - name: Button Label Length Check
+        run: |
+          lua tools/check_button_label_length.lua
+
+      - name: TOC File List Check
+        run: |
+          lua tools/check_toc_file_list.lua
+
+      - name: Dead Locale Keys Check
+        run: |
+          lua tools/check_dead_locale_keys.lua
+
       - name: M+ Forces DB Lifetime
         run: |
           lua tools/check_mplus_db_lifetime.lua
+
+      - name: Nameplate Key-Start Simulator
+        run: |
+          lua tools/simulate_nameplate_keystart.lua all
+
+      - name: SavedVariables Reload Simulator
+        run: |
+          lua tools/simulate_savedvariables_reload.lua
+
+      - name: Key-Start Lifecycle Simulator
+        run: |
+          lua tools/simulate_key_start_lifecycle.lua
+
+      - name: Hidden-Sync Reload Simulator
+        run: |
+          lua tools/simulate_hidden_sync_reload.lua
+
+      - name: Raid-Party Cycle Simulator
+        run: |
+          lua tools/simulate_raid_party_cycle.lua
+
+      - name: LFG Join Target Chain Simulator
+        run: |
+          lua tools/simulate_lfg_join_target_chain.lua
+
+      - name: Reload-Storm Simulator
+        run: |
+          lua tools/simulate_reload_storm.lua
+
+      - name: Key-Completion Lifecycle Simulator
+        run: |
+          lua tools/simulate_key_completion_lifecycle.lua
 
       - name: Deterministic Usecase + Rules Logic Validation
         run: |

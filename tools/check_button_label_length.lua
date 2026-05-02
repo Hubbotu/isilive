@@ -1,0 +1,150 @@
+#!/usr/bin/env lua
+---@diagnostic disable: undefined-global
+-- Pins CLAUDE.md rule: full-width action buttons in the main UI are 120x24px,
+-- and although `SetFlatButtonText` clamps the label, visually truncated text
+-- is bad UX. Target: <=14 characters for any BTN_* key. Compact-mode variants
+-- (_SHORT, _hModeText) are scoped to <=6 characters.
+--
+-- This catches the typical regression where a translator picks a longer word
+-- and the German / French / Russian button gets clipped on screen, while the
+-- enUS variant looks fine to the maintainer.
+--
+-- Two-tier limits:
+--   * BTN_*_SHORT / BTN_*_hModeText / BTN_*_LOCKED -> SHORT_LIMIT
+--   * any other BTN_*                              -> LONG_LIMIT
+-- The character count uses utf8.len when available (Lua 5.3+) so multi-byte
+-- characters (cyrillic, umlauts) count as one character each. Falls back to
+-- byte count on Lua 5.1, which over-counts non-ASCII -- conservative.
+--
+-- Override via the OVERRIDES table below. Use sparingly: every entry is a
+-- visual regression waiting to happen.
+--
+-- Exits 0 on clean, 1 on violations, 2 on IO/setup errors.
+-- Run from repo root:
+--   lua tools/check_button_label_length.lua
+
+local LONG_LIMIT = 14
+local SHORT_LIMIT = 6
+
+-- Per-key length-cap overrides for legitimate edge cases (tooltip-text
+-- entries that just happen to live in the BTN_* namespace, multi-line
+-- buttons that wrap, etc.). Keep this table small — every entry is a
+-- truncation risk if the surrounding UI element ever changes width.
+-- Format: KEY -> max characters.
+local OVERRIDES = {
+  -- Used as a Tooltip:SetText title in ui/isiLive_notice.lua and
+  -- ui/isiLive_teleport_ui.lua, NOT as a button label. Tooltips are wide
+  -- enough that 30 chars still renders without clipping.
+  BTN_TELEPORT_LOCKED = 30,
+}
+
+local function utf8len(s)
+  -- Standard library presence varies. Newer Lua versions expose `utf8.len`
+  -- which counts codepoints; on 5.1 we fall back to byte count, which is
+  -- a strict over-count for any non-ASCII text and therefore stays on the
+  -- safe side of the contract.
+  local utf8 = rawget(_G, "utf8")
+  if type(utf8) == "table" and type(utf8.len) == "function" then
+    local n = utf8.len(s)
+    if type(n) == "number" then
+      return n
+    end
+  end
+  return #s
+end
+
+local function fail(code, message)
+  io.stderr:write("button-label-length: " .. message .. "\n")
+  os.exit(code)
+end
+
+local function LoadLocaleTables()
+  local addonTable = {}
+  local chunk, loadErr = loadfile("locale/isiLive_texts.lua")
+  if not chunk then
+    fail(2, "cannot load locale/isiLive_texts.lua: " .. tostring(loadErr))
+  end
+  local ok, runErr = pcall(chunk, "isiLive", addonTable)
+  if not ok then
+    fail(2, "error executing isiLive_texts.lua: " .. tostring(runErr))
+  end
+  if type(addonTable.Texts) ~= "table" or type(addonTable.Texts.GetLocaleTables) ~= "function" then
+    fail(2, "addonTable.Texts.GetLocaleTables is missing")
+  end
+  return addonTable.Texts.GetLocaleTables()
+end
+
+local function ResolveLimit(key)
+  if OVERRIDES[key] then
+    return OVERRIDES[key]
+  end
+  -- Compact-mode variants: only the explicit suffixes that this codebase
+  -- actually uses for narrow / hModeText layouts. _LOCKED is a button STATE
+  -- (used as tooltip text), not a size variant — the override table handles
+  -- those individually.
+  if key:find("_SHORT$") or key:find("_hModeText$") then
+    return SHORT_LIMIT
+  end
+  return LONG_LIMIT
+end
+
+local function main()
+  local locales = LoadLocaleTables()
+  local violations = {}
+  local checked = 0
+
+  -- Iterate over a stable, sorted locale order so the report is deterministic.
+  local localeOrder = {}
+  for lang in pairs(locales) do
+    localeOrder[#localeOrder + 1] = lang
+  end
+  table.sort(localeOrder)
+
+  for _, lang in ipairs(localeOrder) do
+    local table_ = locales[lang]
+    if type(table_) == "table" then
+      -- Sort keys so the report is identical run-to-run.
+      local keys = {}
+      for key in pairs(table_) do
+        if type(key) == "string" and key:sub(1, 4) == "BTN_" then
+          keys[#keys + 1] = key
+        end
+      end
+      table.sort(keys)
+      for _, key in ipairs(keys) do
+        local value = table_[key]
+        if type(value) == "string" then
+          checked = checked + 1
+          local limit = ResolveLimit(key)
+          local length = utf8len(value)
+          if length > limit then
+            violations[#violations + 1] =
+              string.format("[%s] %s = %q (%d chars > limit %d)", lang, key, value, length, limit)
+          end
+        end
+      end
+    end
+  end
+
+  if #violations == 0 then
+    io.write(
+      string.format(
+        "button-label-length: clean -- all %d BTN_* labels within limits (long<=%d, short<=%d)\n",
+        checked,
+        LONG_LIMIT,
+        SHORT_LIMIT
+      )
+    )
+    os.exit(0)
+  end
+
+  io.write(string.format("button-label-length: %d violation(s) found\n\n", #violations))
+  for _, v in ipairs(violations) do
+    io.write("  " .. v .. "\n")
+  end
+  io.write(string.format("\n  Long limit: <=%d, Short limit: <=%d\n", LONG_LIMIT, SHORT_LIMIT))
+  io.write("  Add an entry to OVERRIDES{} in this script if a label is intentionally longer.\n")
+  os.exit(1)
+end
+
+main()
