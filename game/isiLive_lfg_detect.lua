@@ -97,6 +97,7 @@ end
 -- used later as a tie-breaker when multiple roster members hold a key for the same
 -- dungeon (the leader is in practice the key owner).
 local pendingInvites = {}
+local suppressedInviteAccepts = {}
 -- mapID of the last detected own queue listing (nil = no active listing)
 local lastQueueMapID = nil
 -- mapID currently highlighted (invite or accepted invite, or own queue) — nil = none
@@ -257,10 +258,10 @@ local function ParseTitleKeyLevel(title)
   return best
 end
 
-local function OnInvited(searchResultID)
+local function ResolveInviteEntry(searchResultID)
   local C_LFGList_ref = rawget(_G, "C_LFGList")
   if type(C_LFGList_ref) ~= "table" then
-    return
+    return nil
   end
 
   local info = nil
@@ -292,23 +293,34 @@ local function OnInvited(searchResultID)
     tostring(info and info.activityID),
     tostring(mapID)
   )
-  if mapID then
-    local leaderName = nil
-    if type(info) == "table" and type(info.leaderName) == "string" and info.leaderName ~= "" then
-      leaderName = info.leaderName
-    end
-    local titleLevel = nil
-    if type(info) == "table" then
-      titleLevel = ParseTitleKeyLevel(info.name)
-    end
-    pendingInvites[searchResultID] = { mapID = mapID, leaderName = leaderName, titleLevel = titleLevel }
+  if not mapID then
+    return nil
+  end
+
+  local leaderName = nil
+  if type(info) == "table" and type(info.leaderName) == "string" and info.leaderName ~= "" then
+    leaderName = info.leaderName
+  end
+  local titleLevel = nil
+  if type(info) == "table" then
+    titleLevel = ParseTitleKeyLevel(info.name)
+  end
+
+  return { mapID = mapID, leaderName = leaderName, titleLevel = titleLevel }
+end
+
+local function OnInvited(searchResultID)
+  suppressedInviteAccepts[searchResultID] = nil
+  local entry = ResolveInviteEntry(searchResultID)
+  if entry then
+    pendingInvites[searchResultID] = entry
     Log(
       "state_set",
       "var=pendingInvites[%s] mapID=%s leader=%s titleLevel=%s",
       tostring(searchResultID),
-      tostring(mapID),
-      tostring(leaderName),
-      tostring(titleLevel)
+      tostring(entry.mapID),
+      tostring(entry.leaderName),
+      tostring(entry.titleLevel)
     )
   end
 end
@@ -324,6 +336,9 @@ end
 
 local function OnInviteAccepted(searchResultID)
   local entry = pendingInvites[searchResultID]
+  if entry == nil and not suppressedInviteAccepts[searchResultID] then
+    entry = ResolveInviteEntry(searchResultID)
+  end
   local mapID = type(entry) == "table" and entry.mapID or nil
   local leaderName = type(entry) == "table" and entry.leaderName or nil
   local titleLevel = type(entry) == "table" and entry.titleLevel or nil
@@ -355,7 +370,8 @@ local function OnInviteDeclined(searchResultID)
   local entry = pendingInvites[searchResultID]
   local mapID = type(entry) == "table" and entry.mapID or nil
   Log("invite_declined", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
-  pendingInvites[searchResultID] = nil
+  pendingInvites[searchResultID] = false
+  suppressedInviteAccepts[searchResultID] = true
   if mapID and detectedMapID == mapID then
     detectedMapID = nil
     activeInviteLeader = nil
@@ -428,6 +444,9 @@ local function ClearAllStateImpl()
   pendingAcceptedInviteMapID = nil
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
+  for resultID in pairs(pendingInvites) do
+    suppressedInviteAccepts[resultID] = true
+  end
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")

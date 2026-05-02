@@ -30,12 +30,28 @@ SoundUtils.Registry = {
     defaultEnabled = true,
     defaultChannel = "SFX",
   },
+  battle_res = {
+    file = "",
+    labelKey = "SETTINGS_SOUND_BATTLE_RES",
+    settingKey = "soundBattleResEnabled",
+    defaultEnabled = true,
+    defaultChannel = "SFX",
+  },
+  bloodlust = {
+    file = "",
+    labelKey = "SETTINGS_SOUND_BLOODLUST",
+    settingKey = "soundBloodlustEnabled",
+    defaultEnabled = true,
+    defaultChannel = "SFX",
+  },
 }
 
 SoundUtils.SettingsOrder = {
   "leader_transfer",
   "group_join",
   "portal_available",
+  "battle_res",
+  "bloodlust",
 }
 
 local function BuildSoundKey(soundFile, channel)
@@ -119,4 +135,16 @@ end
 
 function SoundUtils.PlayPortalAvailable()
   SoundUtils.PlayKey("portal_available")
+end
+
+function SoundUtils.PlayIncomingSummon()
+  SoundUtils.PlayKey("portal_available")
+end
+
+function SoundUtils.PlayBattleRes()
+  SoundUtils.PlayKey("battle_res")
+end
+
+function SoundUtils.PlayBloodlust()
+  SoundUtils.PlayKey("bloodlust")
 end

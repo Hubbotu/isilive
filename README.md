@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.209`
+- **Current version:** `0.9.210`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -19,7 +19,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
 - Forces percentage with a live pull-prediction bar so you see at a glance how much the running pull will add
-- Optional **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus an optional remainder until the next (or final) boss
+- Default-on **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus the verified remaining count needed to finish enemy forces
 - Forces info on the **mouseover tooltip** for any mob in a key
 
 Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
@@ -105,7 +105,7 @@ All 8 season dungeon portals in one place:
 
 - **Icon + short code** when ready (e.g. `MT`, `DAWN`)
 - **Cooldown timer** when on cooldown
-- **Highlight + sound** when a portal becomes available
+- **Highlight** when a portal becomes available
 - **Highlight + gold border** on the right portal when you accept an LFG invite or create your own LFG listing for a dungeon
 
 ### Markers (for everyone)
@@ -148,7 +148,7 @@ The percent is computed from the bundled MDT-synced forces DB, **not** from Bliz
 
 ### Forces overlay on enemy nameplates
 
-Optional always-on text over every hostile unit's nameplate during a key (off by default; enable in Settings → Nameplates).
+Default-on text over every hostile unit's nameplate during a key; Settings -> Nameplates can disable it or hide the remaining-needed suffix.
 
 ```
 1.16%
@@ -156,7 +156,7 @@ Optional always-on text over every hostile unit's nameplate during a key (off by
 
 Configurable: percent toggle, font size 8-24, position around the nameplate (LEFT/RIGHT/TOP/BOTTOM). Same DB-based source as the tooltip — deterministic mob contribution, never the cumulative progress.
 
-Plater / Platynator users: a soft warning is shown in Settings if either is loaded — both addons can already display M+ forces on nameplates via their own scripts, so isiLive's overlay defaults to off to avoid duplication.
+Plater / Platynator users: a soft warning is shown in Settings if either is loaded — both addons can already display M+ forces on nameplates via their own scripts, so you can disable isiLive's overlay there if you prefer to avoid duplication.
 
 ### Battle Res / Bloodlust chat announce
 
@@ -207,7 +207,7 @@ Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 - **General** — language, startup auto-show, minimap button
 - **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
 - **Behavior** — addon sync, auto-open on M+ queue, auto-close on key start, raid behavior, column guides
-- **Sounds** — lead transfer, group join, portal available
+- **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust
 - **Nameplates** — enable forces overlay, font size, position, percent toggle
 - **Chat Announcements** — announce Battle Res / announce Bloodlust
 - **Administrative** — queue debug log, runtime log (both reset on reload, for support), plus dedicated **Clear Queue Debug Log** / **Clear Runtime Log** buttons in the panel for one-click log purge without using the slash command

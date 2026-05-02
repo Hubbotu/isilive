@@ -251,6 +251,7 @@ local function FinalizeFactorySettings(ctx)
         if type(mobNameplate.SetFormat) == "function" then
           mobNameplate.SetFormat({
             showPercent = db.mobNameplateShowPercent ~= false,
+            showRemaining = db.mobNameplateShowRemaining ~= false,
           })
         end
         if type(mobNameplate.SetAppearance) == "function" then
@@ -284,13 +285,11 @@ local function FinalizeFactorySettings(ctx)
       local db = IsiLiveDB or {}
 
       -- One-time M+ forces display-mode migration: if the user never chose a
-      -- mode (both legacy keys are nil), persist "off" as the default. The
-      -- nameplate overlay is intentionally OFF on fresh installs so we never
-      -- produce a duplicate display when the user already runs another
-      -- nameplate addon that shows per-mob M+ count. They opt in explicitly
-      -- via the settings panel after seeing the overlay isn't there.
+      -- mode (both legacy keys are nil), persist "nameplate" as the default.
+      -- This keeps the M+ forces percent visible in keys without requiring a
+      -- manual settings toggle after every fresh install / reset.
       if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
-        db.mobNameplateEnabled = false
+        db.mobNameplateEnabled = true
         db.mplusForcesEstimate = false
       end
 
@@ -299,6 +298,9 @@ local function FinalizeFactorySettings(ctx)
       -- initial state until the user manually nudges each control.
       if db.mobNameplateShowPercent == nil then
         db.mobNameplateShowPercent = true
+      end
+      if db.mobNameplateShowRemaining == nil then
+        db.mobNameplateShowRemaining = true
       end
       if db.mobNameplateFontSize == nil then
         db.mobNameplateFontSize = 14
@@ -343,6 +345,7 @@ local function FinalizeFactorySettings(ctx)
         if type(mobNameplate.SetFormat) == "function" then
           mobNameplate.SetFormat({
             showPercent = db.mobNameplateShowPercent ~= false,
+            showRemaining = db.mobNameplateShowRemaining ~= false,
           })
         end
         if type(mobNameplate.SetAppearance) == "function" then

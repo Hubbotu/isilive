@@ -171,6 +171,21 @@ return function(test, ctx)
     Assert.Equal(capturedArgs.level, 15)
   end)
 
+  test("ControllerWiring forwards full-group sound callback into the group controller", function()
+    local addon = LoadAddonModules({ "isiLive_controller_wiring.lua" })
+    local callbackCalls = 0
+    local deps = makeMinimalDeps()
+    deps.callbacks.onMemberJoinedGroup = function()
+      callbackCalls = callbackCalls + 1
+    end
+    local groupModule, getOpts = captureGroupModuleOpts()
+    addon.ControllerWiring.CreateGroupController(groupModule, deps)
+
+    getOpts().onMemberJoinedGroup()
+
+    Assert.Equal(callbackCalls, 1, "onMemberJoinedGroup must be forwarded to Group.CreateController")
+  end)
+
   test("ControllerWiring optional clearRioBaselineSnapshot uses no-op default when absent", function()
     local addon = LoadAddonModules({ "isiLive_controller_wiring.lua" })
     local deps = makeMinimalDeps()

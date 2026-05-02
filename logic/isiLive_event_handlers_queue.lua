@@ -6,6 +6,7 @@ local QueueLifecycle = {}
 addonTable.EventHandlersQueueLifecycle = QueueLifecycle
 
 local NEGATIVE_STATUS_PENDING_GRACE_SECONDS = 20
+local INVITE_ACCEPTED_STATUS_REFRESH_DELAY_SECONDS = 0.2
 
 local function HasActiveListing(entryInfo)
   if type(entryInfo) ~= "table" then
@@ -65,6 +66,27 @@ local function IsRaidModeActive(ctx)
   return type(ctx.isRaidGroup) == "function" and ctx.isRaidGroup() == true
 end
 
+local function IsInviteAcceptedStatus(...)
+  local _searchResultID, newStatus = ...
+  return type(newStatus) == "string" and string.lower(newStatus) == "inviteaccepted"
+end
+
+local function RefreshTargetStatusAfterInviteAccepted(ctx)
+  if type(ctx.updateStatusLine) == "function" then
+    ctx.updateStatusLine()
+  end
+  if type(ctx.timerAfter) == "function" then
+    ctx.timerAfter(INVITE_ACCEPTED_STATUS_REFRESH_DELAY_SECONDS, function()
+      if IsRaidModeActive(ctx) then
+        return
+      end
+      if type(ctx.updateStatusLine) == "function" then
+        ctx.updateStatusLine()
+      end
+    end)
+  end
+end
+
 function QueueLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
     or function(_event, ...) end
@@ -84,6 +106,9 @@ function QueueLifecycle.BuildHandlers(ctx)
         return
       end
       ctx.handleLFGDetectEvent("LFG_LIST_APPLICATION_STATUS_UPDATED", ...)
+      if IsInviteAcceptedStatus(...) then
+        RefreshTargetStatusAfterInviteAccepted(ctx)
+      end
       if ctx.isTestMode() or ctx.isTestAllMode() then
         ctx.exitTestMode()
       end

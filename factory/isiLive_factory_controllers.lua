@@ -1005,8 +1005,16 @@ local function InitializeFactoryPrimaryControllers(ctx)
     local template
     if info.kind == "BR" then
       template = L.COMBAT_CHAT_BR_USED or "%s used BR"
+      local soundUtils = addonTable.SoundUtils
+      if type(soundUtils) == "table" and type(soundUtils.PlayBattleRes) == "function" then
+        soundUtils.PlayBattleRes()
+      end
     elseif info.kind == "LUST" then
       template = L.COMBAT_CHAT_LUST_STARTED or "%s started Bloodlust"
+      local soundUtils = addonTable.SoundUtils
+      if type(soundUtils) == "table" and type(soundUtils.PlayBloodlust) == "function" then
+        soundUtils.PlayBloodlust()
+      end
     else
       return
     end
@@ -1588,6 +1596,10 @@ local function InitializeFactorySecondaryCdTracker(
       killTrack.OnUpdate(function()
         if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
           ctx.rosterPanelController.RefreshKillTrackRow()
+        end
+        local mobNameplate = ctx.addonTable and ctx.addonTable.MobNameplate
+        if type(mobNameplate) == "table" and type(mobNameplate.RefreshAll) == "function" then
+          mobNameplate.RefreshAll()
         end
       end)
     end

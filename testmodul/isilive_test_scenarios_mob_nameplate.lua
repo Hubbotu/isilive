@@ -257,6 +257,47 @@ local function RegisterLifecycleTests(test, Assert, WithGlobals, LoadAddonModule
       Assert.True(next(eventFrame._events) == nil, "SetEnabled(false) must unregister all events")
     end)
   end)
+
+  test("MobNameplate CHALLENGE_MODE_START schedules delayed refreshes for late active-key APIs", function()
+    local scheduled = {}
+    local globals, state, frames = BuildEnv({
+      challengeActive = false,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+      globals = {
+        C_Timer = {
+          After = function(delay, fn)
+            scheduled[#scheduled + 1] = { delay = delay, fn = fn }
+          end,
+        },
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+
+      local eventFrame = nil
+      for _, f in ipairs(frames) do
+        if f._scripts and type(f._scripts.OnEvent) == "function" then
+          eventFrame = f
+          break
+        end
+      end
+      eventFrame = Assert.NotNil(eventFrame, "event frame with OnEvent script must exist")
+
+      eventFrame._scripts.OnEvent(eventFrame, "CHALLENGE_MODE_START")
+      Assert.Equal(#scheduled, 2, "challenge start must queue delayed refreshes after the immediate refresh")
+      Assert.True(addon.MobNameplate._Test_GetFrames()["nameplate1"] == nil, "immediate refresh still respects inactive API state")
+
+      state.challengeActive = true
+      scheduled[1].fn()
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "delayed refresh must render once the active-key API state is available")
+      Assert.True(frame._shown == true, "delayed challenge refresh must show the nameplate overlay")
+      Assert.Equal(frame.text._text, "1.16%", "delayed challenge refresh must render the percent text")
+    end)
+  end)
 end
 
 local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
@@ -276,6 +317,70 @@ local function RegisterRenderTests(test, Assert, WithGlobals, LoadAddonModules)
       Assert.True(frame ~= nil, "frame must be created for eligible nameplate")
       Assert.True(frame._shown == true, "frame must be visible")
       Assert.Equal(frame.text._text, "1.16%", "default format renders the percent string with a trailing %")
+    end)
+  end)
+
+  test("MobNameplate appends remaining dungeon percent when enabled and KillTrack has matching map data", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        KillTrack = {
+          GetData = function()
+            return {
+              active = true,
+              mapID = 161,
+              percent = 75.66,
+              total = 431,
+            }
+          end,
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, showRemaining = true })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must be created for eligible nameplate")
+      Assert.Equal(
+        frame.text._text,
+        "1.16%/24.34%",
+        "remaining percent must append as current-mob percent / remaining-needed percent"
+      )
+    end)
+  end)
+
+  test("MobNameplate omits remaining percent when KillTrack map does not match", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        KillTrack = {
+          GetData = function()
+            return {
+              active = true,
+              mapID = 999,
+              percent = 75.66,
+              total = 431,
+            }
+          end,
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, showRemaining = true })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must be created for eligible nameplate")
+      Assert.Equal(frame.text._text, "1.16%", "mismatched KillTrack map must not invent a remaining value")
     end)
   end)
 

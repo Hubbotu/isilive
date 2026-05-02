@@ -660,18 +660,14 @@ local function RegisterTeleportUIVisualTests(test, Assert, WithGlobals, LoadAddo
     end)
   end)
 
-  test("TeleportUI plays the portal sound once when the active target changes", function()
+  test("TeleportUI keeps active-target refreshes silent because summon sound owns Portal.ogg", function()
     local createFrameStub = BuildTeleportUICreateFrameStub()
     local soundCalls = 0
-    local playedSound = nil
-    local playedChannel = nil
 
     WithGlobals({
       CreateFrame = createFrameStub,
-      PlaySoundFile = function(path, channel)
+      PlaySoundFile = function()
         soundCalls = soundCalls + 1
-        playedSound = path
-        playedChannel = channel
       end,
     }, function()
       local addon = LoadAddonModules({
@@ -748,13 +744,7 @@ local function RegisterTeleportUIVisualTests(test, Assert, WithGlobals, LoadAddo
       controller.UpdateButtons(nil)
       controller.UpdateButtons(12345)
 
-      Assert.Equal(soundCalls, 1, "activating a portal target should play the portal sound once")
-      Assert.Equal(
-        playedSound,
-        "Interface\\AddOns\\isiLive\\sounds\\Portal.ogg",
-        "activating a portal target should use the Portal asset"
-      )
-      Assert.Equal(playedChannel, "SFX", "activating a portal target should use the SFX channel")
+      Assert.Equal(soundCalls, 0, "active-target refreshes must not play the incoming-summon sound")
     end)
   end)
 end

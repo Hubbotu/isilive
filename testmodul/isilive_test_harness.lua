@@ -139,8 +139,7 @@ local IMPLICIT_DEPENDENCIES = {
   ["isiLive_factory_controllers.lua"] = {
     "isiLive_factory_kick_tracker.lua",
   },
-  -- isiLive_sound_utils.lua must be loaded before isiLive_teleport_ui.lua because
-  -- PlayPortalAvailableSound delegates to addonTable.SoundUtils at runtime.
+  -- Keep the sound registry available for teleport modules that share addon setup.
   ["isiLive_teleport_ui.lua"] = { "isiLive_sound_utils.lua" },
   -- isiLive_languages.lua must be loaded before any module that calls
   -- addonTable.Languages (locale, commands, season_data).

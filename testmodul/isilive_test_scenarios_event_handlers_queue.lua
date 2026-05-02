@@ -17,6 +17,8 @@ return function(test, ctx)
       activeJoinedKeyMapID = nil,
       activeJoinedKeyMapIDSets = 0,
       runtimeTraces = {},
+      statusUpdates = 0,
+      scheduled = {},
     }
   end
 
@@ -75,6 +77,12 @@ return function(test, ctx)
       end,
       updateUI = function()
         counters.uiUpdates = counters.uiUpdates + 1
+      end,
+      updateStatusLine = function()
+        counters.statusUpdates = counters.statusUpdates + 1
+      end,
+      timerAfter = function(delay, fn)
+        counters.scheduled[#counters.scheduled + 1] = { delay = delay, fn = fn }
       end,
       logRuntimeTrace = function(message)
         table.insert(counters.runtimeTraces, message)
@@ -146,6 +154,25 @@ return function(test, ctx)
     })
     handlers.LFG_LIST_APPLICATION_STATUS_UPDATED(nil, 7, "applied")
     Assert.Equal(counters.exits, 1, "test-all mode must be exited")
+  end)
+
+  test("APPLICATION_STATUS_UPDATED inviteaccepted refreshes target status immediately and after roster settle", function()
+    local lfgEvents = {}
+    local handlers, counters = LoadHandlers({
+      handleLFGDetectEvent = function(event, ...)
+        lfgEvents[#lfgEvents + 1] = { event, ... }
+      end,
+    })
+
+    handlers.LFG_LIST_APPLICATION_STATUS_UPDATED(nil, 7, "inviteaccepted")
+
+    Assert.Equal(lfgEvents[1][1], "LFG_LIST_APPLICATION_STATUS_UPDATED", "inviteaccepted must reach LFGDetect first")
+    Assert.Equal(counters.statusUpdates, 1, "inviteaccepted must refresh status immediately")
+    Assert.Equal(#counters.scheduled, 1, "inviteaccepted must schedule one settle refresh")
+    Assert.Equal(counters.scheduled[1].delay, 0.2, "settle refresh must use the short invite delay")
+
+    counters.scheduled[1].fn()
+    Assert.Equal(counters.statusUpdates, 2, "scheduled settle refresh must refresh status again")
   end)
 
   -- ShouldPreservePendingQueueJoinInfoOnNegativeStatus edge cases --------------

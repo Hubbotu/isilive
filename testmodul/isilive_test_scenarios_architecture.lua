@@ -655,6 +655,8 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       Assert.True(addon.SoundUtils.HasKey("leader_transfer"), "sound registry should include the leader-transfer key")
       Assert.True(addon.SoundUtils.HasKey("group_join"), "sound registry should include the group-join key")
       Assert.True(addon.SoundUtils.HasKey("portal_available"), "sound registry should include the portal key")
+      Assert.True(addon.SoundUtils.HasKey("battle_res"), "sound registry should include the battle-res key")
+      Assert.True(addon.SoundUtils.HasKey("bloodlust"), "sound registry should include the bloodlust key")
       local leaderEntry = addon.SoundUtils.GetEntry("leader_transfer")
       Assert.NotNil(leaderEntry, "leader-transfer entry should exist")
       Assert.Equal(
@@ -694,8 +696,35 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         addon.SoundUtils.IsEnabled("portal_available"),
         "portal sound should default to enabled when no DB override exists"
       )
+      local battleResEntry = addon.SoundUtils.GetEntry("battle_res")
+      Assert.NotNil(battleResEntry, "battle-res sound entry should exist")
+      Assert.Equal(
+        battleResEntry.settingKey,
+        "soundBattleResEnabled",
+        "battle-res sound should map to the battle-res setting key"
+      )
+      Assert.Equal(battleResEntry.file, "", "battle-res sound must stay silent until an asset is configured")
+      Assert.True(
+        addon.SoundUtils.IsEnabled("battle_res"),
+        "battle-res sound should default to enabled when no DB override exists"
+      )
+      local bloodlustEntry = addon.SoundUtils.GetEntry("bloodlust")
+      Assert.NotNil(bloodlustEntry, "bloodlust sound entry should exist")
+      Assert.Equal(
+        bloodlustEntry.settingKey,
+        "soundBloodlustEnabled",
+        "bloodlust sound should map to the bloodlust setting key"
+      )
+      Assert.Equal(bloodlustEntry.file, "", "bloodlust sound must stay silent until an asset is configured")
+      Assert.True(
+        addon.SoundUtils.IsEnabled("bloodlust"),
+        "bloodlust sound should default to enabled when no DB override exists"
+      )
       Assert.NotNil(addon.SoundUtils.PlayGroupJoin, "sound utils should expose a dedicated group-join sound helper")
       Assert.NotNil(addon.SoundUtils.PlayPortalAvailable, "sound utils should expose a dedicated portal sound helper")
+      Assert.NotNil(addon.SoundUtils.PlayIncomingSummon, "sound utils should expose a dedicated summon sound helper")
+      Assert.NotNil(addon.SoundUtils.PlayBattleRes, "sound utils should expose a dedicated battle-res sound helper")
+      Assert.NotNil(addon.SoundUtils.PlayBloodlust, "sound utils should expose a dedicated bloodlust sound helper")
       addon.SoundUtils.PlayKey("leader_transfer")
       Assert.Equal(playCalls, 1, "leader-transfer sound helper should play exactly once")
       Assert.Equal(
@@ -721,15 +750,22 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         "portal sound helper should use the Portal asset"
       )
       Assert.Equal(playedChannel, "SFX", "portal sound helper should use the SFX channel")
+      addon.SoundUtils.PlayBattleRes()
+      addon.SoundUtils.PlayBloodlust()
+      Assert.Equal(playCalls, 3, "prepared BR and Bloodlust helpers must stay silent without configured assets")
 
       db.soundLeadEnabled = false
       db.soundGroupJoinEnabled = true
       db.soundPortalAvailableEnabled = false
+      db.soundBattleResEnabled = true
+      db.soundBloodlustEnabled = true
       now = 2
       playCalls = 0
       addon.SoundUtils.PlayKey("leader_transfer")
       addon.SoundUtils.PlayGroupJoin()
       addon.SoundUtils.PlayPortalAvailable()
+      addon.SoundUtils.PlayBattleRes()
+      addon.SoundUtils.PlayBloodlust()
       Assert.Equal(playCalls, 1, "only the enabled group-join sound should play when settings are toggled")
       Assert.Equal(
         playedPath,

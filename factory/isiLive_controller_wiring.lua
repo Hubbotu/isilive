@@ -74,6 +74,8 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
       "callbacks.captureQueueJoinCandidate"
     ),
     announceQueuedGroupJoin = RequireFunction(callbacks.announceQueuedGroupJoin, "callbacks.announceQueuedGroupJoin"),
+    onMemberJoinedGroup = type(callbacks.onMemberJoinedGroup) == "function" and callbacks.onMemberJoinedGroup
+      or function() end,
     setMainFrameVisible = RequireFunction(callbacks.setMainFrameVisible, "callbacks.setMainFrameVisible"),
     updateLeaderButtons = RequireFunction(callbacks.updateLeaderButtons, "callbacks.updateLeaderButtons"),
     clearLatestQueueTarget = RequireFunction(callbacks.clearLatestQueueTarget, "callbacks.clearLatestQueueTarget"),
@@ -148,6 +150,16 @@ local function BuildGroupControllerDepsFromContext(ctx)
     callbacks = {
       captureQueueJoinCandidate = ctx.captureQueueJoinCandidate,
       announceQueuedGroupJoin = ctx.announceQueuedGroupJoin,
+      onMemberJoinedGroup = function()
+        local soundUtils = addonTable.SoundUtils
+        if type(soundUtils) == "table" and type(soundUtils.PlayGroupJoin) == "function" then
+          soundUtils.PlayGroupJoin()
+          return
+        end
+        if type(soundUtils) == "table" and type(soundUtils.Play) == "function" then
+          soundUtils.Play("Interface\\AddOns\\isiLive\\sounds\\SynthChord.ogg")
+        end
+      end,
       setMainFrameVisible = ctx.setMainFrameVisible,
       updateLeaderButtons = ctx.updateLeaderButtons,
       clearLatestQueueTarget = ctx.clearLatestQueueTarget,
@@ -175,16 +187,6 @@ local function BuildGroupControllerDepsFromContext(ctx)
     sendRefreshRequest = ctx.sendRefreshRequest,
     timerAfter = BuildTimerAfter(),
     onGroupJoined = function() end,
-    onMemberJoinedGroup = function()
-      local soundUtils = addonTable.SoundUtils
-      if type(soundUtils) == "table" and type(soundUtils.PlayGroupJoin) == "function" then
-        soundUtils.PlayGroupJoin()
-        return
-      end
-      if type(soundUtils) == "table" and type(soundUtils.Play) == "function" then
-        soundUtils.Play("Interface\\AddOns\\isiLive\\sounds\\SynthChord.ogg")
-      end
-    end,
     getRaidTransitionBehavior = ctx.getRaidTransitionBehavior,
     shouldAutoCloseMainFrame = ctx.shouldAutoCloseMainFrame,
     autoCloseMainFrame = ctx.autoCloseMainFrame,
@@ -373,6 +375,8 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
   end
   config.showCombatAnnounce = type(deps.showCombatAnnounce) == "function" and deps.showCombatAnnounce
     or function(_info) end
+  config.playIncomingSummonSound = type(deps.playIncomingSummonSound) == "function" and deps.playIncomingSummonSound
+    or function() end
   config.sendAck = function(sender)
     if C_ChatInfo and C_ChatInfo.SendAddonMessage and type(sender) == "string" and sender ~= "" then
       C_ChatInfo.SendAddonMessage(modules.sync.GetPrefix(), "ACK:" .. deps.getAddonVersionRaw(), "WHISPER", sender)
@@ -602,6 +606,12 @@ local function BuildEventHandlersDepsFromContext(ctx)
     startBindingWatchdog = ctx.startBindingWatchdog,
     getUnitNameAndRealm = ctx.getUnitNameAndRealm,
     showCombatAnnounce = ctx.ShowCombatAnnounce,
+    playIncomingSummonSound = function()
+      local soundUtils = addonTable.SoundUtils
+      if type(soundUtils) == "table" and type(soundUtils.PlayIncomingSummon) == "function" then
+        soundUtils.PlayIncomingSummon()
+      end
+    end,
     markIsiLiveUser = ctx.markIsiLiveUser,
     getUnitRio = ctx.getUnitRio,
     getInspectSpecName = ctx.getInspectSpecName,

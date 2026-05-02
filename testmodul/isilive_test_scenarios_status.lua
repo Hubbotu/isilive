@@ -514,11 +514,11 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       }
       controller.MaybeAnnounceTargetDungeonChat()
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 1, "post-invite target without level must announce once (chat fires before level resolves)")
+      Assert.Equal(#prints, 1, "post-invite target without level must announce once after one settle recheck")
       Assert.Equal(
         prints[1],
         "Target Dungeon: |cffffd200Ara-Kara|r",
-        "level-less invite announce should highlight just the dungeon name in yellow"
+        "settled level-less target announce should highlight just the dungeon name in yellow"
       )
 
       current.targetInfo = {
@@ -527,12 +527,7 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       }
       controller.MaybeAnnounceTargetDungeonChat()
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 2, "level arriving after the invite announce must produce a level-augmented re-announce")
-      Assert.Equal(
-        prints[2],
-        "Target Dungeon: |cffffd200Ara-Kara +14|r",
-        "grouped key chat should highlight the dungeon + key level in yellow (chat-only, status-line stays plain)"
-      )
+      Assert.Equal(#prints, 1, "level arriving after a level-less fallback must not produce duplicate chat")
 
       current.targetInfo = nil
       controller.MaybeAnnounceTargetDungeonChat()
@@ -542,7 +537,58 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         level = 14,
       }
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 3, "clearing the target must allow a fresh grouped key announce later")
+      Assert.Equal(#prints, 2, "clearing the target must allow a fresh grouped key announce later")
+      Assert.Equal(
+        prints[2],
+        "Target Dungeon: |cffffd200Ara-Kara +14|r",
+        "fresh grouped key chat should highlight the dungeon + key level in yellow"
+      )
+    end)
+  end)
+
+  test("Status target dungeon chat upgrades to key level when level resolves before fallback announce", function()
+    local current = {
+      inGroup = true,
+      targetInfo = {
+        name = "Ara-Kara",
+      },
+    }
+    local prints = {}
+
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Outside", "none", 0, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 0, "first level-less sighting must wait for a settle recheck")
+
+      current.targetInfo = {
+        name = "Ara-Kara",
+        level = 14,
+      }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "resolved level before fallback must announce the level form")
+      Assert.Equal(prints[1], "Target Dungeon: |cffffd200Ara-Kara +14|r", "level form must be printed")
     end)
   end)
 

@@ -1035,6 +1035,34 @@ local function RegisterLFGDetectResetTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect inviteaccepted resolves search result when invited event was missed", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1768, name = "Nexuspunkt Xenas +10", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 559, "inviteaccepted must resolve mapID directly from search result")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        10,
+        "inviteaccepted must parse the key level directly from the LFG title"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Leader-Realm",
+        "inviteaccepted must capture the LFG leader directly from the search result"
+      )
+    end)
+  end)
+
   test("LFGDetect CheckActiveGroup keeps detectedMapID while grouped even when no active listing exists", function()
     local globals, fire = BuildLFGDetectEnv({
       IsInGroup = function()

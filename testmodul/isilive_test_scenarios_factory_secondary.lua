@@ -375,6 +375,9 @@ local function BuildControllerContext(state, addon, initial)
       RefreshKickColumn = function()
         state.kickRefreshes = (state.kickRefreshes or 0) + 1
       end,
+      RefreshKillTrackRow = function()
+        state.killTrackRowRefreshes = (state.killTrackRowRefreshes or 0) + 1
+      end,
       SetCdController = function(ctrl)
         state.cdController = ctrl
       end,
@@ -438,8 +441,16 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
           state.killTrackDemoData = nil
           state.killTrackDemoCleared = (state.killTrackDemoCleared or 0) + 1
         end,
-        OnUpdate = function() end,
+        OnUpdate = function(callback)
+          state.killTrackCallbacks = state.killTrackCallbacks or {}
+          table.insert(state.killTrackCallbacks, callback)
+        end,
         SetDebugLogger = function() end,
+      },
+      MobNameplate = {
+        RefreshAll = function()
+          state.mobNameplateRefreshes = (state.mobNameplateRefreshes or 0) + 1
+        end,
       },
     })
 
@@ -481,6 +492,21 @@ local function RegisterTestModeDemoDataTests(test, Assert, WithGlobals, LoadAddo
     Assert.Nil(state.killTrackDemoData, "test mode exit must clear kill-track demo data")
     Assert.Equal(state.mplusDemoCleared, 1, "M+ timer demo data must be cleared once")
     Assert.Equal(state.killTrackDemoCleared, 1, "kill-track demo data must be cleared once")
+  end)
+end
+
+local function RegisterKillTrackNameplateRefreshTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Factory kill-track updates refresh the kill row and active nameplates", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules, {
+      mainFrameShown = true,
+    })
+
+    Assert.NotNil(state.killTrackCallbacks, "factory must subscribe to KillTrack updates")
+    local callback = Assert.NotNil(state.killTrackCallbacks[1], "KillTrack update callback must be registered")
+    callback()
+
+    Assert.Equal(state.killTrackRowRefreshes, 1, "KillTrack update must refresh the lower M+ forces row")
+    Assert.Equal(state.mobNameplateRefreshes, 1, "KillTrack update must refresh nameplate remaining-percent text")
   end)
 end
 
@@ -869,5 +895,6 @@ return function(test, ctx)
     )
   end)
   RegisterTestModeDemoDataTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterKillTrackNameplateRefreshTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterPostRaidKickRecoveryTests(test, Assert, WithGlobals, LoadAddonModules)
 end

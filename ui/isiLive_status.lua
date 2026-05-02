@@ -285,6 +285,8 @@ end
 local function ResetTargetDungeonChatState(state)
   state.lastObservedTargetDungeonName = nil
   state.lastTargetDungeonChatSignature = nil
+  state.pendingLevelLessTargetDungeonName = nil
+  state.levelLessTargetDungeonAnnounced = nil
 end
 
 local function MaybeAnnounceTargetDungeonChat(state, deps)
@@ -296,6 +298,28 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
   local info = ResolveConcreteTargetDungeonInfo(deps)
   if type(info) ~= "table" then
     ResetTargetDungeonChatState(state)
+    return
+  end
+
+  if info.level and state.levelLessTargetDungeonAnnounced == info.name then
+    return
+  end
+
+  if not info.level then
+    if state.levelLessTargetDungeonAnnounced == info.name then
+      return
+    end
+    if state.pendingLevelLessTargetDungeonName ~= info.name then
+      state.pendingLevelLessTargetDungeonName = info.name
+      return
+    end
+    state.levelLessTargetDungeonAnnounced = info.name
+  else
+    state.pendingLevelLessTargetDungeonName = nil
+    state.levelLessTargetDungeonAnnounced = nil
+  end
+
+  if not info.level and state.lastTargetDungeonChatSignature == table.concat({ info.name, "nil" }, "|") then
     return
   end
 

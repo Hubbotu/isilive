@@ -98,6 +98,7 @@ local function NewCtx(overrides)
       return false
     end,
     showCombatAnnounce = function() end,
+    playIncomingSummonSound = function() end,
     forEachRosterInfo = function() end,
     isSyncUserKnown = function()
       return false
@@ -212,6 +213,31 @@ return function(test, ctx)
     })
     handlers.CHALLENGE_MODE_MAPS_UPDATE(nil)
     Assert.Equal(calls, 1, "shared handler must run for CHALLENGE_MODE_MAPS_UPDATE")
+  end)
+
+  test("CONFIRM_SUMMON plays incoming-summon sound outside raid mode", function()
+    local calls = 0
+    local handlers = LoadHandlers({
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    })
+    handlers.CONFIRM_SUMMON(nil)
+    Assert.Equal(calls, 1, "incoming summon confirmation must play the configured summon sound")
+  end)
+
+  test("CONFIRM_SUMMON suppresses incoming-summon sound in raid mode", function()
+    local calls = 0
+    local handlers = LoadHandlers({
+      isRaidGroup = function()
+        return true
+      end,
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    })
+    handlers.CONFIRM_SUMMON(nil)
+    Assert.Equal(calls, 0, "incoming summon confirmation must stay silent in raid mode")
   end)
 
   -- HandleInspectReadyEvent ----------------------------------------------------

@@ -15,20 +15,6 @@ local preparePrivateTooltip = assert(
 )
 local hidePrivateTooltip =
   assert(addonTable.UICommon and addonTable.UICommon.HidePrivateTooltip, "isiLive: UICommon.HidePrivateTooltip missing")
-local function PlayPortalAvailableSound()
-  -- SoundUtils is always loaded before TeleportUI; PlayPortalAvailable applies
-  -- the soundPortalAvailableEnabled setting and spam-protection internally.
-  -- The former fallback paths bypassed both checks and are removed (MINOR-2).
-  local soundUtils = addonTable.SoundUtils
-  if type(soundUtils) == "table" and type(soundUtils.PlayPortalAvailable) == "function" then
-    soundUtils.PlayPortalAvailable()
-  end
-end
-
-local function ShouldSuppressPortalSound(soundContext)
-  return soundContext == "queue" or soundContext == "invite"
-end
-
 local LAYOUT_MODE_EXPANDED = RI.LAYOUT_MODE_EXPANDED or "expanded"
 local LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = RI.LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL or "compact_main_horizontal"
 local M2_ROW_LEFT_MARGIN = RI.M2_ROW_LEFT_MARGIN or 10
@@ -594,7 +580,6 @@ function TeleportUI.CreateController(opts)
       local known = deps.isSpellKnown(button.spellID)
       local icon = deps.getSpellTexture(button.spellID)
       button.icon:SetTexture(icon or button.defaultIcon or "Interface\\Icons\\INV_Misc_QuestionMark")
-      local wasActiveTarget = button._lastObservedActiveTarget == true
       button.isActiveTarget = (resolvedSpellID and button.spellID == resolvedSpellID) and true or false
       button.cooldownRemainingSeconds = tonumber(deps.getTeleportCooldownRemaining(button.spellID)) or 0
       if deps.logRuntimeTraceDeep and button.isActiveTarget then
@@ -640,14 +625,6 @@ function TeleportUI.CreateController(opts)
         button.animGroup:Stop()
       end
 
-      if
-        button._portalSoundPrimed
-        and not wasActiveTarget
-        and button.isActiveTarget
-        and not ShouldSuppressPortalSound(soundContext)
-      then
-        PlayPortalAvailableSound()
-      end
       button._portalSoundPrimed = true
       button._lastObservedActiveTarget = button.isActiveTarget and true or false
 

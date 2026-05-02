@@ -656,13 +656,9 @@ RegisterCenterNoticeTeleportTooltipTests = function(test, Assert, WithGlobals, L
       })
 
       centerNotice.ConfigureTeleportButton("Terrasse der Magister", 999)
-      Assert.Equal(soundCalls, 1, "center notice should play the portal sound when a teleport becomes available")
-      Assert.Equal(
-        playedSound,
-        "Interface\\AddOns\\isiLive\\sounds\\Portal.ogg",
-        "center notice should use the Portal asset when a teleport becomes available"
-      )
-      Assert.Equal(playedChannel, "SFX", "center notice should use the SFX channel for portal sounds")
+      Assert.Equal(soundCalls, 0, "center notice teleport buttons must not play the incoming-summon sound")
+      Assert.Nil(playedSound, "center notice must not select a portal sound asset")
+      Assert.Nil(playedChannel, "center notice must not select a portal sound channel")
       local onEnter = centerNotice.teleportButton._scripts and centerNotice.teleportButton._scripts.OnEnter or nil
       onEnter = Assert.NotNil(onEnter, "center notice teleport button should define tooltip OnEnter")
       onEnter(centerNotice.teleportButton)

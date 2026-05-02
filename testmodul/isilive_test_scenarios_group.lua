@@ -1029,7 +1029,20 @@ local function RegisterGroupLifecycleFollowupTests(test, Assert, LoadAddonModule
 
     Assert.Equal(state.queued, 1, "queue capture must fire on first join")
     Assert.Equal(state.announced, 1, "queue announce must fire on first join")
-    Assert.Equal(state.memberJoinedCalls, 4, "first join should notify every newly seen party member")
+    Assert.Equal(state.memberJoinedCalls, 1, "first join should notify once when the group is full")
+  end)
+
+  test("Group join sound waits until the group is full", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      wasInGroup = false,
+      getNumGroupMembers = function()
+        return 4
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Equal(state.memberJoinedCalls, 0, "partial groups must not play the group-full sound")
   end)
 
   test("First group join fires the optional join callback exactly once", function()

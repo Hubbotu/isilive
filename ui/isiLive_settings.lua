@@ -1242,10 +1242,10 @@ local function ResolveMplusForcesModeFromDB(db)
     return "tooltip"
   end
   if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
-    -- Fresh install: nameplate overlay is OFF by default to avoid colliding
-    -- with another nameplate addon that may already show per-mob M+ count.
+    -- Fresh install: nameplate overlay is ON by default so the M+ forces
+    -- percent appears in keys without a manual setup step.
     -- The factory migration writes the same default into the DB once.
-    return "off"
+    return "nameplate"
   end
   return "off"
 end
@@ -1363,6 +1363,26 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
       end
     end,
     "SETTINGS_NAMEPLATE_SHOW_PERCENT"
+  )
+
+  controls.nameplateShowRemaining, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_NAMEPLATE_SHOW_REMAINING or "Show remaining needed",
+    function()
+      return config.getDB().mobNameplateShowRemaining ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.mobNameplateShowRemaining = checked
+      if type(config.onMobNameplateChange) == "function" then
+        config.onMobNameplateChange()
+      end
+      if type(controls.nameplatePreviewUpdate) == "function" then
+        controls.nameplatePreviewUpdate()
+      end
+    end,
+    "SETTINGS_NAMEPLATE_SHOW_REMAINING"
   )
 
   controls.nameplateFontSize, yOffset = CreateSettingsSlider(
@@ -1540,7 +1560,11 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     local showPercent = db.mobNameplateShowPercent ~= false
     local parts = {}
     if showPercent then
-      parts[#parts + 1] = "1.16%"
+      local text = "1.16%"
+      if db.mobNameplateShowRemaining ~= false then
+        text = text .. "/24.34%"
+      end
+      parts[#parts + 1] = text
     end
     if #parts == 0 then
       preview.overlay:SetText("")
@@ -1783,14 +1807,26 @@ local SOUND_SETTING_FALLBACKS = {
   },
   group_join = {
     labelKey = "SETTINGS_SOUND_GROUP_JOIN_ENABLED",
-    labelFallback = "Sound: Group Join",
+    labelFallback = "Sound: Full Group",
     settingKey = "soundGroupJoinEnabled",
     defaultEnabled = true,
   },
   portal_available = {
     labelKey = "SETTINGS_SOUND_PORTAL_AVAILABLE",
-    labelFallback = "Sound: Portal Available",
+    labelFallback = "Sound: Incoming Summon",
     settingKey = "soundPortalAvailableEnabled",
+    defaultEnabled = true,
+  },
+  battle_res = {
+    labelKey = "SETTINGS_SOUND_BATTLE_RES",
+    labelFallback = "Sound: Battle Res",
+    settingKey = "soundBattleResEnabled",
+    defaultEnabled = true,
+  },
+  bloodlust = {
+    labelKey = "SETTINGS_SOUND_BLOODLUST",
+    labelFallback = "Sound: Bloodlust",
+    settingKey = "soundBloodlustEnabled",
     defaultEnabled = true,
   },
 }
@@ -1799,7 +1835,7 @@ local function GetSoundSettingEntries()
   local soundUtils = addonTable.SoundUtils
   local registry = type(soundUtils) == "table" and type(soundUtils.Registry) == "table" and soundUtils.Registry or nil
   local order = type(soundUtils) == "table" and type(soundUtils.SettingsOrder) == "table" and soundUtils.SettingsOrder
-    or { "leader_transfer", "group_join", "portal_available" }
+    or { "leader_transfer", "group_join", "portal_available", "battle_res", "bloodlust" }
   local entries = {}
 
   for _, key in ipairs(order) do
@@ -2288,6 +2324,10 @@ local function RefreshSettingsControls(controls, config)
   if controls.nameplateShowPercent then
     controls.nameplateShowPercent.label:SetText(freshL.SETTINGS_NAMEPLATE_SHOW_PERCENT or "Show percentage")
     controls.nameplateShowPercent.check:SetChecked(db.mobNameplateShowPercent ~= false)
+  end
+  if controls.nameplateShowRemaining then
+    controls.nameplateShowRemaining.label:SetText(freshL.SETTINGS_NAMEPLATE_SHOW_REMAINING or "Show remaining needed")
+    controls.nameplateShowRemaining.check:SetChecked(db.mobNameplateShowRemaining ~= false)
   end
   if controls.nameplatePosition and type(controls.nameplatePosition.UpdateHighlight) == "function" then
     controls.nameplatePosition.UpdateHighlight()

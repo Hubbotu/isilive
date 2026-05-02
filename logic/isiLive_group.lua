@@ -217,6 +217,7 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
   -- 1. Identify current group members to protect them from ghosting
   local currentMemberKeys = {}
   local unreadablePartySlots = {}
+  local fullGroupJoinSoundPlayed = false
   local name, realm = deps.getUnitNameAndRealm("player")
   if name then
     currentMemberKeys[MemberKey(name, realm)] = true
@@ -322,13 +323,14 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
         _localDpsFresh = localDpsFresh,
       }
 
-      -- Fire sound if this is a genuinely new member (not seen before, not a ghost resurrection)
+      -- Fire the join sound once when a genuine join makes the 5-player group complete.
       local ghostKey = GhostKey(memberName, memberRealm)
       local shouldPlayJoinSound = false
       if callbacks and type(callbacks.onMemberJoinedGroup) == "function" then
-        shouldPlayJoinSound = not existing or existing.isGhost == true
+        shouldPlayJoinSound = members == 5 and not fullGroupJoinSoundPlayed and (not existing or existing.isGhost == true)
       end
       if shouldPlayJoinSound then
+        fullGroupJoinSoundPlayed = true
         deps.logRuntimeTracef(
           "[ROSTER] member_joined unit=%s name=%s class=%s",
           tostring(unit),

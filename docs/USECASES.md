@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.209`
-Zuletzt aktualisiert: `2026-05-01`
+Versionsbasis: `0.9.210`
+Zuletzt aktualisiert: `2026-05-02`
 
 ## Akteure
 
@@ -87,7 +87,7 @@ Ziel: Das Portal-Cooldown-Verhalten nur dann anwenden, wenn der Portal-Cast tats
 5. Regel: Sichtbare Portal-Slots bleiben in deterministischer Season-Display-Reihenfolge, auch wenn mehrere Dungeons denselben Teleport-Spell nutzen.
 6. Output: Das Teleport-Grid zeigt Cooldown-Zeit und Lock-State konsistent; in `M2` zeigen ready Buttons zusaetzlich den locale-aware Dungeon-Short-Code direkt auf dem Icon.
 7. Regel: Solange ein Teleport auf Cooldown ist, wird das `M2`-Short-Code-Overlay versteckt, damit der Cooldown-Timer lesbar bleibt.
-8. Regel: Wenn ein Teleport-Ziel neu verfuegbar wird, wird `sounds/Portal.ogg` genau einmal als Audio-Feedback ausgespielt, ohne Secure-Attributes oder Combat-Lockdown zu beruehren.
+8. Regel: Das Teleport-Grid spielt beim Ready- oder Highlight-Wechsel keinen Portal-Sound mehr; `sounds/Portal.ogg` gehoert zum eingehenden Beschwoerungsdialog des lokalen Spielers.
 9. Erfolgskriterium: Jeder Portal-Button spiegelt den gemeinsamen Cooldown ohne Slot-Drift wider, und `M2` behaelt die Zielerkennung ohne Mouseover.
 
 ## UC-05 Cooldown-Lifecycle
@@ -153,7 +153,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 4. Combat-Sicherheit: Wenn Combat-Lockdown Secure-`ReloadUI`-Button-Refreshes blockiert, zum Beispiel Click-Registration oder Macro-Attribute-Updates, verschiebt das Addon diese Aktualisierung und wiederholt sie auf `PLAYER_REGEN_ENABLED`. Die gemounteten `Esc`-Strips selbst bleiben im Combat read-only, bleiben ueber `GameMenuFrame` sichtbar und machen aus insecure Shortcut-Klicks No-Ops statt Overlay-Layout zu mutieren.
 5. Regel: Der Spellbook-Shortcut muss spellbook-spezifische Opener nutzen und darf nicht ueber das Talents-Panel routen.
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
-7. Ergebnis B: Blizzard Settings zeigen Sprache, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Background Opacity`, `UI Scale`, `Default UI on Open`, `Minimap Button`, `Addon Sync`, `Auto-Open on M+ Queue`, `Auto-Close on Key Start / Solo`, `Column Guides`, die dedizierte `Sounds`-Sektion mit `Sound: Lead Transfer`, `Sound: Group Join` und `Sound: Portal Available`, `Queue Debug Log (resets on reload)` und `Runtime Log (resets on reload)`.
+7. Ergebnis B: Blizzard Settings zeigen Sprache, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Background Opacity`, `UI Scale`, `Default UI on Open`, `Minimap Button`, `Addon Sync`, `Auto-Open on M+ Queue`, `Auto-Close on Key Start / Solo`, `Column Guides`, die dedizierte `Sounds`-Sektion mit `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res` und `Sound: Bloodlust`, `Queue Debug Log (resets on reload)` und `Runtime Log (resets on reload)`.
 8. Regel: Settings-Controls spiegeln live Blizzard-CVars und SavedVariables und wenden Aenderungen sofort an, ohne dass das Main-Addon-Fenster sichtbar sein muss; eine Aenderung von `Background Opacity` aktualisiert live den Main-Frame, die optionalen `Esc`-Tooling- und Travel-Strips und den Settings-Canvas. Der neue `Lock main frame position`-Schalter, der Top-right-Lock-Button sowie die Slash-Commands `/isilive lock`, `/isilive unlock` und `/isilive resetui` spiegeln denselben gespeicherten Lock-State und verhindern unabsichtliches Verschieben der Haupt-UI; `resetui` setzt Position, UI-Skalierung und Hintergrund-Deckkraft wieder auf ihre Default-Werte zurueck und zeigt den Default-Hinweis als separate Textzeile unter dem Button, bevor eine Reset-Bestaetigung abgefragt wird. Hidden Legacy-Controls (`Name Length`, `Teleport Grid Columns`, `Show DPS Column`, `Markers: Leader Only`) bleiben aus der Settings-UI draussen und nutzen derzeit feste Runtime-Defaults: `DPS` an, Marker fuer alle sichtbar, feste Namenstrunkierung und Legacy-`Travel`-Layout mit 2 Spalten.
 9. Erfolgskriterium: Beide Einstiegspunkte bleiben lokalisiert, deterministisch und spiegeln den aktuellen Config- und Runtime-State.
 
@@ -225,12 +225,12 @@ Ziel: Eine optionale Live-Anzeige auf jeder feindlichen Namensplakette waehrend 
 2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und liefert `MPlusForces.byNpcId` plus `MPlusForces.dungeonTotal[mapID].total`.
 3. Aktivierungs-Gate (alle vier muessen halten): aktiver Key, User-Toggle gesetzt, `UnitReaction(unit,"player") <= 4` (hostile/neutral, friendly Units skipped), `UnitGUID` ist ein nicht-leerer String und kein Secret Value.
 4. Verarbeitung: Der GUID wird in eine NpcID umgewandelt (Pattern-Match auf den Blizzard-GUID, akzeptiert nur `Creature` und `Vehicle`), und der `count`-Wert aus `MPlusForces.byNpcId[npcId]` wird durch `MPlusForces.dungeonTotal[mapID].total` geteilt -> `percent = count / total * 100`. Diese DB-basierte Berechnung ist die primaere Quelle; die Blizzard-API `C_ScenarioInfo.GetUnitCriteriaProgressValues` wird nur als Fallback genutzt, wenn die DB den NPC nicht kennt (frischer Patch-Mob vor naechstem MDT-Refresh).
-5. Regel: `BuildText` rendert `<percent>%` oder versteckt das Frame, wenn der Anteil nicht ermittelbar ist (Secret Value, leerer String, fehlender NPC im DB).
+5. Regel: `BuildText` rendert `<percent>%` oder versteckt das Frame, wenn der Anteil nicht ermittelbar ist (Secret Value, leerer String, fehlender NPC im DB). Solange `mobNameplateShowRemaining` nicht explizit `false` ist und `KillTrack.GetData()` fuer dieselbe aktive `mapID` einen belastbaren `rawCount`/`total`- oder `percent`/`total`-Stand liefert, wird zusaetzlich `/<remaining>%` angehaengt; ohne passende KillTrack-Daten bleibt nur der Mob-Anteil sichtbar.
 6. Regel: 12.0-Secret-Value-Guards greifen vor jedem `==`/`~=`/`<=`/`<`/Pattern-Match-Operator: `mapID`, `numCriteria`, `quantity`, `totalQuantity`, `unitGUID`, `unitReaction`, `percentString`. Die Reihenfolge ist `type() -> IsSecretValue() -> Comparison`, niemals umgekehrt, da der Comparison-Operator den Stack tainted, bevor der Guard laeuft.
 7. Regel: Frame-Pool pro `unit`-Token, sodass `CreateFrame` hoechstens einmal pro gleichzeitig aktivem Nameplate-Slot gerufen wird. `NAME_PLATE_UNIT_REMOVED` versteckt das Frame und entfernt den Pool-Eintrag.
-8. Regel: Plater- oder Platynator-Soft-Detect zeigt eine dezente Warnung in den Settings; `mobNameplateEnabled` defaultet auf `false` fuer Frischinstallationen, damit Nutzer dieser Addons keine Doppel-Anzeige erhalten.
+8. Regel: Plater- oder Platynator-Soft-Detect zeigt eine dezente Warnung in den Settings; `mobNameplateEnabled` defaultet auf `true` fuer Frischinstallationen, damit die Forces-Prozentanzeige im Key ohne manuelles Aktivieren sichtbar ist.
 9. Verarbeitung: `appearance.fontSize` wird via `ApplyFont(fontString)` als `SetFont(file, size, flags)` mit dem Template `GameFontNormalOutline` und Default-Fallback `Fonts\\FRIZQT__.TTF` / `OUTLINE` auf den FontString uebertragen, sowohl bei Frame-Erstellung als auch bei jedem Refresh, sodass Slider-Aenderungen ohne `/reload` durchschlagen.
-10. Erfolgskriterium: Im aktiven Key zeigt jede feindliche Namensplakette eine deterministische, lokalisierungsneutrale Forces-Zahl, die der Mouseover-Tooltip-Zeile entspricht; ausserhalb eines Keys oder bei nicht-feindlichen Units bleibt das Overlay versteckt.
+10. Erfolgskriterium: Im aktiven Key zeigt jede feindliche Namensplakette eine deterministische, lokalisierungsneutrale Forces-Zahl, die der Mouseover-Tooltip-Zeile entspricht; bei aktivierter Restbedarfs-Option folgt der noch benoetigte Dungeon-Fortschritt im Format `<mob>%/<rest>%`. Ausserhalb eines Keys oder bei nicht-feindlichen Units bleibt das Overlay versteckt.
 
 ## UC-21 Multi-Kick-Extras im Roster-Tooltip
 

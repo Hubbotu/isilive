@@ -12,6 +12,7 @@ local frames = {}
 
 local format = {
   showPercent = true,
+  showRemaining = false,
 }
 
 local appearance = {
@@ -175,7 +176,38 @@ local function IsEligibleUnit(unit)
   return true
 end
 
-local function BuildText(percentString)
+local function ResolveRemainingPercent(activeMapID)
+  if not format.showRemaining or type(activeMapID) ~= "number" then
+    return nil
+  end
+  local killTrack = addonTable.KillTrack
+  if type(killTrack) ~= "table" or type(killTrack.GetData) ~= "function" then
+    return nil
+  end
+  local ok, data = pcall(killTrack.GetData)
+  if not ok or type(data) ~= "table" or data.active ~= true then
+    return nil
+  end
+  if tonumber(data.mapID) ~= activeMapID then
+    return nil
+  end
+  local total = tonumber(data.total)
+  if not total or total <= 0 then
+    return nil
+  end
+  local rawCount = tonumber(data.rawCount)
+  if rawCount == nil then
+    local percent = tonumber(data.percent)
+    if not percent then
+      return nil
+    end
+    rawCount = (percent / 100) * total
+  end
+  local remainingCount = math.max(0, total - rawCount)
+  return string.format("%.2f", (remainingCount / total) * 100)
+end
+
+local function BuildText(percentString, remainingPercentString)
   if not format.showPercent or type(percentString) ~= "string" then
     return nil
   end
@@ -185,7 +217,11 @@ local function BuildText(percentString)
   -- string concatenates to "%" (still rendered), and any genuine string
   -- runtime errors fall through to nil.
   local ok, text = pcall(function()
-    return percentString .. "%"
+    local text = percentString .. "%"
+    if type(remainingPercentString) == "string" then
+      text = text .. "/" .. remainingPercentString .. "%"
+    end
+    return text
   end)
   if not ok or type(text) ~= "string" then
     return nil
@@ -205,7 +241,8 @@ local function ApplyFrameSizeForFont(frame, size)
   -- (small visual padding); width grows linearly so 4-character percent text
   -- ("99.9%") never gets clipped on the side.
   local height = math.max(20, math.ceil(size + 6))
-  local width = math.max(80, math.ceil(size * 4))
+  local widthMultiplier = format.showRemaining and 7 or 4
+  local width = math.max(80, math.ceil(size * widthMultiplier))
   pcall(frame.SetSize, frame, width, height)
 end
 
@@ -340,10 +377,11 @@ local function UpdateNameplate(unit)
   end
 
   local percentString
+  local activeMapID
   if testMode then
     percentString = testPercent
   else
-    local activeMapID = GetActiveChallengeMapID()
+    activeMapID = GetActiveChallengeMapID()
     -- Primary source: bundled MDT-synced forces DB, which is deterministic and
     -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
     -- when the NPC is missing from the DB (e.g. freshly added patch mob, OR
@@ -363,7 +401,7 @@ local function UpdateNameplate(unit)
     end
   end
 
-  local text = BuildText(percentString)
+  local text = BuildText(percentString, ResolveRemainingPercent(activeMapID))
   if not text then
     if frame then
       frame:Hide()
@@ -408,6 +446,15 @@ local function RefreshAll()
   end
 end
 
+local function ScheduleRefreshAll(delay)
+  local timer = rawget(_G, "C_Timer")
+  local after = type(timer) == "table" and timer.After or nil
+  if type(after) ~= "function" then
+    return
+  end
+  pcall(after, delay, RefreshAll)
+end
+
 local function OnEvent(_, event, arg1)
   if event == "NAME_PLATE_UNIT_ADDED" and type(arg1) == "string" then
     UpdateNameplate(arg1)
@@ -417,6 +464,10 @@ local function OnEvent(_, event, arg1)
       frame:Hide()
       frames[arg1] = nil
     end
+  elseif event == "CHALLENGE_MODE_START" then
+    RefreshAll()
+    ScheduleRefreshAll(0.25)
+    ScheduleRefreshAll(1)
   else
     RefreshAll()
   end
@@ -484,6 +535,15 @@ function MobNameplate.SetFormat(opts)
   if type(opts.showPercent) == "boolean" then
     format.showPercent = opts.showPercent
   end
+  if type(opts.showRemaining) == "boolean" then
+    format.showRemaining = opts.showRemaining
+  end
+  if enabled then
+    RefreshAll()
+  end
+end
+
+function MobNameplate.RefreshAll()
   if enabled then
     RefreshAll()
   end
@@ -657,7 +717,8 @@ function MobNameplate.DumpState(unit)
     percentString = out.apiPercent
   end
   out.resolvedPercent = percentString
-  out.resolvedText = BuildText(percentString)
+  out.remainingPercent = ResolveRemainingPercent(out.activeMapID)
+  out.resolvedText = BuildText(percentString, out.remainingPercent)
 
   local frame = frames[unit]
   if frame then
@@ -712,7 +773,7 @@ function MobNameplate._Test_GetState()
   return {
     enabled = enabled,
     registered = registered,
-    format = { showPercent = format.showPercent },
+    format = { showPercent = format.showPercent, showRemaining = format.showRemaining },
     appearance = {
       fontSize = appearance.fontSize,
       position = appearance.position,

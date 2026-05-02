@@ -105,6 +105,7 @@ local EVENT_REGISTRY = {
   { "LFG_LIST_APPLICATION_STATUS_UPDATED", false, false, false },
   { "LFG_LIST_ACTIVE_ENTRY_UPDATE", false, false, false },
   { "CHAT_MSG_ADDON", false, false, false },
+  { "CONFIRM_SUMMON", true, true, false },
   { "INSPECT_READY", false, false, true },
   { "CHALLENGE_MODE_START", true, true, false },
   { "CHALLENGE_MODE_COMPLETED", true, true, false },

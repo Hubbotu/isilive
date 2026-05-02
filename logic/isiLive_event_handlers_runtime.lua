@@ -596,6 +596,13 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
   end
 
+  local function HandleConfirmSummonEvent(_self)
+    if IsRaidModeActive(ctx) then
+      return
+    end
+    ctx.playIncomingSummonSound()
+  end
+
   local function HandleSpellUpdateCooldownEvent(_self)
     if IsRaidModeActive(ctx) then
       return
@@ -640,6 +647,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     PLAYER_SPECIALIZATION_CHANGED = HandlePlayerSpecializationChangedEvent,
     INSPECT_READY = HandleInspectReadyEvent,
     CHAT_MSG_ADDON = HandleChatMsgAddonEvent,
+    CONFIRM_SUMMON = HandleConfirmSummonEvent,
     SPELL_UPDATE_COOLDOWN = HandleSpellUpdateCooldownEvent,
     SPELL_UPDATE_CHARGES = HandleSpellUpdateChargesEvent,
     UNIT_AURA = HandleUnitAuraEvent,

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2026-05-02 - Version 0.9.210 (patch)
+
+- **Nameplate M+ forces overlay now starts enabled and can show dungeon remainder ([factory/isiLive_factory.lua](../factory/isiLive_factory.lua), [ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua)):**
+  - Fresh installs now default the enemy-nameplate M+ percent overlay to enabled, so the per-mob contribution is visible in keys without a manual toggle.
+  - A new settings checkbox controls the optional remaining-needed suffix. It defaults to enabled and renders values like `1.20%/24.34%` when KillTrack has verified active-run data for the same map.
+  - The remainder calculation uses the existing KillTrack `rawCount`/`total` or `percent`/`total` data and fails closed to the per-mob value only when the active map or total cannot be verified.
+  - KillTrack updates now refresh active nameplates, so the displayed remainder follows live enemy-count progress.
+
+- **Full-group sound cue ([logic/isiLive_group.lua](../logic/isiLive_group.lua), [factory/isiLive_controller_wiring.lua](../factory/isiLive_controller_wiring.lua), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - The former group-join sound now fires only once when a real party update completes the 5-player group, instead of firing for every newly seen party member.
+  - Fixed the runtime wiring so the sound callback created by controller wiring actually reaches the group controller.
+  - Settings labels now describe the full-group cue while keeping the existing saved setting key for compatibility.
+
+- **Sound routing cleanup and prepared combat sound toggles ([core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua), [logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua), [ui/isiLive_teleport_ui.lua](../ui/isiLive_teleport_ui.lua), [ui/isiLive_notice.lua](../ui/isiLive_notice.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - `sounds/Portal.ogg` now belongs to incoming player summons via `CONFIRM_SUMMON`, covering meeting-stone and warlock summon confirmations for the local player.
+  - Teleport-grid and center-notice refreshes no longer play Portal.ogg when a dungeon portal becomes ready or highlighted.
+  - Added default-enabled settings toggles for Battle Res and Bloodlust sounds. Their registry entries intentionally keep an empty asset path until the sound files are available, so no missing-file playback is attempted.
+
+- **LFG target-dungeon announce is faster and avoids duplicate level-less/levelled spam ([game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua), [logic/isiLive_event_handlers_queue.lua](../logic/isiLive_event_handlers_queue.lua), [ui/isiLive_status.lua](../ui/isiLive_status.lua)):**
+  - Invite acceptance now resolves the accepted search-result payload directly, including activity map and title `+N` when available, instead of waiting for a later group/listing refresh.
+  - The target-dungeon chat line may still post without a key level when no reliable level source exists, but it no longer posts a level-less line and then repeats the same dungeon with `+N` once the title level arrives.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [docs/RELEASE.md](RELEASE.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md), [isiLive.toc](../isiLive.toc)):**
+  - Version baseline bumped to `0.9.210`.
+  - Validator baseline updated to `1361` deterministic usecase scenarios.
+
+- **Tests:**
+  - Added deterministic coverage for nameplate remaining-percent rendering, map mismatch suppression, settings persistence, KillTrack-to-nameplate refresh wiring, LFG invite-accepted resolution, immediate invite status refresh, duplicate target-dungeon chat suppression, full-group sound gating, incoming-summon sound routing, silent teleport refreshes, prepared BR/Bloodlust sound settings, and sound callback wiring.
+  - `lua tools/validate_usecases.lua` passed locally with `1361 passed, 0 failed`.
+
 ## 2026-05-01 - Version 0.9.209 (patch)
 
 - **Code review hardening: target resolution, map lookups, and dead fallbacks ([game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua), [logic/isiLive_highlight.lua](../logic/isiLive_highlight.lua), [factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua), [ui/isiLive_roster.lua](../ui/isiLive_roster.lua), [ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua)):**
