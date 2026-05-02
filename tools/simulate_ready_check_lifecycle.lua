@@ -13,7 +13,7 @@ local function LoadLocal(path)
   local file = assert(io.open(path, "rb"))
   local source = file:read("*a")
   file:close()
-  local chunk, err = load(source, "@" .. path)
+  local chunk, err = (loadstring or load)(source, "@" .. path)
   assert(chunk, err)
   return chunk()
 end
