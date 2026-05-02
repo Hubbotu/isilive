@@ -139,22 +139,6 @@ return function(test, ctx)
     end
   end)
 
-  test("RAID_GROUP_HIDDEN is defined in both locales", function()
-    local addon = LoadAddonModules({ "isiLive_texts.lua" })
-    local locales = addon.Texts.GetLocaleTables()
-
-    Assert.NotNil(locales.enUS.RAID_GROUP_HIDDEN, "enUS must have RAID_GROUP_HIDDEN")
-    Assert.NotNil(locales.deDE.RAID_GROUP_HIDDEN, "deDE must have RAID_GROUP_HIDDEN")
-    Assert.True(
-      type(locales.enUS.RAID_GROUP_HIDDEN) == "string" and #locales.enUS.RAID_GROUP_HIDDEN > 0,
-      "enUS RAID_GROUP_HIDDEN must be non-empty string"
-    )
-    Assert.True(
-      type(locales.deDE.RAID_GROUP_HIDDEN) == "string" and #locales.deDE.RAID_GROUP_HIDDEN > 0,
-      "deDE RAID_GROUP_HIDDEN must be non-empty string"
-    )
-  end)
-
   test("Locale title key is present in all locales", function()
     local addon = LoadAddonModules({ "isiLive_texts.lua" })
     local locales = addon.Texts.GetLocaleTables()

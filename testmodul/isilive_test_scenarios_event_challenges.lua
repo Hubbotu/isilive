@@ -50,6 +50,21 @@ local function RegisterChallengeStartAndDelayTests(test, Assert, _WithGlobals, L
     Assert.Equal(lastVisible, false, "enabled auto-close must request a hidden main frame")
   end)
 
+  test("Event handlers reset kick stats on challenge start", function()
+    local resetCalls = 0
+
+    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
+    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+      resetKickStats = function()
+        resetCalls = resetCalls + 1
+      end,
+    })
+
+    controller:Dispatch("CHALLENGE_MODE_START")
+
+    Assert.Equal(resetCalls, 1, "challenge start must reset kick stats exactly once")
+  end)
+
   test("Event handlers auto-show main frame on challenge completion while grouped", function()
     local showCalls = 0
     local lastVisible = nil

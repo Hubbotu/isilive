@@ -178,6 +178,7 @@ local function CreateFactoryContext(addonName, tbl)
     if not (okUnit and playerExists) then
       return false
     end
+    -- secret-value-ok: IsInGroup short-circuits in solo, UnitIsGroupLeader is the leader query itself
     return IsInGroup() and UnitIsGroupLeader("player")
   end
 

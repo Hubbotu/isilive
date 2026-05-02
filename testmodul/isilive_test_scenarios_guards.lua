@@ -27,7 +27,6 @@ local REQUIRED_MODULES = {
   "isiLive_highlight.lua",
   "isiLive_group.lua",
   "isiLive_queue.lua",
-  "isiLive_queue_flow.lua",
   "isiLive_log_buffer.lua",
   "isiLive_inspect.lua",
   "isiLive_roster.lua",

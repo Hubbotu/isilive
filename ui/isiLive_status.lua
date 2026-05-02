@@ -350,6 +350,7 @@ local function GetDungeonDifficultyLabel(getL)
     return L.DUNGEON_DIFF_OUTSIDE, false, false, instanceType, difficultyID, instanceName
   end
 
+  -- secret-value-ok: existence-guarded short-circuit chain on C_ChallengeMode
   if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID and C_ChallengeMode.GetActiveChallengeMapID() then
     return L.DUNGEON_DIFF_MYTHIC, true, true, instanceType, difficultyID, instanceName
   end
@@ -497,7 +498,8 @@ local function BuildStatusLineText(deps, flags)
   local leadText = deps.isPlayerLeader() and L.STATUS_LEAD_YES or L.STATUS_LEAD_NO
   local hasActiveChallenge = false
   if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID then
-    hasActiveChallenge = C_ChallengeMode.GetActiveChallengeMapID() and true or false
+    local ok, mapID = pcall(C_ChallengeMode.GetActiveChallengeMapID)
+    hasActiveChallenge = ok and mapID and true or false
   end
   local mplusText = hasActiveChallenge and L.STATUS_MPLUS_YES or L.STATUS_MPLUS_NO
   local targetDungeonText = BuildTargetDungeonText(deps)

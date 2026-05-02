@@ -66,7 +66,6 @@ local FILE_PATHS = {
   ["isiLive_group.lua"] = "logic/isiLive_group.lua",
   ["isiLive_queue.lua"] = "logic/isiLive_queue.lua",
   ["isiLive_queue_debug.lua"] = "logic/isiLive_queue_debug.lua",
-  ["isiLive_queue_flow.lua"] = "logic/isiLive_queue_flow.lua",
   ["isiLive_stats.lua"] = "logic/isiLive_stats.lua",
   ["isiLive_inspect.lua"] = "logic/isiLive_inspect.lua",
   ["isiLive_events.lua"] = "logic/isiLive_events.lua",

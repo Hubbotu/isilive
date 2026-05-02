@@ -145,13 +145,28 @@ function Units.GetUnitRole(unit)
     return "NONE"
   end
 
-  local role = UnitGroupRolesAssigned(unit)
+  -- pcall-guarded against WoW 12.0 Secret Values: in tainted M+ contexts the
+  -- raw API can return a masked value that crashes the `==` comparison below.
+  local rolesAssigned = rawget(_G, "UnitGroupRolesAssigned")
+  local role
+  if type(rolesAssigned) == "function" then
+    local ok, value = pcall(rolesAssigned, unit)
+    if ok then
+      role = value
+    end
+  end
   if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
     return role
   end
 
   -- Fallback for player: use current specialization role if group role is not set
-  if UnitIsUnit(unit, "player") and GetSpecialization and GetSpecializationRole then
+  local isUnit = rawget(_G, "UnitIsUnit")
+  local isPlayer = false
+  if type(isUnit) == "function" then
+    local ok, value = pcall(isUnit, unit, "player")
+    isPlayer = ok and value == true
+  end
+  if isPlayer and GetSpecialization and GetSpecializationRole then
     local specIndex = GetSpecialization()
     if specIndex then
       role = GetSpecializationRole(specIndex)
@@ -208,9 +223,25 @@ function Units.GetUnitNameAndRealm(unit)
     return nil, nil
   end
 
-  local name, realm = UnitFullName(unit)
+  -- pcall-guarded: in 12.0 M+ keys both UnitFullName and UnitName can return
+  -- Secret Values for tainted units. The downstream Sync.NormalizePlayerKey
+  -- treats nil as "self-realm fallback", so an early bail-out is safe.
+  local name, realm
+  local fullName = rawget(_G, "UnitFullName")
+  if type(fullName) == "function" then
+    local ok, n, r = pcall(fullName, unit)
+    if ok then
+      name, realm = n, r
+    end
+  end
   if not name then
-    name = UnitName(unit)
+    local unitName = rawget(_G, "UnitName")
+    if type(unitName) == "function" then
+      local ok, n = pcall(unitName, unit)
+      if ok then
+        name = n
+      end
+    end
   end
   if addonTable.StringUtils.IsBlank(realm) then
     realm = GetRealmName() or ""

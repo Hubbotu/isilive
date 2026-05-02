@@ -381,7 +381,7 @@ local function UpdateNameplate(unit)
   if testMode then
     percentString = testPercent
   else
-    activeMapID = GetActiveChallengeMapID()
+    activeMapID = GetActiveChallengeMapID() -- secret-value-ok: file-local helper is pcall-protected
     -- Primary source: bundled MDT-synced forces DB, which is deterministic and
     -- guaranteed to be the per-mob contribution. Fallback to the Blizzard API
     -- when the NPC is missing from the DB (e.g. freshly added patch mob, OR
@@ -660,7 +660,7 @@ function MobNameplate.DumpState(unit)
     hasNamePlateAPI = HasNamePlateAPI(),
     hasProgressAPI = HasProgressAPI(),
     challengeActive = IsChallengeModeActive(),
-    activeMapID = GetActiveChallengeMapID(),
+    activeMapID = GetActiveChallengeMapID(), -- secret-value-ok: file-local helper is pcall-protected
     eligible = IsEligibleUnit(unit),
   }
 

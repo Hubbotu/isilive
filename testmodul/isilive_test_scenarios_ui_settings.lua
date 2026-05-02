@@ -1372,7 +1372,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        26,
+        27,
         "settings should hide only the legacy DPS, markers, name-length,"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
           .. " chat-announce, combat-fade, and nameplate-subtoggle checkboxes visible"
@@ -1383,7 +1383,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
-        26,
+        27,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, and nameplate-subtoggle checkboxes"
       )

@@ -1202,6 +1202,21 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
     "SETTINGS_TOOLTIP_FLAGS"
   )
 
+  controls.inviteHint, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_INVITE_HINT_ENABLED or "LFG invite hint",
+    function()
+      local db = config.getDB()
+      return db.inviteHintEnabled ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.inviteHintEnabled = checked
+    end,
+    "SETTINGS_INVITE_HINT_ENABLED"
+  )
+
   return yOffset
 end
 
@@ -1476,6 +1491,9 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
       if type(config.onMobNameplateChange) == "function" then
         config.onMobNameplateChange()
       end
+      if type(controls.nameplatePreviewUpdate) == "function" then
+        controls.nameplatePreviewUpdate()
+      end
     end,
     function(val)
       return string.format("%d", val)
@@ -1498,6 +1516,9 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
       db.mobNameplateYOffset = tonumber(val) or 0
       if type(config.onMobNameplateChange) == "function" then
         config.onMobNameplateChange()
+      end
+      if type(controls.nameplatePreviewUpdate) == "function" then
+        controls.nameplatePreviewUpdate()
       end
     end,
     function(val)
@@ -1580,17 +1601,19 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     end
 
     local pos = NormalizeNameplatePosition(db.mobNameplatePosition)
+    local xo = tonumber(db.mobNameplateXOffset) or 0
+    local yo = tonumber(db.mobNameplateYOffset) or 0
     if type(preview.overlay.ClearAllPoints) == "function" then
       preview.overlay:ClearAllPoints()
     end
     if pos == "LEFT" then
-      preview.overlay:SetPoint("RIGHT", preview, "LEFT", -4, 0)
+      preview.overlay:SetPoint("RIGHT", preview, "LEFT", xo, yo)
     elseif pos == "TOP" then
-      preview.overlay:SetPoint("BOTTOM", preview, "TOP", 0, 4)
+      preview.overlay:SetPoint("BOTTOM", preview, "TOP", xo, yo)
     elseif pos == "BOTTOM" then
-      preview.overlay:SetPoint("TOP", preview, "BOTTOM", 0, -4)
+      preview.overlay:SetPoint("TOP", preview, "BOTTOM", xo, yo)
     else
-      preview.overlay:SetPoint("LEFT", preview, "RIGHT", 4, 0)
+      preview.overlay:SetPoint("LEFT", preview, "RIGHT", xo, yo)
     end
 
     local fontSize = tonumber(db.mobNameplateFontSize) or 14
@@ -2317,6 +2340,10 @@ local function RefreshSettingsControls(controls, config)
   if controls.tooltipFlags then
     controls.tooltipFlags.label:SetText(freshL.SETTINGS_TOOLTIP_FLAGS or "Tooltip: Language Flags")
     controls.tooltipFlags.check:SetChecked(db.tooltipFlagsEnabled ~= false)
+  end
+  if controls.inviteHint then
+    controls.inviteHint.label:SetText(freshL.SETTINGS_INVITE_HINT_ENABLED or "LFG invite hint")
+    controls.inviteHint.check:SetChecked(db.inviteHintEnabled ~= false)
   end
   if controls.nameplateDisplayMode and type(controls.nameplateDisplayMode.UpdateHighlight) == "function" then
     controls.nameplateDisplayMode.UpdateHighlight()

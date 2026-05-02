@@ -1158,9 +1158,153 @@ local function RegisterLFGDetectResetTests(test, ctx)
   end)
 end
 
+local function RegisterLFGDetectInviteHintTests(test, ctx)
+  local Assert = ctx.assert
+  local LoadAddonModules = ctx.load_modules
+  local WithGlobals = ctx.with_globals
+
+  local function BuildLocale()
+    return {
+      INVITE_HINT_GROUP = "Group: %s",
+      INVITE_HINT_DUNGEON = "Dungeon: %s",
+      INVITE_HINT_UNKNOWN_DUNGEON = "Unknown dungeon",
+    }
+  end
+
+  test("LFGDetect.OnInvited surfaces a two-line invite hint with mapName + group title", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+12 NW Push, no jail", leaderName = "Tankadin-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local hints = {}
+      addon.LFGDetect.SetInviteHintCallback(function(message, durationSeconds)
+        hints[#hints + 1] = { message = message, duration = durationSeconds }
+      end)
+      addon.LFGDetect.SetInviteHintEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetTeleportLookupByMapID(function(mapID)
+        if mapID == 557 then
+          return { mapName = "Windrunner Spire" }
+        end
+        return nil
+      end)
+      addon.LFGDetect.SetInviteHintLocaleFn(BuildLocale)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+
+      Assert.Equal(#hints, 1, "OnInvited must trigger one InviteHint render")
+      Assert.NotNil(hints[1], "InviteHint payload must be captured")
+      Assert.Equal(hints[1].duration, 8, "InviteHint must request the 8s auto-hide window")
+      local message = hints[1].message
+      Assert.True(message:find("Windrunner Spire", 1, true) ~= nil, "InviteHint must mention the resolved dungeon name")
+      Assert.True(message:find("+12", 1, true) ~= nil, "InviteHint must surface the parsed key level")
+      Assert.True(
+        message:find("+12 NW Push, no jail", 1, true) ~= nil,
+        "InviteHint must surface the raw group title (lobby conventions)"
+      )
+      Assert.True(message:find("\n", 1, true) ~= nil, "InviteHint must be two-line")
+    end)
+  end)
+
+  test("LFGDetect.OnInvited respects the inviteHintEnabled setting", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+10 spire" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local hints = {}
+      addon.LFGDetect.SetInviteHintCallback(function(message)
+        hints[#hints + 1] = message
+      end)
+      addon.LFGDetect.SetInviteHintEnabledFn(function()
+        return false
+      end)
+      addon.LFGDetect.SetInviteHintLocaleFn(BuildLocale)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      Assert.Equal(#hints, 0, "InviteHint must stay silent when SETTINGS_INVITE_HINT_ENABLED is off")
+    end)
+  end)
+
+  test("LFGDetect.OnInvited falls back to UNKNOWN_DUNGEON when teleport lookup misses", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+9 group" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local hints = {}
+      addon.LFGDetect.SetInviteHintCallback(function(message)
+        hints[#hints + 1] = message
+      end)
+      addon.LFGDetect.SetInviteHintEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetTeleportLookupByMapID(function()
+        return nil
+      end)
+      addon.LFGDetect.SetInviteHintLocaleFn(BuildLocale)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      Assert.Equal(#hints, 1, "InviteHint must still render when the teleport lookup returns nil")
+      Assert.True(
+        hints[1]:find("Unknown dungeon", 1, true) ~= nil,
+        "InviteHint headline must use the localized fallback when mapName is unresolved"
+      )
+    end)
+  end)
+
+  test("LFGDetect.OnInvited stays silent when the invite hint callback is not wired", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+5" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      -- No SetInviteHintCallback call: factory wiring not done yet.
+      addon.LFGDetect.SetInviteHintEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetInviteHintLocaleFn(BuildLocale)
+
+      -- Must not crash. Replay the full invited -> inviteaccepted flow so the
+      -- OnInvited path runs and the post-accept stage confirms pendingInvites
+      -- got populated (mapID then surfaces via GetDetectedMapID).
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "missing hint-callback wiring must not break the existing pending-invite resolution chain"
+      )
+    end)
+  end)
+end
+
 return function(test, ctx)
   RegisterLFGDetectResolutionTests(test, ctx)
   RegisterLFGDetectInviteAcceptRaceTests(test, ctx)
   RegisterLFGDetectQueueStateTests(test, ctx)
   RegisterLFGDetectResetTests(test, ctx)
+  RegisterLFGDetectInviteHintTests(test, ctx)
 end

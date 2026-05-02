@@ -804,7 +804,6 @@ local function GetAllIsiLiveFiles()
     "isiLive_group.lua",
     "isiLive_queue.lua",
     "isiLive_queue_debug.lua",
-    "isiLive_queue_flow.lua",
     "isiLive_stats.lua",
     "isiLive_inspect.lua",
     "isiLive_events.lua",
@@ -874,6 +873,32 @@ return function(test, ctx)
     Assert.Equal(db.mobNameplateEnabled, true, "fresh DB must default the M+ forces display mode to nameplates")
     Assert.Equal(db.mplusForcesEstimate, false, "fresh DB must keep the tooltip forces display disabled")
     Assert.Equal(db.mobNameplateShowRemaining, true, "fresh DB must enable nameplate remaining percent by default")
+  end)
+
+  test("factory composition root: legacy tooltip-only forces settings migrate to nameplate default", function()
+    local globals, db = BuildGlobals()
+    db.mplusForcesEstimate = true
+    db.mobNameplateEnabled = nil
+
+    local addon
+    WithGlobals(globals, function()
+      addon = LoadAddonModules(GetAllIsiLiveFiles())
+    end)
+
+    WithGlobals(globals, function()
+      local ok, err = xpcall(function()
+        addon.Factory.InitializeAddon("isiLive", addon)
+      end, debug.traceback)
+      Assert.Equal(ok, true, "InitializeAddon must migrate legacy DB without raising: " .. tostring(err))
+    end)
+
+    Assert.Equal(db.mobNameplateEnabled, true, "legacy DB without mobNameplateEnabled must default to nameplates")
+    Assert.Equal(db.mplusForcesEstimate, false, "legacy tooltip-only flag must be disabled by the migration")
+    Assert.Equal(
+      addon.MobNameplate._Test_GetState().enabled,
+      true,
+      "ApplyDBSettings must push the migrated nameplate flag into the live MobNameplate module"
+    )
   end)
 
   test("factory composition root: post-init ctx helpers and event flows execute without errors", function()

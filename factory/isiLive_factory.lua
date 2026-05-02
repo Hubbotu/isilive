@@ -284,11 +284,13 @@ local function FinalizeFactorySettings(ctx)
     ctx.ApplyDBSettings = function()
       local db = IsiLiveDB or {}
 
-      -- One-time M+ forces display-mode migration: if the user never chose a
-      -- mode (both legacy keys are nil), persist "nameplate" as the default.
-      -- This keeps the M+ forces percent visible in keys without requiring a
-      -- manual settings toggle after every fresh install / reset.
-      if db.mobNameplateEnabled == nil and db.mplusForcesEstimate == nil then
+      -- M+ forces display-mode migration: if mobNameplateEnabled has never
+      -- been set, default to "nameplate" mode. This covers fresh installs
+      -- AND legacy users whose only persisted key was mplusForcesEstimate
+      -- (the pre-nameplate tooltip-only era). The three display modes are
+      -- mutually exclusive in the settings UI, so mplusForcesEstimate is
+      -- forced off here to avoid both modules running in parallel.
+      if db.mobNameplateEnabled == nil then
         db.mobNameplateEnabled = true
         db.mplusForcesEstimate = false
       end
@@ -313,6 +315,12 @@ local function FinalizeFactorySettings(ctx)
       end
       if db.mobNameplateYOffset == nil then
         db.mobNameplateYOffset = 0
+      end
+      -- Default the LFG invite hint ON for first-run users; legacy users who
+      -- never had the toggle keep the same default. They can disable it via
+      -- the settings panel (SETTINGS_INVITE_HINT_ENABLED).
+      if db.inviteHintEnabled == nil then
+        db.inviteHintEnabled = true
       end
 
       if not IsiLiveDB then

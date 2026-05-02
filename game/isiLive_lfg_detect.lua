@@ -121,6 +121,20 @@ local activeInviteTitleLevel = nil
 local highlightCallback = nil
 local groupRosterTraceLogger = nil
 
+-- Pre-accept InviteHint plumbing. The factory injects:
+--   * inviteHintCallback(message, durationSeconds): renders the floating
+--     yellow hint above LFGListInviteDialog. nil disables the hint.
+--   * inviteHintEnabledFn(): reads IsiLiveDB.inviteHintEnabled (~= false).
+--     nil treats the feature as enabled.
+--   * teleportLookupByMapID(mapID): returns { mapName = "..." } or nil.
+--     nil falls back to the localized UNKNOWN_DUNGEON string.
+--   * inviteHintLocaleFn(): returns the active locale table for INVITE_HINT_*
+--     keys. nil disables the hint (no strings to format).
+local inviteHintCallback = nil
+local inviteHintEnabledFn = nil
+local teleportLookupByMapID = nil
+local inviteHintLocaleFn = nil
+
 local debugLog = nil
 local debugTrace = nil
 local debugTraceDeep = nil
@@ -158,6 +172,23 @@ end
 
 function LFGDetect.SetGroupRosterTraceLogger(fn)
   groupRosterTraceLogger = type(fn) == "function" and fn or nil
+end
+
+-- Wired once by the factory; nil-safe so tests can opt out by passing nil.
+function LFGDetect.SetInviteHintCallback(fn)
+  inviteHintCallback = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetInviteHintEnabledFn(fn)
+  inviteHintEnabledFn = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetTeleportLookupByMapID(fn)
+  teleportLookupByMapID = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetInviteHintLocaleFn(fn)
+  inviteHintLocaleFn = type(fn) == "function" and fn or nil
 end
 
 function LFGDetect.SetLogger(fn)
@@ -302,11 +333,70 @@ local function ResolveInviteEntry(searchResultID)
     leaderName = info.leaderName
   end
   local titleLevel = nil
+  local groupName = nil
   if type(info) == "table" then
     titleLevel = ParseTitleKeyLevel(info.name)
+    if type(info.name) == "string" and info.name ~= "" then
+      groupName = info.name
+    end
   end
 
-  return { mapID = mapID, leaderName = leaderName, titleLevel = titleLevel }
+  return {
+    mapID = mapID,
+    leaderName = leaderName,
+    titleLevel = titleLevel,
+    groupName = groupName,
+  }
+end
+
+-- Renders the floating yellow LFG invite hint above LFGListInviteDialog when
+-- an invite arrives. Reads its dungeon name from the same Teleport.GetTeleportInfoByMapID
+-- source as the post-accept status-line chat announce, so both stay in lockstep.
+-- Silently no-ops when:
+--   * the invite hint feature is disabled via SETTINGS_INVITE_HINT_ENABLED
+--   * the factory has not wired the callback yet (early-load races)
+--   * the locale getter is missing (testing in isolation)
+local function MaybeShowInviteHint(entry)
+  if type(inviteHintCallback) ~= "function" then
+    return
+  end
+  if type(inviteHintLocaleFn) ~= "function" then
+    return
+  end
+  if type(inviteHintEnabledFn) == "function" and inviteHintEnabledFn() == false then
+    return
+  end
+
+  local L = inviteHintLocaleFn() or {}
+  local mapName = nil
+  if type(teleportLookupByMapID) == "function" and entry.mapID then
+    local info = teleportLookupByMapID(entry.mapID)
+    if type(info) == "table" and type(info.name) == "string" and info.name ~= "" then
+      mapName = info.name
+    elseif type(info) == "table" and type(info.mapName) == "string" and info.mapName ~= "" then
+      mapName = info.mapName
+    end
+  end
+  if not mapName or mapName == "" then
+    mapName = L.INVITE_HINT_UNKNOWN_DUNGEON or "Unknown dungeon"
+  end
+
+  -- Headline: dungeon name with optional "+<level>" suffix when the group
+  -- title leaked a key level (most LFG postings do).
+  local headline
+  if entry.titleLevel then
+    headline = string.format("%s  +%d", mapName, entry.titleLevel)
+  else
+    headline = mapName
+  end
+
+  -- Subline: localized "Group: %s" with the raw group title preserved (so
+  -- lobby conventions like "no jail" / "achiever" stay readable).
+  local groupText = entry.groupName or "?"
+  local groupTemplate = L.INVITE_HINT_GROUP or "Group: %s"
+  local subline = string.format(groupTemplate, groupText)
+
+  inviteHintCallback(headline .. "\n" .. subline, 8)
 end
 
 local function OnInvited(searchResultID)
@@ -314,6 +404,7 @@ local function OnInvited(searchResultID)
   local entry = ResolveInviteEntry(searchResultID)
   if entry then
     pendingInvites[searchResultID] = entry
+    MaybeShowInviteHint(entry)
     Log(
       "state_set",
       "var=pendingInvites[%s] mapID=%s leader=%s titleLevel=%s",

@@ -40,7 +40,6 @@ return function(test, ctx)
       end,
       getL = function()
         return {
-          LEAD_GAINED = "You are now the group leader.",
           LEAD_LOST = "You are no longer the group leader.",
           LEAD_TRANSFERRED_CENTER = "You are now the group leader!",
         }

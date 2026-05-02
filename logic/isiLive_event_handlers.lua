@@ -119,6 +119,7 @@ local function BuildContext(opts)
   ctx.handleKillTrackEvent = OptionalFunction(opts.handleKillTrackEvent, function(_event, ...) end)
   ctx.handleCombatEventsEvent = OptionalFunction(opts.handleCombatEventsEvent, function(_event, ...) end)
   ctx.handleKickTrackerEvent = OptionalFunction(opts.handleKickTrackerEvent, function(_event, ...) end)
+  ctx.resetKickStats = OptionalFunction(opts.resetKickStats, nil)
   ctx.handleLeaderWatchEvent = OptionalFunction(opts.handleLeaderWatchEvent, function(_event, ...) end)
   ctx.getCombatLogEventInfo = OptionalFunction(opts.getCombatLogEventInfo, function()
     return nil

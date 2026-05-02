@@ -83,7 +83,7 @@ local function AppendForcesLine(tooltip, data)
     return
   end
 
-  local activeMapID = GetActiveChallengeMapID()
+  local activeMapID = GetActiveChallengeMapID() -- secret-value-ok: file-local helper is pcall-protected
   if not activeMapID then
     return
   end

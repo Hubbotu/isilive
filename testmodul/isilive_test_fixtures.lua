@@ -201,46 +201,4 @@ function Fixtures.BuildEventHandlersController(eventHandlersModule, entryRef, co
   return eventHandlersModule.CreateController(options), counters, entryRef
 end
 
-function Fixtures.BuildQueueFlowController(queueFlowModule, overrides)
-  local state = {
-    pending = nil,
-    prints = {},
-  }
-
-  local baseOptions = {
-    getL = function()
-      return {
-        UNKNOWN_GROUP = "Unknown",
-        JOINED_FROM_QUEUE = "Joined from queue: %s",
-        CHAT_QUEUE_PREFIX = "Queue Join",
-      }
-    end,
-    getPendingQueueJoinInfo = function()
-      return state.pending
-    end,
-    setPendingQueueJoinInfo = function(value)
-      state.pending = value
-    end,
-    printFn = function(message)
-      table.insert(state.prints, tostring(message))
-    end,
-    isInChallengeMode = function()
-      return false
-    end,
-    isInGroup = function()
-      return false
-    end,
-    isPlayerLeader = function()
-      return false
-    end,
-    getTimeFn = function()
-      return 42
-    end,
-  }
-
-  local options = Merge(baseOptions, overrides)
-  local controller = queueFlowModule.CreateController(options)
-  return controller, state, options
-end
-
 return Fixtures

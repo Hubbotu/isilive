@@ -786,7 +786,7 @@ function Notice.CreateInviteHint(opts)
   local mainFrameGlobalName = opts.mainFrameGlobalName or "isiLiveMainFrame"
 
   local frame = CreateFrame("Frame", "isiLiveInviteHintFrame", parent, "BackdropTemplate")
-  frame:SetSize(420, 46)
+  frame:SetSize(420, 64)
   frame:Hide()
   frame:SetFrameStrata("DIALOG")
 
@@ -799,10 +799,16 @@ function Notice.CreateInviteHint(opts)
     end
   end
 
-  local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  -- Two-line layout: headline (dungeon + level) on top in larger / brighter
+  -- gold, group title underneath in muted gold. Both share the same FontString
+  -- with a "\n"-separated message so the caller stays simple.
+  local text = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
   text:SetPoint("CENTER", 0, 0)
   text:SetJustifyH("CENTER")
   text:SetTextColor(1, 0.82, 0)
+  if type(text.SetSpacing) == "function" then
+    text:SetSpacing(2)
+  end
 
   local endsAt = 0
 

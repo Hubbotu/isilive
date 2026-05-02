@@ -307,7 +307,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
   end
   ctx.CaptureQueueJoinCandidate = function(...)
     local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
-    if ctx.GetActiveChallengeMapID() then
+    if ctx.GetActiveChallengeMapID() then -- secret-value-ok: ctx wrapper is pcall-protected
       if logFn then
         logFn("[QUEUE_FLOW] capture_candidate blocked reason=challenge_active")
       end
@@ -978,6 +978,28 @@ local function InitializeFactoryPrimaryControllers(ctx)
     if type(lfgDetect.SetLogger) == "function" then
       lfgDetect.SetLogger(nil)
     end
+    -- Pre-accept InviteHint plumbing: hand the floating-yellow-popup callback,
+    -- the DB toggle reader, and the dungeon-name lookup over to LFGDetect.
+    -- All three are nil-safe on the LFGDetect side, so partial wiring (early
+    -- ADDON_LOADED state, tests) stays safe.
+    if type(lfgDetect.SetInviteHintCallback) == "function" then
+      lfgDetect.SetInviteHintCallback(ctx.ShowInviteHint)
+    end
+    if type(lfgDetect.SetInviteHintEnabledFn) == "function" then
+      lfgDetect.SetInviteHintEnabledFn(function()
+        local db = rawget(_G, "IsiLiveDB")
+        if type(db) ~= "table" then
+          return true
+        end
+        return db.inviteHintEnabled ~= false
+      end)
+    end
+    if type(lfgDetect.SetTeleportLookupByMapID) == "function" and modules.teleport then
+      lfgDetect.SetTeleportLookupByMapID(modules.teleport.GetTeleportInfoByMapID)
+    end
+    if type(lfgDetect.SetInviteHintLocaleFn) == "function" then
+      lfgDetect.SetInviteHintLocaleFn(ctx.GetL)
+    end
   end
 
   -- Strips the "-Realm" suffix from a player name so the chat output reads
@@ -1484,6 +1506,12 @@ local function InitializeFactorySecondaryRuntimeMethods(ctx, modules)
       langMsgKey = "LANG_SET_ES"
     elseif resolved == "ptBR" then
       langMsgKey = "LANG_SET_PT"
+    elseif resolved == "itIT" then
+      langMsgKey = "LANG_SET_IT"
+    elseif resolved == "ruRU" then
+      langMsgKey = "LANG_SET_RU"
+    elseif resolved == "trTR" then
+      langMsgKey = "LANG_SET_TR"
     end
     ctx.Print(ctx.L[langMsgKey])
   end
