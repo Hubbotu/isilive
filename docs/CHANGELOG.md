@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-05-03 - Version 0.9.211 (patch)
+
+Bug fixes (settings preview, locale switch coverage, WoW 12.0 Secret-Value hardening), one new user feature (LFG invite hint above the Blizzard invite dialog with a settings toggle), nine new static-analysis CI gates, five new lifecycle simulators, and ~500 lines of dead code removed (the unloaded `QueueFlow` module + 8 orphan locale keys).
+
+- **Bugfix: nameplate X/Y-offset preview was inert ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua)):**
+  - Repro: open the settings panel, drag the X-offset or Y-offset slider for the nameplate-percent preview. The "Test Mob" preview did not move.
+  - Two compounding causes: (1) the X/Y offset slider callbacks called only `config.onMobNameplateChange()` and not `controls.nameplatePreviewUpdate()` like the position selector did, so the in-panel preview never re-rendered; (2) `UpdatePreview` itself ignored `mobNameplateXOffset`/`mobNameplateYOffset` and used hard-coded ±4px padding, so even if it had re-rendered the offsets would have been ignored.
+  - Fix: both X and Y offset slider callbacks now invoke `nameplatePreviewUpdate()`. `UpdatePreview` reads `db.mobNameplateXOffset`/`mobNameplateYOffset` and feeds them straight to `SetPoint(xo, yo)` — same semantics as `ApplyPosition` in [ui/isiLive_mob_nameplate.lua:329-340](../ui/isiLive_mob_nameplate.lua#L329-L340), so what the user sees in preview matches what the live nameplate does in keys.
+
+- **Bugfix: `mobNameplateEnabled` migration skipped legacy users ([factory/isiLive_factory.lua](../factory/isiLive_factory.lua)):**
+  - Repro: a user from the pre-nameplate-overlay era (had only set `mplusForcesEstimate`) gets a fresh `mobNameplateEnabled` default of `nil` rather than `true`, so the M+ forces percent stays hidden until they manually toggle it.
+  - Root cause: the migration guard required BOTH `mobNameplateEnabled == nil AND mplusForcesEstimate == nil`, so any prior tooltip-mode setting blocked the new default.
+  - Fix: drop the second condition and force `mplusForcesEstimate = false` alongside, since the three display modes (off/tooltip/nameplate) are mutually exclusive.
+
+- **Bugfix: language-switch confirmation always said "English" for it/ru/tr ([factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua)):**
+  - Repro: `/isilive lang it` (or `ru` / `tr`) prints "Language set to English." instead of the localized confirmation, even though the locale switch itself works correctly.
+  - Root cause: the `langMsgKey` switch covered only enUS/deDE/frFR/esES/ptBR — itIT/ruRU/trTR fell through to the `LANG_SET_EN` default. The matching `LANG_SET_IT/RU/TR` locale keys were defined in all 8 locale tables but never referenced.
+  - Fix: extend the switch with the three missing branches. The `check_dead_locale_keys.lua` gate (introduced in this release) flagged the orphan keys, which led to discovering the bug.
+
+- **Hardening: WoW 12.0 Secret-Value guards in `Units.GetUnitRole` / `Units.GetUnitNameAndRealm` and `Status.BuildStatusLineText` ([game/isiLive_units.lua](../game/isiLive_units.lua), [ui/isiLive_status.lua](../ui/isiLive_status.lua)):**
+  - In M+ tainted contexts WoW masks return values as Secret Values; equality checks on them raise tainted-compare errors. `UnitGroupRolesAssigned`, `UnitIsUnit`, `UnitFullName`, `UnitName`, and `C_ChallengeMode.GetActiveChallengeMapID` are now wrapped in `pcall` + `rawget(_G, ...)` lookups that fail closed to nil/`"NONE"` rather than crashing the addon path.
+  - Detected by the new `check_secret_value_guards.lua` gate, which inspects every direct call against the watched API surface.
+
+- **Feature: LFG invite hint above the Blizzard invite dialog ([game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua), [ui/isiLive_notice.lua](../ui/isiLive_notice.lua), [factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - When `LFG_LIST_APPLICATION_STATUS_UPDATED == "invited"` arrives (Blizzard opens its `LFGListInviteDialog`), a yellow 420×64px popup floats above the dialog with a two-line label: headline = localized dungeon name `+<key level>`, sub-line = the raw group title from `info.name` so lobby conventions ("no jail", "achiever", etc.) stay readable. Auto-hide after 8 seconds.
+  - Data resolution reuses the existing `Notice.CreateInviteHint` frame (latent since v0.9.87 but never triggered) plus `Teleport.GetTeleportInfoByMapID` for the dungeon name — same source as the post-accept "Ziel-Dungeon" status-line chat, so both stay in lockstep.
+  - New `SETTINGS_INVITE_HINT_ENABLED` checkbox in the settings panel (default on); the toggle is read live each invite, no `/reload` needed.
+
+- **Dead-code cleanup: unloaded `QueueFlow` module + 8 orphan locale keys ([logic/isiLive_queue_flow.lua](removed), [locale/isiLive_texts.lua](../locale/isiLive_texts.lua)):**
+  - `logic/isiLive_queue_flow.lua` had been written for a v0.9.27 refactor but never added to `isiLive.toc`. Tests loaded it directly via `loadfile`, so they stayed green for 9 months while WoW never executed the code. Production used a parallel inline implementation in `factory_controllers.AnnounceQueuedGroupJoin`.
+  - Removed: the module (105 lines), the dedicated test file (~120 lines), `Fixtures.BuildQueueFlowController`, the legacy-parity test in `isilive_test_scenarios_status.lua` (~125 lines), and 5 manifest references.
+  - Plus 8 orphan locale keys × 8 languages = 96 lines: `BTN_GAMEMENU_CHARACTER`, `INVITE_HINT_DUNGEON`, `INVITE_HINT_GROUP`, `INVITE_HINT_UNKNOWN_DUNGEON`, `LEAD_GAINED`, `MODE_LAYOUT_M`, `PORTAL_NAVIGATOR_TEXT`, `RAID_GROUP_HIDDEN` (the InviteHint keys were re-introduced for the new feature above).
+  - Found via the new `check_toc_file_list.lua` and `check_dead_locale_keys.lua` gates.
+
+- **New static-analysis CI gates (9):**
+  - **[tools/check_sound_channel.lua](../tools/check_sound_channel.lua)** — pins CLAUDE.md sound-channel rule: every `PlaySoundFile` / `defaultChannel` uses `"SFX"`, never `"Master"`.
+  - **[tools/check_chat_color_safety.lua](../tools/check_chat_color_safety.lua)** — verhindert `|cff…[…]|r`-ohne-`|H`-hyperlink Pattern in Files, die `SendChatMessage` aufrufen (WoW server silently drops those).
+  - **[tools/check_wow_api_compliance.lua](../tools/check_wow_api_compliance.lua)** — pins WoW 12.0 (Midnight) restrictions: `COMBAT_LOG_EVENT_UNFILTERED`, `CombatLogGetCurrentEventInfo`, `C_MythicPlus.GetOwnedKeystoneLink`, tooltip sync-version regressions.
+  - **[tools/check_format_string_consistency.lua](../tools/check_format_string_consistency.lua)** — pins format-specifier multiset across all 8 locale tables; catches translator-introduced `%s`/`%d` mismatches that would crash `string.format` only in the offending language.
+  - **[tools/check_secret_value_guards.lua](../tools/check_secret_value_guards.lua)** — heuristic linter for direct `UnitGUID`/`UnitName`/`UnitFullName`/`UnitReaction`/`UnitClass`/`UnitIsGroupLeader`/`UnitGroupRolesAssigned`/`UnitIsUnit`/`UnitIsVisible`/`GetActiveChallengeMapID`/`CombatLogGetCurrentEventInfo` calls without `pcall` / `IsSecretValue` / short-circuit guards.
+  - **[tools/check_addon_message_size.lua](../tools/check_addon_message_size.lua)** — runtime-load Sync, dispatch every `Sync.Send*` with worst-case args (24-char realm + player names, 8-entry kick extras, max-digit numerics), assert `#payload <= 245` (10 bytes headroom under the 255-byte WoW server-drop limit).
+  - **[tools/check_button_label_length.lua](../tools/check_button_label_length.lua)** — pins CLAUDE.md "≤ 14 chars for full-width action buttons" rule across 192 BTN_* keys × 8 locales (with `_SHORT`/`_hModeText` short-limit ≤ 6).
+  - **[tools/check_toc_file_list.lua](../tools/check_toc_file_list.lua)** — bidirectional consistency check between `isiLive.toc` and on-disk Lua files (catches dead references and untracked production files).
+  - **[tools/check_dead_locale_keys.lua](../tools/check_dead_locale_keys.lua)** — flags every enUS key that has no production reference. Caught the LANG_SET it/ru/tr bug above.
+  - All nine wired into [tools/validate_ci_local.ps1](../tools/validate_ci_local.ps1), [.github/workflows/lua-check.yml](../.github/workflows/lua-check.yml), [.github/workflows/sync-mplus-forces.yml](../.github/workflows/sync-mplus-forces.yml), with drift-protection asserts in [testmodul/isilive_test_scenarios_architecture.lua](../testmodul/isilive_test_scenarios_architecture.lua).
+
+- **New lifecycle simulators (5):**
+  - **[tools/simulate_hidden_sync_reload.lua](../tools/simulate_hidden_sync_reload.lua)** — UI hidden + group + `/reload` must keep `Sync.ProcessAddonMessage` ingesting KEY/STATS/DPS/LOC/TARGET/KICK/HELLO/REQSYNC. 36 checks across two sessions plus state-isolation between them.
+  - **[tools/simulate_raid_party_cycle.lua](../tools/simulate_raid_party_cycle.lua)** — full Party → Raid → Party transition matrix: roster reset, RIO/inspect/queue cleanup on raid entry, hello suppression in raid, `clearKnownUsers` on return. 31 checks.
+  - **[tools/simulate_lfg_join_target_chain.lua](../tools/simulate_lfg_join_target_chain.lua)** — LFG-Apply → Invite-Accepted → group fills 5/5 announces queue join exactly once (no double-spam, leader-suppression, idempotent capture, no stale announce after leave+rejoin). 14 checks.
+  - **[tools/simulate_reload_storm.lua](../tools/simulate_reload_storm.lua)** — 3 sequential `/reload` cycles + repeated `MobNameplate.SetEnabled(true)` storms within one session pin idempotency invariants (no doubled `RegisterEvent`, no doubled `OnEvent` handler, no extra `CreateFrame` allocations on toggle). 30 checks.
+  - **[tools/simulate_key_completion_lifecycle.lua](../tools/simulate_key_completion_lifecycle.lua)** — symmetric counterpart to the existing key-start simulator: pins `CHALLENGE_MODE_COMPLETED` / `CHALLENGE_MODE_RESET` post-key side effects (timer/KillTrack/CombatEvents dispatch, `notifyPostChallengeSync`, status-line refresh, delayed post-run refresh schedule, raid hard-off, in-time vs depleted vs back-to-back keys). 47 checks across 6 scenarios.
+
+- **Extended simulator: `simulate_nameplate_keystart.lua`** — 4 new scenarios: `secret_guid` (Secret-Value GUID forces API fallback), `api_only` (no MDT DB, scenario API delivers percent), `secret_mapid` (Secret-Value `GetActiveChallengeMapID` short-circuits to API path), `format_no_percent` (showPercent=false hides overlay despite valid data).
+
+- **Coverage uplift: ui/isiLive_ui.lua + ui/isiLive_notice.lua ([testmodul/isilive_test_scenarios_ui_branches.lua](../testmodul/isilive_test_scenarios_ui_branches.lua), [testmodul/isilive_test_scenarios_ui_notice_branches.lua](../testmodul/isilive_test_scenarios_ui_notice_branches.lua)):**
+  - 9 new MainFrame branch tests: controller API surface, raid-suppress + combat-defer for `SetVisible`/`ToggleVisibility`, `SetHeightSafe`/`SetWidthSafe` combat-defer, drag-storm `OnDragStop` → `SavePosition` writes IsiLiveDB.position, locked-drag no-op, mid-drag lock finalizes the position.
+  - 8 new Notice branch tests: `Notice.CreateInviteHint` anchor-resolution chain (LFGListInviteDialog → LFGDungeonReadyDialog → globalMainFrame → UIParent), OnUpdate auto-hide, `Notice.CreatePortalNavigatorNotice` right-click-hide / left-click-no-op / close-button-click.
+  - Both target files moved out of the bottom-10 coverage hot-spots.
+
+- **Doc-Sync ([README.md](../README.md), [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/USECASES.md](USECASES.md), [CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md), [isiLive.toc](../isiLive.toc)):**
+  - Version baseline bumped to `0.9.211`.
+  - Validator baseline updated to `1375` deterministic usecase scenarios.
+
+- **Tests:**
+  - Added 4 LFGDetect InviteHint scenarios in [testmodul/isilive_test_scenarios_lfg_detect.lua](../testmodul/isilive_test_scenarios_lfg_detect.lua), 9 MainFrame branch tests in [testmodul/isilive_test_scenarios_ui_branches.lua](../testmodul/isilive_test_scenarios_ui_branches.lua), 8 Notice branch tests in [testmodul/isilive_test_scenarios_ui_notice_branches.lua](../testmodul/isilive_test_scenarios_ui_notice_branches.lua), plus expanded architecture-drift asserts covering the 9 new static gates and 5 new simulators across both GitHub workflows + the local preflight.
+  - `lua tools/validate_usecases.lua` passed locally with `1375 passed, 0 failed`.
+
 ## 2026-05-02 - Version 0.9.210 (patch)
 
 - **Nameplate M+ forces overlay now starts enabled and can show dungeon remainder ([factory/isiLive_factory.lua](../factory/isiLive_factory.lua), [ui/isiLive_mob_nameplate.lua](../ui/isiLive_mob_nameplate.lua), [ui/isiLive_settings.lua](../ui/isiLive_settings.lua), [factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua)):**

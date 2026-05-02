@@ -1,7 +1,7 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.210`
-Zuletzt aktualisiert: `2026-05-02`
+Versionsbasis: `0.9.211`
+Zuletzt aktualisiert: `2026-05-03`
 
 ## Zweck
 
@@ -100,23 +100,33 @@ Lokale Release-Qualitaet ist absichtlich in statische und Runtime-Gates aufgetei
    - `ISILIVE_MAX_FILE_LINES=3200 ISILIVE_MAX_FUNCTION_LINES=420 lua tools/lua_metrics_check.lua`
    - `lua tools/check_locale_drift.lua`
    - `lua tools/check_mplus_db_lifetime.lua` — verhindert, dass eine abgelaufene `data/isiLive_mplus_forces.lua` einen Release passiert; Override ueber `ISILIVE_ALLOW_STALE_MPLUS_DB=1`.
+   - `lua tools/check_sound_channel.lua` — pinnt die CLAUDE.md-Sound-Regel: jeder `PlaySoundFile`-Aufruf nutzt Channel `"SFX"`, nie `"Master"`. Inline-Override per `-- sound-ok`.
+   - `lua tools/check_chat_color_safety.lua` — verhindert das `|cff...[...]|r`-ohne-`|H`-Hyperlink-Muster in Files, die `SendChatMessage` aufrufen (WoW-Server filtert solche Nachrichten silent). Inline-Override per `-- chat-color-ok`.
+   - `lua tools/check_wow_api_compliance.lua` — pinnt die WoW 12.0 (Midnight) Restriktionen aus CLAUDE.md: `COMBAT_LOG_EVENT_UNFILTERED`, `CombatLogGetCurrentEventInfo`, `C_MythicPlus.GetOwnedKeystoneLink` und Tooltip-Sync-Version-Regressions. Inline-Override per `-- wow-api-ok`.
+   - `lua tools/simulate_nameplate_keystart.lua all` — simuliert die Nameplate-Prozentanzeige rund um `CHALLENGE_MODE_START` und bricht bei verletzten Gate-Erwartungen ab.
+   - `lua tools/simulate_savedvariables_reload.lua` — simuliert Settings-Aenderungen ueber zwei Addon-Sessions und bricht ab, wenn SavedVariables, UI-Control-Zustand oder Live-Callbacks nach `/reload` auseinanderlaufen.
+   - `lua tools/simulate_key_start_lifecycle.lua` — simuliert den kompletten Key-Start-Lifecycle ueber den echten EventHandlers-Controller inklusive Raid-Hard-off, Auto-Close-Gates, Ready-Check-Reset, Kick-Reset, Damage-Meter-Reset und Nameplate-Refresh-Pfad.
+   - `lua tools/simulate_hidden_sync_reload.lua` — simuliert eine versteckte Main-UI in einer Gruppe ueber `/reload` hinweg und prueft, dass `Sync.ProcessAddonMessage` weiterhin KEY/STATS/DPS/LOC/TARGET/KICK/HELLO/REQSYNC verarbeitet (UI-Sichtbarkeit darf den Sync-Ingest nicht gaten).
+   - `lua tools/simulate_raid_party_cycle.lua` — simuliert den Wechsel Party -> Raid -> Party ueber `Group.HandleGroupRosterUpdate` und pinnt die komplette Transitions-Matrix (Roster-Reset, Inspect-/RIO-/Queue-Cleanup, Hello-Suppression im Raid, Recovery beim Rueckkehr in eine Party).
+   - `lua tools/simulate_lfg_join_target_chain.lua` — simuliert LFG-Apply -> Invite-Accepted -> Gruppe fuellt sich auf 5/5 und stellt sicher, dass die Queue-Join-Announce genau einmal feuert (kein Doppelspam, Leader-Suppression, idempotenter Capture, kein Stale-Announce nach Leave+Rejoin).
+   - `lua tools/simulate_reload_storm.lua` — simuliert mehrere `/reload`-Zyklen plus wiederholte `MobNameplate.SetEnabled`/`Sync.RegisterPrefix`-Storms innerhalb einer Session und pinnt die Idempotenz-Verträge (kein doppeltes `RegisterEvent`, kein doppelter `OnEvent`-Handler, kein zusätzliches `CreateFrame` bei wiederholtem Enable, sauberes Unregister bei Disable).
 2. Runtime-Logik-Checks:
    - `lua tools/validate_rules_logic.lua`
    - `lua tools/validate_architecture_rules.lua`
    - `lua tools/validate_usecases.lua`
 3. `tools/validate_rules_logic.lua` validiert aktive Vertraege aus `RULES_LOGIC.md` gegen deterministische Testnamen.
 4. `tools/validate_architecture_rules.lua` validiert aktive Architekturvertraege aus `ARCHITECTURE_RULES.md` gegen deterministische Testnamen.
-5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1361 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
+5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1362 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
    Zusaetzlich laeuft der gleiche Validator-Lauf in CI unter `luacov` (`lua -lluacov tools/validate_usecases.lua`), damit `tools/coverage_summary.lua` die Line-Coverage pro Schicht in das GitHub-Actions-Step-Summary schreibt und der vollstaendige `luacov.report.out` als Artefakt hochgeladen wird.
    Baseline (`2026-04-22`, Commit nach Coverage-Einfuehrung): **78.62% Gesamt-Line-Coverage** ueber 19487 Produktionszeilen. Per-Schicht: `locale/` 97%, `logic/` 84%, `core/` 82%, `game/` 81%, `ui/` 79%, `factory/` 47%. Die `factory/`-Luecke ist erwartet (Composition-Root-Code, der ohne Blizzard-API-Context schwer isoliert testbar ist) und bildet den konkreten naechsten Schwerpunkt fuer UI-nahe Test-Erweiterungen.
-6. Der M+-Forces-DB-Refresh laeuft automatisch ueber `.github/workflows/sync-mplus-forces.yml` (Donnerstag 06:00 UTC plus `workflow_dispatch`): Clone MDT → `tools/sync_mdt_forces.lua` → voller CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, usecases) → Commit + Push nach `main`. Ohne Diff im DB-File laeuft der Workflow still durch ohne Commit.
+6. Der M+-Forces-DB-Refresh laeuft automatisch ueber `.github/workflows/sync-mplus-forces.yml` (Donnerstag 06:00 UTC plus `workflow_dispatch`): Clone MDT → `tools/sync_mdt_forces.lua` → voller CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, Nameplate-Key-Start-Simulator, SavedVariables-Reload-Simulator, Key-Start-Lifecycle-Simulator, usecases) → Commit + Push nach `main`. Ohne Diff im DB-File laeuft der Workflow still durch ohne Commit.
 
 Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte Einstiegspunkt fuer das statische Gate, weil sie `luacheck` ueber den repo-lokalen Windows-Shim routen, statt direkt das LuaRocks-Script aufzurufen.
 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.210 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
+| isiLive                                                 v0.9.211 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
 |---------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
 |---------------------------------------------------------------------------------------------------|
