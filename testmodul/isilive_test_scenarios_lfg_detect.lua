@@ -1049,7 +1049,11 @@ local function RegisterLFGDetectResetTests(test, ctx)
 
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
 
-      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 559, "inviteaccepted must resolve mapID directly from search result")
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        559,
+        "inviteaccepted must resolve mapID directly from search result"
+      )
       Assert.Equal(
         addon.LFGDetect.GetActiveInviteTitleLevel(),
         10,

@@ -288,7 +288,10 @@ local function RegisterLifecycleTests(test, Assert, WithGlobals, LoadAddonModule
 
       eventFrame._scripts.OnEvent(eventFrame, "CHALLENGE_MODE_START")
       Assert.Equal(#scheduled, 2, "challenge start must queue delayed refreshes after the immediate refresh")
-      Assert.True(addon.MobNameplate._Test_GetFrames()["nameplate1"] == nil, "immediate refresh still respects inactive API state")
+      Assert.True(
+        addon.MobNameplate._Test_GetFrames()["nameplate1"] == nil,
+        "immediate refresh still respects inactive API state"
+      )
 
       state.challengeActive = true
       scheduled[1].fn()

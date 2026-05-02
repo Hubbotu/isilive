@@ -327,7 +327,9 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
       local ghostKey = GhostKey(memberName, memberRealm)
       local shouldPlayJoinSound = false
       if callbacks and type(callbacks.onMemberJoinedGroup) == "function" then
-        shouldPlayJoinSound = members == 5 and not fullGroupJoinSoundPlayed and (not existing or existing.isGhost == true)
+        shouldPlayJoinSound = members == 5
+          and not fullGroupJoinSoundPlayed
+          and (not existing or existing.isGhost == true)
       end
       if shouldPlayJoinSound then
         fullGroupJoinSoundPlayed = true
