@@ -67,7 +67,7 @@ local function IsRaidModeActive(ctx)
 end
 
 local function IsInviteAcceptedStatus(...)
-  local _searchResultID, newStatus = ...
+  local newStatus = select(2, ...)
   return type(newStatus) == "string" and string.lower(newStatus) == "inviteaccepted"
 end
 
