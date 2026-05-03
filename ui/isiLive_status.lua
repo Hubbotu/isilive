@@ -287,6 +287,7 @@ local function ResetTargetDungeonChatState(state)
   state.lastTargetDungeonChatSignature = nil
   state.pendingLevelLessTargetDungeonName = nil
   state.levelLessTargetDungeonAnnounced = nil
+  state.levelAnnouncedTargetDungeonName = nil
 end
 
 local function MaybeAnnounceTargetDungeonChat(state, deps)
@@ -298,6 +299,17 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
   local info = ResolveConcreteTargetDungeonInfo(deps)
   if type(info) ~= "table" then
     ResetTargetDungeonChatState(state)
+    return
+  end
+
+  -- Lock-in: once we've announced this dungeon WITH a level, suppress every
+  -- further announce for the same dungeon name — even when the level later
+  -- flickers (LFG-title hint cleared after CHALLENGE_MODE_START, owner-key
+  -- sync roundtrip, etc.). Without this guard, the announce signature flips
+  -- between "Name|14" → "Name|13" → "Name|nil" as the level source degrades,
+  -- producing two or three near-identical chat lines for the same key.
+  -- Resets when ResetTargetDungeonChatState fires (group-leave or no-target).
+  if state.levelAnnouncedTargetDungeonName == info.name then
     return
   end
 
@@ -339,6 +351,9 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
   end
 
   state.lastTargetDungeonChatSignature = signature
+  if info.level then
+    state.levelAnnouncedTargetDungeonName = info.name
+  end
   local sink = deps.printHighlighted or deps.printFn
   sink(announcementText)
 end

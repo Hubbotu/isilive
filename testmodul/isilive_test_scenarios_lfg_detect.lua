@@ -823,6 +823,92 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "ClearAllState must drop the leader hint")
     end)
   end)
+
+  -- ---------------------------------------------------------------------------
+  -- Fix 1: OnInviteDeclined must only clear active state for the accepted
+  -- searchResultID. Parallel listings ("+12/+13/+14" of the same dungeon)
+  -- delisting after invite-accept must not destroy activeInviteTitleLevel.
+  -- ---------------------------------------------------------------------------
+
+  test("LFGDetect OnInviteDeclined for a different searchResultID keeps active invite state", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1768, name = "+13 NPX", leaderName = "Other-Realm" },
+          [2] = { activityID = 1768, name = "+14 NPX push", leaderName = "Pusher-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 2, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 2, "inviteaccepted")
+
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 14, "setup: +14 listing was accepted")
+      Assert.Equal(
+        addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+        2,
+        "setup: acceptedInviteSearchResultID points at the +14 listing"
+      )
+
+      -- Listing 1 ("+13 NPX") delists in parallel. Same dungeon mapID, but a
+      -- different searchResultID — must not erase the +14 invite state.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "declined_delisted")
+
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        14,
+        "delisting a different parallel listing must not null out activeInviteTitleLevel"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Pusher-Realm",
+        "delisting a different parallel listing must not null out activeInviteLeader"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        559,
+        "delisting a different parallel listing must not null out detectedMapID"
+      )
+    end)
+  end)
+
+  test("LFGDetect OnInvited passes the searchResultID through to the invite-hint callback", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [42] = { activityID = 1768, name = "+14 NPX", leaderName = "Pusher-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local capturedResultID = nil
+      addon.LFGDetect.SetInviteHintCallback(function(_message, _duration, searchResultID)
+        capturedResultID = searchResultID
+      end)
+      addon.LFGDetect.SetInviteHintEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetInviteHintLocaleFn(function()
+        return { INVITE_HINT_GROUP = "Group: %s", INVITE_HINT_UNKNOWN_DUNGEON = "Unknown" }
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "invited")
+      Assert.Equal(
+        capturedResultID,
+        42,
+        "Fix 3a: MaybeShowInviteHint must forward the originating searchResultID to the hint callback"
+      )
+    end)
+  end)
 end
 
 local function RegisterLFGDetectResetTests(test, ctx)

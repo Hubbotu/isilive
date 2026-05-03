@@ -811,10 +811,23 @@ function Notice.CreateInviteHint(opts)
   end
 
   local endsAt = 0
+  -- searchResultID this hint was rendered for. When the visible LFGListInviteDialog
+  -- shows a *different* resultID (multiple parallel invites for the same dungeon,
+  -- e.g. "+12/+13/+14" push-lobby variants), hide instead of confidently labeling
+  -- the wrong listing. nil = hint is dialog-agnostic (legacy callers).
+  local currentResultID = nil
 
-  local function GetInviteAnchorFrame()
+  local function GetInviteDialog()
     local lfgListInviteDialog = rawget(_G, "LFGListInviteDialog")
     if lfgListInviteDialog and lfgListInviteDialog:IsShown() then
+      return lfgListInviteDialog
+    end
+    return nil
+  end
+
+  local function GetInviteAnchorFrame()
+    local lfgListInviteDialog = GetInviteDialog()
+    if lfgListInviteDialog then
       return lfgListInviteDialog
     end
     local lfgDungeonReadyDialog = rawget(_G, "LFGDungeonReadyDialog")
@@ -824,7 +837,31 @@ function Notice.CreateInviteHint(opts)
     return nil
   end
 
+  -- True when the visible LFGListInviteDialog references a *different*
+  -- searchResultID than the one this hint was rendered for. Returns false in
+  -- the dialog-agnostic case (currentResultID == nil) and when the dialog is
+  -- not visible (other anchors like LFGDungeonReadyDialog or the main frame).
+  local function IsHintMismatchedToVisibleDialog()
+    if currentResultID == nil then
+      return false
+    end
+    local dialog = GetInviteDialog()
+    if not dialog then
+      return false
+    end
+    local dialogResultID = rawget(dialog, "resultID") or rawget(dialog, "selectedResult")
+    if dialogResultID == nil then
+      return false
+    end
+    return dialogResultID ~= currentResultID
+  end
+
   local function Position()
+    if IsHintMismatchedToVisibleDialog() then
+      frame:Hide()
+      return
+    end
+
     local anchor = GetInviteAnchorFrame()
     frame:ClearAllPoints()
 
@@ -842,15 +879,23 @@ function Notice.CreateInviteHint(opts)
     frame:SetPoint("TOP", parent, "TOP", 0, -220)
   end
 
-  local function Show(message, durationSeconds)
+  local function Show(message, durationSeconds, searchResultID)
+    currentResultID = searchResultID
     text:SetText(message)
     Position()
     endsAt = GetTime() + (durationSeconds or 10)
-    frame:Show()
+    if not IsHintMismatchedToVisibleDialog() then
+      frame:Show()
+    end
   end
 
   frame:SetScript("OnUpdate", function(self)
     if GetTime() >= endsAt then
+      currentResultID = nil
+      self:Hide()
+      return
+    end
+    if IsHintMismatchedToVisibleDialog() then
       self:Hide()
       return
     end

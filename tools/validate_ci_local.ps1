@@ -139,6 +139,7 @@ try {
   Invoke-CheckedCommand "Hidden-Sync Reload Simulator" "lua tools/simulate_hidden_sync_reload.lua"
   Invoke-CheckedCommand "Raid-Party Cycle Simulator" "lua tools/simulate_raid_party_cycle.lua"
   Invoke-CheckedCommand "LFG Join Target Chain Simulator" "lua tools/simulate_lfg_join_target_chain.lua"
+  Invoke-CheckedCommand "Multi-Invite Target Chain Simulator" "lua tools/simulate_multi_invite_target_chain.lua"
   Invoke-CheckedCommand "Reload-Storm Simulator" "lua tools/simulate_reload_storm.lua"
   Invoke-CheckedCommand "Key-Completion Lifecycle Simulator" "lua tools/simulate_key_completion_lifecycle.lua"
   Invoke-CheckedCommand "Deterministic Usecase + Rules Logic Validation" "lua tools/validate_usecases.lua"

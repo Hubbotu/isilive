@@ -115,6 +115,13 @@ local activeInviteLeader = nil
 -- neither a roster owner nor a synced target supplies a level (typical for
 -- groups whose leader does not run isiLive). nil = no hint available.
 local activeInviteTitleLevel = nil
+-- searchResultID of the invite the player actually accepted (nil before accept
+-- or after a full reset). Used by OnInviteDeclined to ignore decline/delisted
+-- events for *other* parallel listings — without this guard, any same-mapID
+-- decline (very common in push lobbies that post several +N variants for the
+-- same dungeon) would null out the active invite state and force the status
+-- announce to fall back on a worse level source.
+local acceptedInviteSearchResultID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -356,7 +363,7 @@ end
 --   * the invite hint feature is disabled via SETTINGS_INVITE_HINT_ENABLED
 --   * the factory has not wired the callback yet (early-load races)
 --   * the locale getter is missing (testing in isolation)
-local function MaybeShowInviteHint(entry)
+local function MaybeShowInviteHint(entry, searchResultID)
   if type(inviteHintCallback) ~= "function" then
     return
   end
@@ -396,7 +403,12 @@ local function MaybeShowInviteHint(entry)
   local groupTemplate = L.INVITE_HINT_GROUP or "Group: %s"
   local subline = string.format(groupTemplate, groupText)
 
-  inviteHintCallback(headline .. "\n" .. subline, 8)
+  -- searchResultID lets the hint frame re-validate against the currently
+  -- visible LFGListInviteDialog: if the Blizzard dialog is showing a different
+  -- listing (very common with multiple parallel invites for "+12/+13/+14"
+  -- variants of the same dungeon), the hint must not present text that does
+  -- not match the dialog the player is about to act on.
+  inviteHintCallback(headline .. "\n" .. subline, 8, searchResultID)
 end
 
 local function OnInvited(searchResultID)
@@ -404,7 +416,7 @@ local function OnInvited(searchResultID)
   local entry = ResolveInviteEntry(searchResultID)
   if entry then
     pendingInvites[searchResultID] = entry
-    MaybeShowInviteHint(entry)
+    MaybeShowInviteHint(entry, searchResultID)
     Log(
       "state_set",
       "var=pendingInvites[%s] mapID=%s leader=%s titleLevel=%s",
@@ -445,6 +457,7 @@ local function OnInviteAccepted(searchResultID)
     pendingInvites[searchResultID] = nil
     activeInviteLeader = leaderName
     activeInviteTitleLevel = titleLevel
+    acceptedInviteSearchResultID = searchResultID
     pendingAcceptedInviteMapID = mapID
     if detectedMapID ~= mapID then
       Log("state_set", "var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID))
@@ -453,6 +466,7 @@ local function OnInviteAccepted(searchResultID)
     end
     Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
     Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
+    Log("state_set", "var=acceptedInviteSearchResultID val=%s", tostring(searchResultID))
     TriggerHighlightUpdate("invite")
   end
 end
@@ -463,10 +477,26 @@ local function OnInviteDeclined(searchResultID)
   Log("invite_declined", "searchResultID=%s mapID=%s", tostring(searchResultID), tostring(mapID))
   pendingInvites[searchResultID] = false
   suppressedInviteAccepts[searchResultID] = true
+  -- A decline/delisted event for a *different* parallel listing (very common in
+  -- push lobbies that post "+12", "+13", "+14" variants of the same dungeon)
+  -- must not erase the active-invite state of the listing the player actually
+  -- accepted — otherwise the LFG-title level hint disappears and downstream
+  -- consumers (status announce, owner resolve) fall back to a worse level
+  -- source. Only the accepted searchResultID is allowed to reset state.
+  if acceptedInviteSearchResultID ~= nil and searchResultID ~= acceptedInviteSearchResultID then
+    Log(
+      "invite_declined_ignored",
+      "searchResultID=%s reason=other_listing accepted=%s",
+      tostring(searchResultID),
+      tostring(acceptedInviteSearchResultID)
+    )
+    return
+  end
   if mapID and detectedMapID == mapID then
     detectedMapID = nil
     activeInviteLeader = nil
     activeInviteTitleLevel = nil
+    acceptedInviteSearchResultID = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -516,6 +546,7 @@ local function ClearDetectedState()
     lastQueueMapID = nil
     activeInviteLeader = nil
     activeInviteTitleLevel = nil
+    acceptedInviteSearchResultID = nil
     TriggerHighlightUpdate("queue")
   end
 end
@@ -529,12 +560,14 @@ local function ClearAllStateImpl()
     or pendingAcceptedInviteMapID ~= nil
     or activeInviteLeader ~= nil
     or activeInviteTitleLevel ~= nil
+    or acceptedInviteSearchResultID ~= nil
   Log("clear_all_state", "hadState=%s", tostring(hadState))
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
+  acceptedInviteSearchResultID = nil
   for resultID in pairs(pendingInvites) do
     suppressedInviteAccepts[resultID] = true
   end
@@ -559,6 +592,13 @@ end
 -- pattern in the title).
 function LFGDetect.GetActiveInviteTitleLevel()
   return activeInviteTitleLevel
+end
+
+-- searchResultID of the invite the player actually accepted. Exposed for tests
+-- (the production code reads the module-local directly). nil = no accepted
+-- invite, or state was reset.
+function LFGDetect.GetAcceptedInviteSearchResultID()
+  return acceptedInviteSearchResultID
 end
 
 function LFGDetect.ClearAllState()
@@ -673,6 +713,7 @@ function LFGDetect.HandleEvent(event, ...)
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
         activeInviteTitleLevel = entry.titleLevel
+        acceptedInviteSearchResultID = resultID
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")
       else

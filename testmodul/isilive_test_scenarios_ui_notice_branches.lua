@@ -294,6 +294,116 @@ local function RegisterInviteHintTests(test, Assert, WithGlobals, LoadAddonModul
       Assert.False(hint.frame:IsShown(), "invite hint hides itself after duration elapses")
     end)
   end)
+
+  test("Notice.CreateInviteHint stays visible when dialog resultID matches Show() searchResultID", function()
+    local now = 600
+    local dialog = CreateFrameStub()
+    dialog:Show()
+    dialog.resultID = 42
+
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return now
+      end,
+      LFGListInviteDialog = dialog,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+      local Notice = RequireValue(addon.Notice, "Notice module should load")
+      local hint = Notice.CreateInviteHint({ parent = UIParent })
+
+      hint.Show("Matching listing", 5, 42)
+      Assert.True(
+        hint.frame:IsShown(),
+        "invite hint must stay visible when dialog.resultID matches the rendered searchResultID"
+      )
+    end)
+  end)
+
+  test("Notice.CreateInviteHint hides itself when dialog resultID differs from Show() searchResultID", function()
+    local now = 700
+    local dialog = CreateFrameStub()
+    dialog:Show()
+    dialog.resultID = 99
+
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return now
+      end,
+      LFGListInviteDialog = dialog,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+      local Notice = RequireValue(addon.Notice, "Notice module should load")
+      local hint = Notice.CreateInviteHint({ parent = UIParent })
+
+      hint.Show("Stale listing", 5, 42)
+      Assert.False(
+        hint.frame:IsShown(),
+        "invite hint must NOT show when dialog.resultID points at a different listing — Fix 3a"
+      )
+    end)
+  end)
+
+  test("Notice.CreateInviteHint stays visible when no LFGListInviteDialog is shown", function()
+    -- Anchor falls back to LFGDungeonReadyDialog or main frame; the resultID
+    -- mismatch guard only kicks in when LFGListInviteDialog is actively visible.
+    local now = 800
+    local readyDialog = CreateFrameStub()
+    readyDialog:Show()
+
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return now
+      end,
+      LFGDungeonReadyDialog = readyDialog,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+      local Notice = RequireValue(addon.Notice, "Notice module should load")
+      local hint = Notice.CreateInviteHint({ parent = UIParent })
+
+      hint.Show("Ready dialog", 5, 7)
+      Assert.True(
+        hint.frame:IsShown(),
+        "invite hint must remain visible against non-LFGListInviteDialog anchors regardless of searchResultID"
+      )
+    end)
+  end)
+
+  test("Notice.CreateInviteHint OnUpdate hides when dialog switches to a different resultID mid-flight", function()
+    local now = 900
+    local dialog = CreateFrameStub()
+    dialog:Show()
+    dialog.resultID = 17
+
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return now
+      end,
+      LFGListInviteDialog = dialog,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+      local Notice = RequireValue(addon.Notice, "Notice module should load")
+      local hint = Notice.CreateInviteHint({ parent = UIParent })
+
+      hint.Show("Initial listing", 10, 17)
+      Assert.True(hint.frame:IsShown(), "matching resultID at Show() time keeps the hint visible")
+
+      local onUpdate = hint.frame:GetScript("OnUpdate")
+      onUpdate = RequireValue(onUpdate, "invite hint frame should expose OnUpdate")
+
+      -- Blizzard advances to the next queued invite; Dialog.resultID flips.
+      dialog.resultID = 18
+      onUpdate(hint.frame, 0.5)
+      Assert.False(hint.frame:IsShown(), "OnUpdate must hide the hint when the dialog switches to a different listing")
+    end)
+  end)
 end
 
 local function RegisterPortalNavigatorBranchTests(test, Assert, WithGlobals, LoadAddonModules)

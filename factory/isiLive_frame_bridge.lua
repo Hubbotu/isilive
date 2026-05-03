@@ -100,8 +100,8 @@ function FrameBridge.CreateContext(opts)
     centerNotice.Show(message, durationSeconds, nil, nil, showOptions)
   end
 
-  function context.ShowInviteHint(message, durationSeconds)
-    inviteHint.Show(message, durationSeconds)
+  function context.ShowInviteHint(message, durationSeconds, searchResultID)
+    inviteHint.Show(message, durationSeconds, searchResultID)
   end
 
   function context.SetMainFrameVisible(visible, showOpts)

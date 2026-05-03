@@ -454,8 +454,8 @@ local function InitializeFactoryFrameBridge(ctx)
   ctx.ShowPortalNavigatorNotice = function(layout)
     ctx.portalNavigatorNotice.Show(layout)
   end
-  ctx.ShowInviteHint = function(message, durationSeconds)
-    frameBridgeContext.ShowInviteHint(message, durationSeconds)
+  ctx.ShowInviteHint = function(message, durationSeconds, searchResultID)
+    frameBridgeContext.ShowInviteHint(message, durationSeconds, searchResultID)
   end
   ctx.SetMainFrameVisible = function(visible, reasonOrOpts)
     local opts = type(reasonOrOpts) == "table" and reasonOrOpts or {}

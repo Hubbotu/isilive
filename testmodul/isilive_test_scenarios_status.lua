@@ -546,6 +546,118 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
     end)
   end)
 
+  test("Status target dungeon chat locks in after first level announce and ignores level downgrade", function()
+    -- Fix 2 reproduction: after the first +N announce, downstream level
+    -- sources can flicker to a *lower* number (own-key surfacing in the
+    -- roster after the LFG-title hint disappeared) or to nil (sync round-
+    -- trip in flight). Neither must produce a second chat line for the
+    -- same dungeon name — the production bug printed three near-identical
+    -- "Ziel-Dungeon" lines per accept event.
+    local current = {
+      inGroup = true,
+      targetInfo = { name = "Nexus-Point Xenas", level = 14 },
+    }
+    local prints = {}
+
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Outside", "none", 0, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "first +14 announce fires once")
+      Assert.Equal(prints[1], "Target Dungeon: |cffffd200Nexus-Point Xenas +14|r", "+14 form printed")
+
+      current.targetInfo = { name = "Nexus-Point Xenas", level = 13 }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(
+        #prints,
+        1,
+        "level downgrade for the same dungeon must NOT trigger a second chat line — Fix 2 lock-in"
+      )
+
+      current.targetInfo = { name = "Nexus-Point Xenas" }
+      controller.MaybeAnnounceTargetDungeonChat()
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(
+        #prints,
+        1,
+        "level disappearing for the locked dungeon must NOT trigger a level-less third chat line"
+      )
+
+      current.targetInfo = { name = "Nexus-Point Xenas", level = 14 }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "level recovering to the original +N must not produce a duplicate line")
+    end)
+  end)
+
+  test("Status target dungeon chat lock-in resets when group leaves so a fresh key can announce again", function()
+    local current = {
+      inGroup = true,
+      targetInfo = { name = "Nexus-Point Xenas", level = 14 },
+    }
+    local prints = {}
+
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Outside", "none", 0, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "setup: locked-in announce printed once")
+
+      current.inGroup = false
+      controller.MaybeAnnounceTargetDungeonChat() -- triggers ResetTargetDungeonChatState
+
+      current.inGroup = true
+      current.targetInfo = { name = "Nexus-Point Xenas", level = 14 }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(
+        #prints,
+        2,
+        "leaving the group resets the lock-in; the next key for the same dungeon must announce again"
+      )
+    end)
+  end)
+
   test("Status target dungeon chat upgrades to key level when level resolves before fallback announce", function()
     local current = {
       inGroup = true,
