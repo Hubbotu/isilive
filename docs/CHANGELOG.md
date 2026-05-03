@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-05-03 - Version 0.9.212 (patch)
+
+Two WoW 12.0 (Midnight) compatibility fixes plus dead-code cleanup. Both bugs share the same root cause: WoW retail's API surface in 12.0 differs from TWW (`C_Item.GetAverageItemLevel` removed, `C_PaperDollInfo.GetInspectItemLevel(party*)` returns 0 unconditionally, party addon messages inside instances arrive on `INSTANCE_CHAT` instead of `PARTY`), and isiLive's older code paths still assumed pre-12.0 behavior.
+
+- **Bugfix: own iLvl never showed in the roster row ([logic/isiLive_group.lua](../logic/isiLive_group.lua), [logic/isiLive_inspect.lua](../logic/isiLive_inspect.lua), [factory/isiLive_factory_frame_bridge.lua](../factory/isiLive_factory_frame_bridge.lua)):**
+  - Repro: log in solo or in a group with own player visible. The "iLvl" column for your own row stayed `-` until you pressed Re-Sync (which, by accident, walked a different code path).
+  - Three compounding causes in 12.0:
+    1. `C_PaperDollInfo.GetInspectItemLevel("player")` returns `0` in 12.0 even when `INSPECT_READY` fires for self — the inspect-pipeline path could never fill `roster.player.ilvl`.
+    2. `OnInspectReady` then *overwrote* the prior value with that `0`/`nil`, also clobbering party member values between successful inspects.
+    3. The solo-roster-builder (`EnsureSoloPlayerRoster`) bypassed `UpdatePlayerEntry` entirely and hard-coded `ilvl = nil`.
+  - Fix: `UpdatePlayerEntry` and `EnsureSoloPlayerRoster` now read the local `C_Item.GetAverageItemLevel` (with legacy `GetAverageItemLevel` fallback for 12.0 where `C_Item.GetAverageItemLevel` was removed) directly via the new exported `KeySync.ResolveAverageItemLevel`, set `_localIlvlFresh = true` so sync-backfill cannot overwrite it, and run the read even while `_refreshQueued` is true. `OnInspectReady` now skips writing when the API returns 0/nil and falls back to the local resolver for the player unit, preserving existing values.
+  - Wiring: `getOwnAverageItemLevel` flows from `KeySync.ResolveAverageItemLevel` through `factory_frame_bridge.lua → factory.lua → controller_wiring.lua` into both the group module (player row) and the inspect controller (`OnInspectReady` fallback).
+
+- **Bugfix: party-member keystones did not appear inside M+ keys ([logic/isiLive_sync.lua](../logic/isiLive_sync.lua)):**
+  - Repro: enter an M+ key with members who only have RaiderIO (or any LibKeystone-using addon) but no isiLive. Their `Key` column stayed `-` for the entire run.
+  - Root cause: the LibKeystone protocol implementation in [logic/isiLive_sync.lua](../logic/isiLive_sync.lua) hard-coded the `"PARTY"` channel on both ends — `Sync.SendLibKeystoneRequest` and `Sync.SendLibKeystonePartyData` sent on `"PARTY"` (silently dropped by the WoW server inside instances), and `ProcessLibKeystoneMessage` rejected anything that wasn't `"PARTY"` (so `INSTANCE_CHAT` arrivals from peers were filtered out). The bug had been latent since the LibKeystone interop commit on 2026-04-09 (24 days); only the combination of "inside an instance + at least one peer without isiLive" surfaced it.
+  - Fix: both senders now mirror `Sync.GetAddonSyncChannel`'s instance-aware logic and pick `"INSTANCE_CHAT"` when `IsInGroup(LE_PARTY_CATEGORY_INSTANCE)` is true, otherwise `"PARTY"`. The receive filter in `ProcessLibKeystoneMessage` accepts both `"PARTY"` and `"INSTANCE_CHAT"` (still rejects `"RAID"`, `"GUILD"`, `"WHISPER"` per LibKeystone spec). The ISILIVE prefix already had this right since v0.9.14 — only the LibKeystone path drifted.
+
+- **Cleanup: removed two duplicate `SendChatMessage` fallback blocks ([factory/isiLive_controller_wiring.lua](../factory/isiLive_controller_wiring.lua), [ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua)):**
+  - Both `sendOwnKeystoneToChat` (reactive: triggered by an incoming `SHAREKEYS` ISILIVE message) and the `Keys teilen` button onClick (active: user-initiated) had a defensive fallback that called raw `_G.SendChatMessage(line, "PARTY")` if `ContextHelpers.SendPartyChatMessage` was missing. The TOC guarantees `ContextHelpers` is loaded before either caller, so the fallback was dead code in production — but it hard-coded `"PARTY"` and would have re-introduced the same instance-channel bug if it ever did trigger.
+  - Both fallbacks deleted; both call sites now go through `ContextHelpers.SendPartyChatMessage` directly. Net delete: ~50 lines including the obsolete fallback test.
+
+- **Test coverage:**
+  - 3 new tests in `testmodul/isilive_test_scenarios_group.lua` (player iLvl direct read, nil fallback, runs under `_refreshQueued`).
+  - 2 new tests in `testmodul/isilive_test_scenarios_inspect.lua` (player fallback in `OnInspectReady`, no-overwrite-with-0 for party members).
+  - 2 new tests + 1 extended test in `testmodul/isilive_test_scenarios_sync.lua` (LibKeystone send routes to `INSTANCE_CHAT` inside instance group; `ProcessLibKeystoneMessage` accepts `INSTANCE_CHAT`).
+  - 1 obsolete test removed (`sendOwnKeystoneToChat falls back to _G.SendChatMessage when ContextHelpers.SendPartyChatMessage is missing`).
+  - Total: 1380 → 1386 deterministic unit tests, all green.
+
 ## 2026-05-03 - Version 0.9.211 (patch)
 
 Bug fixes (settings preview, locale switch coverage, WoW 12.0 Secret-Value hardening), one new user feature (LFG invite hint above the Blizzard invite dialog with a settings toggle), nine new static-analysis CI gates, five new lifecycle simulators, and ~500 lines of dead code removed (the unloaded `QueueFlow` module + 8 orphan locale keys).

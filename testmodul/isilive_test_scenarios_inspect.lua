@@ -300,6 +300,78 @@ local function RegisterInspectFreshnessTests(test, Assert, WithGlobals, LoadAddo
     end)
   end)
 
+  test("OnInspectReady falls back to getOwnAverageItemLevel for player when GetInspectItemLevel returns 0", function()
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      UnitExists = function(_unit)
+        return true
+      end,
+      UnitGUID = function(unit)
+        return "guid-" .. unit
+      end,
+      C_PaperDollInfo = {
+        GetInspectItemLevel = function()
+          return 0 -- Simulates the common case where GetInspectItemLevel("player") returns 0
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local controller = addon.Inspect.CreateController({})
+
+      local roster = { player = {} }
+      controller.isInspecting = "player"
+
+      controller.OnInspectReady("guid-player", roster, function()
+        return 3000
+      end, function()
+        return nil
+      end, function()
+        return "Frost"
+      end, function()
+        return 645 -- getOwnAverageItemLevel fallback
+      end)
+
+      Assert.Equal(roster.player.ilvl, 645, "OnInspectReady must use getOwnAverageItemLevel fallback for player")
+      Assert.True(roster.player._localIlvlFresh, "player ilvl from local API must be marked fresh")
+    end)
+  end)
+
+  test("OnInspectReady does not overwrite existing ilvl when GetInspectItemLevel returns 0/nil", function()
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      UnitExists = function(_unit)
+        return true
+      end,
+      UnitGUID = function(unit)
+        return "guid-" .. unit
+      end,
+      C_PaperDollInfo = {
+        GetInspectItemLevel = function()
+          return 0
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local controller = addon.Inspect.CreateController({})
+
+      local roster = { party1 = { ilvl = 618, _localIlvlFresh = true } }
+      controller.isInspecting = "party1"
+
+      controller.OnInspectReady("guid-party1", roster, function()
+        return nil
+      end, function()
+        return nil
+      end, nil, nil)
+
+      Assert.Equal(roster.party1.ilvl, 618, "previously good ilvl must not be wiped by a 0 inspect response")
+      Assert.True(roster.party1._localIlvlFresh, "_localIlvlFresh must be preserved when no overwrite happens")
+    end)
+  end)
+
   test("Inspect force refresh keeps ghost member data and skips ghost inspect queueing", function()
     WithGlobals({
       UnitGUID = function(unit)

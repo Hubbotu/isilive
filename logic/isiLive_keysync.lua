@@ -96,6 +96,13 @@ local function ResolveAverageItemLevel()
   return nil
 end
 
+-- Exposed so the group module can populate the player row's ilvl directly:
+-- CanInspect("player") is unreliable (often false for self) and NotifyInspect
+-- on "player" is restricted during M+ keystones under 12.0, so the inspect
+-- pipeline never fills roster.player.ilvl. C_Item.GetAverageItemLevel works
+-- for the local player without any inspect dance.
+KeySync.ResolveAverageItemLevel = ResolveAverageItemLevel
+
 local function GetOwnedStatsSnapshot(getUnitRio)
   local specID = nil
   if GetSpecialization and GetSpecializationInfo then

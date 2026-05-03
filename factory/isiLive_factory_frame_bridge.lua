@@ -194,6 +194,10 @@ local function CreateFactoryContext(addonName, tbl)
   ctx.GetInspectSpecName = modules.units.GetInspectSpecName
   ctx.GetShortSpecLabel = modules.units.GetShortSpecLabel
   ctx.GetUnitRio = modules.units.GetUnitRio
+  ctx.GetOwnAverageItemLevel = modules.keySync and modules.keySync.ResolveAverageItemLevel
+    or function()
+      return nil
+    end
   ctx.GetNumGroupMembers = function()
     local getNumGroupMembers = rawget(_G, "GetNumGroupMembers")
     if type(getNumGroupMembers) ~= "function" then
@@ -347,6 +351,11 @@ local function InitializeFactoryFrameBridge(ctx)
       keyMapID, keyLevel = ctx.GetOwnedKeystoneSnapshot()
     end
 
+    -- Solo player ilvl comes from C_Item.GetAverageItemLevel directly:
+    -- this path bypasses UpdatePlayerEntry entirely, so without filling ilvl
+    -- here the local row stays blank until a Re-Sync forces an inspect cycle.
+    local ownIlvl = type(ctx.GetOwnAverageItemLevel) == "function" and ctx.GetOwnAverageItemLevel() or nil
+
     ctx.runtimeState.SetRoster({
       player = {
         name = name,
@@ -355,7 +364,8 @@ local function InitializeFactoryFrameBridge(ctx)
         class = class,
         role = ctx.GetUnitRole("player"),
         spec = ctx.GetPlayerSpecName(),
-        ilvl = nil,
+        ilvl = ownIlvl,
+        _localIlvlFresh = ownIlvl ~= nil or nil,
         rio = ctx.GetUnitRio("player"),
         hasIsiLive = true,
         keyMapID = keyMapID,

@@ -126,6 +126,9 @@ local function BuildGroupControllerOptions(state, overrides)
     getUnitRio = function(_unit)
       return 3500
     end,
+    getOwnAverageItemLevel = overrides.getOwnAverageItemLevel or function()
+      return nil
+    end,
     unitIsGroupLeader = overrides.unitIsGroupLeader or function(_unit)
       return false
     end,
@@ -382,6 +385,74 @@ local function RegisterGroupJoinLifecycleTests(test, Assert, LoadAddonModules, W
       Assert.Equal(#frameBridgeCalls, 1, "non-queue show requests must still work when queue auto-open is off")
       Assert.True(frameBridgeCalls[1], "non-queue show request must remain visible")
     end)
+  end)
+
+  test("Player ilvl is populated directly from getOwnAverageItemLevel without inspect", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      getNumGroupMembers = function()
+        return 5
+      end,
+      getOwnAverageItemLevel = function()
+        return 632
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Equal(state.roster.player.ilvl, 632, "player ilvl must be filled from getOwnAverageItemLevel")
+    Assert.True(
+      state.roster.player._localIlvlFresh,
+      "direct player ilvl must mark _localIlvlFresh so sync cannot overwrite it"
+    )
+  end)
+
+  test("Player ilvl falls back to nil when getOwnAverageItemLevel returns nil and no fresh value exists", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      getNumGroupMembers = function()
+        return 5
+      end,
+      getOwnAverageItemLevel = function()
+        return nil
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Nil(state.roster.player.ilvl, "player ilvl stays nil when local API returns nil")
+    Assert.True(
+      state.roster.player._localIlvlFresh ~= true,
+      "_localIlvlFresh must not be set when getOwnAverageItemLevel returned nil"
+    )
+  end)
+
+  test("Player ilvl is populated even while _refreshQueued is true (post force-refresh)", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      getNumGroupMembers = function()
+        return 5
+      end,
+      getOwnAverageItemLevel = function()
+        return 641
+      end,
+    })
+
+    -- Simulate the QueueForceRefreshData side-effect on the player row that
+    -- happens during a /reload, refresh, or post-challenge sync: row exists,
+    -- _refreshQueued is true, ilvl/_localIlvlFresh wiped.
+    state.roster.player = {
+      name = "TestPlayer",
+      realm = "TestRealm",
+      hasIsiLive = true,
+      _refreshQueued = true,
+    }
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Equal(
+      state.roster.player.ilvl,
+      641,
+      "player ilvl must be populated by getOwnAverageItemLevel even while _refreshQueued is true"
+    )
+    Assert.True(state.roster.player._localIlvlFresh, "_localIlvlFresh must be set when local ilvl was applied")
   end)
 
   test("Group roster updates re-apply the teleport highlight while grouped", function()

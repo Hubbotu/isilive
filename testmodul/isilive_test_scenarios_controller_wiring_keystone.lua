@@ -293,36 +293,6 @@ return function(test, ctx)
     Assert.True(sawAbort, "send_failed abort reason must be logged")
   end)
 
-  -- In-group fallback path: ContextHelpers missing, _G.SendChatMessage works ---
-
-  test(
-    "sendOwnKeystoneToChat falls back to _G.SendChatMessage when ContextHelpers.SendPartyChatMessage is missing",
-    function()
-      local sentLines = {}
-      WithGlobals({
-        GetTime = function()
-          return 5000
-        end,
-        SendChatMessage = function(line, channel)
-          table.insert(sentLines, { line = line, channel = channel })
-        end,
-      }, function()
-        local config = WireKeystone({
-          SendPartyChatMessage = false, -- explicitly drop the helper
-          ctxOverrides = {
-            isInGroup = function()
-              return true
-            end,
-          },
-        })
-        -- pcall on SendChatMessage returns true on success -> sent == true
-        Assert.True(config.sendOwnKeystoneToChat(), "fallback chat send must succeed")
-      end)
-      Assert.Equal(sentLines[1].line, "[KEY] PSF +12", "fallback must receive the same line")
-      Assert.Equal(sentLines[1].channel, "PARTY", "fallback channel must be PARTY")
-    end
-  )
-
   -- Solo path: not in group, _G.print available --------------------------------
 
   test("sendOwnKeystoneToChat falls back to print when player is not in a group", function()

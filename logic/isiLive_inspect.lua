@@ -120,7 +120,15 @@ local function QueueForceRefreshData(controller, roster)
   end
 end
 
-local function OnInspectReady(controller, guid, roster, getUnitRio, getInspectSpecName, getPlayerSpecName)
+local function OnInspectReady(
+  controller,
+  guid,
+  roster,
+  getUnitRio,
+  getInspectSpecName,
+  getPlayerSpecName,
+  getOwnAverageItemLevel
+)
   local inspectedUnit = controller.isInspecting
   if not (inspectedUnit and GetUnitGUIDSafe(inspectedUnit) == guid) then
     return false
@@ -133,13 +141,26 @@ local function OnInspectReady(controller, guid, roster, getUnitRio, getInspectSp
       ilvl = ilvlResult
     end
   end
+  -- GetInspectItemLevel("player") returns 0/nil in most contexts (in M+ under
+  -- 12.0 the inspect path is restricted entirely). Fall back to the local
+  -- C_Item.GetAverageItemLevel for own player so we never write a useless 0.
+  if (not ilvl or ilvl <= 0) and inspectedUnit == "player" and type(getOwnAverageItemLevel) == "function" then
+    local ownIlvl = getOwnAverageItemLevel()
+    if type(ownIlvl) == "number" and ownIlvl > 0 then
+      ilvl = ownIlvl
+    end
+  end
   local ilvlChanged = false
   if roster[inspectedUnit] then
-    if roster[inspectedUnit].ilvl ~= ilvl then
-      ilvlChanged = true
-    end
-    roster[inspectedUnit].ilvl = ilvl
+    -- Only write a real value: do NOT overwrite a previously-good ilvl with a
+    -- transient 0/nil from a partial inspect response. Preserves data both for
+    -- player (our local-API fallback above) and for party members between
+    -- successful inspects.
     if ilvl and ilvl > 0 then
+      if roster[inspectedUnit].ilvl ~= ilvl then
+        ilvlChanged = true
+      end
+      roster[inspectedUnit].ilvl = ilvl
       roster[inspectedUnit]._localIlvlFresh = true
     end
   end
@@ -358,8 +379,23 @@ function Inspect.CreateController(config)
     EnqueueInspect(controller, unit, roster)
   end
 
-  function controller.OnInspectReady(guid, roster, getUnitRio, getInspectSpecName, getPlayerSpecName)
-    return OnInspectReady(controller, guid, roster, getUnitRio, getInspectSpecName, getPlayerSpecName)
+  function controller.OnInspectReady(
+    guid,
+    roster,
+    getUnitRio,
+    getInspectSpecName,
+    getPlayerSpecName,
+    getOwnAverageItemLevel
+  )
+    return OnInspectReady(
+      controller,
+      guid,
+      roster,
+      getUnitRio,
+      getInspectSpecName,
+      getPlayerSpecName,
+      getOwnAverageItemLevel
+    )
   end
 
   function controller.OnUpdate()

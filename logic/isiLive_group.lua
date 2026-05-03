@@ -71,6 +71,9 @@ local function BuildDeps(opts)
     getUnitRio = opts.getUnitRio or function()
       return nil
     end,
+    getOwnAverageItemLevel = opts.getOwnAverageItemLevel or function()
+      return nil
+    end,
     unitIsGroupLeader = opts.unitIsGroupLeader or function(_unit)
       return false
     end,
@@ -200,9 +203,19 @@ UpdatePlayerEntry = function(deps, playerEntry, preserveIlvl)
   if not playerEntry._refreshQueued then
     SetIfNotNil(playerEntry, "spec", deps.getPlayerSpecName())
     SetIfNotNil(playerEntry, "rio", deps.getUnitRio("player"))
-    if not preserveIlvl and not playerEntry._localIlvlFresh then
-      playerEntry.ilvl = nil
-    end
+  end
+
+  -- Read own ilvl directly via C_Item.GetAverageItemLevel. Runs even when
+  -- _refreshQueued is true: the inspect path cannot reliably fill this for
+  -- "player" (CanInspect("player") often false; in M+ under 12.0 NotifyInspect
+  -- is restricted; even when INSPECT_READY fires GetInspectItemLevel("player")
+  -- frequently returns 0). The local API is always authoritative for self.
+  local ownIlvl = deps.getOwnAverageItemLevel()
+  if ownIlvl then
+    playerEntry.ilvl = ownIlvl
+    playerEntry._localIlvlFresh = true
+  elseif not playerEntry._refreshQueued and not preserveIlvl and not playerEntry._localIlvlFresh then
+    playerEntry.ilvl = nil
   end
 
   return playerEntry

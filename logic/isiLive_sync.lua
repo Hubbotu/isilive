@@ -1435,8 +1435,14 @@ function Sync.SendLibKeystoneRequest(opts)
   end
 
   lastLibKeystoneRequestAt = now
-  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, "R", "PARTY", "NORMAL")
-  SyncLog("send_libkeystone_request", "channel=PARTY sent=%s", tostring(sent))
+  -- Pick the correct party channel: inside an instance the WoW server only
+  -- delivers party addon messages on INSTANCE_CHAT, sending to "PARTY" silently
+  -- drops. Mirror Sync.GetAddonSyncChannel's instance-aware selection but skip
+  -- the RAID branch — LibKeystone is party-only by spec.
+  local libKsChannel = (LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)) and "INSTANCE_CHAT"
+    or "PARTY"
+  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, "R", libKsChannel, "NORMAL")
+  SyncLog("send_libkeystone_request", "channel=%s sent=%s", tostring(libKsChannel), tostring(sent))
   return true
 end
 
@@ -1482,10 +1488,15 @@ function Sync.SendLibKeystonePartyData(opts)
   end
 
   local payload = string.format("%d,%d,%d", numericLevel, numericMapID, numericRio)
-  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, payload, "PARTY", "NORMAL")
+  -- Same instance-aware channel picker as SendLibKeystoneRequest: must use
+  -- INSTANCE_CHAT inside dungeons/keys, otherwise the message is dropped.
+  local libKsChannel = (LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)) and "INSTANCE_CHAT"
+    or "PARTY"
+  local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, payload, libKsChannel, "NORMAL")
   SyncLog(
     "send_libkeystone_party",
-    "level=%s mapID=%s rio=%s sent=%s",
+    "channel=%s level=%s mapID=%s rio=%s sent=%s",
+    tostring(libKsChannel),
     tostring(numericLevel),
     tostring(numericMapID),
     tostring(numericRio),
@@ -1516,7 +1527,11 @@ local function ProcessLibKeystoneMessage(message, sender, localName, localRealm,
   if type(message) ~= "string" or #message == 0 or #message > MAX_ADDON_MESSAGE_LENGTH then
     return nil
   end
-  if channel ~= nil and channel ~= "PARTY" then
+  -- LibKeystone is party-only protocol, but inside an instance the WoW server
+  -- delivers party addon messages on the INSTANCE_CHAT channel. Accept both
+  -- so peers running RaiderIO (or any other LibKeystone-using addon) reach us
+  -- inside M+ keys, dungeons, and scenarios.
+  if channel ~= nil and channel ~= "PARTY" and channel ~= "INSTANCE_CHAT" then
     return nil
   end
 
@@ -1582,7 +1597,7 @@ end
 -- @param sender string Sender's "Name-Realm" string (must be non-empty).
 -- @param localName string Local player name (used to detect self-messages).
 -- @param localRealm string|nil Local player realm.
--- @param channel string|nil Arrival channel (used for LibKS PARTY-only filter).
+-- @param channel string|nil Arrival channel (LibKS accepts PARTY + INSTANCE_CHAT).
 -- @return table|nil Result with fields: shouldAck, shouldRequestRefresh, shouldShareKeys, sender,
 --   peerAddonVersion, peerProtocolVersion, peerCapturedAt, peerSource,
 --   keyUpdated, statsUpdated, dpsUpdated, locUpdated, targetUpdated, kickUpdated.

@@ -109,6 +109,10 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
     getUnitRole = RequireFunction(deps.getUnitRole, "getUnitRole"),
     getPlayerSpecName = RequireFunction(deps.getPlayerSpecName, "getPlayerSpecName"),
     getUnitRio = RequireFunction(deps.getUnitRio, "getUnitRio"),
+    getOwnAverageItemLevel = type(deps.getOwnAverageItemLevel) == "function" and deps.getOwnAverageItemLevel
+      or function()
+        return nil
+      end,
     unitIsGroupLeader = RequireFunction(deps.unitIsGroupLeader, "unitIsGroupLeader"),
     unitHasIsiLive = RequireFunction(deps.unitHasIsiLive, "unitHasIsiLive"),
     applyKnownKeyToRosterEntry = RequireFunction(deps.applyKnownKeyToRosterEntry, "applyKnownKeyToRosterEntry"),
@@ -178,6 +182,7 @@ local function BuildGroupControllerDepsFromContext(ctx)
     getUnitRole = ctx.getUnitRole,
     getPlayerSpecName = ctx.getPlayerSpecName,
     getUnitRio = ctx.getUnitRio,
+    getOwnAverageItemLevel = ctx.getOwnAverageItemLevel,
     unitIsGroupLeader = ctx.unitIsGroupLeader,
     unitHasIsiLive = ctx.unitHasIsiLive,
     applyKnownKeyToRosterEntry = ctx.applyKnownKeyToRosterEntry,
@@ -366,7 +371,8 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
       state.getRoster(),
       deps.getUnitRio,
       deps.getInspectSpecName,
-      deps.getPlayerSpecName
+      deps.getPlayerSpecName,
+      deps.getOwnAverageItemLevel
     )
   end
   config.processAddonMessage = function(prefix, message, sender, channel)
@@ -549,22 +555,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
       end
 
       if ctx.isInGroup and ctx.isInGroup() then
-        local sent = false
-        if type(ContextHelpers.SendPartyChatMessage) == "function" then
-          sent = ContextHelpers.SendPartyChatMessage(line)
-        else
-          local sendChatMessage = rawget(_G, "SendChatMessage")
-          if type(sendChatMessage) == "function" then
-            sent = pcall(sendChatMessage, line, "PARTY")
-          end
-          if not sent then
-            local chatInfo = rawget(_G, "C_ChatInfo")
-            local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
-            if type(sendChatMessageCompat) == "function" then
-              sent = pcall(sendChatMessageCompat, line, "PARTY")
-            end
-          end
-        end
+        local sent = ContextHelpers.SendPartyChatMessage(line)
         if sent then
           ctx._lastKeystoneChatAt = now
           if traceDeep then
@@ -616,6 +607,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     getUnitRio = ctx.getUnitRio,
     getInspectSpecName = ctx.getInspectSpecName,
     getPlayerSpecName = ctx.getPlayerSpecName,
+    getOwnAverageItemLevel = ctx.getOwnAverageItemLevel,
     getAddonVersionRaw = ctx.getAddonVersionRaw,
     getCombatLogEventInfo = ctx.GetCombatLogEventInfo,
     handleLFGDetectEvent = function(event, ...)

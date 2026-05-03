@@ -1010,6 +1010,23 @@ local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, Loa
       local guildResult =
         addon.Sync.ProcessAddonMessage("LibKS", "15,2649,3210", "Guildie-OtherRealm", "MyPlayer", "Realm", "GUILD")
       Assert.Nil(guildResult, "guild LibKeystone payloads must stay ignored for party roster sync")
+
+      -- Inside an instance (M+ key, dungeon, scenario) the WoW server delivers
+      -- party addon messages on INSTANCE_CHAT rather than PARTY. Must accept.
+      local instanceResult = addon.Sync.ProcessAddonMessage(
+        "LibKS",
+        "10,505,3050",
+        "InstancePeer-OtherRealm",
+        "MyPlayer",
+        "Realm",
+        "INSTANCE_CHAT"
+      )
+      Assert.NotNil(instanceResult, "INSTANCE_CHAT LibKeystone payloads must not be silently dropped")
+      Assert.True(instanceResult.keyUpdated, "INSTANCE_CHAT key data must update sync state")
+      local instanceKeyInfo = addon.Sync.GetPlayerKeyInfo("InstancePeer", "OtherRealm")
+      Assert.NotNil(instanceKeyInfo, "INSTANCE_CHAT key info must be stored")
+      Assert.Equal(instanceKeyInfo.level, 10, "INSTANCE_CHAT key level must be parsed")
+      Assert.Equal(instanceKeyInfo.mapID, 505, "INSTANCE_CHAT key mapID must be parsed")
     end)
   end)
 
@@ -1267,6 +1284,65 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
       Assert.Equal(sentMessages[1].prefix, "LibKS", "LibKeystone party data must use the LibKS prefix")
       Assert.Equal(sentMessages[1].message, "17,505,3333", "LibKeystone party data must encode level, map, and rio")
       Assert.Equal(sentMessages[1].channel, "PARTY", "LibKeystone party data must use the party channel")
+    end)
+  end)
+
+  test("Sync SendLibKeystoneRequest routes to INSTANCE_CHAT inside an instance group", function()
+    local sentMessages = {}
+
+    WithGlobals({
+      GetTime = function()
+        return 200
+      end,
+      LE_PARTY_CATEGORY_INSTANCE = 2,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+      addon.Sync.SendLibKeystoneRequest({ force = true })
+      Assert.Equal(#sentMessages, 1, "request must send")
+      Assert.Equal(
+        sentMessages[1].channel,
+        "INSTANCE_CHAT",
+        "LibKeystone request must use INSTANCE_CHAT inside an instance group"
+      )
+    end)
+  end)
+
+  test("Sync SendLibKeystonePartyData routes to INSTANCE_CHAT inside an instance group", function()
+    local sentMessages = {}
+
+    WithGlobals({
+      LE_PARTY_CATEGORY_INSTANCE = 2,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+      addon.Sync.SendLibKeystonePartyData({ mapID = 505, level = 17, rio = 3333 })
+      Assert.Equal(#sentMessages, 1, "party data must send")
+      Assert.Equal(
+        sentMessages[1].channel,
+        "INSTANCE_CHAT",
+        "LibKeystone party data must use INSTANCE_CHAT inside an instance group"
+      )
     end)
   end)
 end

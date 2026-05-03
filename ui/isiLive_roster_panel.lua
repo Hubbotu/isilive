@@ -130,35 +130,6 @@ local function RequireFunction(value, name)
   return addonTable.Validators.RequireFunction(value, name, "RosterPanel")
 end
 
-local function SendPartyChatMessage(message)
-  if type(ContextHelpers.SendPartyChatMessage) == "function" then
-    return ContextHelpers.SendPartyChatMessage(message)
-  end
-
-  if type(message) ~= "string" or message == "" then
-    return false
-  end
-
-  local sendChatMessage = rawget(_G, "SendChatMessage")
-  if type(sendChatMessage) == "function" then
-    local ok = pcall(sendChatMessage, message, "PARTY")
-    if ok then
-      return true
-    end
-  end
-
-  local chatInfo = rawget(_G, "C_ChatInfo")
-  local sendChatMessageCompat = type(chatInfo) == "table" and chatInfo.SendChatMessage or nil
-  if type(sendChatMessageCompat) == "function" then
-    local ok = pcall(sendChatMessageCompat, message, "PARTY")
-    if ok then
-      return true
-    end
-  end
-
-  return false
-end
-
 local function CreateStatusLine(mainFrame)
   local statusLine = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   statusLine:SetPoint("BOTTOMLEFT", 10, 6)
@@ -306,7 +277,7 @@ local function CreateShareKeysButton(mainFrame, deps)
     local inGroup = deps.isInGroup() == true
     if ownLine then
       if inGroup then
-        local sentOwnKey = SendPartyChatMessage(ownLine)
+        local sentOwnKey = ContextHelpers.SendPartyChatMessage(ownLine)
         if not sentOwnKey then
           print(ownLine)
         end

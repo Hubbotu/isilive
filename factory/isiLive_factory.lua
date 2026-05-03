@@ -508,6 +508,7 @@ local function FinalizeFactoryRuntime(ctx)
     getUnitRole = ctx.GetUnitRole,
     getPlayerSpecName = ctx.GetPlayerSpecName,
     getUnitRio = ctx.GetUnitRio,
+    getOwnAverageItemLevel = ctx.GetOwnAverageItemLevel,
     getInspectSpecName = ctx.GetInspectSpecName,
     unitHasIsiLive = ctx.UnitHasIsiLive,
     applyKnownKeyToRosterEntry = ctx.ApplyKnownKeyToRosterEntry,
