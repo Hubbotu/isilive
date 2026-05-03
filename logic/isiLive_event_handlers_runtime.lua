@@ -329,10 +329,6 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     IsiLiveDB.position = IsiLiveDB.position or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
     IsiLiveDB.locale = ctx.resolveLocaleTag(IsiLiveDB.locale or ctx.defaultLocale)
     ctx.setLocaleTable(ctx.locales[IsiLiveDB.locale] or ctx.locales.enUS)
-    -- These settings are temporarily hidden from Blizzard Settings.
-    -- Keep SavedVariables aligned with the hard runtime defaults until the controls return.
-    IsiLiveDB.showDpsColumn = true
-    IsiLiveDB.markersLeaderOnly = false
     -- Administrative debug settings are never persisted: always start disabled, user must re-enable each session.
     IsiLiveDB.queueDebug = false
     IsiLiveDB.runtimeLogEnabled = false

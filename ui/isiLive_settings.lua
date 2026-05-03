@@ -24,9 +24,6 @@ local SETTINGS_CONTENT_WIDTH = 700
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
 local SHOW_NAME_MAX_CHARS_SETTING = false
 local SHOW_TELEPORT_COLUMNS_SETTING = false
--- Temporarily hidden from Settings while live runtime keeps these defaults hard-forced.
-local SHOW_DPS_COLUMN_SETTING = false
-local SHOW_MARKERS_LEADER_ONLY_SETTING = false
 local DEFAULT_LAYOUT_MODE_EXPANDED = "expanded"
 local DEFAULT_LAYOUT_MODE_COMPACT_VERTICAL = "compact_vertical"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL = "compact_horizontal"
@@ -798,7 +795,6 @@ local function ResolveSettingsOptions(opts)
     onBgAlphaChange = opts.onBgAlphaChange,
     onUiScaleChange = opts.onUiScaleChange,
     onSyncToggle = opts.onSyncToggle,
-    onShowDpsColumnToggle = opts.onShowDpsColumnToggle,
     onMinimapButtonToggle = opts.onMinimapButtonToggle,
     onAutoOpenQueueToggle = opts.onAutoOpenQueueToggle,
     onAutoCloseMainFrameToggle = opts.onAutoCloseMainFrameToggle,
@@ -810,7 +806,6 @@ local function ResolveSettingsOptions(opts)
     onPortalNavigatorToggle = opts.onPortalNavigatorToggle,
     onDefaultLayoutModeChange = opts.onDefaultLayoutModeChange,
     onNameMaxCharsChange = opts.onNameMaxCharsChange,
-    onMarkersLeaderOnlyToggle = opts.onMarkersLeaderOnlyToggle,
     onRosterColumnGuidesToggle = opts.onRosterColumnGuidesToggle,
     onTeleportColumnsChange = opts.onTeleportColumnsChange,
     getQueueDebugEnabled = opts.getQueueDebugEnabled,
@@ -1079,25 +1074,6 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
     end
   end
   yOffset = yOffset - 18
-
-  if SHOW_DPS_COLUMN_SETTING then
-    controls.showDps, yOffset = CreateSettingsCheckbox(
-      canvas,
-      yOffset,
-      labels.SETTINGS_SHOW_DPS_COLUMN or "Show DPS Column",
-      function()
-        local db = config.getDB()
-        return db.showDpsColumn ~= false
-      end,
-      function(checked)
-        local db = config.getDB()
-        db.showDpsColumn = checked
-        if type(config.onShowDpsColumnToggle) == "function" then
-          config.onShowDpsColumnToggle(checked)
-        end
-      end
-    )
-  end
 
   if SHOW_NAME_MAX_CHARS_SETTING then
     controls.nameMaxChars, yOffset = CreateSettingsSlider(
@@ -1799,25 +1775,6 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     true
   )
 
-  if SHOW_MARKERS_LEADER_ONLY_SETTING then
-    controls.markers, yOffset = CreateSettingsCheckbox(
-      canvas,
-      yOffset,
-      labels.SETTINGS_MARKERS_LEADER_ONLY or "Markers: Leader Only",
-      function()
-        local db = config.getDB()
-        return db.markersLeaderOnly == true
-      end,
-      function(checked)
-        local db = config.getDB()
-        db.markersLeaderOnly = checked
-        if type(config.onMarkersLeaderOnlyToggle) == "function" then
-          config.onMarkersLeaderOnlyToggle(checked)
-        end
-      end
-    )
-  end
-
   return yOffset
 end
 
@@ -2251,17 +2208,11 @@ local function RefreshSettingsControls(controls, config)
     controls.clearRuntimeLogBtn.label:SetText(freshL.SETTINGS_RUNTIME_LOG_CLEAR or "Clear Runtime Log")
   end
 
-  if controls.showDps then
-    controls.showDps.label:SetText(freshL.SETTINGS_SHOW_DPS_COLUMN or "Show DPS Column")
-  end
   if controls.nameMaxChars then
     controls.nameMaxChars.label:SetText(freshL.SETTINGS_NAME_MAX_CHARS or "Name Length")
   end
   if controls.tpColumns then
     controls.tpColumns.label:SetText(freshL.SETTINGS_TELEPORT_COLUMNS or "Teleport Grid Columns")
-  end
-  if controls.markers then
-    controls.markers.label:SetText(freshL.SETTINGS_MARKERS_LEADER_ONLY or "Markers: Leader Only")
   end
   if controls.columnGuides then
     controls.columnGuides.label:SetText(freshL.SETTINGS_ROSTER_COLUMN_GUIDES or "Column Guides")
@@ -2378,17 +2329,11 @@ local function RefreshSettingsControls(controls, config)
     controls.nameplatePreviewUpdate()
   end
 
-  if controls.showDps then
-    controls.showDps.check:SetChecked(db.showDpsColumn ~= false)
-  end
   if controls.nameMaxChars then
     controls.nameMaxChars.SetValueSilently(type(db.nameMaxChars) == "number" and db.nameMaxChars or 10)
   end
   if controls.tpColumns then
     controls.tpColumns.SetValueSilently(type(db.teleportColumns) == "number" and db.teleportColumns or 4)
-  end
-  if controls.markers then
-    controls.markers.check:SetChecked(db.markersLeaderOnly == true)
   end
   if controls.betaHeader then
     controls.betaHeader:SetText(freshL.SETTINGS_BETA_NOTICE or "Beta")

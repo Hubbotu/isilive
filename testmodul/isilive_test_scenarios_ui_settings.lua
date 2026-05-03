@@ -56,7 +56,6 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
-            SETTINGS_MARKERS_LEADER_ONLY = "Markers Leader Only",
             SETTINGS_QUEUE_DEBUG = "Queue Debug",
             SETTINGS_RUNTIME_LOG = "Runtime Log",
             SETTINGS_RESET_DB = "Reset All Settings",
@@ -294,7 +293,6 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_ESC_PANEL = "ESC Panel",
             SETTINGS_BG_ALPHA = "Background Opacity",
             SETTINGS_UI_SCALE = "UI Scale",
-            SETTINGS_SHOW_DPS_COLUMN = "Show DPS Column",
             SETTINGS_NAME_MAX_CHARS = "Name Length",
             SETTINGS_TELEPORT_COLUMNS = "Teleport Grid Columns",
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
@@ -306,7 +304,6 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
-            SETTINGS_MARKERS_LEADER_ONLY = "Markers Leader Only",
             SETTINGS_QUEUE_DEBUG = "Queue Debug",
             SETTINGS_RUNTIME_LOG = "Runtime Log",
           }
@@ -1277,9 +1274,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
   test("Settings panel hides disabled legacy display and behavior controls", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {
-      showDpsColumn = true,
       nameMaxChars = 18,
-      markersLeaderOnly = true,
       teleportColumns = 2,
     }
 
@@ -1308,7 +1303,6 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
             SETTINGS_ESC_PANEL = "ESC Panel",
             SETTINGS_BG_ALPHA = "Background Opacity",
             SETTINGS_UI_SCALE = "UI Scale",
-            SETTINGS_SHOW_DPS_COLUMN = "Show DPS Column",
             SETTINGS_NAME_MAX_CHARS = "Name Length",
             SETTINGS_TELEPORT_COLUMNS = "Teleport Grid Columns",
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
@@ -1319,7 +1313,6 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_RAID_TRANSITION_BEHAVIOR = "Raid Behavior",
             SETTINGS_RAID_TRANSITION_BEHAVIOR_HIDE = "Raid Off",
-            SETTINGS_MARKERS_LEADER_ONLY = "Markers Leader Only",
             SETTINGS_QUEUE_DEBUG = "Queue Debug",
             SETTINGS_RUNTIME_LOG = "Runtime Log",
           }
@@ -1373,7 +1366,7 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(
         checkboxCount,
         27,
-        "settings should hide only the legacy DPS, markers, name-length,"
+        "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
           .. " chat-announce, combat-fade, and nameplate-subtoggle checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"

@@ -708,26 +708,6 @@ local function RegisterCombatStartupM0TrackingTests(test, Assert, WithGlobals, L
 end
 
 local function RegisterCombatStartupStateRestoreTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
-  test("Event handlers force hidden setting defaults on ADDON_LOADED", function()
-    local db = {
-      locale = "enUS",
-      showDpsColumn = false,
-      markersLeaderOnly = false,
-      position = { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 },
-    }
-
-    WithGlobals({
-      IsiLiveDB = db,
-    }, function()
-      local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
-      local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {})
-      controller:Dispatch("ADDON_LOADED", "isiLive")
-    end)
-
-    Assert.True(db.showDpsColumn == true, "ADDON_LOADED must force the hidden DPS-column setting on")
-    Assert.False(db.markersLeaderOnly == true, "ADDON_LOADED must force the hidden marker setting off")
-  end)
-
   test("Event handlers reset runtime log storage and enabled flag on ADDON_LOADED", function()
     local ensureRuntimeLogStorageCalls = 0
     local setRuntimeLogEnabledValue = nil

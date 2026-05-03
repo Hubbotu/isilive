@@ -159,11 +159,6 @@ local function FinalizeFactorySettings(ctx)
       onSyncToggle = function(_enabled)
         -- Runtime reads IsiLiveDB.syncEnabled directly; no additional action needed
       end,
-      onShowDpsColumnToggle = function(_enabled)
-        if ctx.rosterPanelController and type(ctx.rosterPanelController.RenderRoster) == "function" then
-          ctx.rosterPanelController.RenderRoster(ctx.GetRoster())
-        end
-      end,
       onRosterColumnGuidesToggle = function(_enabled)
         if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshLayoutState) == "function" then
           ctx.rosterPanelController.RefreshLayoutState()
@@ -210,11 +205,6 @@ local function FinalizeFactorySettings(ctx)
         ctx.RestoreLayoutState()
       end,
       onNameMaxCharsChange = function(_maxChars)
-        if ctx.rosterPanelController and type(ctx.rosterPanelController.RenderRoster) == "function" then
-          ctx.rosterPanelController.RenderRoster(ctx.GetRoster())
-        end
-      end,
-      onMarkersLeaderOnlyToggle = function(_enabled)
         if ctx.rosterPanelController and type(ctx.rosterPanelController.RenderRoster) == "function" then
           ctx.rosterPanelController.RenderRoster(ctx.GetRoster())
         end

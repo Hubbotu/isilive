@@ -15,7 +15,6 @@ end
 local H = LoadRosterPanelHelpers()
 local NewRecordedFrame = H.NewRecordedFrame
 local FindFrameByProperty = H.FindFrameByProperty
-local FindWorldMarkerButtons = H.FindWorldMarkerButtons
 local FindM2ColumnGuides = H.FindM2ColumnGuides
 local BuildHiddenSettingTestController = H.BuildHiddenSettingTestController
 
@@ -112,123 +111,6 @@ local function RegisterRosterPanelHiddenDisplayDefaultTests(test, Assert, WithGl
           rowText:find("OldHeal", 1, true) ~= nil,
           "extra ghosts must stay behind all active members when the row budget is exhausted"
         )
-      end
-    end)
-  end)
-
-  test("Roster panel keeps hidden DPS setting hard-enabled even when DB disables it", function()
-    local createdFrames = {}
-    local createdFontStrings = {}
-
-    WithGlobals({
-      IsiLiveDB = {
-        showDpsColumn = false,
-      },
-      CreateFrame = function()
-        return NewRecordedFrame(createdFrames, createdFontStrings)
-      end,
-      GameTooltip = {
-        SetOwner = function() end,
-        SetText = function() end,
-        AddLine = function() end,
-        Show = function() end,
-        Hide = function() end,
-      },
-    }, function()
-      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
-      local controller = BuildHiddenSettingTestController(addon, createdFontStrings, {
-        buildOrderedRoster = function()
-          return {
-            {
-              unit = "party1",
-              info = {
-                name = "Buddy",
-                role = "DAMAGER",
-              },
-            },
-          }
-        end,
-        buildDisplayData = function()
-          return {
-            colorHex = "ffffffff",
-            displayName = "Buddy",
-            languageDisplay = "EN",
-            specText = "Fury",
-            ilvlText = "650",
-            rioText = "3000",
-            keyText = "DB +10",
-            addonMarker = "",
-            atDungeonMarker = "",
-            readyCheckMarkup = "",
-            roleIconMarkup = "",
-          }
-        end,
-        rolePriority = {
-          DAMAGER = 1,
-        },
-        unitPriority = {
-          party1 = 1,
-        },
-      })
-
-      controller.RenderRoster({})
-
-      local dpsHeader = nil
-      local rowDps = nil
-      for _, fontString in ipairs(createdFontStrings) do
-        if fontString.pointX == 390 and fontString.pointY == -34 then
-          dpsHeader = fontString
-        elseif fontString.pointX == 390 and fontString.pointY ~= -34 then
-          rowDps = fontString
-        end
-      end
-
-      dpsHeader = Assert.NotNil(dpsHeader, "DPS header should exist")
-      ---@diagnostic disable-next-line: undefined-field
-      Assert.True(dpsHeader:IsShown(), "hidden settings must keep the DPS header visible")
-      rowDps = Assert.NotNil(rowDps, "row DPS cell should exist")
-      ---@diagnostic disable-next-line: undefined-field
-      Assert.True(rowDps:IsShown(), "hidden settings must keep row DPS values visible")
-      ---@diagnostic disable-next-line: undefined-field
-      Assert.Equal(rowDps.text, "-", "row DPS cell should still render the placeholder value")
-    end)
-  end)
-
-  test("Roster panel keeps hidden marker setting visible for non-leaders even when DB enables leader-only", function()
-    local createdFrames = {}
-    local createdFontStrings = {}
-
-    WithGlobals({
-      IsiLiveDB = {
-        markersLeaderOnly = true,
-      },
-      InCombatLockdown = function()
-        return false
-      end,
-      CreateFrame = function()
-        return NewRecordedFrame(createdFrames, createdFontStrings)
-      end,
-      GameTooltip = {
-        SetOwner = function() end,
-        SetText = function() end,
-        AddLine = function() end,
-        Show = function() end,
-        Hide = function() end,
-      },
-    }, function()
-      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
-      local controller = BuildHiddenSettingTestController(addon, createdFontStrings, {
-        isPlayerLeader = function()
-          return false
-        end,
-      })
-
-      controller.RenderRoster({})
-
-      local tankButtons = FindWorldMarkerButtons(createdFrames)
-      Assert.Equal(#tankButtons, 8, "marker helper should still create all eight world-marker buttons")
-      for _, button in ipairs(tankButtons) do
-        Assert.True(button:IsShown(), "hidden settings must keep world-marker buttons visible for non-leaders")
       end
     end)
   end)
