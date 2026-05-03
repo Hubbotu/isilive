@@ -1,51 +1,53 @@
 #!/usr/bin/env sh
+# Fast gate for every commit:
+#   * stylua --check       — formatting
+#   * luacheck             — lint
+#   * validate_usecases    — 1380 unit tests
+#
+# The full gate (all 11 simulators + static-analysis gates + metrics)
+# runs in pre-push instead, so iteration commits stay snappy. To run
+# the full gate manually, invoke `pwsh tools/run_local_ci.ps1`. To
+# bypass any hook for a single commit, use `git commit --no-verify`.
 
 set -e
 
-echo "Running pre-commit checks..."
+cd "$(git rev-parse --show-toplevel)"
 
-if command -v powershell >/dev/null 2>&1; then
-  if ! powershell -ExecutionPolicy Bypass -File tools/sync_release_baseline.ps1; then
-    echo "pre-commit: release baseline sync failed."
-    exit 1
+# luacheck + the test runner depend on luarocks-installed modules (lfs);
+# set LUA_PATH / LUA_CPATH if luarocks is available so the hook works
+# from a plain Git Bash shell without requiring PowerShell.
+#
+# `luarocks path` outputs Windows-CMD-style "SET KEY=VALUE" lines, so
+# `eval` does not work portably. Use the dedicated --lr-path / --lr-cpath
+# flags which print just the value, then append ";;" so Lua's default
+# search paths stay in the chain.
+if command -v luarocks >/dev/null 2>&1; then
+  lr_path="$(luarocks path --lr-path 2>/dev/null || true)"
+  lr_cpath="$(luarocks path --lr-cpath 2>/dev/null || true)"
+  if [ -n "$lr_path" ]; then
+    export LUA_PATH="${lr_path};;"
   fi
-elif command -v pwsh >/dev/null 2>&1; then
-  if ! pwsh -File tools/sync_release_baseline.ps1; then
-    echo "pre-commit: release baseline sync failed."
-    exit 1
+  if [ -n "$lr_cpath" ]; then
+    export LUA_CPATH="${lr_cpath};;"
   fi
 fi
 
-if command -v powershell >/dev/null 2>&1; then
-  if ! powershell -ExecutionPolicy Bypass -File tools/validate_ci_local.ps1; then
-    echo "pre-commit: local CI preflight failed."
-    exit 1
-  fi
-elif command -v pwsh >/dev/null 2>&1; then
-  if ! pwsh -File tools/validate_ci_local.ps1; then
-    echo "pre-commit: local CI preflight failed."
-    exit 1
-  fi
-else
-  if ! stylua --check .; then
-    echo "pre-commit: stylua check failed. Run 'stylua .' and retry."
-    exit 1
-  fi
-
-  if ! luacheck --exclude-files ".luarocks/**" -- .; then
-    echo "pre-commit: luacheck failed. Fix lint issues and retry."
-    exit 1
-  fi
-
-  if ! lua tools/lua_metrics_check.lua; then
-    echo "pre-commit: lua metrics check failed. Fix file/function size violations and retry."
-    exit 1
-  fi
-
-  if ! lua tools/validate_usecases.lua; then
-    echo "pre-commit: deterministic usecase/rules logic validation failed. Fix failing scenarios or RULES_LOGIC mapping and retry."
-    exit 1
-  fi
+echo "==> stylua --check"
+if ! stylua --check .; then
+  echo "pre-commit: stylua check failed. Run 'stylua .' to auto-fix and retry." >&2
+  exit 1
 fi
 
-echo "pre-commit: all checks passed."
+echo "==> luacheck"
+if ! luacheck --exclude-files ".luarocks/**" -- .; then
+  echo "pre-commit: luacheck failed. Fix lint issues and retry." >&2
+  exit 1
+fi
+
+echo "==> validate_usecases (1380 deterministic unit tests)"
+if ! lua tools/validate_usecases.lua; then
+  echo "pre-commit: usecase / rules-logic validation failed." >&2
+  exit 1
+fi
+
+echo "pre-commit: fast gate passed."
