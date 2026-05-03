@@ -142,6 +142,7 @@ try {
   Invoke-CheckedCommand "Multi-Invite Target Chain Simulator" "lua tools/simulate_multi_invite_target_chain.lua"
   Invoke-CheckedCommand "Leader-Handoff Cascade Simulator" "lua tools/simulate_leader_handoff_cascade.lua"
   Invoke-CheckedCommand "Challenge-Mode Taint Sequence Simulator" "lua tools/simulate_challenge_mode_taint_sequence.lua"
+  Invoke-CheckedCommand "Keystone-Link Bag-Scan Lifecycle Simulator" "lua tools/simulate_keystone_link_bag_scan_lifecycle.lua"
   Invoke-CheckedCommand "Reload-Storm Simulator" "lua tools/simulate_reload_storm.lua"
   Invoke-CheckedCommand "Key-Completion Lifecycle Simulator" "lua tools/simulate_key_completion_lifecycle.lua"
   Invoke-CheckedCommand "Deterministic Usecase + Rules Logic Validation" "lua tools/validate_usecases.lua"

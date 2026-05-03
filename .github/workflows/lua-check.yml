@@ -148,6 +148,10 @@ jobs:
         run: |
           lua tools/simulate_challenge_mode_taint_sequence.lua
 
+      - name: Keystone-Link Bag-Scan Lifecycle Simulator
+        run: |
+          lua tools/simulate_keystone_link_bag_scan_lifecycle.lua
+
       - name: Reload-Storm Simulator
         run: |
           lua tools/simulate_reload_storm.lua
