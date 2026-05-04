@@ -2132,6 +2132,20 @@ local function RefreshSettingsControls(controls, config)
   if controls.displayHint then
     controls.displayHint:SetText(freshL.SETTINGS_SECTION_DISPLAY_HINT or "Scale, opacity, and UI recovery tools.")
   end
+  if controls.nameplatesHeader then
+    controls.nameplatesHeader:SetText(freshL.SETTINGS_SECTION_NAMEPLATES or "Nameplates")
+  end
+  if controls.nameplatesHint then
+    controls.nameplatesHint:SetText(
+      freshL.SETTINGS_SECTION_NAMEPLATES_HINT or "Enemy forces overlay on Mythic+ nameplates."
+    )
+  end
+  if controls.nameplatesExternalWarn then
+    controls.nameplatesExternalWarn:SetText(
+      freshL.SETTINGS_NAMEPLATE_EXTERNAL_WARN
+        or "Plater or Platynator detected: if that addon already shows M+ count, leave this off."
+    )
+  end
   controls.behaviorHeader:SetText(freshL.SETTINGS_SECTION_BEHAVIOR or "Behavior")
   if controls.behaviorHint then
     controls.behaviorHint:SetText(
