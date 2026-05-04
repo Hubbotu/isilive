@@ -2,11 +2,28 @@
 -- by replacing the row.readyCheckBackground frame with a mock that records every
 -- Show/Hide/SetColorTexture call. Then exercises the renders that follow FINISHED
 -- (RefreshReadyCheckStateImpl + RenderRosterImpl + a follow-up RenderRosterImpl
--- triggered by a fake GROUP_ROSTER_UPDATE-like event) and prints the call log.
+-- triggered by a fake GROUP_ROSTER_UPDATE-like event) and asserts the row
+-- background state at every step.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+-- the real RenderRosterImpl + RefreshReadyCheckStateImpl from the production
+-- render module are driven against frame mocks that record every Show/Hide/
+-- SetColorTexture call. Asserts use the shared Check/os.exit(1) pattern so a
+-- regression in the hold-after-FINISHED contract breaks CI rather than just
+-- printing different log lines.
+--
+-- COMPONENT-ONLY exception (per CLAUDE.md): the simulator reaches into
+-- _RosterPanelInternal via Reflection (`addon._RosterInternal or
+-- addon._RosterPanelInternal`). The roster_panel module exposes its render
+-- impl only through this internal table; no public surface accepts the
+-- mock state object the test feeds. Documented here so future cleanup
+-- knows the boundary leak is intentional.
 ---@diagnostic disable-next-line: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
 local load = load
+---@diagnostic disable-next-line: undefined-global
+local os = os
 
 local function LoadLocal(path)
   local file = assert(io.open(path, "rb"))
@@ -18,6 +35,65 @@ local function LoadLocal(path)
 end
 
 local Harness = LoadLocal("testmodul/isilive_test_harness.lua")
+
+local failures = 0
+
+local function Check(condition, message)
+  if condition then
+    print("  [CHECK PASS] " .. message)
+    return
+  end
+  failures = failures + 1
+  print("  [CHECK FAIL] " .. message)
+end
+
+-- Match against READY_CHECK_BACKGROUND_COLORS.r in roster.lua.
+local LABEL_GREEN = "GREEN"
+local LABEL_RED = "RED"
+local LABEL_YELLOW = "YELLOW"
+local LABEL_NONE = "(none)"
+
+local function ColorLabelOf(color)
+  if type(color) ~= "table" then
+    return LABEL_NONE
+  end
+  if color[1] == 0.08 then
+    return LABEL_GREEN
+  elseif color[1] == 0.48 then
+    return LABEL_RED
+  elseif color[1] == 0.55 then
+    return LABEL_YELLOW
+  end
+  return string.format("rgba(%.2f,%.2f,%.2f,%.2f)", color[1], color[2], color[3], color[4])
+end
+
+local function CountVisibleByColor(memberRows)
+  local visible = 0
+  local byColor = { [LABEL_GREEN] = 0, [LABEL_RED] = 0, [LABEL_YELLOW] = 0 }
+  for i = 1, 5 do
+    local bg = memberRows[i].readyCheckBackground
+    if bg.visible then
+      visible = visible + 1
+      local label = ColorLabelOf(bg.lastColor)
+      byColor[label] = (byColor[label] or 0) + 1
+    end
+  end
+  return visible, byColor
+end
+
+local function ExpectVisibleCounts(memberRows, expectedVisible, expectedByColor, message)
+  local visible, byColor = CountVisibleByColor(memberRows)
+  local mismatches = {}
+  if visible ~= expectedVisible then
+    mismatches[#mismatches + 1] = string.format("visible=%d (expected %d)", visible, expectedVisible)
+  end
+  for label, expectedCount in pairs(expectedByColor) do
+    if (byColor[label] or 0) ~= expectedCount then
+      mismatches[#mismatches + 1] = string.format("%s=%d (expected %d)", label, byColor[label] or 0, expectedCount)
+    end
+  end
+  Check(#mismatches == 0, message .. (mismatches[1] and (" — " .. table.concat(mismatches, ", ")) or ""))
+end
 
 -- Simulated state (same as the lifecycle simulator) ----------------------------------------
 local sim = {
@@ -304,6 +380,7 @@ Harness.WithGlobals({
   RI.RefreshReadyCheckStateImpl(state, roster)
   PrintLog("Phase 1: READY_CHECK fired → RefreshReadyCheckStateImpl (live: yellow for everyone)")
   PrintBackgroundStates("after phase 1", memberRows)
+  ExpectVisibleCounts(memberRows, 5, { [LABEL_YELLOW] = 5 }, "phase 1: 5 yellow rows visible (all waiting)")
 
   -- Phase 2: confirms received
   sim.readyCheckStatus.player = "ready"
@@ -314,6 +391,12 @@ Harness.WithGlobals({
   RI.RefreshReadyCheckStateImpl(state, roster)
   PrintLog("Phase 2: confirms in → RefreshReadyCheckStateImpl (live: green/red/yellow)")
   PrintBackgroundStates("after phase 2", memberRows)
+  ExpectVisibleCounts(
+    memberRows,
+    5,
+    { [LABEL_GREEN] = 2, [LABEL_RED] = 1, [LABEL_YELLOW] = 2 },
+    "phase 2: 2 green (player+party1) + 1 red (party2) + 2 yellow (party3+4 no-answer)"
+  )
 
   -- Phase 3: READY_CHECK_FINISHED — simulate post-finish state.
   -- WoW clears the live status and the event handler promotes ready/declined to hold.
@@ -335,14 +418,28 @@ Harness.WithGlobals({
   RI.RefreshReadyCheckStateImpl(state, roster)
   PrintLog("Phase 3a: READY_CHECK_FINISHED → RefreshReadyCheckStateImpl (hold: green/red)")
   PrintBackgroundStates("after phase 3a (hold should be ON)", memberRows)
+  ExpectVisibleCounts(
+    memberRows,
+    5,
+    { [LABEL_GREEN] = 2, [LABEL_RED] = 3 },
+    "phase 3a: 2 green (held ready) + 3 red (declined-promotion incl. no-answer)"
+  )
 
   -- Phase 4: simulate a follow-up generic UI rerender — this is what the user
   -- sees as "background disappears". A GROUP_ROSTER_UPDATE-like event, or
   -- INSPECT_READY, or any ChatMsgAddon → ctx.updateUI() → RenderRosterImpl.
+  -- This is the regression pin for the "hold flickers off after FINISHED" bug:
+  -- if a renderer side-path ever overrides the hold, this assert fails.
   ResetLog()
   RI.RenderRosterImpl(state, roster)
   PrintLog("Phase 3b: follow-up RenderRosterImpl (the suspected override path)")
   PrintBackgroundStates("after phase 3b — IS THE HOLD STILL ON?", memberRows)
+  ExpectVisibleCounts(
+    memberRows,
+    5,
+    { [LABEL_GREEN] = 2, [LABEL_RED] = 3 },
+    "phase 3b: hold survives a follow-up RenderRosterImpl (regression pin)"
+  )
 
   -- Phase 5: another follow-up shortly after
   sim.now = sim.now + 2
@@ -350,4 +447,17 @@ Harness.WithGlobals({
   RI.RenderRosterImpl(state, roster)
   PrintLog("Phase 3c: another RenderRosterImpl 2s later")
   PrintBackgroundStates("after phase 3c", memberRows)
+  ExpectVisibleCounts(
+    memberRows,
+    5,
+    { [LABEL_GREEN] = 2, [LABEL_RED] = 3 },
+    "phase 3c: hold still on after a second follow-up RenderRosterImpl"
+  )
 end)
+
+if failures > 0 then
+  print(string.format("\nReady-check frame-overrides simulator failed: %d check(s) failed", failures))
+  os.exit(1)
+end
+
+print("\nReady-check frame-overrides simulator passed.")

@@ -9,6 +9,22 @@
 -- A regression that forgets a single one of those steps would silently break
 -- recovery after a wing-clear / raid stop, so this simulator pins the entire
 -- transition matrix.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+--   * Group.HandleGroupRosterUpdate is the real production controller (no replica).
+--   * RuntimeState is real (RuntimeState.CreateController) — covers
+--     setWasInGroup / setWasRaidGroup / setWasGroupLeader / setRoster /
+--     getRoster / getWasInGroup / getWasRaidGroup through the production
+--     mutator. Replaces the previous closure-only group-state stub.
+--   * COMPONENT-ONLY exceptions (justified): IsInGroup / GetNumGroupMembers
+--     are WoW globals we cannot drive via real Blizzard events from a
+--     standalone Lua process — they are stubbed against an in-memory
+--     `state.inGroup` / `state.numMembers` model. The downstream side-effect
+--     callbacks (sendIsiLiveHello, sendOwnKeySnapshot, sendRefreshRequest,
+--     onGroupJoined, captureQueueJoinCandidate, ...) remain event-recorders;
+--     loading the real Sync / KeySync / Inspect / FactoryControllers chain
+--     pulls in ~10 transitive deps. The dispatch contract those modules see
+--     is pinned here; their internal logic is in dedicated module-level tests.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -40,23 +56,19 @@ local function FormatBool(value)
   return value == true and "yes" or (value == false and "no" or "-")
 end
 
--- A group state is an in-memory model of WoW's group tracking. The simulator
--- mutates this between transitions and re-uses it as the source of truth for
--- isInGroup / getNumGroupMembers / etc.
-local function NewGroupState()
+-- WoW-globals model: only the (extern) Blizzard surface — IsInGroup,
+-- GetNumGroupMembers — that we cannot drive via real Blizzard events.
+-- Everything else lives in the real RuntimeState below.
+local function NewWowGlobalsModel()
   return {
     inGroup = false,
     numMembers = 0,
-    wasInGroup = false,
-    wasRaidGroup = false,
-    wasGroupLeader = false,
-    roster = {},
     knownUsers = { ["Peer-OtherRealm"] = true, ["Tank-OtherRealm"] = true },
   }
 end
 
 local function BuildSim()
-  local state = NewGroupState()
+  local model = NewWowGlobalsModel()
   local events = {}
   local visibility = {} -- list of { visible = bool, reason = string }
   local timers = {}
@@ -66,39 +78,43 @@ local function BuildSim()
     events[#events + 1] = { name = name, payload = payload }
   end
 
+  local addon, runtimeState
+  Harness.WithGlobals({}, function()
+    addon = Harness.LoadAddonModules({
+      "isiLive_runtime_state.lua",
+      "isiLive_group.lua",
+    })
+    runtimeState = addon.RuntimeState.CreateController({})
+  end)
+
   local opts = {
     isInGroup = function()
-      return state.inGroup
+      return model.inGroup
     end,
     getNumGroupMembers = function()
-      return state.numMembers
+      return model.numMembers
     end,
     getActiveChallengeMapID = function()
       return nil
     end,
-    getWasInGroup = function()
-      return state.wasInGroup
-    end,
+    -- Real RuntimeState wiring (replaces the previous closure-only state stubs).
+    getWasInGroup = runtimeState.GetWasInGroup,
     setWasInGroup = function(flag)
-      state.wasInGroup = flag == true
+      runtimeState.SetWasInGroup(flag)
       record("setWasInGroup", flag)
     end,
-    getWasRaidGroup = function()
-      return state.wasRaidGroup
-    end,
+    getWasRaidGroup = runtimeState.GetWasRaidGroup,
     setWasRaidGroup = function(flag)
-      state.wasRaidGroup = flag == true
+      runtimeState.SetWasRaidGroup(flag)
       record("setWasRaidGroup", flag)
     end,
     setWasGroupLeader = function(flag)
-      state.wasGroupLeader = flag == true
+      runtimeState.SetWasGroupLeader(flag)
       record("setWasGroupLeader", flag)
     end,
-    getRoster = function()
-      return state.roster
-    end,
+    getRoster = runtimeState.GetRoster,
     setRoster = function(next)
-      state.roster = next or {}
+      runtimeState.SetRoster(next)
       record("setRoster", next)
     end,
     captureQueueJoinCandidate = function()
@@ -121,7 +137,7 @@ local function BuildSim()
       record("clearRioBaselineSnapshot")
     end,
     clearKnownUsers = function()
-      state.knownUsers = {}
+      model.knownUsers = {}
       record("clearKnownUsers")
     end,
     resetInspectAll = function()
@@ -206,11 +222,7 @@ local function BuildSim()
     logRuntimeTrace = function() end,
   }
 
-  local controller
-  Harness.WithGlobals({}, function()
-    local addon = Harness.LoadAddonModules({ "isiLive_group.lua" })
-    controller = addon.Group.CreateController(opts)
-  end)
+  local controller = addon.Group.CreateController(opts)
 
   local function advance(seconds)
     now = now + seconds
@@ -226,20 +238,21 @@ local function BuildSim()
   end
 
   return {
-    state = state,
+    model = model,
+    runtimeState = runtimeState,
     events = events,
     visibility = visibility,
     advance = advance,
     transition = function(label, mutate)
-      mutate(state)
+      mutate(model)
       print("---- " .. label)
       print(
         string.format(
           "  before HandleGroupRosterUpdate: inGroup=%s numMembers=%s wasInGroup=%s wasRaidGroup=%s",
-          FormatBool(state.inGroup),
-          tostring(state.numMembers),
-          FormatBool(state.wasInGroup),
-          FormatBool(state.wasRaidGroup)
+          FormatBool(model.inGroup),
+          tostring(model.numMembers),
+          FormatBool(runtimeState.GetWasInGroup()),
+          FormatBool(runtimeState.GetWasRaidGroup())
         )
       )
       controller.HandleGroupRosterUpdate()
@@ -247,10 +260,10 @@ local function BuildSim()
       print(
         string.format(
           "  after  HandleGroupRosterUpdate: inGroup=%s numMembers=%s wasInGroup=%s wasRaidGroup=%s",
-          FormatBool(state.inGroup),
-          tostring(state.numMembers),
-          FormatBool(state.wasInGroup),
-          FormatBool(state.wasRaidGroup)
+          FormatBool(model.inGroup),
+          tostring(model.numMembers),
+          FormatBool(runtimeState.GetWasInGroup()),
+          FormatBool(runtimeState.GetWasRaidGroup())
         )
       )
     end,
@@ -296,8 +309,11 @@ local function Run()
     visibilityForPhase1 and visibilityForPhase1.visible == true and visibilityForPhase1.reason == "queue",
     "joining a party shows the main frame with reason=queue"
   )
-  Check(sim.state.wasInGroup == true, "wasInGroup is set true after the join transition")
-  Check(sim.state.wasRaidGroup == false, "wasRaidGroup stays false in a 3-man party")
+  Check(
+    sim.runtimeState.GetWasInGroup() == true,
+    "wasInGroup is set true after the join transition (real RuntimeState)"
+  )
+  Check(sim.runtimeState.GetWasRaidGroup() == false, "wasRaidGroup stays false in a 3-man party (real RuntimeState)")
 
   -- Phase 2: the group expands beyond 5 members -> raid hard-off.
   sim.transition("Phase 2: party expands to 10-man raid", function(state)
@@ -327,7 +343,10 @@ local function Run()
     raidVisibility and raidVisibility.visible == false and raidVisibility.reason == "raid",
     "raid transition hides the main frame with reason=raid"
   )
-  Check(sim.state.wasRaidGroup == true, "wasRaidGroup is true after the 10-man transition")
+  Check(
+    sim.runtimeState.GetWasRaidGroup() == true,
+    "wasRaidGroup is true after the 10-man transition (real RuntimeState)"
+  )
   Check(
     CountEvents(sim.events, "sendIsiLiveHello", phase1End + 1) == 0,
     "raid mode does NOT send hello traffic during the raid transition itself"
@@ -350,7 +369,10 @@ local function Run()
     CountEvents(sim.events, "clearKnownUsers", phase2End + 1) == 1,
     "raid -> party recovery clears the known-users cache exactly once"
   )
-  Check(sim.state.wasRaidGroup == false, "wasRaidGroup is reset after returning to a 5-or-fewer party")
+  Check(
+    sim.runtimeState.GetWasRaidGroup() == false,
+    "wasRaidGroup is reset after returning to a 5-or-fewer party (real RuntimeState)"
+  )
   Check(
     CountEvents(sim.events, "sendIsiLiveHello", phase2End + 1) == 1,
     "raid -> party recovery re-sends hello so peers re-populate"
@@ -378,7 +400,7 @@ local function Run()
     state.inGroup = false
     state.numMembers = 0
   end)
-  Check(sim.state.wasInGroup == false, "wasInGroup is cleared on group leave")
+  Check(sim.runtimeState.GetWasInGroup() == false, "wasInGroup is cleared on group leave (real RuntimeState)")
   -- HandleNoGroup is the off-ramp; it should drop the roster snapshot.
   Check(
     CountEvents(sim.events, "setRoster", phase3End + 1) >= 1,

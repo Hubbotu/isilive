@@ -10,6 +10,13 @@
 -- Memory- and hook-leak regressions in WoW addons typically only surface
 -- after many /reload cycles in a single play session — this gate makes them
 -- visible at preflight time instead.
+--
+-- End-to-end discipline (CLAUDE.md): the KEY payload fed into ProcessAddonMessage
+-- in Phase 1 is derived from the production Sync.SendKey via captured
+-- C_ChatInfo.SendAddonMessage bytes — sender/receiver wire format drift surfaces
+-- here as a check failure. The frame-lifecycle phases (2-4) drive the real
+-- MobNameplate.SetEnabled / Sync.RegisterPrefix code paths against tracking
+-- frame mocks; no replica logic.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -168,6 +175,48 @@ local function BuildSession(opts)
         addon.Sync.RegisterPrefix()
       end)
     end,
+    -- Drive Sync.SendKey via the real production sender, capture the
+    -- emitted C_ChatInfo.SendAddonMessage payload, and return it. Lets the
+    -- receiver-side ProcessAddonMessage be driven with bytes the sender
+    -- actually emits — wire-format drift surfaces here.
+    captureKeyPayload = function(sendOpts)
+      sendOpts = sendOpts or {}
+      sendOpts.isVisible = false
+      sendOpts.allowHidden = true
+      sendOpts.force = true
+      local capturedPayload
+      Harness.WithGlobals({
+        strsplit = StrSplitStub,
+        GetRealmName = function()
+          return "Realm"
+        end,
+        UnitName = function()
+          return "MyPlayer", "Realm"
+        end,
+        IsInGroup = function()
+          return opts.inGroup ~= false
+        end,
+        IsInRaid = function()
+          return false
+        end,
+        GetTime = function()
+          return 1000
+        end,
+        C_ChatInfo = {
+          RegisterAddonMessagePrefix = function()
+            return true
+          end,
+          SendAddonMessage = function(_prefix, payload)
+            capturedPayload = payload
+            return true
+          end,
+        },
+        IsiLiveDB = { syncEnabled = true },
+      }, function()
+        addon.Sync.SendKey(sendOpts)
+      end)
+      return capturedPayload
+    end,
   }
 end
 
@@ -217,7 +266,22 @@ local function Run()
     local before = sim.addon.Sync.GetPlayerKeyInfo("Peer", "OtherRealm")
     Check(before == nil, string.format("cycle %d: fresh load has no Peer state before any payload", cycle))
 
-    local result = sim.process("KEY:2649:" .. cycle .. ":1000:reload-storm", "Peer-OtherRealm")
+    -- Derive the KEY wire bytes from the production Sync.SendKey instead of
+    -- hard-coding "KEY:2649:N:1000:reload-storm". A sender/receiver format
+    -- drift would surface here as a check failure.
+    local keyPayload = sim.captureKeyPayload({
+      mapID = 2649,
+      level = cycle,
+      capturedAt = 1000,
+      source = "reload-storm",
+    })
+    local expectedBytes = string.format("KEY:2649:%d:1000:reload-storm", cycle)
+    Check(
+      keyPayload == expectedBytes,
+      string.format("cycle %d: sender produces expected wire bytes (%s)", cycle, expectedBytes)
+    )
+
+    local result = sim.process(keyPayload, "Peer-OtherRealm")
     Check(result and result.keyUpdated == true, string.format("cycle %d: KEY payload applies on first ingest", cycle))
 
     local after = sim.addon.Sync.GetPlayerKeyInfo("Peer", "OtherRealm")

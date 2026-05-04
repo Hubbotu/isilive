@@ -19,6 +19,11 @@
 --   * isiLive_leader_watch.lua (real)       — verifies center-notice on gain
 --   * isiLive_status.lua (real)             — verifies Fix 2 lock-in holds
 --                                             across leader changes
+--   * isiLive_factory_controllers.lua (real) — drives ctx.GetStatusTargetDungeonInfo
+--                                              so the level-resolver chain
+--                                              (LFG-title hint -> owner-key ->
+--                                              synced-target) is exercised
+--                                              end-to-end across the cascade.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -121,19 +126,80 @@ local function Run()
 
   Harness.WithGlobals(globals, function()
     local addon = Harness.LoadAddonModules({
+      "isiLive_runtime_state.lua",
       "isiLive_lfg_detect.lua",
       "isiLive_status.lua",
       "isiLive_sound_utils.lua",
       "isiLive_leader_watch.lua",
+      "isiLive_factory_controllers.lua",
     })
 
     -- ----------------------------------------------------------------------
-    -- Status controller — drives the "Ziel-Dungeon" announce path.
+    -- Real ctx.GetStatusTargetDungeonInfo from factory_controllers.lua —
+    -- replaces the previous statusModel.target poke. The resolver chain
+    -- (LFG-title hint > owner-key > synced-target) runs end-to-end so the
+    -- post-leader-change assertions exercise the same code path as production.
     -- ----------------------------------------------------------------------
-    local statusModel = {
-      target = nil,
-      prints = {},
+    local resolverScenario = {
+      roster = {},
+      ownerUnit = nil,
     }
+    local runtimeState = addon.RuntimeState.CreateController({})
+    local ctx = {
+      modules = {
+        sync = {
+          NormalizePlayerKey = function(name, realm)
+            return (name or "") .. "-" .. (realm or "")
+          end,
+          GetPlayerTargetInfo = function()
+            return nil
+          end,
+        },
+        teleport = {
+          GetTeleportInfoByMapID = function(mapID)
+            if mapID == 559 then
+              return { mapName = "Nexus-Point Xenas" }
+            end
+            return nil
+          end,
+        },
+        queue = {
+          GetActivityName = function()
+            return nil
+          end,
+        },
+      },
+      runtimeState = runtimeState,
+      locale = "enUS",
+      L = {
+        UNKNOWN_GROUP = "unknown",
+        CHAT_QUEUE_PREFIX = "ISI-Q",
+        JOINED_FROM_QUEUE = "joined %s",
+      },
+      GetRoster = function()
+        return resolverScenario.roster
+      end,
+      IsPlayerLeader = function()
+        return false
+      end,
+      Print = function() end,
+      UpdateStatusLine = function() end,
+      ResolveMapIDByActivityID = function(activityID)
+        if activityID == 1768 then
+          return 559
+        end
+        return nil
+      end,
+    }
+    ctx.GetL = function()
+      return ctx.L
+    end
+    addon._FactoryInternal.InitializeFactoryRuntimeHelpers(ctx)
+    ctx.ResolveActiveKeyOwnerUnit = function()
+      return resolverScenario.ownerUnit
+    end
+
+    local statusModel = { prints = {} }
     local statusController = addon.Status.CreateController({
       getL = function()
         return {
@@ -144,9 +210,7 @@ local function Run()
       isInGroup = function()
         return groupRef.inGroup
       end,
-      getTargetDungeonInfo = function()
-        return statusModel.target
-      end,
+      getTargetDungeonInfo = ctx.GetStatusTargetDungeonInfo,
       printFn = function(message)
         table.insert(statusModel.prints, tostring(message))
       end,
@@ -211,7 +275,14 @@ local function Run()
     Check(addon.LFGDetect.GetActiveInviteLeader() == "Alice-Realm", "post-accept: activeInviteLeader points at Alice")
     Check(addon.LFGDetect.GetAcceptedInviteSearchResultID() == 3, "post-accept: acceptedInviteSearchResultID captured")
 
-    statusModel.target = { name = "Nexus-Point Xenas", level = 14 }
+    -- Drive the REAL ctx.GetStatusTargetDungeonInfo. With LFGDetect.GetActiveInviteTitleLevel()
+    -- already set to 14 from the accept above, the resolver yields
+    -- {name="Nexus-Point Xenas", level=14} via the title-priority branch.
+    local resolved1 = ctx.GetStatusTargetDungeonInfo()
+    Check(
+      type(resolved1) == "table" and resolved1.level == 14,
+      "Phase 1: real GetStatusTargetDungeonInfo yields level=14 from LFG-title hint"
+    )
     statusController.MaybeAnnounceTargetDungeonChat()
     Check(#statusModel.prints == 1, "Phase 1: first announce fires once")
     Check(
@@ -242,17 +313,20 @@ local function Run()
     leaderController.UpdateLeaderState("PARTY_LEADER_CHANGED")
     Check(#leaderModel.centerNotices == 0, "leader-change to Bob: no center-notice (player not promoted)")
 
-    -- The level-resolver (in production: GetStatusTargetDungeonInfo) might
-    -- now flicker because the LFG-title-hint flow is unaffected but the
-    -- owner-key resolution chain is one frame behind. Drive it through:
-    statusModel.target = { name = "Nexus-Point Xenas", level = 14 }
+    -- Inject an owner-key resync for the same dungeon at level 13 — the
+    -- pre-Fix-1 bug class would have downgraded the announce. With the real
+    -- resolver, LFG-title hint=14 wins and the lock-in suppresses re-announce.
+    resolverScenario.roster = {
+      party1 = { name = "Bob", realm = "Realm", keyLevel = 13, isGhost = false },
+    }
+    resolverScenario.ownerUnit = "party1"
+    local resolvedAfterLeaderChange = ctx.GetStatusTargetDungeonInfo()
+    Check(
+      type(resolvedAfterLeaderChange) == "table" and resolvedAfterLeaderChange.level == 14,
+      "leader-change: resolver still returns level=14 even with owner-key=13 in roster (Fix 1)"
+    )
     statusController.MaybeAnnounceTargetDungeonChat()
     Check(#statusModel.prints == 1, "leader-change: same +14 must NOT re-announce (Fix 2 lock-in)")
-
-    statusModel.target = { name = "Nexus-Point Xenas" } -- level briefly flickered to nil
-    statusController.MaybeAnnounceTargetDungeonChat()
-    statusController.MaybeAnnounceTargetDungeonChat()
-    Check(#statusModel.prints == 1, "leader-change + level flicker: still no second announce")
 
     -- ----------------------------------------------------------------------
     -- Phase 3: Bob also leaves; player gets promoted to leader.
@@ -272,7 +346,7 @@ local function Run()
     Check(leaderModel.wasGroupLeader == true, "leader-gain: wasGroupLeader updated")
     Check(leaderModel.leaderButtonUpdates >= 1, "leader-gain: leader buttons re-rendered")
 
-    statusModel.target = { name = "Nexus-Point Xenas", level = 14 }
+    -- Resolver still yields +14 (LFG-title hint unchanged across leader change).
     statusController.MaybeAnnounceTargetDungeonChat()
     Check(
       #statusModel.prints == 1,
@@ -307,13 +381,16 @@ local function Run()
     )
     Check(#leaderModel.leadLostPrints == 1, "leave-group: 'lead lost' message printed")
 
-    statusModel.target = nil
-    statusController.MaybeAnnounceTargetDungeonChat() -- ResetTargetDungeonChatState
+    -- ResetTargetDungeonChatState: solo + nil-target, then fresh accept.
+    resolverScenario.roster = {}
+    resolverScenario.ownerUnit = nil
+    statusController.MaybeAnnounceTargetDungeonChat() -- triggers ResetTargetDungeonChatState
 
     -- New cycle: same dungeon name, fresh accept. Lock-in must be cleared.
     groupRef.inGroup = true
     groupRef.members = 5
-    statusModel.target = { name = "Nexus-Point Xenas", level = 14 }
+    fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 3, "invited")
+    fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 3, "inviteaccepted")
     statusController.MaybeAnnounceTargetDungeonChat()
     Check(#statusModel.prints == 2, "fresh cycle: same dungeon name announces again because lock-in was reset")
   end)

@@ -27,6 +27,15 @@
 --     not abort the iteration.
 --   * Invalid input: mapID <= 0 or level <= 0 → returns nil (cannot send).
 --   * Plain-text fallback contains no color-code wrappers.
+--
+-- COMPONENT-ONLY (CLAUDE.md "Tests & simulators: end-to-end by default"
+-- exception): ContextHelpers.BuildKeystoneChatLink is a pure function with
+-- no event path — its inputs are (mapID, level, dungeonName) plus the
+-- C_MythicPlus / C_Container globals. There is no upstream production
+-- caller chain to drive end-to-end here; the SHAREKEYS roundtrip in
+-- simulate_sender_receiver.lua exercises the result of this function in a
+-- real send pipeline. Direct branch-coverage via mocked bag/API state is
+-- the appropriate level for this surface.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global

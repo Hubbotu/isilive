@@ -22,6 +22,18 @@
 --      the local "player" unit only — never for other party members.
 --   5. CHALLENGE_MODE_START/COMPLETED cycle: per-cycle dedup state must
 --      reset so a Bloodlust in run 1 doesn't suppress a Bloodlust in run 2.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+--   * Phase 1 drives module loading + RegisterEvent capture against real
+--     production modules (LFGDetect, CombatEvents, KickTracker, KillTrack).
+--   * Phase 2 was previously calling controller.HandleUnitSpellcastSucceeded
+--     directly (one layer below the production dispatcher); it now routes
+--     every spell event through the real CombatEvents.HandleEvent
+--     ("UNIT_SPELLCAST_SUCCEEDED", unit, ...) entry point — the same path
+--     WoW invokes through OnEvent. This catches a future regression where
+--     HandleEvent stops fanning out to HandleUnitSpellcastSucceeded.
+--   * Phase 3 drives the protected-dispatch guard against the real
+--     CombatEvents.HandleEvent path — no replica.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -202,7 +214,10 @@ local function VerifyBrLustDetection()
     local inKey = { value = true }
     local dbToggles = { chatAnnounceBR = true, chatAnnounceLust = true }
 
-    local controller = addon.CombatEvents.CreateController({
+    -- Wire deps into the file-scope controllerInstance via the production
+    -- SetDependencies entry — this is what factory_controllers.lua does in
+    -- production. CombatEvents.HandleEvent then routes through this instance.
+    addon.CombatEvents.SetDependencies({
       getTime = function()
         return clock.now
       end,
@@ -221,43 +236,43 @@ local function VerifyBrLustDetection()
     })
 
     -- BR spell (Rebirth) cast by player → must broadcast.
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 20484)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 20484)
     Check(#broadcasts == 1, "Rebirth (Druid BR) by player triggers broadcast")
     Check(broadcasts[1].kind == "BR", "broadcast kind=BR for spellID 20484")
 
     -- Same BR cast within 3s by same player → deduplicated.
     clock.now = clock.now + 1
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 20484)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 20484)
     Check(#broadcasts == 1, "duplicate BR within 3s window is suppressed")
 
     -- BR cast by another party member → must NOT broadcast (self-only).
     clock.now = clock.now + 5
-    controller.HandleUnitSpellcastSucceeded("party2", "spell", 20484)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "party2", "spell", 20484)
     Check(#broadcasts == 1, "non-player unit BR is rejected (Secret Value safety)")
 
     -- Bloodlust by player → broadcast as LUST.
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 2825)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 2825)
     Check(#broadcasts == 2, "Bloodlust (Shaman) by player triggers broadcast")
     Check(broadcasts[2].kind == "LUST", "broadcast kind=LUST for spellID 2825")
 
     -- Outside a key → must NOT broadcast.
     inKey.value = false
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 80353)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 80353)
     Check(#broadcasts == 2, "Time Warp outside a key does not broadcast")
     inKey.value = true
 
     -- Random non-BR-non-LUST spell → no broadcast.
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 1234567)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 1234567)
     Check(#broadcasts == 2, "non-BR/Lust spellID does not broadcast")
 
     -- Secret Value: spellID arrives as nil (12.0 protected-context masking).
-    controller.HandleUnitSpellcastSucceeded("player", "spell", nil)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", nil)
     Check(#broadcasts == 2, "nil spellID (Secret Value) is silently rejected")
 
     -- DB toggle off for BR → next BR is suppressed.
     dbToggles.chatAnnounceBR = false
     clock.now = clock.now + 100
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 20484)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 20484)
     Check(#broadcasts == 2, "chatAnnounceBR=false suppresses BR broadcast")
     dbToggles.chatAnnounceBR = true
 
@@ -266,30 +281,14 @@ local function VerifyBrLustDetection()
     -- the same spell can announce again in the next run.
     -- ------------------------------------------------------------------
     clock.now = clock.now + 1
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 2825)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 2825)
     Check(#broadcasts == 3, "Bloodlust in cycle 1 (post-toggle) broadcasts")
     -- Within dedup window, same Bloodlust would be suppressed:
-    controller.HandleUnitSpellcastSucceeded("player", "spell", 2825)
+    addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 2825)
     Check(#broadcasts == 3, "duplicate Bloodlust within 3s window stays suppressed")
 
-    -- Simulate the START handler firing: the global event fan-out calls Reset.
-    addon.CombatEvents.SetDependencies({
-      getTime = function()
-        return clock.now
-      end,
-      isInKey = function()
-        return true
-      end,
-      getUnitName = function(unit)
-        return "Tester-" .. unit
-      end,
-      broadcastCombatAnnounce = function(kind, sourceName, spellID)
-        broadcasts[#broadcasts + 1] = { kind = kind, source = sourceName, spellID = spellID }
-      end,
-      getDB = function()
-        return dbToggles
-      end,
-    })
+    -- CHALLENGE_MODE_START fires through the same HandleEvent dispatcher;
+    -- the production fan-out calls Reset() for the dedup map.
     addon.CombatEvents.HandleEvent("CHALLENGE_MODE_START")
     addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 2825)
     Check(

@@ -1,5 +1,18 @@
 -- Standalone CLI tool: simulates the MobNameplate gate chain around
--- CHALLENGE_MODE_START and prints why the percent overlay is visible or hidden.
+-- CHALLENGE_MODE_START and asserts why the percent overlay is visible or hidden.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+-- the real MobNameplate module is loaded; CHALLENGE_MODE_START and
+-- NAME_PLATE_UNIT_ADDED events are dispatched through the production OnEvent
+-- handler that the module registers. Frame state is inspected through the
+-- mock CreateFrame factory.
+--
+-- COMPONENT-ONLY exception (justified): this simulator calls
+-- addon.MobNameplate.DumpState(unit) and addon.MobNameplate.DumpFrames(),
+-- which are test-only introspection hooks the production module exposes.
+-- The alternative would be reading frame state via Reflection through
+-- _NameplateInternal — which violates module boundaries even more. The
+-- DumpState surface is a deliberate test seam, documented as such here.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable: undefined-global

@@ -1,6 +1,24 @@
 -- Standalone CLI tool: simulates settings writes, WoW SavedVariables persistence,
 -- and a second addon session after /reload. It fails if persisted DB values or
 -- the live settings callbacks diverge from the user's saved choices.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+-- the real Settings panel (ui/isiLive_settings.lua) is loaded; every settings
+-- mutation goes through the production OnClick / OnValueChanged scripts the
+-- panel registers on its checkbox / slider / option-button frames. The
+-- SavedVariables roundtrip is simulated via CopyTable(IsiLiveDB) on /reload,
+-- mirroring how WoW restores the global table.
+--
+-- COMPONENT-ONLY exception (justified): ApplyFactorySettingsDefaults +
+-- ApplyLiveSettingsFromDB below mirror the DB-default migration and
+-- live-apply pipeline from factory.lua:274-364 (ctx.ApplyDBSettings). The
+-- production version requires a fully wired ctx (LFGFlags, MobTooltip,
+-- MobNameplate, _RosterInternal, addonTable.GetL, ...) — loading that
+-- chain pulls in ~30 transitive deps, much more than we want for a
+-- settings-roundtrip test. **Drift risk**: if a new DB-default key is
+-- added to factory.lua's ApplyDBSettings, also add it here. The
+-- check_dead_locale_keys / check_addon_message_size CI gates do not
+-- catch settings-default drift between this replica and production.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
