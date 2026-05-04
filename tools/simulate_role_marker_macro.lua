@@ -101,11 +101,11 @@ local function MakeRoleButtonMock()
   function mock:Hide()
     self._shown = false
   end
-  function mock:SetSize() end
-  function mock:SetPoint() end
-  function mock:RegisterForClicks() end
-  function mock:SetScript() end
-  function mock:HookScript() end
+  mock.SetSize = NoOp
+  mock.SetPoint = NoOp
+  mock.RegisterForClicks = NoOp
+  mock.SetScript = NoOp
+  mock.HookScript = NoOp
   return mock
 end
 
@@ -137,22 +137,22 @@ end
 
 local function MakeFrameMock()
   local mock = {}
-  function mock:Show() end
-  function mock:Hide() end
-  function mock:SetPoint() end
-  function mock:SetSize() end
-  function mock:SetAllPoints() end
-  function mock:CreateTexture()
+  mock.Show = NoOp
+  mock.Hide = NoOp
+  mock.SetPoint = NoOp
+  mock.SetSize = NoOp
+  mock.SetAllPoints = NoOp
+  mock.CreateTexture = function()
     return MakeBackgroundMock()
   end
-  function mock:CreateFontString()
+  mock.CreateFontString = function()
     return MakeFontStringMock()
   end
-  function mock:SetScript() end
-  function mock:HookScript() end
-  function mock:RegisterEvent() end
-  function mock:UnregisterEvent() end
-  function mock:EnableMouse() end
+  mock.SetScript = NoOp
+  mock.HookScript = NoOp
+  mock.RegisterEvent = NoOp
+  mock.UnregisterEvent = NoOp
+  mock.EnableMouse = NoOp
   return mock
 end
 
