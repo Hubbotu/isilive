@@ -715,7 +715,11 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         "soundBloodlustEnabled",
         "bloodlust sound should map to the bloodlust setting key"
       )
-      Assert.Equal(bloodlustEntry.file, "", "bloodlust sound must stay silent until an asset is configured")
+      Assert.Equal(
+        bloodlustEntry.file,
+        "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
+        "bloodlust entry should point at the boxing-arena asset"
+      )
       Assert.True(
         addon.SoundUtils.IsEnabled("bloodlust"),
         "bloodlust sound should default to enabled when no DB override exists"
@@ -752,7 +756,12 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       Assert.Equal(playedChannel, "SFX", "portal sound helper should use the SFX channel")
       addon.SoundUtils.PlayBattleRes()
       addon.SoundUtils.PlayBloodlust()
-      Assert.Equal(playCalls, 3, "prepared BR and Bloodlust helpers must stay silent without configured assets")
+      Assert.Equal(playCalls, 4, "battle-res stays silent without an asset; bloodlust plays the boxing-arena asset")
+      Assert.Equal(
+        playedPath,
+        "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
+        "bloodlust helper should use the boxing-arena asset"
+      )
 
       db.soundLeadEnabled = false
       db.soundGroupJoinEnabled = true
@@ -766,11 +775,15 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       addon.SoundUtils.PlayPortalAvailable()
       addon.SoundUtils.PlayBattleRes()
       addon.SoundUtils.PlayBloodlust()
-      Assert.Equal(playCalls, 1, "only the enabled group-join sound should play when settings are toggled")
+      Assert.Equal(
+        playCalls,
+        2,
+        "enabled group-join and bloodlust should play; battle-res still silent without an asset"
+      )
       Assert.Equal(
         playedPath,
-        "Interface\\AddOns\\isiLive\\sounds\\SynthChord.ogg",
-        "enabled group-join sound should remain the only played asset"
+        "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
+        "bloodlust asset should be the last played sound"
       )
     end)
   end)

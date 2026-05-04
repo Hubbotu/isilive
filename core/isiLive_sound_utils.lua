@@ -38,7 +38,7 @@ SoundUtils.Registry = {
     defaultChannel = "SFX",
   },
   bloodlust = {
-    file = "",
+    file = "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
     labelKey = "SETTINGS_SOUND_BLOODLUST",
     settingKey = "soundBloodlustEnabled",
     defaultEnabled = true,
