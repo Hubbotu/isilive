@@ -1,13 +1,21 @@
 -- Standalone CLI tool: simulates the full ready-check lifecycle (READY_CHECK →
--- READY_CHECK_CONFIRM → READY_CHECK_FINISHED → hold expiry) and prints the
+-- READY_CHECK_CONFIRM → READY_CHECK_FINISHED → hold expiry) and asserts the
 -- background-color state of each roster row at every step. Verifies that the
 -- 20-second hold actually keeps the row decorated after the ready check ended,
 -- and pinpoints whether the bug is on the event-handler side, the state side,
 -- or the render side.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+-- the EventHandlers controller is real, BuildDisplayData is real, the
+-- per-unit hold timestamps live in real per-call closures. Asserts use the
+-- shared Check/exit-1 pattern so a regression breaks CI rather than just
+-- printing different colors.
 ---@diagnostic disable-next-line: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
 local load = load
+---@diagnostic disable-next-line: undefined-global
+local os = os
 
 local function LoadLocal(path)
   local file = assert(io.open(path, "rb"))
@@ -20,6 +28,43 @@ end
 
 local Harness = LoadLocal("testmodul/isilive_test_harness.lua")
 local Fixtures = LoadLocal("testmodul/isilive_test_fixtures.lua")
+
+local failures = 0
+
+local function Check(condition, message)
+  if condition then
+    print("  [CHECK PASS] " .. message)
+    return
+  end
+  failures = failures + 1
+  print("  [CHECK FAIL] " .. message)
+end
+
+-- Color constants matching READY_CHECK_BACKGROUND_COLORS in roster.lua.
+-- ColorLabel() below uses the same r-channel discriminator.
+local LABEL_GREEN = "GREEN(ready)"
+local LABEL_RED = "RED(notready)"
+local LABEL_YELLOW = "YELLOW(waiting)"
+local LABEL_NONE = "(none)"
+
+local function ExpectColor(snap, unit, expectedLabel, message)
+  local info = snap[unit] or {}
+  local actual
+  if type(info.color) == "table" then
+    if info.color[1] == 0.08 then
+      actual = LABEL_GREEN
+    elseif info.color[1] == 0.48 then
+      actual = LABEL_RED
+    elseif info.color[1] == 0.55 then
+      actual = LABEL_YELLOW
+    else
+      actual = string.format("rgba(%.2f,%.2f,%.2f,%.2f)", info.color[1], info.color[2], info.color[3], info.color[4])
+    end
+  else
+    actual = LABEL_NONE
+  end
+  Check(actual == expectedLabel, string.format("%s [%s] expected=%s actual=%s", message, unit, expectedLabel, actual))
+end
 
 -- Simulated state: ready-check active flag, per-unit hold timestamps,
 -- per-unit live status (what GetReadyCheckStatus would return), and a
@@ -212,18 +257,43 @@ local function ResetSim()
   sim.scheduledTimers = {}
 end
 
+local function ExpectColors(snap, mapping, label)
+  for unit, expected in pairs(mapping) do
+    ExpectColor(snap, unit, expected, label)
+  end
+end
+
+local function PrintAndSnapshot(snapshotLabel)
+  PrintSnapshot(snapshotLabel)
+  return SnapshotBackgrounds()
+end
+
 local function ScenarioHappyPath()
   print("\n========== Scenario 1: happy path (mixed responses) ==========")
   ResetSim()
   local controller = BuildController()
 
-  PrintSnapshot("0. baseline (no ready check)")
+  local snap = PrintAndSnapshot("0. baseline (no ready check)")
+  ExpectColors(snap, {
+    player = LABEL_NONE,
+    party1 = LABEL_NONE,
+    party2 = LABEL_NONE,
+    party3 = LABEL_NONE,
+    party4 = LABEL_NONE,
+  }, "baseline → no decoration")
 
   controller:Dispatch("READY_CHECK")
   for _, unit in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
     sim.readyCheckStatus[unit] = "waiting"
   end
-  PrintSnapshot("1. READY_CHECK fired (all waiting)")
+  snap = PrintAndSnapshot("1. READY_CHECK fired (all waiting)")
+  ExpectColors(snap, {
+    player = LABEL_YELLOW,
+    party1 = LABEL_YELLOW,
+    party2 = LABEL_YELLOW,
+    party3 = LABEL_YELLOW,
+    party4 = LABEL_YELLOW,
+  }, "READY_CHECK fired → every unit yellow (waiting)")
 
   Tick(2)
   sim.readyCheckStatus.player = "ready"
@@ -233,7 +303,14 @@ local function ScenarioHappyPath()
   sim.readyCheckStatus.party2 = "notready"
   controller:Dispatch("READY_CHECK_CONFIRM", "party2", "notready")
   -- party3 and party4 remain "waiting" (no answer)
-  PrintSnapshot("2. confirms received (player+party1=ready, party2=notready, party3+4=no answer)")
+  snap = PrintAndSnapshot("2. confirms received (player+party1=ready, party2=notready, party3+4=no answer)")
+  ExpectColors(snap, {
+    player = LABEL_GREEN,
+    party1 = LABEL_GREEN,
+    party2 = LABEL_RED,
+    party3 = LABEL_YELLOW,
+    party4 = LABEL_YELLOW,
+  }, "confirms applied → ready=green, notready=red, no-answer=yellow")
 
   Tick(3)
   -- READY_CHECK_FINISHED simulates the WoW client clearing live status:
@@ -241,16 +318,39 @@ local function ScenarioHappyPath()
     sim.readyCheckStatus[unit] = nil
   end
   controller:Dispatch("READY_CHECK_FINISHED")
-  PrintSnapshot("3. READY_CHECK_FINISHED → hold should be active for 20s")
+  snap = PrintAndSnapshot("3. READY_CHECK_FINISHED → hold should be active for 20s")
+  ExpectColors(snap, {
+    player = LABEL_GREEN,
+    party1 = LABEL_GREEN,
+    party2 = LABEL_RED,
+    party3 = LABEL_RED,
+    party4 = LABEL_RED,
+  }, "FINISHED → hold active: ready stays green, notready+no-answer = red (declined-promotion)")
 
   Tick(5)
-  PrintSnapshot("4. +5s into hold (still within 20s window)")
+  snap = PrintAndSnapshot("4. +5s into hold (still within 20s window)")
+  ExpectColors(snap, {
+    player = LABEL_GREEN,
+    party1 = LABEL_GREEN,
+    party2 = LABEL_RED,
+  }, "+5s into hold → colors persist")
 
   Tick(10)
-  PrintSnapshot("5. +15s into hold (still within 20s window)")
+  snap = PrintAndSnapshot("5. +15s into hold (still within 20s window)")
+  ExpectColors(snap, {
+    player = LABEL_GREEN,
+    party2 = LABEL_RED,
+  }, "+15s into hold → colors still persist")
 
   Tick(6)
-  PrintSnapshot("6. +21s after FINISHED (hold expired, timers fired)")
+  snap = PrintAndSnapshot("6. +21s after FINISHED (hold expired, timers fired)")
+  ExpectColors(snap, {
+    player = LABEL_NONE,
+    party1 = LABEL_NONE,
+    party2 = LABEL_NONE,
+    party3 = LABEL_NONE,
+    party4 = LABEL_NONE,
+  }, "hold expired → all decorations cleared")
 end
 
 local function ScenarioRapidRecheck()
@@ -267,7 +367,11 @@ local function ScenarioRapidRecheck()
     sim.readyCheckStatus[unit] = nil
   end
   controller:Dispatch("READY_CHECK_FINISHED")
-  PrintSnapshot("1. first ready check finished → hold active")
+  local snap = PrintAndSnapshot("1. first ready check finished → hold active")
+  ExpectColors(snap, {
+    player = LABEL_GREEN,
+    party1 = LABEL_RED,
+  }, "first finished → ready=green, notready=red")
 
   Tick(5)
   -- Second ready check starts mid-hold. The current code wipes all holds
@@ -276,7 +380,14 @@ local function ScenarioRapidRecheck()
   for _, unit in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
     sim.readyCheckStatus[unit] = "waiting"
   end
-  PrintSnapshot("2. second READY_CHECK fired (holds wiped, all waiting again)")
+  snap = PrintAndSnapshot("2. second READY_CHECK fired (holds wiped, all waiting again)")
+  ExpectColors(snap, {
+    player = LABEL_YELLOW,
+    party1 = LABEL_YELLOW,
+    party2 = LABEL_YELLOW,
+    party3 = LABEL_YELLOW,
+    party4 = LABEL_YELLOW,
+  }, "second READY_CHECK wipes holds and re-yellows everyone")
 end
 
 local function ScenarioFinishWithNoConfirms()
@@ -288,21 +399,33 @@ local function ScenarioFinishWithNoConfirms()
   for _, unit in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
     sim.readyCheckStatus[unit] = "waiting"
   end
-  PrintSnapshot("1. READY_CHECK fired (all waiting)")
+  local snap = PrintAndSnapshot("1. READY_CHECK fired (all waiting)")
+  ExpectColors(snap, {
+    player = LABEL_YELLOW,
+    party4 = LABEL_YELLOW,
+  }, "READY_CHECK fired → all yellow")
 
   Tick(30) -- typical WoW 30s ready-check timeout
   for unit in pairs(sim.readyCheckStatus) do
     sim.readyCheckStatus[unit] = nil
   end
   controller:Dispatch("READY_CHECK_FINISHED")
-  PrintSnapshot("2. READY_CHECK_FINISHED → 'no answer' members should be visible somehow for 20s")
-  print("    NOTE per user spec: 'grau = keine antwort' — but the current code")
-  print("    promotes unanswered units to DECLINED → red (notready), not gray.")
+  snap = PrintAndSnapshot("2. READY_CHECK_FINISHED → 'no answer' members are promoted to declined → red")
+  -- Per the current implementation, unanswered units are promoted to
+  -- DECLINED on FINISHED. The "grau = keine antwort" UX wish from the
+  -- original spec is intentionally NOT met by the production code.
+  ExpectColors(snap, {
+    player = LABEL_RED,
+    party1 = LABEL_RED,
+    party2 = LABEL_RED,
+    party3 = LABEL_RED,
+    party4 = LABEL_RED,
+  }, "all-no-answer + FINISHED → all red (declined-promotion, NOT gray)")
 end
 
 local function ScenarioRenderAfterFinish()
   print("\n========== Scenario 4: a generic UI re-render happens 1s AFTER FINISHED ==========")
-  print("(this is the bug the user reports: 'background overwritten right after readycheck')")
+  print("(this pins the user-reported 'background overwritten right after readycheck' regression)")
   ResetSim()
   local controller = BuildController()
 
@@ -313,22 +436,33 @@ local function ScenarioRenderAfterFinish()
     sim.readyCheckStatus[unit] = nil
   end
   controller:Dispatch("READY_CHECK_FINISHED")
-  PrintSnapshot("1. READY_CHECK_FINISHED → hold active")
+  local snap = PrintAndSnapshot("1. READY_CHECK_FINISHED → hold active")
+  ExpectColor(snap, "player", LABEL_GREEN, "post-FINISHED player still green")
 
   -- Simulate any other event triggering a render: GROUP_ROSTER_UPDATE,
   -- INSPECT_READY etc would all call BuildDisplayData via RenderRoster.
   -- This snapshot is exactly what a re-render would compute right after.
   Tick(1)
-  PrintSnapshot("2. +1s, simulating a generic UI rerender (e.g. GROUP_ROSTER_UPDATE)")
+  snap = PrintAndSnapshot("2. +1s, simulating a generic UI rerender (e.g. GROUP_ROSTER_UPDATE)")
+  ExpectColor(snap, "player", LABEL_GREEN, "+1s rerender does not wipe the hold")
 
   Tick(2)
-  PrintSnapshot("3. +3s, another rerender")
+  snap = PrintAndSnapshot("3. +3s, another rerender")
+  ExpectColor(snap, "player", LABEL_GREEN, "+3s rerender does not wipe the hold")
 
   Tick(15)
-  PrintSnapshot("4. +18s, just before hold expiry")
+  snap = PrintAndSnapshot("4. +18s, just before hold expiry")
+  ExpectColor(snap, "player", LABEL_GREEN, "+18s (still within 20s) hold persists through repeated renders")
 end
 
 ScenarioHappyPath()
 ScenarioRapidRecheck()
 ScenarioFinishWithNoConfirms()
 ScenarioRenderAfterFinish()
+
+if failures > 0 then
+  print(string.format("\nReady-check lifecycle simulator failed: %d check(s) failed", failures))
+  os.exit(1)
+end
+
+print("\nReady-check lifecycle simulator passed.")

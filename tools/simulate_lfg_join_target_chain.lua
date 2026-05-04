@@ -11,10 +11,19 @@
 --     and the pending state is cleared
 --   * leaving and rejoining a fresh group does not surface the previous
 --     pending info (state was cleared on the first announce)
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+-- this simulator drives the REAL ctx.AnnounceQueuedGroupJoin and
+-- ctx.CaptureQueueJoinCandidate closures from factory_controllers.lua via
+-- FI.InitializeFactoryRuntimeHelpers(ctx) on a real
+-- RuntimeState.CreateController. No replica mock of the announce/capture
+-- pipeline.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
 local load = load
+---@diagnostic disable-next-line: undefined-global
+local os = os
 
 local function LoadLocal(path)
   local file = assert(io.open(path, "rb"))
@@ -38,50 +47,42 @@ local function Check(condition, message)
   print("  [CHECK FAIL] " .. message)
 end
 
--- The queue-announce pipeline lives in factory_controllers.lua, but its
--- behaviour is small enough to model in-line. The model mirrors the production
--- AnnounceQueuedGroupJoin code path — single-fire after the first
--- announce-eligible call, with a leader-suppression branch.
-local function NewQueueAnnouncer(opts)
-  opts = opts or {}
-  local state = {
-    pendingInfo = nil,
-    announces = {}, -- list of group names actually printed
-    suppressedAsLeader = 0,
-  }
+-- One shared per-sim state pointer, swapped at the top of each scenario.
+-- The dynamic globals (IsInGroup, GetTime) below dereference whatever
+-- BuildSim() sets here, so the production closures see live group state
+-- without needing per-call scope juggling.
+local currentSim = nil
 
-  local function captureCandidate(args)
-    -- Production CaptureQueueJoinCandidate refuses to capture during an active
-    -- key, when no group name was supplied, or when there is already a
-    -- pending entry.
-    if opts.activeChallengeMap and opts.activeChallengeMap() then
-      return
+local globals = {
+  GetTime = function()
+    return currentSim and currentSim.now or 100
+  end,
+  IsInGroup = function()
+    return currentSim ~= nil and currentSim.groupState.inGroup == true
+  end,
+  IsInRaid = function()
+    return false
+  end,
+  UnitName = function(unit)
+    if unit == "player" then
+      return "Self"
     end
-    if state.pendingInfo ~= nil then
-      return
+    return nil
+  end,
+  GetRealmName = function()
+    return "Realm"
+  end,
+}
+
+local addon
+
+local function ContainsLine(lines, needle)
+  for _, line in ipairs(lines) do
+    if string.find(line, needle, 1, true) then
+      return true
     end
-    if type(args) ~= "table" or type(args.groupName) ~= "string" or args.groupName == "" then
-      return
-    end
-    state.pendingInfo = { groupName = args.groupName }
   end
-
-  local function announce()
-    -- The production AnnounceQueuedGroupJoin returns silently when there is
-    -- no pending entry or when the local player is the group leader.
-    if state.pendingInfo == nil then
-      return
-    end
-    if opts.isPlayerLeader and opts.isPlayerLeader() then
-      state.suppressedAsLeader = state.suppressedAsLeader + 1
-      state.pendingInfo = nil
-      return
-    end
-    state.announces[#state.announces + 1] = state.pendingInfo.groupName
-    state.pendingInfo = nil
-  end
-
-  return state, captureCandidate, announce
+  return false
 end
 
 local function BuildSim(opts)
@@ -95,16 +96,43 @@ local function BuildSim(opts)
   }
   local statusLineUpdates = 0
   local timers = {}
-  local now = 0
+  local printedLines = {}
 
-  local announcerState, captureCandidate, announce = NewQueueAnnouncer({
-    isPlayerLeader = function()
+  local runtimeState = addon.RuntimeState.CreateController({})
+
+  local ctx = {
+    modules = {
+      sync = {
+        NormalizePlayerKey = function(name, realm)
+          return (name or "") .. "-" .. (realm or "")
+        end,
+      },
+    },
+    runtimeState = runtimeState,
+    locale = "enUS",
+    L = {
+      UNKNOWN_GROUP = "unknown",
+      CHAT_QUEUE_PREFIX = "ISI-Q",
+      JOINED_FROM_QUEUE = "joined %s",
+    },
+    GetRoster = function()
+      return {}
+    end,
+    IsPlayerLeader = function()
       return groupState.isLeader
     end,
-    activeChallengeMap = function()
-      return false
+    Print = function(msg)
+      printedLines[#printedLines + 1] = tostring(msg)
     end,
-  })
+    UpdateStatusLine = function() end,
+  }
+  ctx.GetL = function()
+    return ctx.L
+  end
+
+  -- Bind the production closures (ctx.CaptureQueueJoinCandidate,
+  -- ctx.AnnounceQueuedGroupJoin) onto ctx.
+  addon._FactoryInternal.InitializeFactoryRuntimeHelpers(ctx)
 
   local groupOpts = {
     isInGroup = function()
@@ -133,13 +161,11 @@ local function BuildSim(opts)
       return {}
     end,
     setRoster = function() end,
-    captureQueueJoinCandidate = function()
-      -- Group calls this without args; the production CaptureQueueJoinCandidate
-      -- is a no-op when nothing was queued earlier (we already captured the
-      -- candidate via the LFG-apply path before the roster update arrived).
+    captureQueueJoinCandidate = function(...)
+      return ctx.CaptureQueueJoinCandidate(...)
     end,
     announceQueuedGroupJoin = function()
-      announce()
+      return ctx.AnnounceQueuedGroupJoin()
     end,
     setMainFrameVisible = function() end,
     updateLeaderButtons = function() end,
@@ -152,7 +178,9 @@ local function BuildSim(opts)
       statusLineUpdates = statusLineUpdates + 1
     end,
     updateMPlusTeleportButton = function() end,
-    clearPendingQueueJoinInfo = function() end,
+    clearPendingQueueJoinInfo = function()
+      runtimeState.SetPendingQueueJoinInfo(nil)
+    end,
     getUnitNameAndRealm = function(unit)
       if unit == "player" then
         return "Self", "Realm"
@@ -195,7 +223,7 @@ local function BuildSim(opts)
     onGroupJoined = function() end,
     onMemberJoinedGroup = function() end,
     timerAfter = function(delay, callback)
-      timers[#timers + 1] = { at = now + delay, callback = callback }
+      timers[#timers + 1] = { at = (currentSim and currentSim.now or 0) + delay, callback = callback }
     end,
     shouldAutoCloseMainFrame = function()
       return false
@@ -208,18 +236,15 @@ local function BuildSim(opts)
     logRuntimeTrace = function() end,
   }
 
-  local controller
-  Harness.WithGlobals({}, function()
-    local addon = Harness.LoadAddonModules({ "isiLive_group.lua" })
-    controller = addon.Group.CreateController(groupOpts)
-  end)
+  local controller = addon.Group.CreateController(groupOpts)
 
+  local sim
   local function advance(seconds)
-    now = now + seconds
+    sim.now = sim.now + seconds
     local pending = timers
     timers = {}
     for _, timer in ipairs(pending) do
-      if timer.at <= now then
+      if timer.at <= sim.now then
         timer.callback()
       else
         timers[#timers + 1] = timer
@@ -227,10 +252,15 @@ local function BuildSim(opts)
     end
   end
 
-  return {
+  sim = {
     groupState = groupState,
-    announcerState = announcerState,
-    captureCandidate = captureCandidate,
+    ctx = ctx,
+    runtimeState = runtimeState,
+    printedLines = printedLines,
+    now = 0,
+    captureCandidate = function(args)
+      ctx.CaptureQueueJoinCandidate(args)
+    end,
     rosterUpdate = function()
       controller.HandleGroupRosterUpdate()
       advance(1)
@@ -239,116 +269,187 @@ local function BuildSim(opts)
       return statusLineUpdates
     end,
   }
+  return sim
+end
+
+local function PendingGroupName(sim)
+  local pending = sim.runtimeState.GetPendingQueueJoinInfo()
+  if type(pending) ~= "table" then
+    return nil
+  end
+  return pending.groupName
+end
+
+local function AnnouncedFor(sim, groupName)
+  return ContainsLine(sim.printedLines, groupName)
+end
+
+local function CountAnnounceLines(sim)
+  -- Each AnnounceQueuedGroupJoin emits 3 Print calls (separator, body, separator).
+  -- The body line carries the localized prefix "ISI-Q | joined <groupName>",
+  -- so counting body lines = counting announces.
+  local count = 0
+  for _, line in ipairs(sim.printedLines) do
+    if string.find(line, "ISI-Q | joined", 1, true) then
+      count = count + 1
+    end
+  end
+  return count
 end
 
 local function Run()
   print("========== LFG apply -> invite -> group full -> announce simulator ==========\n")
 
-  -- ------------------------------------------------------------------
-  -- Scenario 1: applicant joins as a non-leader. Announce fires exactly
-  -- once even though the roster fills from 2 to 5 in four updates.
-  -- ------------------------------------------------------------------
-  print("---- Scenario 1: applicant joins, group fills to 5/5 ----")
-  do
-    local sim = BuildSim({ isLeader = false })
+  Harness.WithGlobals(globals, function()
+    addon = Harness.LoadAddonModules({
+      "isiLive_runtime_state.lua",
+      "isiLive_factory_controllers.lua",
+      "isiLive_group.lua",
+    })
 
-    -- Phase 1: still solo, LFG apply captures the group name.
-    sim.captureCandidate({ groupName = "+10 NW Push" })
-    Check(
-      sim.announcerState.pendingInfo ~= nil and sim.announcerState.pendingInfo.groupName == "+10 NW Push",
-      "LFG apply captures the pending group name before the roster update arrives"
-    )
-    Check(#sim.announcerState.announces == 0, "no announce fires while still solo")
+    -- ------------------------------------------------------------------
+    -- Scenario 1: applicant joins as a non-leader. Announce fires exactly
+    -- once even though the roster fills from 2 to 5 in four updates.
+    -- ------------------------------------------------------------------
+    print("---- Scenario 1: applicant joins, group fills to 5/5 ----")
+    do
+      local sim = BuildSim({ isLeader = false })
+      currentSim = sim
 
-    -- Phase 2: invite accepted, GROUP_ROSTER_UPDATE flips isInGroup=true.
-    sim.groupState.inGroup = true
-    sim.groupState.numMembers = 2
-    sim.rosterUpdate()
-    Check(#sim.announcerState.announces == 1, "first roster update with isInGroup=true announces the queued group join")
-    Check(sim.announcerState.announces[1] == "+10 NW Push", "announce carries the captured group name")
-    Check(sim.announcerState.pendingInfo == nil, "pending info is cleared after the announce")
+      -- Phase 1: still solo, LFG apply captures the group name.
+      sim.captureCandidate({ groupName = "+10 NW Push" })
+      Check(
+        PendingGroupName(sim) == "+10 NW Push",
+        "LFG apply captures the pending group name before the roster update arrives"
+      )
+      Check(CountAnnounceLines(sim) == 0, "no announce fires while still solo")
 
-    -- Phase 3: group fills to 3/5, 4/5, 5/5. NONE of these may re-announce.
-    local announceCountAfterJoin = #sim.announcerState.announces
-    for _, count in ipairs({ 3, 4, 5 }) do
-      sim.groupState.numMembers = count
+      -- Phase 2: invite accepted, GROUP_ROSTER_UPDATE flips isInGroup=true.
+      sim.groupState.inGroup = true
+      sim.groupState.numMembers = 2
       sim.rosterUpdate()
+      Check(CountAnnounceLines(sim) == 1, "first roster update with isInGroup=true announces the queued group join")
+      Check(AnnouncedFor(sim, "+10 NW Push"), "announce carries the captured group name")
+      Check(PendingGroupName(sim) == nil, "pending info is cleared after the announce")
+
+      -- Phase 3: group fills to 3/5, 4/5, 5/5. NONE of these may re-announce.
+      local announceCountAfterJoin = CountAnnounceLines(sim)
+      for _, count in ipairs({ 3, 4, 5 }) do
+        sim.groupState.numMembers = count
+        sim.rosterUpdate()
+      end
+      Check(
+        CountAnnounceLines(sim) == announceCountAfterJoin,
+        "no additional announces fire while the group fills from 3/5 to 5/5 (no double-spam)"
+      )
     end
-    Check(
-      #sim.announcerState.announces == announceCountAfterJoin,
-      "no additional announces fire while the group fills from 3/5 to 5/5 (no double-spam)"
-    )
-  end
 
-  -- ------------------------------------------------------------------
-  -- Scenario 2: the local player created the group (is the leader).
-  -- The pending info must be discarded silently.
-  -- ------------------------------------------------------------------
-  print("\n---- Scenario 2: applicant becomes leader (suppressed announce) ----")
-  do
-    local sim = BuildSim({ isLeader = true })
+    -- ------------------------------------------------------------------
+    -- Scenario 2: the local player created the group (is the leader).
+    -- The pending info must be discarded silently.
+    -- ------------------------------------------------------------------
+    print("\n---- Scenario 2: applicant becomes leader (suppressed announce) ----")
+    do
+      local sim = BuildSim({ isLeader = true })
+      currentSim = sim
 
-    sim.captureCandidate({ groupName = "+12 ML Vault" })
-    Check(
-      sim.announcerState.pendingInfo ~= nil,
-      "leader-flow still captures the group name (the suppression decision happens at announce time)"
-    )
+      sim.captureCandidate({ groupName = "+12 ML Vault" })
+      Check(
+        PendingGroupName(sim) == "+12 ML Vault",
+        "leader-flow still captures the group name (the suppression decision happens at announce time)"
+      )
 
-    sim.groupState.inGroup = true
-    sim.groupState.numMembers = 2
-    sim.rosterUpdate()
-    Check(#sim.announcerState.announces == 0, "leader does not get a queued-join announce")
-    Check(sim.announcerState.suppressedAsLeader == 1, "leader suppression branch fires exactly once")
-    Check(sim.announcerState.pendingInfo == nil, "leader path still clears the pending info")
-  end
+      sim.groupState.inGroup = true
+      sim.groupState.numMembers = 2
+      sim.rosterUpdate()
+      Check(CountAnnounceLines(sim) == 0, "leader does not get a queued-join announce")
+      Check(PendingGroupName(sim) == nil, "leader path still clears the pending info")
+    end
 
-  -- ------------------------------------------------------------------
-  -- Scenario 3: applicant joins, leaves, then re-joins a fresh group
-  -- without applying via LFG again. The second join must NOT announce
-  -- the stale group name from the first cycle.
-  -- ------------------------------------------------------------------
-  print("\n---- Scenario 3: leave + rejoin without re-applying (no stale announce) ----")
-  do
-    local sim = BuildSim({ isLeader = false })
+    -- ------------------------------------------------------------------
+    -- Scenario 3: applicant joins, leaves, then re-joins a fresh group
+    -- without applying via LFG again. The second join must NOT announce
+    -- the stale group name from the first cycle.
+    -- ------------------------------------------------------------------
+    print("\n---- Scenario 3: leave + rejoin without re-applying (no stale announce) ----")
+    do
+      local sim = BuildSim({ isLeader = false })
+      currentSim = sim
 
-    sim.captureCandidate({ groupName = "+8 Halls" })
-    sim.groupState.inGroup = true
-    sim.groupState.numMembers = 4
-    sim.rosterUpdate()
-    Check(#sim.announcerState.announces == 1, "first cycle announces once")
+      sim.captureCandidate({ groupName = "+8 Halls" })
+      sim.groupState.inGroup = true
+      sim.groupState.numMembers = 4
+      sim.rosterUpdate()
+      Check(CountAnnounceLines(sim) == 1, "first cycle announces once")
 
-    -- leave
-    sim.groupState.inGroup = false
-    sim.groupState.numMembers = 0
-    sim.rosterUpdate()
+      -- leave
+      sim.groupState.inGroup = false
+      sim.groupState.numMembers = 0
+      sim.rosterUpdate()
 
-    -- rejoin a different group, but no new LFG apply happened — pending must
-    -- stay nil so no stale group name is surfaced.
-    sim.groupState.inGroup = true
-    sim.groupState.numMembers = 3
-    sim.rosterUpdate()
-    Check(#sim.announcerState.announces == 1, "rejoin without a fresh LFG apply does not replay the previous announce")
-  end
+      -- rejoin a different group, but no new LFG apply happened — pending must
+      -- stay nil so no stale group name is surfaced.
+      sim.groupState.inGroup = true
+      sim.groupState.numMembers = 3
+      sim.rosterUpdate()
+      Check(CountAnnounceLines(sim) == 1, "rejoin without a fresh LFG apply does not replay the previous announce")
+    end
 
-  -- ------------------------------------------------------------------
-  -- Scenario 4: capture is idempotent. A second capture call before the
-  -- roster update arrives must not overwrite the first group name.
-  -- ------------------------------------------------------------------
-  print("\n---- Scenario 4: double-capture is idempotent ----")
-  do
-    local sim = BuildSim({ isLeader = false })
-    sim.captureCandidate({ groupName = "+11 NW" })
-    sim.captureCandidate({ groupName = "+15 BRH" })
-    Check(
-      sim.announcerState.pendingInfo and sim.announcerState.pendingInfo.groupName == "+11 NW",
-      "second capture call does not overwrite the first pending group name"
-    )
+    -- ------------------------------------------------------------------
+    -- Scenario 4a: double-capture while solo OVERWRITES the pending entry.
+    -- This is the production behaviour — when not in a group,
+    -- CaptureQueueJoinCandidate clears the pending entry first, then the
+    -- next capture call with a valid groupName replaces it. The replica
+    -- mock that previously backed this simulator had the wrong "idempotent
+    -- while solo" assumption, which was caught when the simulator was
+    -- wired to the real factory_controllers closures.
+    -- ------------------------------------------------------------------
+    print("\n---- Scenario 4a: double-capture while solo overwrites pending ----")
+    do
+      local sim = BuildSim({ isLeader = false })
+      currentSim = sim
 
-    sim.groupState.inGroup = true
-    sim.groupState.numMembers = 3
-    sim.rosterUpdate()
-    Check(sim.announcerState.announces[1] == "+11 NW", "announce uses the first captured group name")
-  end
+      sim.captureCandidate({ groupName = "+11 NW" })
+      Check(PendingGroupName(sim) == "+11 NW", "first solo capture sets the pending group name")
+
+      sim.captureCandidate({ groupName = "+15 BRH" })
+      Check(
+        PendingGroupName(sim) == "+15 BRH",
+        "second solo capture overwrites the pending entry (production CaptureQueueJoinCandidate clears-then-sets when not in group)"
+      )
+
+      sim.groupState.inGroup = true
+      sim.groupState.numMembers = 3
+      sim.rosterUpdate()
+      Check(AnnouncedFor(sim, "+15 BRH"), "announce uses the most recent solo capture")
+    end
+
+    -- ------------------------------------------------------------------
+    -- Scenario 4b: once in a group, capture IS idempotent. A subsequent
+    -- capture call with a different groupName must not displace the
+    -- already-pending entry.
+    -- ------------------------------------------------------------------
+    print("\n---- Scenario 4b: double-capture while in-group is idempotent ----")
+    do
+      local sim = BuildSim({ isLeader = false })
+      currentSim = sim
+
+      -- Capture solo, then enter group BEFORE the announce-eligible roster
+      -- update fires (e.g. invite accept arrives slightly before the next
+      -- GROUP_ROSTER_UPDATE).
+      sim.captureCandidate({ groupName = "+11 NW" })
+      sim.groupState.inGroup = true
+      Check(PendingGroupName(sim) == "+11 NW", "first capture sets pending while solo")
+
+      -- Second capture while in-group: production keeps the existing
+      -- pending entry untouched (the if-branch guards on GetPendingQueueJoinInfo)
+      -- and triggers an announce immediately.
+      sim.captureCandidate({ groupName = "+15 BRH" })
+      Check(AnnouncedFor(sim, "+11 NW"), "in-group second capture announces the FIRST pending name")
+      Check(not AnnouncedFor(sim, "+15 BRH"), "in-group second capture does not surface the new groupName")
+      Check(PendingGroupName(sim) == nil, "announce clears the pending entry")
+    end
+  end)
 
   if failures > 0 then
     print(string.format("\nLFG join + target-chain simulator failed: %d check(s) failed", failures))

@@ -1,5 +1,20 @@
 -- Standalone CLI tool: simulates CHALLENGE_MODE_START through the real
 -- EventHandlers controller and verifies the key-start side effects stay wired.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+--   * EventHandlers controller is real (controller:Dispatch path).
+--   * RuntimeState is real (RuntimeState.CreateController) — covers
+--     setReadyCheckActive / setActiveJoinedKeyMapID / IsReadyCheckActive /
+--     GetActiveJoinedKeyMapID through the production mutator.
+--   * COMPONENT-ONLY exceptions (justified): handleMplusTimerEvent,
+--     handleKillTrackEvent, handleCombatEventsEvent, resetKickStats,
+--     captureRioBaselineSnapshot, checkIfEnteredTargetDungeon, and the UI
+--     refresh callbacks remain stubs. Loading the real Mplus timer / KillTrack /
+--     CombatEvents / KickTracker / RIO / target-dungeon modules would pull in
+--     ~12 transitive dependencies (frame APIs, sync wiring, scenario data,
+--     UnitGUID / GetSpellInfo / C_NamePlate). The dispatch-order assertions
+--     pin the wiring contract those modules see; their internal logic is
+--     covered by dedicated module-level scenarios in testmodul/.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -64,8 +79,6 @@ local function BuildController(opts)
   local visibility = {}
   local damageMeterResets = 0
   local state = {
-    activeJoinedKeyMapID = 161,
-    readyCheckActive = true,
     nameplateRefreshes = 0,
     timerEvents = {},
     killTrackEvents = {},
@@ -86,8 +99,19 @@ local function BuildController(opts)
   }
 
   local controller
+  local runtimeState
   Harness.WithGlobals(globals, function()
-    local addon = Harness.LoadAddonModules({ "isiLive_event_handlers.lua" })
+    local addon = Harness.LoadAddonModules({
+      "isiLive_runtime_state.lua",
+      "isiLive_event_handlers.lua",
+    })
+    -- Real RuntimeState seeded with the pre-key state we want the lifecycle
+    -- to mutate. Replaces two stub callbacks (setReadyCheckActive,
+    -- setActiveJoinedKeyMapID) with the production mutator.
+    runtimeState = addon.RuntimeState.CreateController({
+      activeJoinedKeyMapID = 161,
+      isReadyCheckActive = true,
+    })
     controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
       isRaidGroup = function()
         return opts.inRaid == true
@@ -123,14 +147,14 @@ local function BuildController(opts)
       end,
       setReadyCheckActive = function(active)
         Append(events, "readyCheck.active=" .. tostring(active))
-        state.readyCheckActive = active == true
+        runtimeState.SetReadyCheckActive(active)
       end,
       captureRioBaselineSnapshot = function()
         Append(events, "rio.captureBaseline")
       end,
       setActiveJoinedKeyMapID = function(value)
         Append(events, "joinedKeyMap=" .. tostring(value))
-        state.activeJoinedKeyMapID = value
+        runtimeState.SetActiveJoinedKeyMapID(value)
       end,
       checkIfEnteredTargetDungeon = function()
         Append(events, "target.checkEntered")
@@ -160,6 +184,7 @@ local function BuildController(opts)
     events = events,
     visibility = visibility,
     state = state,
+    runtimeState = runtimeState,
     damageMeterResets = function()
       return damageMeterResets
     end,
@@ -170,8 +195,8 @@ local function PrintSummary(label, sim)
   print("---- " .. label)
   print("  events              = " .. FormatEvents(sim.events))
   print("  damageMeterResets   = " .. tostring(sim.damageMeterResets()))
-  print("  readyCheckActive    = " .. tostring(sim.state.readyCheckActive))
-  print("  activeJoinedKeyMapID= " .. tostring(sim.state.activeJoinedKeyMapID))
+  print("  readyCheckActive    = " .. tostring(sim.runtimeState.IsReadyCheckActive()))
+  print("  activeJoinedKeyMapID= " .. tostring(sim.runtimeState.GetActiveJoinedKeyMapID()))
   print("  nameplateRefreshes  = " .. tostring(sim.state.nameplateRefreshes))
 end
 
@@ -186,10 +211,10 @@ local function CheckCommonKeyStart(sim)
     "CombatEvents receives CHALLENGE_MODE_START exactly once"
   )
   Check(Count(sim.events, "kick.reset") == 1, "kick stats reset on key start")
-  Check(sim.state.readyCheckActive == false, "ready-check state is cleared on key start")
+  Check(sim.runtimeState.IsReadyCheckActive() == false, "ready-check state is cleared on key start (real RuntimeState)")
   Check(sim.damageMeterResets() == 1, "Blizzard damage meter reset runs once when available")
   Check(Count(sim.events, "rio.captureBaseline") == 1, "RIO baseline capture runs once")
-  Check(sim.state.activeJoinedKeyMapID == nil, "active joined-key map is cleared")
+  Check(sim.runtimeState.GetActiveJoinedKeyMapID() == nil, "active joined-key map is cleared (real RuntimeState)")
   Check(Count(sim.events, "target.checkEntered") == 1, "target-dungeon entry check runs once")
   Check(Count(sim.events, "ui.leaderButtons") == 1, "leader buttons refresh once")
   Check(Count(sim.events, "ui.statusLine") == 1, "status line refreshes once")
@@ -242,8 +267,14 @@ local function ScenarioRaidHardOff()
   PrintSummary("after CHALLENGE_MODE_START", sim)
   Check(#sim.events == 0, "raid mode suppresses all challenge-start side effects")
   Check(sim.damageMeterResets() == 0, "raid mode does not reset the damage meter")
-  Check(sim.state.readyCheckActive == true, "raid-suppressed key start leaves ready-check state untouched")
-  Check(sim.state.activeJoinedKeyMapID == 161, "raid-suppressed key start leaves joined-key map untouched")
+  Check(
+    sim.runtimeState.IsReadyCheckActive() == true,
+    "raid-suppressed key start leaves ready-check state untouched (real RuntimeState)"
+  )
+  Check(
+    sim.runtimeState.GetActiveJoinedKeyMapID() == 161,
+    "raid-suppressed key start leaves joined-key map untouched (real RuntimeState)"
+  )
 end
 
 local function Run()

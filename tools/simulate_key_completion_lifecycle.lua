@@ -10,6 +10,19 @@
 -- Symmetric counterpart to simulate_key_start_lifecycle.lua. State leaks between
 -- a finished key and the next one are subtle and only show up after the second
 -- run of the session — this gate makes them visible at preflight time.
+--
+-- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
+--   * EventHandlers controller is real (controller:Dispatch path).
+--   * RuntimeState is real (RuntimeState.CreateController) — covers
+--     getPendingPostChallengeRefresh / setPendingPostChallengeRefresh through
+--     the production mutator. No more closure-only refresh-state stub.
+--   * COMPONENT-ONLY exceptions (justified): handleMplusTimerEvent,
+--     handleKillTrackEvent, handleCombatEventsEvent, notifyPostChallengeSync,
+--     and the UI refresh callbacks remain stubs. Loading the real Mplus timer /
+--     KillTrack / CombatEvents / Sync modules pulls in ~12 transitive deps
+--     (frame APIs, scenario data, UnitGUID, sync wiring). The dispatch-order
+--     contract those modules see is covered here; their internal logic is in
+--     dedicated module-level scenarios under testmodul/.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -99,9 +112,28 @@ local function BuildController(opts)
   }
 
   local controller
+  local runtimeState
+  local pendingMutatorStats = { calls = 0, lastValue = nil, sawNonNil = false }
   Harness.WithGlobals(globals, function()
-    local addon = Harness.LoadAddonModules({ "isiLive_event_handlers.lua" })
+    local addon = Harness.LoadAddonModules({
+      "isiLive_runtime_state.lua",
+      "isiLive_event_handlers.lua",
+    })
+    runtimeState = addon.RuntimeState.CreateController({})
     controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+      -- Real RuntimeState wiring (replaces fixture's closure-only refresh
+      -- stub). The set-path is wrapped with a counter spy so we can assert
+      -- the production mutator is hit even when the value is nil (which a
+      -- nil-pushing array would silently drop in Lua).
+      getPendingPostChallengeRefresh = runtimeState.GetPendingPostChallengeRefresh,
+      setPendingPostChallengeRefresh = function(value)
+        pendingMutatorStats.calls = pendingMutatorStats.calls + 1
+        pendingMutatorStats.lastValue = value
+        if value ~= nil then
+          pendingMutatorStats.sawNonNil = true
+        end
+        return runtimeState.SetPendingPostChallengeRefresh(value)
+      end,
       isRaidGroup = function()
         return opts.inRaid == true
       end,
@@ -183,6 +215,8 @@ local function BuildController(opts)
     events = events,
     visibility = visibility,
     state = state,
+    runtimeState = runtimeState,
+    pendingMutatorStats = pendingMutatorStats,
     pendingTimers = function()
       return #timers
     end,
@@ -271,6 +305,7 @@ local function ScenarioBackToBackKeys()
   sim.dispatch("CHALLENGE_MODE_COMPLETED")
   local firstSyncCount = sim.state.postChallengeSyncs
   local firstStatusCount = sim.state.statusLineRefreshes
+  local refreshAfterFirst = sim.runtimeState.GetPendingPostChallengeRefresh()
 
   sim.dispatch("CHALLENGE_MODE_START")
   sim.dispatch("CHALLENGE_MODE_COMPLETED")
@@ -287,6 +322,21 @@ local function ScenarioBackToBackKeys()
   Check(
     Count(sim.events, "timer.CHALLENGE_MODE_COMPLETED") == 2,
     "MplusTimer receives CHALLENGE_MODE_COMPLETED twice across the two keys"
+  )
+  -- Real production wiring: COMPLETED schedules the delayed refresh via
+  -- timerAfter; on fire RunDelayedPostChallengeRefresh calls
+  -- SetPendingPostChallengeRefresh(ctx, nil) (line 251 in challenge.lua),
+  -- which routes through the real RuntimeState mutator wrapped by our spy.
+  Check(refreshAfterFirst == nil, "first completion alone does not mutate pending refresh marker (timer not yet fired)")
+  local callsBeforeAdvance = sim.pendingMutatorStats.calls
+  sim.advance(10) -- fire the post-completion refresh timer (scheduled at +5s)
+  Check(
+    sim.pendingMutatorStats.calls > callsBeforeAdvance,
+    "real RuntimeState.SetPendingPostChallengeRefresh is hit when the post-completion refresh timer fires"
+  )
+  Check(
+    sim.pendingMutatorStats.lastValue == nil,
+    "the timer-fire mutator call sets the pending marker back to nil (RunDelayedPostChallengeRefresh non-raid path)"
   )
 end
 
