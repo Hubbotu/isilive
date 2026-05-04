@@ -132,6 +132,7 @@ try {
   Invoke-CheckedCommand "Button Label Length Check" "lua tools/check_button_label_length.lua"
   Invoke-CheckedCommand "TOC File List Check" "lua tools/check_toc_file_list.lua"
   Invoke-CheckedCommand "Dead Locale Keys Check" "lua tools/check_dead_locale_keys.lua"
+  Invoke-CheckedCommand "Settings Default Pattern Check" "lua tools/check_settings_default_pattern.lua"
   Invoke-CheckedCommand "M+ Forces DB Lifetime" "lua tools/check_mplus_db_lifetime.lua"
   Invoke-CheckedCommand "Nameplate Key-Start Simulator" "lua tools/simulate_nameplate_keystart.lua all"
   Invoke-CheckedCommand "SavedVariables Reload Simulator" "lua tools/simulate_savedvariables_reload.lua"

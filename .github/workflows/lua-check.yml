@@ -108,6 +108,10 @@ jobs:
         run: |
           lua tools/check_dead_locale_keys.lua
 
+      - name: Settings Default Pattern Check
+        run: |
+          lua tools/check_settings_default_pattern.lua
+
       - name: M+ Forces DB Lifetime
         run: |
           lua tools/check_mplus_db_lifetime.lua

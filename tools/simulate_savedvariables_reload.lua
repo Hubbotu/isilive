@@ -376,6 +376,66 @@ local function Run()
   PrintState("3. session 2 after /reload", sessionTwo)
   AssertSessionTwo(sessionTwo)
 
+  -- ----------------------------------------------------------------------
+  -- Scenario "settings convention" (CLAUDE.md "Settings: default-on /
+  -- default-off pattern"):
+  --   * Pattern A (default-ON): toggle OFF must persist as `false` and
+  --     read sites must see false after reload.
+  --   * Pattern B (default-OFF): nil DB on fresh install must read as OFF;
+  --     toggle ON must persist as `true` and read sites must see true.
+  --
+  -- This generic scenario protects against the regression class where a
+  -- new boolean setting is introduced with the wrong read pattern (e.g.
+  -- intended default-ON but coded as `db.X == true` -> every existing
+  -- user starts with the feature OFF).
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario: convention round-trip ==========")
+  local conventionSession = BuildPanelSession({})
+
+  -- Pattern A on a fresh DB: inviteHintEnabled has no stored value yet,
+  -- but `db.inviteHintEnabled ~= false` (the production read pattern in
+  -- factory.lua + lfg_detect.lua) must yield true.
+  Check(
+    conventionSession.db.inviteHintEnabled == nil or conventionSession.db.inviteHintEnabled == true,
+    "Pattern A on fresh DB: inviteHintEnabled is nil-or-true (default-ON read pattern works pre-toggle)"
+  )
+
+  -- User toggles inviteHintEnabled OFF.
+  ClickCheckbox(conventionSession.frames, "SETTINGS_INVITE_HINT_ENABLED", false)
+  Check(conventionSession.db.inviteHintEnabled == false, "Pattern A: toggle-OFF persists explicit `false` in DB")
+
+  -- Simulate /reload via SavedVariables roundtrip.
+  local conventionReloaded = BuildPanelSession(CopyTable(conventionSession.db))
+  Check(
+    conventionReloaded.db.inviteHintEnabled == false,
+    "Pattern A: explicit `false` survives /reload (the v0.9.211-style regression pin)"
+  )
+  -- The production read pattern would now resolve to false.
+  Check(
+    (conventionReloaded.db.inviteHintEnabled ~= false) == false,
+    "Pattern A: read site `db.inviteHintEnabled ~= false` returns false after toggle-OFF + reload"
+  )
+
+  -- Pattern B on a fresh DB: autoCloseMainFrame is unset; production read
+  -- `db.autoCloseMainFrame == true` must yield false (default-OFF works).
+  local patternBSession = BuildPanelSession({})
+  Check(
+    (patternBSession.db.autoCloseMainFrame == true) == false,
+    "Pattern B on fresh DB: read `db.autoCloseMainFrame == true` is false (default-OFF read pattern works pre-toggle)"
+  )
+
+  -- User toggles autoCloseMainFrame ON.
+  ClickCheckbox(patternBSession.frames, "SETTINGS_AUTO_CLOSE_MAIN_FRAME", true)
+  Check(patternBSession.db.autoCloseMainFrame == true, "Pattern B: toggle-ON persists explicit `true` in DB")
+
+  -- Reload and re-check.
+  local patternBReloaded = BuildPanelSession(CopyTable(patternBSession.db))
+  Check(patternBReloaded.db.autoCloseMainFrame == true, "Pattern B: explicit `true` survives /reload")
+  Check(
+    (patternBReloaded.db.autoCloseMainFrame == true) == true,
+    "Pattern B: read site `db.autoCloseMainFrame == true` returns true after toggle-ON + reload"
+  )
+
   if failures > 0 then
     print(string.format("\nSavedVariables reload simulator failed: %d check(s) failed", failures))
     os.exit(1)

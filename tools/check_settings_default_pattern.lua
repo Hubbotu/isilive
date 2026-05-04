@@ -1,0 +1,258 @@
+#!/usr/bin/env lua
+---@diagnostic disable: undefined-global
+-- Pins the CLAUDE.md "Settings: default-on / default-off pattern" rule.
+--
+-- For every boolean setting written by the settings panel (pattern
+-- `db.X = checked`), verify there is at least one matching read site
+-- elsewhere in the codebase, and that all reads use a CONSISTENT pattern:
+--
+--   * Pattern A (default-ON):  read = `db.X ~= false`
+--   * Pattern B (default-OFF): read = `db.X == true`
+--   * Pattern C (migration in factory.lua ApplyDBSettings):
+--                             `if db.X == nil then db.X = ... end`
+--                              followed by Pattern A reads elsewhere
+--
+-- Mixed patterns silently flip the default for some users when the read-
+-- pattern is changed without a migration block — the v0.9.211 settings
+-- audit found this class of drift after a long delay.
+--
+-- The gate skips:
+--   * non-boolean writes (db.X = tonumber(val), db.X = NormalizeXxx(val), ...)
+--   * computed-boolean writes (db.X = (mode == "Y")) — those are
+--     deliberate and accompany migration blocks already
+--
+-- Exits 0 on clean, 1 on inconsistencies found, 2 on IO/setup errors.
+-- Run from repo root:
+--   lua tools/check_settings_default_pattern.lua
+
+local SCAN_DIRS = { "core", "factory", "game", "logic", "ui" }
+local SETTINGS_FILE = "ui/isiLive_settings.lua"
+local FACTORY_FILE = "factory/isiLive_factory.lua"
+
+-- Settings that are deliberately exempt (e.g. computed booleans that derive
+-- their value from a string-mode selector and use Pattern C migration).
+local OVERRIDES = {
+  -- mode-toggle written via `db.X = (mode == "...")` and migrated in
+  -- ApplyDBSettings — flagging would be a false positive.
+  mobNameplateEnabled = "tri-state mode-toggle (off/tooltip/nameplate); migrated in ApplyDBSettings",
+  mplusForcesEstimate = "tri-state mode-toggle (off/tooltip/nameplate); migrated in ApplyDBSettings",
+}
+
+local lfs = require("lfs")
+
+local function fail(code, message)
+  io.stderr:write("settings-default-pattern: " .. message .. "\n")
+  os.exit(code)
+end
+
+local function walkDir(dir, files)
+  for entry in lfs.dir(dir) do
+    if entry ~= "." and entry ~= ".." then
+      local path = dir .. "/" .. entry
+      local mode = lfs.attributes(path, "mode")
+      if mode == "directory" then
+        walkDir(path, files)
+      elseif mode == "file" and path:match("%.lua$") then
+        files[#files + 1] = path
+      end
+    end
+  end
+  return files
+end
+
+local function readFile(path)
+  local fh = io.open(path, "r")
+  if not fh then
+    return ""
+  end
+  local content = fh:read("*a")
+  fh:close()
+  return content
+end
+
+-- ----------------------------------------------------------------------
+-- Step 1: enumerate boolean writes in the settings panel.
+-- A "boolean write" is `db.X = checked` exactly (no transformation) — we
+-- ignore numeric / string / computed writes.
+-- ----------------------------------------------------------------------
+local function collectBooleanWrites()
+  local content = readFile(SETTINGS_FILE)
+  if content == "" then
+    fail(2, "cannot read " .. SETTINGS_FILE)
+  end
+  local settings = {}
+  for fieldName in content:gmatch("db%.([%a_][%w_]*)%s*=%s*checked") do
+    settings[fieldName] = true
+  end
+  return settings
+end
+
+-- ----------------------------------------------------------------------
+-- Step 2: for each setting, scan production code for read patterns.
+--
+--   Pattern A read:  db.X ~= false
+--   Pattern B read:  db.X == true
+--   Pattern C migr:  if db.X == nil then ... db.X = ... end (factory.lua)
+--
+-- Returns: { [setting] = { patternA = bool, patternB = bool, hasMigration = bool } }
+-- ----------------------------------------------------------------------
+local function classifyReads(settings, files)
+  local result = {}
+  for name in pairs(settings) do
+    result[name] = { patternA = false, patternB = false, hasMigration = false }
+  end
+
+  -- Migration check (factory.lua only). Match "if <var>.X == nil then"
+  -- where <var> is any local-table reference (db, dbRef, IsiLiveDB, ...).
+  local factoryContent = readFile(FACTORY_FILE)
+  for name in pairs(settings) do
+    local migrationPattern = "if%s+[%w_]+%." .. name .. "%s*==%s*nil%s+then"
+    if factoryContent:find(migrationPattern) then
+      result[name].hasMigration = true
+    end
+  end
+
+  -- Scan ALL production files for read patterns. We exclude the settings
+  -- file itself (it has both writes AND its own reads of `db.X` to seed
+  -- checkbox initial state, which would skew classification).
+  --
+  -- Pattern A (default-ON) read forms in the wild:
+  --   `<var>.X ~= false`        -- standard
+  --   `<var>.X == false`        -- inverted, in skip-the-ON-action context
+  --   `not (<var>.X == false)`  -- explicit double-negation
+  --
+  -- Pattern B (default-OFF) read forms in the wild:
+  --   `<var>.X == true`         -- standard
+  --   `<var>.X ~= true`         -- inverted, in skip-the-OFF-action context
+  --   `if <var>.X then`         -- truthy check (nil/false → skip, true → act)
+  --
+  -- Earlier versions of this gate matched only literal "db.X" + only the
+  -- two standard forms, and missed the many call sites that read through
+  -- factory-bridge variables (dbRef, savedDb, IsiLiveDB) or used the
+  -- negated/truthy variants.
+  for _, path in ipairs(files) do
+    if path ~= SETTINGS_FILE and not path:match("^tools/") then
+      local content = readFile(path)
+      for name in pairs(settings) do
+        -- Pattern A: any "false" comparison against the field
+        local patternA1 = "[%w_]+%." .. name .. "%s*~=%s*false"
+        local patternA2 = "[%w_]+%." .. name .. "%s*==%s*false"
+        if content:find(patternA1) or content:find(patternA2) then
+          result[name].patternA = true
+        end
+        -- Pattern B: any "true" comparison OR truthy `if X then` check
+        local patternB1 = "[%w_]+%." .. name .. "%s*==%s*true"
+        local patternB2 = "[%w_]+%." .. name .. "%s*~=%s*true"
+        local patternB3 = "and%s+[%w_]+%." .. name .. "%s+then"
+        local patternB4 = "if%s+[%w_]+%." .. name .. "%s+then"
+        if content:find(patternB1) or content:find(patternB2) or content:find(patternB3) or content:find(patternB4) then
+          result[name].patternB = true
+        end
+      end
+    end
+  end
+  return result
+end
+
+-- ----------------------------------------------------------------------
+-- Step 3: classify each setting's status.
+--
+--   "ok-A"      = pattern A reads only (default-ON, consistent)
+--   "ok-B"      = pattern B reads only (default-OFF, consistent)
+--   "ok-C"      = pattern A reads + migration in ApplyDBSettings
+--   "no-reads"  = settings panel writes but nothing reads ⇒ DEAD setting
+--   "mixed"     = some reads use ~= false, others use == true (DRIFT RISK)
+-- ----------------------------------------------------------------------
+local function classifyStatus(name, info)
+  if OVERRIDES[name] then
+    return "override"
+  end
+  if not info.patternA and not info.patternB then
+    return "no-reads"
+  end
+  if info.patternA and info.patternB then
+    return "mixed"
+  end
+  if info.patternA then
+    if info.hasMigration then
+      return "ok-C"
+    end
+    return "ok-A"
+  end
+  return "ok-B"
+end
+
+-- ----------------------------------------------------------------------
+-- Main.
+-- ----------------------------------------------------------------------
+local function main()
+  if not lfs.attributes(SETTINGS_FILE, "mode") then
+    fail(2, "scan dir mismatch: " .. SETTINGS_FILE .. " not found (run from repo root)")
+  end
+
+  local files = {}
+  for _, dir in ipairs(SCAN_DIRS) do
+    if lfs.attributes(dir, "mode") == "directory" then
+      walkDir(dir, files)
+    end
+  end
+
+  local settings = collectBooleanWrites()
+  local reads = classifyReads(settings, files)
+
+  local failures = {}
+  local report = {}
+  local names = {}
+  for name in pairs(settings) do
+    names[#names + 1] = name
+  end
+  table.sort(names)
+
+  for _, name in ipairs(names) do
+    local info = reads[name]
+    local status = classifyStatus(name, info)
+    table.insert(report, { name = name, status = status, info = info })
+    if status == "no-reads" then
+      table.insert(
+        failures,
+        string.format("  %s: written by settings panel, but NO read site found (dead setting?)", name)
+      )
+    elseif status == "mixed" then
+      table.insert(
+        failures,
+        string.format(
+          "  %s: MIXED read patterns — some `~= false` (default-ON), some `== true` (default-OFF). "
+            .. "Pick one and stick with it across the codebase.",
+          name
+        )
+      )
+    end
+  end
+
+  print("settings-default-pattern: " .. #names .. " boolean settings audited")
+  for _, entry in ipairs(report) do
+    local label = ({
+      ["ok-A"] = "default-ON  (Pattern A: ~= false)",
+      ["ok-B"] = "default-OFF (Pattern B: == true)",
+      ["ok-C"] = "default-ON  (Pattern C: migration + ~= false)",
+      ["override"] = "override (manually exempt)",
+      ["no-reads"] = "FAIL: no read site",
+      ["mixed"] = "FAIL: mixed read patterns",
+    })[entry.status] or entry.status
+    print(string.format("  %-40s %s", entry.name, label))
+  end
+
+  if #failures > 0 then
+    io.stderr:write("\n")
+    io.stderr:write(string.format("settings-default-pattern: %d issue(s) found\n", #failures))
+    for _, msg in ipairs(failures) do
+      io.stderr:write(msg .. "\n")
+    end
+    os.exit(1)
+  end
+
+  print("settings-default-pattern: clean")
+  os.exit(0)
+end
+
+main()

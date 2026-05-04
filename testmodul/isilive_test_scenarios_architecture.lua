@@ -982,6 +982,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
     AssertContains(
       Assert,
       workflowContent,
+      "lua tools/check_settings_default_pattern.lua",
+      "workflow must keep the settings-default-pattern gate"
+    )
+    AssertContains(
+      Assert,
+      workflowContent,
       "lua tools/simulate_key_completion_lifecycle.lua",
       "workflow must keep the key-completion lifecycle simulator gate"
     )
@@ -1080,6 +1086,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       syncWorkflowContent,
       "lua tools/check_dead_locale_keys.lua",
       "M+ forces sync workflow must keep the dead-locale-keys gate"
+    )
+    AssertContains(
+      Assert,
+      syncWorkflowContent,
+      "lua tools/check_settings_default_pattern.lua",
+      "M+ forces sync workflow must keep the settings-default-pattern gate"
     )
     AssertContains(
       Assert,
@@ -1244,6 +1256,12 @@ local function RegisterArchitectureWorkflowTests(test, Assert)
       localPreflightContent,
       'Invoke-CheckedCommand "Dead Locale Keys Check" "lua tools/check_dead_locale_keys.lua"',
       "local preflight must run the dead-locale-keys gate"
+    )
+    AssertContains(
+      Assert,
+      localPreflightContent,
+      'Invoke-CheckedCommand "Settings Default Pattern Check" "lua tools/check_settings_default_pattern.lua"',
+      "local preflight must run the settings-default-pattern gate"
     )
     AssertContains(
       Assert,
