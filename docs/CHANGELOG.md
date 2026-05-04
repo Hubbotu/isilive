@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-05-04 - Version 0.9.214 (patch)
+
+Two user-facing fixes plus a long-pending audio cue.
+
+- **Bugfix: Nameplates section header / hint stayed in English on a German UI ([ui/isiLive_settings.lua](../ui/isiLive_settings.lua)):**
+  - Repro: switch to deDE (or open Settings before the language is fully applied). The Nameplates section showed `Nameplates` / `Enemy forces overlay on Mythic+ nameplates.` instead of `Namensplaketten` / `Gegnerkraft-Anzeige auf Mythic+ Namensplaketten.`.
+  - Root cause: `RefreshSettingsControls` (the live-relabel pass) covered all 7 other section headers/hints but missed `nameplatesHeader`, `nameplatesHint`, and the `nameplatesExternalWarn` Plater/Platynator note. Once built, those labels never refreshed.
+  - Fix: 3 additional refresh blocks, exact build-order position (between Display and Behavior). Same pattern as the other sections, supports all 8 locale tables.
+
+- **Sound: Bloodlust now plays the BoxingArenaSound asset ([core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua)):**
+  - Previously the bloodlust sound entry shipped with `file = ""` (silent until an asset was configured). The helper, settings checkbox, and combat-event detection were all wired, only the asset was missing.
+  - Wired `bloodlust.file` to `Interface\AddOns\isiLive\sounds\BoxingArenaSound.ogg`. Default-enabled, SFX channel, controllable via the existing "Sound alert on Bloodlust" setting.
+
+- **Test coverage:** architecture sound-registry test now asserts the new BL asset path; the "BR + BL silent without configured assets" assertion split — BR remains silent (still no asset), BL counted in the play tally.
+
 ## 2026-05-04 - Version 0.9.213 (patch)
 
 CI/test hygiene release — no runtime or UI changes. Bundles 11 commits that landed on `main` after v0.9.212 and tightens the simulator suite toward strict end-to-end discipline.
