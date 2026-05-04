@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-05-05 - Version 0.9.215 (patch)
+
+Battle Res audio cue now ships with an asset.
+
+- **Sound: Battle Res now plays the ChickenAlarm asset ([core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua)):**
+  - Previously the battle-res sound entry shipped with `file = ""` (silent until an asset was configured). The helper, settings checkbox, and combat-event detection were all wired, only the asset was missing.
+  - Wired `battle_res.file` to `Interface\AddOns\isiLive\sounds\ChickenAlarm.ogg`. Default-enabled, SFX channel, controllable via the existing "Sound alert on Battle Res" setting.
+  - `.gitignore` whitelist extended (`!sounds/ChickenAlarm.ogg`) so the asset is tracked and packaged into the CurseForge build.
+
+- **Test coverage:** architecture sound-registry test now asserts the new BR asset path and that BR + BL both play their configured assets when enabled.
+
 ## 2026-05-04 - Version 0.9.214 (patch)
 
 Two user-facing fixes plus a long-pending audio cue.
