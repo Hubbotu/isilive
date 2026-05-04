@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-04 - Version 0.9.213 (patch)
+
+CI/test hygiene release — no runtime or UI changes. Bundles 11 commits that landed on `main` after v0.9.212 and tightens the simulator suite toward strict end-to-end discipline.
+
+- **New end-to-end simulators (`tools/simulate_*.lua`):**
+  - HELLO/ACK/REQSYNC handshake (full peer discovery + roster sync).
+  - SHAREKEYS roundtrip (sender → receiver → roster update).
+  - High-priority path coverage: kick-tracker extras, killtrack lifecycle, role-marker macro.
+  - Medium-priority: M+ timer lifecycle, settings live-apply, savedvariables-reload.
+  - Lower-priority: LFG-invite hint dialog binding, inspect pipeline, secret-value pipeline, addon-message throttle, sender/receiver flow.
+  - Existing simulators (key-start, key-completion, ready-check, leader-handoff, lfg-join, multi-invite, raid-party-cycle, reload-storm, hidden-sync-reload, nameplate-keystart, ready-check-frame-overrides) tightened to true E2E semantics — removed shortcut paths, asserts now check the full observable result instead of intermediate state.
+
+- **CI gate additions (`.github/workflows/lua-check.yml`, `tools/check_settings_default_pattern.lua`):**
+  - New static gate enforcing the settings-default pattern (catches drift from the established register/read/write convention before review).
+  - Convention round-trip simulator wired into the lua-check workflow.
+  - `tools/validate_ci_local.ps1` covers the same gate locally.
+
+- **Lint cleanups:**
+  - Dropped colon-syntax `self` on KillTrack ticker `Cancel` stub and role-marker frame mock NoOp methods (luacheck warnings).
+  - Shortened an over-120-char assert message in the lfg_join simulator.
+
+- **Test scenarios:** `testmodul/isilive_test_scenarios_architecture.lua` now asserts the new gate is registered.
+
+Net diff: 30 files, +6046 / -351 — all under `tools/`, `testmodul/`, and `.github/workflows/`. No `game/`, `ui/`, `core/`, `logic/`, `factory/`, or root `.lua` files touched.
+
 ## 2026-05-03 - Version 0.9.212 (patch)
 
 Two WoW 12.0 (Midnight) compatibility fixes plus dead-code cleanup. Both bugs share the same root cause: WoW retail's API surface in 12.0 differs from TWW (`C_Item.GetAverageItemLevel` removed, `C_PaperDollInfo.GetInspectItemLevel(party*)` returns 0 unconditionally, party addon messages inside instances arrive on `INSTANCE_CHAT` instead of `PARTY`), and isiLive's older code paths still assumed pre-12.0 behavior.
