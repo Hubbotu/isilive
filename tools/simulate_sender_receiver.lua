@@ -3,6 +3,8 @@
 local io = io
 ---@diagnostic disable-next-line: undefined-global
 local load = load
+---@diagnostic disable-next-line: undefined-global
+local os = os
 
 local function LoadLocal(path)
   local file = assert(io.open(path, "rb"))
@@ -327,6 +329,327 @@ local function SimulateShareKeysEventHandler()
   PrintTable("event.sharekeys.counts.", counts)
 end
 
+-- ============================================================================
+-- Mode: roundtrip
+--
+-- End-to-end SHAREKEYS flow in a single shared global scope:
+--   sender Sync.SendShareKeysRequest()
+--     -> capture (prefix, message, channel) via mocked C_ChatInfo.SendAddonMessage
+--     -> dispatch CHAT_MSG_ADDON with the captured bytes into a receiver
+--        EventHandlers controller running the real Sync.ProcessAddonMessage
+--     -> receiver sendOwnKeystoneToChat closure runs the real
+--        ContextHelpers.BuildOwnKeystoneAnnounceLine + SendPartyChatMessage
+--     -> capture chat bytes via mocked SendChatMessage
+--
+-- Pins the wire-level handoff (sender bytes equal receiver bytes), the
+-- shouldShareKeys validity check, the channel resolution on both ends, and
+-- the 30s self-cooldown.
+-- ============================================================================
+
+local function BuildRoundtripGlobals(opts)
+  return {
+    GetRealmName = function()
+      return opts.realm or "Realm"
+    end,
+    GetTime = function()
+      opts._timeCalls = (opts._timeCalls or 0) + 1
+      return opts._now
+    end,
+    IsInGroup = function(category)
+      if category == 2 then
+        return opts.inInstance == true
+      end
+      return opts.inGroup ~= false
+    end,
+    IsInRaid = function()
+      return opts.inRaid == true
+    end,
+    LE_PARTY_CATEGORY_INSTANCE = 2,
+    strsplit = BuildStrsplit(),
+    C_MythicPlus = opts.ownedKeystoneLink and {
+      GetOwnedKeystoneLink = function()
+        return opts.ownedKeystoneLink
+      end,
+    } or nil,
+    C_Container = MakeBagApi(opts.bagHasKey == true),
+    C_ChallengeMode = MakeChallengeModeApi(),
+    SendChatMessage = function(message, channel)
+      opts._chatMessages[#opts._chatMessages + 1] = message
+      opts._chatChannels[#opts._chatChannels + 1] = channel
+    end,
+    C_ChatInfo = {
+      SendAddonMessage = function(prefix, message, channel)
+        opts._addonMessages[#opts._addonMessages + 1] = {
+          prefix = prefix,
+          message = message,
+          channel = channel,
+        }
+        return true
+      end,
+    },
+  }
+end
+
+local function BuildReceiverSendOwnKeystoneToChat(addon, opts, state)
+  return function()
+    state.sendOwnKeystoneCalls = state.sendOwnKeystoneCalls + 1
+    local now = opts._now
+    if state.lastKeystoneAt and (now - state.lastKeystoneAt) < 30 then
+      state.cooldownAborts = state.cooldownAborts + 1
+      return false
+    end
+    local line = addon.ContextHelpers.BuildOwnKeystoneAnnounceLine({
+      getL = function()
+        return { ANNOUNCE_PREFIX = "PartyKeys:" }
+      end,
+      getOwnedKeystoneSnapshot = function()
+        return 2649, 12
+      end,
+      getDungeonShortCode = function(mapID)
+        return mapID == 2649 and "ARA" or nil
+      end,
+    })
+    if type(line) ~= "string" or line == "" then
+      return false
+    end
+    local sent = addon.ContextHelpers.SendPartyChatMessage(line)
+    if sent then
+      state.lastKeystoneAt = now
+    end
+    return sent == true
+  end
+end
+
+local function CheckExpectations(opts, sentBytes, state)
+  local expected = opts.expect or {}
+  local fails = {}
+  if expected.wireChannel ~= nil then
+    local actual = sentBytes and sentBytes.channel
+    if actual ~= expected.wireChannel then
+      fails[#fails + 1] =
+        string.format("wireChannel=%s (expected %s)", tostring(actual), tostring(expected.wireChannel))
+    end
+  end
+  if expected.wireMessage ~= nil then
+    local actual = sentBytes and sentBytes.message
+    if actual ~= expected.wireMessage then
+      fails[#fails + 1] =
+        string.format("wireMessage=%s (expected %s)", tostring(actual), tostring(expected.wireMessage))
+    end
+  end
+  if expected.chatMessages ~= nil and #opts._chatMessages ~= expected.chatMessages then
+    fails[#fails + 1] = string.format("chatMessages=%d (expected %d)", #opts._chatMessages, expected.chatMessages)
+  end
+  if expected.chatChannel ~= nil then
+    local actual = opts._chatChannels[1]
+    if actual ~= expected.chatChannel then
+      fails[#fails + 1] =
+        string.format("chatChannel=%s (expected %s)", tostring(actual), tostring(expected.chatChannel))
+    end
+  end
+  if expected.sendOwnKeystoneCalls ~= nil and state.sendOwnKeystoneCalls ~= expected.sendOwnKeystoneCalls then
+    fails[#fails + 1] =
+      string.format("sendOwnKeystoneCalls=%d (expected %d)", state.sendOwnKeystoneCalls, expected.sendOwnKeystoneCalls)
+  end
+  if expected.cooldownAborts ~= nil and state.cooldownAborts ~= expected.cooldownAborts then
+    fails[#fails + 1] = string.format("cooldownAborts=%d (expected %d)", state.cooldownAborts, expected.cooldownAborts)
+  end
+  return fails
+end
+
+local function RunRoundtripScenario(name, opts)
+  opts._now = opts.now or 100
+  opts._addonMessages = {}
+  opts._chatMessages = {}
+  opts._chatChannels = {}
+
+  local senderSendOk
+  local sentBytes
+  local state = { sendOwnKeystoneCalls = 0, cooldownAborts = 0, lastKeystoneAt = 0 }
+
+  Harness.WithGlobals(BuildRoundtripGlobals(opts), function()
+    local addon = Harness.LoadAddonModules({
+      "isiLive_context_helpers.lua",
+      "isiLive_sync.lua",
+      "isiLive_event_handlers.lua",
+    })
+
+    -- ====== SENDER side: simulate the "Keys teilen" button click ======
+    -- The button onClick (ui/isiLive_roster_panel.lua:262) calls
+    -- deps.sendShareKeysRequest, which is wired to Sync.SendShareKeysRequest.
+    senderSendOk = addon.Sync.SendShareKeysRequest()
+    sentBytes = opts._addonMessages[1]
+
+    -- ====== RECEIVER side: dispatch the captured wire bytes ======
+    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+      isMainFrameShown = function()
+        return false
+      end,
+      processAddonMessage = function(prefix, message, sender, channel)
+        return addon.Sync.ProcessAddonMessage(
+          prefix,
+          message,
+          sender,
+          opts.receiverName or "Me",
+          opts.receiverRealm or "Realm",
+          channel
+        )
+      end,
+      sendOwnKeystoneToChat = BuildReceiverSendOwnKeystoneToChat(addon, opts, state),
+      triggerShareKeysCooldown = function() end,
+    })
+
+    local function dispatch(prefixOverride, sender)
+      if not sentBytes then
+        return
+      end
+      controller:Dispatch(
+        "CHAT_MSG_ADDON",
+        prefixOverride or sentBytes.prefix,
+        sentBytes.message,
+        sentBytes.channel,
+        sender or opts.senderName or "OtherPlayer-OtherRealm"
+      )
+    end
+
+    if opts.dispatchWrongPrefix then
+      dispatch("OTHER_ADDON", nil)
+    elseif opts.dispatchSelfEcho then
+      -- Sender uses the receiver's own player key, ProcessAddonMessage must
+      -- short-circuit shouldShareKeys.
+      dispatch(nil, (opts.receiverName or "Me") .. "-" .. (opts.receiverRealm or "Realm"))
+    else
+      dispatch(nil, nil)
+      if opts.dispatchAgain then
+        opts._now = opts._now + (opts.secondDelay or 5)
+        dispatch(nil, nil)
+      end
+    end
+  end)
+
+  local fails = CheckExpectations(opts, sentBytes, state)
+  print("---- " .. name)
+  print("  sender.SendShareKeysRequest.ok = " .. tostring(senderSendOk))
+  print("  wire.addonMessageCount         = " .. tostring(#opts._addonMessages))
+  if sentBytes then
+    print(
+      "  wire.prefix / msg / channel    = "
+        .. tostring(sentBytes.prefix)
+        .. " / "
+        .. tostring(sentBytes.message)
+        .. " / "
+        .. tostring(sentBytes.channel)
+    )
+  end
+  print("  receiver.sendOwnKeystoneCalls  = " .. tostring(state.sendOwnKeystoneCalls))
+  print("  receiver.cooldownAborts        = " .. tostring(state.cooldownAborts))
+  print("  receiver.chatMessages          = " .. tostring(#opts._chatMessages))
+  print("  receiver.chatChannels          = [" .. table.concat(opts._chatChannels, ", ") .. "]")
+  if #fails == 0 then
+    print("  >> PASS")
+  else
+    print("  >> FAIL: " .. table.concat(fails, "; "))
+  end
+  return #fails == 0
+end
+
+local function SimulateRoundtrip()
+  local results = {}
+
+  results[#results + 1] = RunRoundtripScenario("1. happy_in_instance: M+ key — wire & chat go INSTANCE_CHAT", {
+    inGroup = true,
+    inInstance = true,
+    bagHasKey = true,
+    expect = {
+      wireChannel = "INSTANCE_CHAT",
+      wireMessage = "SHAREKEYS",
+      chatChannel = "INSTANCE_CHAT",
+      chatMessages = 1,
+      sendOwnKeystoneCalls = 1,
+    },
+  })
+
+  results[#results + 1] = RunRoundtripScenario("2. happy_in_party: party (no instance) — wire & chat go PARTY", {
+    inGroup = true,
+    inInstance = false,
+    bagHasKey = true,
+    expect = {
+      wireChannel = "PARTY",
+      wireMessage = "SHAREKEYS",
+      chatChannel = "PARTY",
+      chatMessages = 1,
+      sendOwnKeystoneCalls = 1,
+    },
+  })
+
+  results[#results + 1] = RunRoundtripScenario("3. self_echo: sender == receiver, shouldShareKeys=false, no chat", {
+    inGroup = true,
+    inInstance = true,
+    bagHasKey = true,
+    receiverName = "Me",
+    receiverRealm = "Realm",
+    dispatchSelfEcho = true,
+    expect = {
+      wireChannel = "INSTANCE_CHAT",
+      chatMessages = 0,
+      sendOwnKeystoneCalls = 0,
+    },
+  })
+
+  results[#results + 1] = RunRoundtripScenario("4. wrong_prefix: SHAREKEYS via 'OTHER_ADDON' prefix is dropped", {
+    inGroup = true,
+    inInstance = true,
+    bagHasKey = true,
+    dispatchWrongPrefix = true,
+    expect = {
+      wireChannel = "INSTANCE_CHAT",
+      chatMessages = 0,
+      sendOwnKeystoneCalls = 0,
+    },
+  })
+
+  results[#results + 1] = RunRoundtripScenario("5. cooldown_re_trigger: 2x SHAREKEYS within 30s, only 1 chat sent", {
+    inGroup = true,
+    inInstance = true,
+    bagHasKey = true,
+    dispatchAgain = true,
+    secondDelay = 5,
+    expect = {
+      wireChannel = "INSTANCE_CHAT",
+      chatMessages = 1,
+      sendOwnKeystoneCalls = 2,
+      cooldownAborts = 1,
+    },
+  })
+
+  results[#results + 1] = RunRoundtripScenario("6. cooldown_expired: 2nd SHAREKEYS after 35s succeeds", {
+    inGroup = true,
+    inInstance = true,
+    bagHasKey = true,
+    dispatchAgain = true,
+    secondDelay = 35,
+    expect = {
+      wireChannel = "INSTANCE_CHAT",
+      chatMessages = 2,
+      sendOwnKeystoneCalls = 2,
+      cooldownAborts = 0,
+    },
+  })
+
+  local pass, fail = 0, 0
+  for _, ok in ipairs(results) do
+    if ok then
+      pass = pass + 1
+    else
+      fail = fail + 1
+    end
+  end
+  print(string.format("---- roundtrip summary: %d pass, %d fail", pass, fail))
+  if fail > 0 then
+    os.exit(1)
+  end
+end
+
 local mode = tostring((...)) or "all"
 if mode == "sharekeys" then
   SimulateShareKeys()
@@ -340,6 +663,8 @@ elseif mode == "event" then
   SimulateShareKeysEventHandler()
 elseif mode == "share_pipeline" then
   SimulateSharePipeline()
+elseif mode == "roundtrip" then
+  SimulateRoundtrip()
 else
   SimulateShareKeys()
   SimulateKey()
@@ -347,4 +672,5 @@ else
   SimulateKick()
   SimulateShareKeysEventHandler()
   SimulateSharePipeline()
+  SimulateRoundtrip()
 end
