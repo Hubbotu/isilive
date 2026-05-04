@@ -129,7 +129,7 @@ local function buildGlobals()
     C_Timer = {
       NewTicker = function(_interval, callback)
         local handle = { _cancelled = false, _callback = callback }
-        function handle:Cancel()
+        handle.Cancel = function()
           handle._cancelled = true
         end
         model.ticks[#model.ticks + 1] = handle
