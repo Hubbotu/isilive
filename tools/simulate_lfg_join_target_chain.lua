@@ -415,7 +415,7 @@ local function Run()
       sim.captureCandidate({ groupName = "+15 BRH" })
       Check(
         PendingGroupName(sim) == "+15 BRH",
-        "second solo capture overwrites the pending entry (production CaptureQueueJoinCandidate clears-then-sets when not in group)"
+        "second solo capture overwrites pending (production clears-then-sets when not in group)"
       )
 
       sim.groupState.inGroup = true
