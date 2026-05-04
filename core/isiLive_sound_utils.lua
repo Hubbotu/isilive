@@ -31,7 +31,7 @@ SoundUtils.Registry = {
     defaultChannel = "SFX",
   },
   battle_res = {
-    file = "",
+    file = "Interface\\AddOns\\isiLive\\sounds\\ChickenAlarm.ogg",
     labelKey = "SETTINGS_SOUND_BATTLE_RES",
     settingKey = "soundBattleResEnabled",
     defaultEnabled = true,

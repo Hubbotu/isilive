@@ -703,7 +703,11 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         "soundBattleResEnabled",
         "battle-res sound should map to the battle-res setting key"
       )
-      Assert.Equal(battleResEntry.file, "", "battle-res sound must stay silent until an asset is configured")
+      Assert.Equal(
+        battleResEntry.file,
+        "Interface\\AddOns\\isiLive\\sounds\\ChickenAlarm.ogg",
+        "battle-res entry should point at the chicken-alarm asset"
+      )
       Assert.True(
         addon.SoundUtils.IsEnabled("battle_res"),
         "battle-res sound should default to enabled when no DB override exists"
@@ -756,7 +760,7 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       Assert.Equal(playedChannel, "SFX", "portal sound helper should use the SFX channel")
       addon.SoundUtils.PlayBattleRes()
       addon.SoundUtils.PlayBloodlust()
-      Assert.Equal(playCalls, 4, "battle-res stays silent without an asset; bloodlust plays the boxing-arena asset")
+      Assert.Equal(playCalls, 5, "battle-res and bloodlust both play their configured assets")
       Assert.Equal(
         playedPath,
         "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
@@ -777,8 +781,8 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       addon.SoundUtils.PlayBloodlust()
       Assert.Equal(
         playCalls,
-        2,
-        "enabled group-join and bloodlust should play; battle-res still silent without an asset"
+        3,
+        "enabled group-join, battle-res, and bloodlust should play; disabled lead and portal stay silent"
       )
       Assert.Equal(
         playedPath,

@@ -28,6 +28,7 @@ build/
 sounds/*
 !sounds/CartoonVoiceBaritone.ogg
 !sounds/BoxingArenaSound.ogg
+!sounds/ChickenAlarm.ogg
 !sounds/SynthChord.ogg
 
 # Local LuaRocks tree (CI/local tooling)
