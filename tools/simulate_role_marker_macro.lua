@@ -192,11 +192,11 @@ local function BuildState(memberRows, addonRoster)
       return nil
     end,
     buildDisplayData = addonRoster.Roster.BuildDisplayData,
-    truncateName = function(t)
-      return t
+    truncateName = function(text)
+      return text
     end,
-    getShortSpecLabel = function(t)
-      return t
+    getShortSpecLabel = function(text)
+      return text
     end,
     getLanguageFlagMarkup = function()
       return ""

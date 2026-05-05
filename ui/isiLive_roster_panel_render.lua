@@ -70,6 +70,11 @@ local KICK_COL_WIDTH = RI.KICK_COL_WIDTH or 58
 local KICK_HOVER_WIDTH = 58
 local ROLE_BUTTON_X = SPEC_COL_X + SPEC_COL_WIDTH + 4
 
+-- Raid-target marker per role: 6 = Blue Square (Tank), 4 = Green Triangle (Healer).
+-- Right-click clears via marker 0.
+local ROLE_MARKER = { TANK = 6, HEALER = 4 }
+local CLEAR_MARKER = 0
+
 -- These settings are temporarily hidden from Blizzard Settings.
 -- Keep the runtime behavior hard-forced until the controls are re-enabled.
 local FORCE_SHOW_DPS_COLUMN = true
@@ -149,7 +154,8 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
   -- Lift the secure button above the row's hoverFrame: both are siblings of
   -- mainFrame with default level; at equal strata + level, hit-test tie-break
   -- is unstable on 12.0+, and the hoverFrame's RightButton-only OnMouseUp
-  -- silently swallows LeftButton clicks if it ever wins.
+  -- silently swallows LeftButton clicks if it ever wins. Type-guard is for
+  -- inline test mocks that do not stub SetFrameLevel/GetFrameLevel.
   if type(row.roleButton.SetFrameLevel) == "function" and type(mainFrame.GetFrameLevel) == "function" then
     row.roleButton:SetFrameLevel((mainFrame:GetFrameLevel() or 1) + 10)
   end
@@ -553,31 +559,23 @@ local function RenderRosterImpl(state, roster)
       end
 
       -- Target by character name, never by unit token. /target party1 is
-      -- broken in 12.0.5 (party tokens are secret unit tokens; the slash
-      -- command silently fails from secure macros). /target Felix-Tichondrius
-      -- works because slash-command name parsing is not token-based. See
-      -- CLAUDE.md "Role-marker click feature: target by character name".
+      -- broken in 12.0.5 (party tokens are secret unit tokens); /target
+      -- <name-realm> still works because slash-command name parsing is not
+      -- token-based. See CLAUDE.md "Role-marker click feature: target by
+      -- character name".
       if not IsCombatLockdownActive() then
         if showButton and not isCollapsed then
           row.roleButton:Show()
           row.roleButton:SetAttribute("type1", "macro")
           row.roleButton:SetAttribute("type2", "macro")
-          local entryInfo = entry.info
-          local name = (type(entryInfo) == "table" and type(entryInfo.name) == "string" and entryInfo.name ~= "")
-              and entryInfo.name
-            or nil
-          local realm = (type(entryInfo) == "table" and type(entryInfo.realm) == "string" and entryInfo.realm ~= "")
-              and entryInfo.realm
-            or nil
+          local name = (type(info.name) == "string" and info.name ~= "") and info.name or nil
+          local realm = (type(info.realm) == "string" and info.realm ~= "") and info.realm or nil
           local target = name and (realm and (name .. "-" .. realm) or name) or nil
-          if target and role == "TANK" then
-            -- Blue Square = 6
-            row.roleButton:SetAttribute("macrotext1", "/target " .. target .. "\n/tm 6\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. target .. "\n/tm 0\n/targetlasttarget")
-          elseif target and role == "HEALER" then
-            -- Green Triangle = 4
-            row.roleButton:SetAttribute("macrotext1", "/target " .. target .. "\n/tm 4\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. target .. "\n/tm 0\n/targetlasttarget")
+          local marker = target and ROLE_MARKER[role]
+          if marker then
+            local prefix = "/target " .. target .. "\n/tm "
+            row.roleButton:SetAttribute("macrotext1", prefix .. marker .. "\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", prefix .. CLEAR_MARKER .. "\n/targetlasttarget")
           else
             row.roleButton:SetAttribute("macrotext1", nil)
             row.roleButton:SetAttribute("macrotext2", nil)
