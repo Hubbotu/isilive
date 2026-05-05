@@ -119,4 +119,70 @@ return function(test, ctx)
       "UTF-8 cross-realm passthrough"
     )
   end)
+
+  test("StringUtils.BuildSlashTargetName strips realm suffix when it matches the home realm", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Pinto", "Stormrage", "Stormrage"),
+      "Pinto",
+      "matching home realm must drop the suffix so /target acquires the local-realm unit"
+    )
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Pinto", "Twisting Nether", "Twisting Nether"),
+      "Pinto",
+      "matching home realm with a space must still strip cleanly"
+    )
+  end)
+
+  test("StringUtils.BuildSlashTargetName keeps the realm suffix for cross-realm units", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Felix", "Tichondrius", "Stormrage"),
+      "Felix-Tichondrius",
+      "different realm must retain the cross-realm suffix"
+    )
+  end)
+
+  test("StringUtils.BuildSlashTargetName returns bare name when realm is blank", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Felix", "", "Stormrage"),
+      "Felix",
+      "empty realm short-circuits before any home-realm comparison"
+    )
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Felix", nil, "Stormrage"),
+      "Felix",
+      "nil realm short-circuits before any home-realm comparison"
+    )
+  end)
+
+  test("StringUtils.BuildSlashTargetName falls back to GetRealmName when no homeRealm arg is passed", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    local previousGetRealmName = rawget(_G, "GetRealmName")
+    rawset(_G, "GetRealmName", function()
+      return "Stormrage"
+    end)
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Pinto", "Stormrage"),
+      "Pinto",
+      "must consult GetRealmName when caller does not pass homeRealm explicitly"
+    )
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName("Cross", "Tichondrius"),
+      "Cross-Tichondrius",
+      "different realm via GetRealmName fallback must keep the suffix"
+    )
+    rawset(_G, "GetRealmName", previousGetRealmName)
+  end)
+
+  test("StringUtils.BuildSlashTargetName returns nil when name is blank", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(
+      addon.StringUtils.BuildSlashTargetName(nil, "Stormrage", "Stormrage"),
+      nil,
+      "missing name must yield nil so the macro builder skips the click entirely"
+    )
+    Assert.Equal(addon.StringUtils.BuildSlashTargetName("", "Stormrage", "Stormrage"), nil, "empty name must yield nil")
+  end)
 end

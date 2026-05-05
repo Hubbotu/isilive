@@ -178,6 +178,12 @@ Harness.WithGlobals({
   GetAddOnMetadata = function()
     return nil
   end,
+  -- Home realm distinct from any realm name used in scenarios below so the
+  -- home-realm-strip path can be exercised in isolation without disturbing
+  -- the existing cross-realm assertions (Tichondrius / TwistingNether).
+  GetRealmName = function()
+    return "Stormrage"
+  end,
   CreateFrame = MakeFrameMock,
 }, function()
   local addon = Harness.LoadAddonModules({ "isiLive_roster.lua", "isiLive_roster_panel_render.lua" })
@@ -391,6 +397,45 @@ Harness.WithGlobals({
     if heal then
       Check(heal.roleButton:GetAttribute("macrotext1") == nil, "missing-name HEALER: macrotext1 is nil")
       Check(heal.roleButton:GetAttribute("macrotext2") == nil, "missing-name HEALER: macrotext2 is nil")
+    end
+  end
+
+  -- ----------------------------------------------------------------------
+  -- Scenario 6b: home-realm strip. Units.GetUnitNameAndRealm fills realm with
+  -- GetRealmName() for the local player when UnitFullName returns blank, so
+  -- info.realm always carries the home realm string. /target Pinto-Stormrage
+  -- (or worse, /target Pinto-Twisting Nether with a space) does NOT acquire
+  -- the local-realm Pinto, but /target Pinto does. The macro builder must
+  -- strip the realm suffix when info.realm matches GetRealmName().
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 6b: home-realm matches => strip realm suffix ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "Pinto", realm = "Stormrage", class = "WARRIOR", role = "TANK" },
+      party1 = { name = "Cross", realm = "Tichondrius", class = "PRIEST", role = "HEALER" },
+    }
+    RI.RenderRosterImpl(state, roster)
+
+    local tank = FindRowForUnit(memberRows, "player")
+    if tank then
+      Check(
+        tank.roleButton:GetAttribute("macrotext1") == "/target Pinto\n/tm 6\n/targetlasttarget",
+        "TANK home-realm match: macrotext1 must drop the '-Stormrage' suffix"
+      )
+      Check(
+        tank.roleButton:GetAttribute("macrotext2") == "/target Pinto\n/tm 0\n/targetlasttarget",
+        "TANK home-realm match: macrotext2 must drop the '-Stormrage' suffix"
+      )
+    end
+
+    local heal = FindRowForUnit(memberRows, "party1")
+    if heal then
+      Check(
+        heal.roleButton:GetAttribute("macrotext1") == "/target Cross-Tichondrius\n/tm 4\n/targetlasttarget",
+        "HEALER cross-realm: macrotext1 must keep the '-Tichondrius' suffix"
+      )
     end
   end
 

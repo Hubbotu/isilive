@@ -562,7 +562,7 @@ local function RenderRosterImpl(state, roster)
           row.roleButton:Show()
           row.roleButton:SetAttribute("type1", "macro")
           row.roleButton:SetAttribute("type2", "macro")
-          local target = addonTable.StringUtils.BuildQualifiedName(info.name, info.realm)
+          local target = addonTable.StringUtils.BuildSlashTargetName(info.name, info.realm)
           local marker = target and ROLE_MARKER[role]
           if marker then
             local prefix = "/target " .. target .. "\n/tm "
