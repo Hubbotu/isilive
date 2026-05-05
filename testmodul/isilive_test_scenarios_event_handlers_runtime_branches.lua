@@ -314,6 +314,30 @@ return function(test, ctx)
     Assert.Equal(roster.player.spec, "Blood", "spec change must rewrite cached spec name on player slot")
   end)
 
+  test("PLAYER_SPECIALIZATION_CHANGED triggers updateUI on intra-role spec swap (Arcane -> Frost)", function()
+    local roster = {
+      player = { name = "Alpha", spec = "Arcane", role = "DAMAGER" },
+    }
+    local uiCalls = 0
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getPlayerSpecName = function()
+        return "Frost"
+      end,
+      getUnitRole = function(_unit)
+        return "DAMAGER"
+      end,
+      updateUI = function()
+        uiCalls = uiCalls + 1
+      end,
+    })
+    handlers.PLAYER_SPECIALIZATION_CHANGED(nil, "player")
+    Assert.Equal(roster.player.spec, "Frost", "intra-role spec swap must rewrite cached spec name")
+    Assert.True(uiCalls >= 1, "intra-role spec swap must trigger updateUI even when role stayed the same")
+  end)
+
   test("PLAYER_SPECIALIZATION_CHANGED keeps cached spec when an inspect refresh is queued", function()
     local roster = {
       player = { name = "Alpha", spec = "Unholy", role = "DAMAGER", _refreshQueued = true },

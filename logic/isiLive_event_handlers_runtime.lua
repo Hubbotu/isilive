@@ -337,20 +337,24 @@ end
 -- Refresh the cached spec name on the player roster entry so the spec column
 -- reflects the new spec immediately on PLAYER_SPECIALIZATION_CHANGED. Skipped
 -- when an inspect refresh is queued so the inspect pipeline keeps ownership of
--- spec writes for that cycle.
+-- spec writes for that cycle. Returns true when the cached spec actually
+-- changed so the caller can fire updateUI even if the role stayed the same
+-- (Mage Arcane -> Frost: same DAMAGER role, different spec name).
 local function RefreshPlayerSpecCache(ctx)
   if type(ctx.getPlayerSpecName) ~= "function" then
-    return
+    return false
   end
   local roster = ctx.getRoster()
   local playerInfo = type(roster) == "table" and roster.player or nil
   if type(playerInfo) ~= "table" or playerInfo._refreshQueued then
-    return
+    return false
   end
   local specName = ctx.getPlayerSpecName()
   if type(specName) == "string" and specName ~= "" and specName ~= playerInfo.spec then
     playerInfo.spec = specName
+    return true
   end
+  return false
 end
 
 function RuntimeLifecycle.BuildHandlers(ctx)
@@ -590,8 +594,15 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
     ctx.handleKickTrackerEvent("PLAYER_SPECIALIZATION_CHANGED", unit)
     ctx.sendOwnBackgroundSnapshot("player-state")
-    RefreshPlayerSpecCache(ctx)
+    -- Spec change can be role-flipping (Druid Balance -> Guardian) or pure
+    -- intra-role (Mage Arcane -> Frost). RefreshRosterRoles only fires
+    -- updateUI when the role actually changed, so the spec-only path needs
+    -- its own updateUI trigger to surface the new spec name.
+    local specChanged = RefreshPlayerSpecCache(ctx)
     RefreshRosterRoles(ctx)
+    if specChanged then
+      ctx.updateUI()
+    end
   end
 
   local function HandlePlayerRolesAssignedEvent(_self)
