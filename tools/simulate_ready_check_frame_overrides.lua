@@ -35,6 +35,7 @@ local function LoadLocal(path)
 end
 
 local Harness = LoadLocal("testmodul/isilive_test_harness.lua")
+local RosterMocks = LoadLocal("testmodul/isilive_test_render_roster_mocks.lua")
 
 local failures = 0
 
@@ -143,38 +144,17 @@ local function MakeBackgroundMock(slot)
   return mock
 end
 
-local function NoOp() end
-local function MakeFontStringMock()
-  return {
-    SetText = NoOp,
-    SetTextColor = NoOp,
-    SetPoint = NoOp,
-    SetWidth = NoOp,
-    SetJustifyH = NoOp,
-    Show = NoOp,
-    Hide = NoOp,
-  }
-end
-
+local NoOp = RosterMocks.NoOp
+local MakeFontStringMock = RosterMocks.MakeFontStringMock
+-- This sim instruments background mocks with frameLog; route them through
+-- the shared MakeFrameMock via opts.makeTexture so background-from-frame
+-- creation stays observable.
 local function MakeFrameMock()
-  local mock = {}
-  function mock:Show() end
-  function mock:Hide() end
-  function mock:SetPoint() end
-  function mock:SetSize() end
-  function mock:SetAllPoints() end
-  function mock:CreateTexture()
-    return MakeBackgroundMock("?")
-  end
-  function mock:CreateFontString()
-    return MakeFontStringMock()
-  end
-  function mock:SetScript() end
-  function mock:HookScript() end
-  function mock:RegisterEvent() end
-  function mock:UnregisterEvent() end
-  function mock:EnableMouse() end
-  return mock
+  return RosterMocks.MakeFrameMock({
+    makeTexture = function()
+      return MakeBackgroundMock("?")
+    end,
+  })
 end
 
 -- Build a memberRows table that already has 5 rows wired up with our mocks.
@@ -203,8 +183,7 @@ end
 -- Stub state object passed to RenderRosterImpl / RefreshReadyCheckStateImpl ------------------
 
 local function BuildState(memberRows, addonRoster)
-  return {
-    memberRows = memberRows,
+  return RosterMocks.BuildDefaultRenderState(memberRows, addonRoster, {
     mainFrame = MakeFrameMock(),
     shareKeysButton = (function()
       local btn = MakeFrameMock()
@@ -213,45 +192,10 @@ local function BuildState(memberRows, addonRoster)
       btn.SetShareKeysAvailable = NoOp
       return btn
     end)(),
-    rosterTooltip = nil,
-    setMainFrameHeightSafe = NoOp,
-    minFrameHeight = 100,
-    raidNoticeLabel = nil,
-    buildOrderedRoster = addonRoster.Roster.BuildOrderedRoster,
     rolePriority = rolePriority,
     unitPriority = unitPriority,
-    resolveActiveKeyOwnerUnit = function()
-      return nil
-    end,
     isReadyCheckActive = function()
       return sim.isReadyCheckActive
-    end,
-    resolveTargetMapID = function()
-      return nil
-    end,
-    buildDisplayData = addonRoster.Roster.BuildDisplayData,
-    truncateName = function(text)
-      return text
-    end,
-    getShortSpecLabel = function(text)
-      return text
-    end,
-    getLanguageFlagMarkup = function()
-      return ""
-    end,
-    getDungeonShortCode = function()
-      return nil
-    end,
-    getDungeonName = function()
-      return nil
-    end,
-    getRioDelta = function()
-      return nil
-    end,
-    syncMarker = "",
-    syncBadge = "",
-    getPlayerSyncSummary = function()
-      return nil
     end,
     getReadyCheckReadyUntil = function(unit)
       return sim.readyUntilByUnit[unit]
@@ -262,25 +206,7 @@ local function BuildState(memberRows, addonRoster)
     getTime = function()
       return sim.now
     end,
-    getL = function()
-      return {}
-    end,
-    isRaidGroup = function()
-      return false
-    end,
-    uiRef = nil,
-    applyKnownKeyToRosterEntry = function()
-      return false
-    end,
-    getPlayerLastRunDps = nil,
-    getOwnedKeystoneSnapshot = nil,
-    getLanguageTooltipMarkup = function()
-      return ""
-    end,
-    showRosterColumnGuides = function()
-      return false
-    end,
-  }
+  })
 end
 
 -- Run scenario -------------------------------------------------------------------------------

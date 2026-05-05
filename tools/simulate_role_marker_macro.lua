@@ -37,6 +37,8 @@ local function LoadLocal(path)
 end
 
 local Harness = LoadLocal("testmodul/isilive_test_harness.lua")
+local RosterMocks = LoadLocal("testmodul/isilive_test_render_roster_mocks.lua")
+local NoOp = RosterMocks.NoOp
 
 local failures = 0
 
@@ -50,12 +52,14 @@ local function Check(condition, message)
 end
 
 -- ----------------------------------------------------------------------
--- Frame mocks. The role button is created with SecureActionButtonTemplate;
+-- Sim-local mocks. The role button is created with SecureActionButtonTemplate;
 -- production calls SetAttribute("type1"|"type2"|"macrotext1"|"macrotext2"|...).
 -- We capture each attribute keyed by the unit so the roster-name assertions
--- can look up per row.
+-- can look up per row. Frame + font-string mocks come from the shared
+-- testmodul/isilive_test_render_roster_mocks.lua helper.
 -- ----------------------------------------------------------------------
-local function NoOp() end
+local MakeFrameMock = RosterMocks.MakeFrameMock
+local MakeFontStringMock = RosterMocks.MakeFontStringMock
 
 local function MakeRoleButtonMock()
   local icon = {
@@ -93,18 +97,6 @@ local function MakeRoleButtonMock()
   return mock
 end
 
-local function MakeFontStringMock()
-  return {
-    SetText = NoOp,
-    SetTextColor = NoOp,
-    SetPoint = NoOp,
-    SetWidth = NoOp,
-    SetJustifyH = NoOp,
-    Show = NoOp,
-    Hide = NoOp,
-  }
-end
-
 local function MakeBackgroundMock()
   return {
     visible = false,
@@ -117,31 +109,6 @@ local function MakeBackgroundMock()
     SetColorTexture = NoOp,
     SetAllPoints = NoOp,
   }
-end
-
-local function MakeFrameMock()
-  local mock = {}
-  mock.Show = NoOp
-  mock.Hide = NoOp
-  mock.SetPoint = NoOp
-  mock.SetSize = NoOp
-  mock.SetAllPoints = NoOp
-  mock.GetFrameLevel = function()
-    return 1
-  end
-  mock.SetFrameLevel = NoOp
-  mock.CreateTexture = function()
-    return MakeBackgroundMock()
-  end
-  mock.CreateFontString = function()
-    return MakeFontStringMock()
-  end
-  mock.SetScript = NoOp
-  mock.HookScript = NoOp
-  mock.RegisterEvent = NoOp
-  mock.UnregisterEvent = NoOp
-  mock.EnableMouse = NoOp
-  return mock
 end
 
 local function BuildMemberRows()
@@ -164,85 +131,12 @@ local function BuildMemberRows()
   return rows
 end
 
+-- All defaults (no-op closures, empty values, role/unit priority maps,
+-- BuildOrderedRoster wiring) come from RosterMocks.BuildDefaultRenderState.
+-- This sim's scenarios run at static t=100 with ready-check inactive — no
+-- overrides needed.
 local function BuildState(memberRows, addonRoster)
-  return {
-    memberRows = memberRows,
-    mainFrame = MakeFrameMock(),
-    shareKeysButton = (function()
-      local btn = MakeFrameMock()
-      btn.SetEnabled = NoOp
-      btn.SetAlpha = NoOp
-      btn.SetShareKeysAvailable = NoOp
-      return btn
-    end)(),
-    rosterTooltip = nil,
-    setMainFrameHeightSafe = NoOp,
-    minFrameHeight = 100,
-    raidNoticeLabel = nil,
-    buildOrderedRoster = addonRoster.Roster.BuildOrderedRoster,
-    rolePriority = { TANK = 1, HEALER = 2, DAMAGER = 3, NONE = 4 },
-    unitPriority = { player = 1, party1 = 2, party2 = 3, party3 = 4, party4 = 5 },
-    resolveActiveKeyOwnerUnit = function()
-      return nil
-    end,
-    isReadyCheckActive = function()
-      return false
-    end,
-    resolveTargetMapID = function()
-      return nil
-    end,
-    buildDisplayData = addonRoster.Roster.BuildDisplayData,
-    truncateName = function(text)
-      return text
-    end,
-    getShortSpecLabel = function(text)
-      return text
-    end,
-    getLanguageFlagMarkup = function()
-      return ""
-    end,
-    getDungeonShortCode = function()
-      return nil
-    end,
-    getDungeonName = function()
-      return nil
-    end,
-    getRioDelta = function()
-      return nil
-    end,
-    syncMarker = "",
-    syncBadge = "",
-    getPlayerSyncSummary = function()
-      return nil
-    end,
-    getReadyCheckReadyUntil = function()
-      return nil
-    end,
-    getReadyCheckDeclinedUntil = function()
-      return nil
-    end,
-    getTime = function()
-      return 100
-    end,
-    getL = function()
-      return {}
-    end,
-    isRaidGroup = function()
-      return false
-    end,
-    uiRef = nil,
-    applyKnownKeyToRosterEntry = function()
-      return false
-    end,
-    getPlayerLastRunDps = nil,
-    getOwnedKeystoneSnapshot = nil,
-    getLanguageTooltipMarkup = function()
-      return ""
-    end,
-    showRosterColumnGuides = function()
-      return false
-    end,
-  }
+  return RosterMocks.BuildDefaultRenderState(memberRows, addonRoster)
 end
 
 local function FindRowForUnit(memberRows, unit)
