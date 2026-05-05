@@ -128,6 +128,9 @@ local function BuildEventHandlersBaseOptions(entryRef, counters)
     getUnitNameAndRealm = function()
       return "player", "realm"
     end,
+    getUnitRole = function(_unit)
+      return nil
+    end,
     markIsiLiveUser = function() end,
     maybeShowNonMythicDungeonEntryNotice = function() end,
     maybeShowPortalNavigatorNotice = function() end,

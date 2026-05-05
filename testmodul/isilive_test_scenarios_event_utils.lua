@@ -576,8 +576,10 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
     gate(frame, "CHALLENGE_MODE_MAPS_UPDATE")
     gate(frame, "PLAYER_EQUIPMENT_CHANGED", 16, true)
     gate(frame, "PLAYER_SPECIALIZATION_CHANGED", "player")
+    gate(frame, "PLAYER_ROLES_ASSIGNED")
+    gate(frame, "ROLE_CHANGED_INFORM", "Alpha", "Alpha", "DAMAGER", "TANK")
 
-    Assert.Equal(#dispatched, 4, "config builders gate must allow sparse hidden local change events")
+    Assert.Equal(#dispatched, 6, "config builders gate must allow sparse hidden local change events")
     Assert.Equal(dispatched[1], "BAG_UPDATE_DELAYED", "config builders gate should pass BAG_UPDATE_DELAYED")
     Assert.Equal(
       dispatched[2],
@@ -590,6 +592,8 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
       "PLAYER_SPECIALIZATION_CHANGED",
       "config builders gate should pass PLAYER_SPECIALIZATION_CHANGED"
     )
+    Assert.Equal(dispatched[5], "PLAYER_ROLES_ASSIGNED", "config builders gate should pass PLAYER_ROLES_ASSIGNED")
+    Assert.Equal(dispatched[6], "ROLE_CHANGED_INFORM", "config builders gate should pass ROLE_CHANGED_INFORM")
   end)
 
   test("Bootstrap gate blocks hidden group auto-open while inside non-key dungeon", function()

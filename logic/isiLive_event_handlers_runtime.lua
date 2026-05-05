@@ -304,6 +304,55 @@ local function SanitizeDBAndInstallErrorLog(ctx)
   end
 end
 
+-- Re-poll cached roster.role for player + party slots from the live API.
+-- Shared by PLAYER_ROLES_ASSIGNED, ROLE_CHANGED_INFORM and the spec-change
+-- chain (Units.GetUnitRole prefers spec role for "player").
+local function RefreshRosterRoles(ctx)
+  if IsRaidModeActive(ctx) then
+    return
+  end
+  if type(ctx.getUnitRole) ~= "function" then
+    return
+  end
+  local roster = ctx.getRoster()
+  if type(roster) ~= "table" then
+    return
+  end
+  local changed = false
+  for unit, info in pairs(roster) do
+    if type(info) == "table" and not info.isGhost and (unit == "player" or string.find(unit, "^party") ~= nil) then
+      local role = ctx.getUnitRole(unit)
+      if (role == "TANK" or role == "HEALER" or role == "DAMAGER" or role == "NONE") and role ~= info.role then
+        info.role = role
+        changed = true
+      end
+    end
+  end
+  if changed then
+    ctx.updateUI()
+    ctx.updateLeaderButtons()
+  end
+end
+
+-- Refresh the cached spec name on the player roster entry so the spec column
+-- reflects the new spec immediately on PLAYER_SPECIALIZATION_CHANGED. Skipped
+-- when an inspect refresh is queued so the inspect pipeline keeps ownership of
+-- spec writes for that cycle.
+local function RefreshPlayerSpecCache(ctx)
+  if type(ctx.getPlayerSpecName) ~= "function" then
+    return
+  end
+  local roster = ctx.getRoster()
+  local playerInfo = type(roster) == "table" and roster.player or nil
+  if type(playerInfo) ~= "table" or playerInfo._refreshQueued then
+    return
+  end
+  local specName = ctx.getPlayerSpecName()
+  if type(specName) == "string" and specName ~= "" and specName ~= playerInfo.spec then
+    playerInfo.spec = specName
+  end
+end
+
 function RuntimeLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
     or function(_event, ...) end
@@ -541,6 +590,12 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
     ctx.handleKickTrackerEvent("PLAYER_SPECIALIZATION_CHANGED", unit)
     ctx.sendOwnBackgroundSnapshot("player-state")
+    RefreshPlayerSpecCache(ctx)
+    RefreshRosterRoles(ctx)
+  end
+
+  local function HandlePlayerRolesAssignedEvent(_self)
+    RefreshRosterRoles(ctx)
   end
 
   local function HandlePlayerEquipmentChangedEvent(_self)
@@ -665,6 +720,8 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     CHALLENGE_MODE_MAPS_UPDATE = HandleOwnedKeyContextEvent,
     PLAYER_EQUIPMENT_CHANGED = HandlePlayerEquipmentChangedEvent,
     PLAYER_SPECIALIZATION_CHANGED = HandlePlayerSpecializationChangedEvent,
+    PLAYER_ROLES_ASSIGNED = HandlePlayerRolesAssignedEvent,
+    ROLE_CHANGED_INFORM = HandlePlayerRolesAssignedEvent,
     INSPECT_READY = HandleInspectReadyEvent,
     CHAT_MSG_ADDON = HandleChatMsgAddonEvent,
     CONFIRM_SUMMON = HandleConfirmSummonEvent,

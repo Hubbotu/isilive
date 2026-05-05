@@ -239,6 +239,18 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
       "PLAYER_SPECIALIZATION_CHANGED = true",
       "ConfigBuilders hidden-gate allowlist must include hidden specialization change updates"
     )
+    AssertContains(
+      Assert,
+      content,
+      "PLAYER_ROLES_ASSIGNED = true",
+      "ConfigBuilders hidden-gate allowlist must include hidden role-assignment updates"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "ROLE_CHANGED_INFORM = true",
+      "ConfigBuilders hidden-gate allowlist must include hidden live role-change events"
+    )
   end)
 
   test("Architecture root keeps challenge helper guarded and de-duplicates roster trigger helper", function()

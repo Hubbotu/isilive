@@ -357,6 +357,8 @@ function ConfigBuilders.BuildGateOpts(ctx)
       CHALLENGE_MODE_MAPS_UPDATE = true,
       PLAYER_EQUIPMENT_CHANGED = true,
       PLAYER_SPECIALIZATION_CHANGED = true,
+      PLAYER_ROLES_ASSIGNED = true,
+      ROLE_CHANGED_INFORM = true,
     },
   }
 end

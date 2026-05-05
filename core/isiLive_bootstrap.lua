@@ -101,6 +101,8 @@ local EVENT_REGISTRY = {
   { "UPDATE_INSTANCE_INFO", false, false, false },
   { "GROUP_ROSTER_UPDATE", false, "cond", false },
   { "PARTY_LEADER_CHANGED", false, "cond", false },
+  { "PLAYER_ROLES_ASSIGNED", false, true, false },
+  { "ROLE_CHANGED_INFORM", false, true, false },
   { "LFG_LIST_SEARCH_RESULT_UPDATED", false, false, false },
   { "LFG_LIST_APPLICATION_STATUS_UPDATED", false, false, false },
   { "LFG_LIST_ACTIVE_ENTRY_UPDATE", false, false, false },

@@ -160,6 +160,8 @@ return function(test, ctx)
       result.allowWhenHidden.PLAYER_SPECIALIZATION_CHANGED == true,
       "must allow PLAYER_SPECIALIZATION_CHANGED when hidden"
     )
+    Assert.True(result.allowWhenHidden.PLAYER_ROLES_ASSIGNED == true, "must allow PLAYER_ROLES_ASSIGNED when hidden")
+    Assert.True(result.allowWhenHidden.ROLE_CHANGED_INFORM == true, "must allow ROLE_CHANGED_INFORM when hidden")
   end)
 
   test("ConfigBuilders BuildGateOpts does not leak extra ctx fields", function()

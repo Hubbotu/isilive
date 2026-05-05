@@ -145,21 +145,12 @@ function Units.GetUnitRole(unit)
     return "NONE"
   end
 
-  -- pcall-guarded against WoW 12.0 Secret Values: in tainted M+ contexts the
-  -- raw API can return a masked value that crashes the `==` comparison below.
-  local rolesAssigned = rawget(_G, "UnitGroupRolesAssigned")
-  local role
-  if type(rolesAssigned) == "function" then
-    local ok, value = pcall(rolesAssigned, unit)
-    if ok then
-      role = value
-    end
-  end
-  if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
-    return role
-  end
-
-  -- Fallback for player: use current specialization role if group role is not set
+  -- For the local player, prefer GetSpecializationRole over UnitGroupRolesAssigned:
+  -- the LFG/group role assignment does not auto-update on a pure spec switch
+  -- (e.g. Druid Balance -> Guardian keeps the assigned role at DAMAGER), but
+  -- the active spec is the authoritative source for what role the player can
+  -- actually fulfil. Other units fall back to UnitGroupRolesAssigned because
+  -- their spec is only known after an inspect cycle.
   local isUnit = rawget(_G, "UnitIsUnit")
   local isPlayer = false
   if type(isUnit) == "function" then
@@ -169,10 +160,20 @@ function Units.GetUnitRole(unit)
   if isPlayer and GetSpecialization and GetSpecializationRole then
     local specIndex = GetSpecialization()
     if specIndex then
-      role = GetSpecializationRole(specIndex)
-      if role == "TANK" or role == "HEALER" or role == "DAMAGER" then
-        return role
+      local specRole = GetSpecializationRole(specIndex)
+      if specRole == "TANK" or specRole == "HEALER" or specRole == "DAMAGER" then
+        return specRole
       end
+    end
+  end
+
+  -- pcall-guarded against WoW 12.0 Secret Values: in tainted M+ contexts the
+  -- raw API can return a masked value that crashes the `==` comparison below.
+  local rolesAssigned = rawget(_G, "UnitGroupRolesAssigned")
+  if type(rolesAssigned) == "function" then
+    local ok, value = pcall(rolesAssigned, unit)
+    if ok and (value == "TANK" or value == "HEALER" or value == "DAMAGER") then
+      return value
     end
   end
 

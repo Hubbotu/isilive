@@ -204,6 +204,174 @@ return function(test, ctx)
     Assert.Equal(calls.dungeon, 1, "dungeon-entry check must run")
   end)
 
+  -- HandlePlayerRolesAssignedEvent --------------------------------------------
+
+  test("PLAYER_ROLES_ASSIGNED rewrites cached roster role for player and party slots", function()
+    local roster = {
+      player = { name = "Alpha", role = "DAMAGER" },
+      party1 = { name = "Beta", role = "DAMAGER" },
+      party2 = { name = "Gamma", role = "HEALER" },
+    }
+    local roleByUnit = {
+      player = "TANK",
+      party1 = "HEALER",
+      party2 = "HEALER",
+    }
+    local uiCalls, leaderCalls = 0, 0
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(unit)
+        return roleByUnit[unit]
+      end,
+      updateUI = function()
+        uiCalls = uiCalls + 1
+      end,
+      updateLeaderButtons = function()
+        leaderCalls = leaderCalls + 1
+      end,
+    })
+    handlers.PLAYER_ROLES_ASSIGNED(nil)
+    Assert.Equal(roster.player.role, "TANK", "ego role must update from DD to tank")
+    Assert.Equal(roster.party1.role, "HEALER", "party1 role must update from DD to healer")
+    Assert.Equal(roster.party2.role, "HEALER", "unchanged role must stay HEALER")
+    Assert.Equal(uiCalls, 1, "any role change must trigger one updateUI")
+    Assert.Equal(leaderCalls, 1, "any role change must refresh leader buttons")
+  end)
+
+  test("PLAYER_ROLES_ASSIGNED skips ghosts and non-unit-token entries", function()
+    local roster = {
+      player = { name = "Alpha", role = "DAMAGER" },
+      ["ghost:Beta-"] = { name = "Beta", role = "TANK", isGhost = true },
+      party1 = { name = "Gamma", role = "DAMAGER", isGhost = true },
+    }
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(_unit)
+        return "HEALER"
+      end,
+    })
+    handlers.PLAYER_ROLES_ASSIGNED(nil)
+    Assert.Equal(roster.player.role, "HEALER", "live player slot must update")
+    Assert.Equal(roster["ghost:Beta-"].role, "TANK", "ghost slot must keep its old role")
+    Assert.Equal(roster.party1.role, "DAMAGER", "ghost-flagged party slot must keep its old role")
+  end)
+
+  test("PLAYER_ROLES_ASSIGNED bails out in raid mode without touching roster", function()
+    local roster = {
+      player = { name = "Alpha", role = "DAMAGER" },
+    }
+    local handlers = LoadHandlers({
+      isRaidGroup = function()
+        return true
+      end,
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(_unit)
+        return "TANK"
+      end,
+    })
+    handlers.PLAYER_ROLES_ASSIGNED(nil)
+    Assert.Equal(roster.player.role, "DAMAGER", "raid mode must suppress role refresh")
+  end)
+
+  test("PLAYER_SPECIALIZATION_CHANGED also refreshes player role from spec", function()
+    local roster = {
+      player = { name = "Alpha", role = "DAMAGER" },
+    }
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(unit)
+        return unit == "player" and "TANK" or "DAMAGER"
+      end,
+    })
+    handlers.PLAYER_SPECIALIZATION_CHANGED(nil, "player")
+    Assert.Equal(roster.player.role, "TANK", "spec change must trigger role refresh for player")
+  end)
+
+  test("PLAYER_SPECIALIZATION_CHANGED also refreshes cached spec name on player roster entry", function()
+    local roster = {
+      player = { name = "Alpha", spec = "Unholy", role = "DAMAGER" },
+    }
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getPlayerSpecName = function()
+        return "Blood"
+      end,
+      getUnitRole = function(_unit)
+        return "TANK"
+      end,
+    })
+    handlers.PLAYER_SPECIALIZATION_CHANGED(nil, "player")
+    Assert.Equal(roster.player.spec, "Blood", "spec change must rewrite cached spec name on player slot")
+  end)
+
+  test("PLAYER_SPECIALIZATION_CHANGED keeps cached spec when an inspect refresh is queued", function()
+    local roster = {
+      player = { name = "Alpha", spec = "Unholy", role = "DAMAGER", _refreshQueued = true },
+    }
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getPlayerSpecName = function()
+        return "Blood"
+      end,
+    })
+    handlers.PLAYER_SPECIALIZATION_CHANGED(nil, "player")
+    Assert.Equal(
+      roster.player.spec,
+      "Unholy",
+      "spec must not race the inspect refresh path that owns spec writes when _refreshQueued is set"
+    )
+  end)
+
+  test("ROLE_CHANGED_INFORM shares the role-refresh handler", function()
+    local roster = {
+      player = { name = "Alpha", role = "DAMAGER" },
+    }
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(_unit)
+        return "TANK"
+      end,
+    })
+    handlers.ROLE_CHANGED_INFORM(nil, "Alpha", "Alpha", "DAMAGER", "TANK")
+    Assert.Equal(roster.player.role, "TANK", "ROLE_CHANGED_INFORM must trigger the same role refresh path")
+  end)
+
+  test("PLAYER_ROLES_ASSIGNED skips updateUI when nothing changed", function()
+    local roster = {
+      player = { name = "Alpha", role = "TANK" },
+      party1 = { name = "Beta", role = "HEALER" },
+    }
+    local roleByUnit = { player = "TANK", party1 = "HEALER" }
+    local uiCalls = 0
+    local handlers = LoadHandlers({
+      getRoster = function()
+        return roster
+      end,
+      getUnitRole = function(unit)
+        return roleByUnit[unit]
+      end,
+      updateUI = function()
+        uiCalls = uiCalls + 1
+      end,
+    })
+    handlers.PLAYER_ROLES_ASSIGNED(nil)
+    Assert.Equal(uiCalls, 0, "no change must not trigger a UI refresh")
+  end)
+
   test("CHALLENGE_MODE_MAPS_UPDATE shares the owned-key handler", function()
     local calls = 0
     local handlers = LoadHandlers({

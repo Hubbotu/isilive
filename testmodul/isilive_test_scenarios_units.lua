@@ -211,6 +211,62 @@ return function(test, ctx)
       end)
     end)
 
+    test.it("Units GetUnitRole prefers spec role for player over group role assignment", function()
+      WithGlobals({
+        UnitExists = function()
+          return true
+        end,
+        UnitGroupRolesAssigned = function()
+          return "DAMAGER"
+        end,
+        UnitIsUnit = function(a, b)
+          return a == "player" and b == "player"
+        end,
+        GetSpecialization = function()
+          return 1
+        end,
+        GetSpecializationRole = function()
+          return "TANK"
+        end,
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_units.lua" })
+        local Units = addon.Units
+        Assert.Equal(
+          Units.GetUnitRole("player"),
+          "TANK",
+          "spec-role must override group-role for player so spec switches drive the icon"
+        )
+      end)
+    end)
+
+    test.it("Units GetUnitRole keeps group role for non-player units", function()
+      WithGlobals({
+        UnitExists = function()
+          return true
+        end,
+        UnitGroupRolesAssigned = function()
+          return "HEALER"
+        end,
+        UnitIsUnit = function()
+          return false
+        end,
+        GetSpecialization = function()
+          return 1
+        end,
+        GetSpecializationRole = function()
+          return "TANK"
+        end,
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_units.lua" })
+        local Units = addon.Units
+        Assert.Equal(
+          Units.GetUnitRole("party1"),
+          "HEALER",
+          "non-player units must keep UnitGroupRolesAssigned without spec override"
+        )
+      end)
+    end)
+
     test.it("Units GetUnitRole returns NONE when spec fallback also fails", function()
       WithGlobals({
         UnitExists = function()

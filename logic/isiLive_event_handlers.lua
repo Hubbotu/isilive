@@ -104,6 +104,12 @@ local function BuildContext(opts)
   ctx.updateCountdownCancelButton = RequireFunction(opts.updateCountdownCancelButton, "updateCountdownCancelButton")
   ctx.restoreBgAlpha = OptionalFunction(opts.restoreBgAlpha, function(_alpha) end)
   ctx.getUnitNameAndRealm = RequireFunction(opts.getUnitNameAndRealm, "getUnitNameAndRealm")
+  ctx.getUnitRole = OptionalFunction(opts.getUnitRole, function(_unit)
+    return nil
+  end)
+  ctx.getPlayerSpecName = OptionalFunction(opts.getPlayerSpecName, function()
+    return nil
+  end)
   ctx.markIsiLiveUser = RequireFunction(opts.markIsiLiveUser, "markIsiLiveUser")
   ctx.maybeShowNonMythicDungeonEntryNotice =
     RequireFunction(opts.maybeShowNonMythicDungeonEntryNotice, "maybeShowNonMythicDungeonEntryNotice")

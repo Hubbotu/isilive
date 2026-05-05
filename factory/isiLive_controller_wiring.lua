@@ -304,6 +304,13 @@ end
 
 local function ExtendEventHandlersConfig(config, deps, state, refs, controllers, callbacks, modules)
   config.getUnitNameAndRealm = RequireFunction(deps.getUnitNameAndRealm, "getUnitNameAndRealm")
+  config.getUnitRole = type(deps.getUnitRole) == "function" and deps.getUnitRole or function(_unit)
+    return nil
+  end
+  config.getPlayerSpecName = type(deps.getPlayerSpecName) == "function" and deps.getPlayerSpecName
+    or function()
+      return nil
+    end
   config.markIsiLiveUser = RequireFunction(deps.markIsiLiveUser, "markIsiLiveUser")
   config.maybeShowNonMythicDungeonEntryNotice = function()
     local seasonData = addonTable.SeasonData
@@ -596,6 +603,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     applyHotkeyBindings = ctx.applyHotkeyBindings,
     startBindingWatchdog = ctx.startBindingWatchdog,
     getUnitNameAndRealm = ctx.getUnitNameAndRealm,
+    getUnitRole = ctx.getUnitRole,
     showCombatAnnounce = ctx.ShowCombatAnnounce,
     playIncomingSummonSound = function()
       local soundUtils = addonTable.SoundUtils
