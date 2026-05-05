@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-05-05 - Version 0.9.219 (patch)
+
+Two roster bugs that surfaced under the WoW 12.0+ secret-value / secret-token regression chain: the cached role + spec did not follow live in-game changes, and the role-marker click failed on the local-realm player because the `/target` macro carried a home-realm suffix that WoW cannot resolve.
+
+### Live role + spec refresh on `PLAYER_SPECIALIZATION_CHANGED`, `PLAYER_ROLES_ASSIGNED`, `ROLE_CHANGED_INFORM`
+
+Switching specs (e.g. Druid Balance → Guardian, Death Knight Unholy → Blood) or flipping the assigned group role via right-click portrait / `/role` previously did not update the cached `info.role` and `info.spec` on the roster row — only the next full `GROUP_ROSTER_UPDATE` (which does NOT fire on role-only or spec-only changes) would refresh it.
+
+- **Three new event registrations** ([core/isiLive_bootstrap.lua](../core/isiLive_bootstrap.lua)) — `PLAYER_ROLES_ASSIGNED` (LFG role-check finalisation), `ROLE_CHANGED_INFORM` (real-time in-group role flip via right-click portrait / `/role`), and routing `PLAYER_SPECIALIZATION_CHANGED` (already registered) through the same role-refresh path. All three are `hidden = true` so the cache stays warm even when the main frame is closed.
+- **`Units.GetUnitRole` prefers spec role for `"player"`** ([game/isiLive_units.lua](../game/isiLive_units.lua)) — `UnitGroupRolesAssigned` does not auto-update on a pure spec switch (Druid Balance → Guardian keeps the assigned role at DAMAGER), so the active spec is now authoritative for the local player. Other party slots keep `UnitGroupRolesAssigned` because their spec is only known after an inspect cycle.
+- **Shared role-refresh path** ([logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua)) — `RefreshRosterRoles` and `RefreshPlayerSpecCache` extracted as module-scope helpers so `RuntimeLifecycle.BuildHandlers` stays under the 420-line metrics gate after the new dispatch wiring. `_refreshQueued`-guarded spec write so the inspect pipeline keeps ownership of spec writes for that cycle.
+- **Wiring**: `ctx.getUnitRole` + `ctx.getPlayerSpecName` flow through `event_handlers` / `controller_wiring` with optional/no-op defaults so existing tests keep working without per-fixture wiring.
+- **Tests**: 8 new branch tests in [testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua](../testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua) (`PLAYER_ROLES_ASSIGNED` happy path, ghost skip, raid bail-out, no-change-no-UI, `ROLE_CHANGED_INFORM` share, `PLAYER_SPECIALIZATION_CHANGED` role+spec refresh, `_refreshQueued` guard) plus 2 `Units.GetUnitRole` tests pinning the spec-prefer-for-player rule and the keep-group-role-for-others rule. Architecture / config-builder / event-utils gates pinned for the new `allowWhenHidden` entries. Total usecase scenarios: 1453 (was 1442).
+
+### Role-marker click home-realm strip
+
+Clicking the tank/healer role icon on your own row produced "Das könnt Ihr im Moment nicht tun" when no other unit was targeted, and silently marked the previously-selected unit when one was. Repro: solo Tank on home realm, click own row's role icon — the macro `/target Pinto-Twisting Nether\n/tm 6\n/targetlasttarget` fails to acquire Pinto because `/target` cannot resolve a local-realm unit when the realm suffix is included.
+
+- **Root cause**: [game/isiLive_units.lua](../game/isiLive_units.lua) fills `info.realm` with `GetRealmName()` for the local player when `UnitFullName` returns a blank realm — needed for sync-key stability — but that string then leaked into the role-marker `/target` macro via the shared `BuildQualifiedName` helper. WoW's `/target` slash command does not acquire local-realm units when the realm suffix is present, especially when the realm name contains spaces ("Twisting Nether").
+- **New helper** `StringUtils.BuildSlashTargetName(name, realm, homeRealm?)` ([core/isiLive_string_utils.lua](../core/isiLive_string_utils.lua)) — strips the realm suffix when it matches the home realm, falling back to the WoW global `GetRealmName()` when no `homeRealm` arg is passed so callers don't have to thread it through.
+- **Macro builder** in [ui/isiLive_roster_panel_render.lua](../ui/isiLive_roster_panel_render.lua) switched from `BuildQualifiedName` to `BuildSlashTargetName`. Cross-realm units still keep the `-Realm` suffix; only the home-realm match strips. The whisper code path in `hoverFrame.OnMouseUp` is intentionally untouched — WoW's whisper parser tolerates the home-realm suffix in practice; can be migrated later if needed.
+- **Tests**: 5 new `StringUtils` tests (home-realm strip with and without spaces in realm name, cross-realm keep, blank-realm short-circuit, `GetRealmName` fallback, nil-name guard). New simulator scenario 6b in [tools/simulate_role_marker_macro.lua](../tools/simulate_role_marker_macro.lua) — `GetRealmName` mocked to "Stormrage", roster mixes home-realm tank (must drop suffix) + cross-realm healer (must keep suffix) to pin both branches.
+
 ## 2026-05-05 - Version 0.9.218 (patch)
 
 Restores the tank/healer role-icon click in the roster after the WoW 12.0.5 secret-unit-token regression, and ships the previously-staged SavedVariables hardening (schema sanitizer + always-on Lua-error capture + size-guard) in the same release.
