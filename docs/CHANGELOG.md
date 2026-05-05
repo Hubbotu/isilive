@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-05 - Version 0.9.216 (patch)
+
+Incoming-summon audio cue now actually plays.
+
+- **Bugfix: `portal_available` sound silently no-op'd in-game ([core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua)):**
+  - Repro: someone summons you outside of a raid → no audio cue, even though the helper, settings checkbox, and `CONFIRM_SUMMON` event wiring all fired correctly.
+  - Root cause: registry referenced `Interface\AddOns\isiLive\sounds\Portal.ogg`, an OGG that has never existed in the repo. WoW's `PlaySoundFile` silently fails on missing assets, so nothing was audible and no error was raised.
+  - Fix: switched the entry from a custom OGG to Blizzard's built-in soundkit `SOUNDKIT.UI_GROUP_FINDER_RECEIVE_APPLICATION` (a soft UI ping). The name is resolved through `_G.SOUNDKIT[name]` at play time so the entry stays patch-stable if Blizzard ever renames the constant.
+  - Added `SoundUtils.PlaySoundKit(id, channel)` helper with the same spam-protection mechanic as `Play()`, keyed separately so file- and kit-based sounds do not collide.
+
+- **Test coverage: closes the gap that let the missing-file regression slip through:**
+  - New end-to-end simulator [tools/simulate_sound_playback.lua](../tools/simulate_sound_playback.lua) drives every helper through the real `SoundUtils` module and verifies each call resolves to either an existing OGG on disk or a numeric `SOUNDKIT` id. The previous architecture test only stubbed `PlaySoundFile` and asserted on the registry mapping — it could not detect a missing asset.
+  - Architecture test now mocks `PlaySound` + `SOUNDKIT` and asserts that `portal_available` routes through `PlaySound` with the resolved kit id, plus an explicit assert on `portalEntry.soundKit`.
+
 ## 2026-05-05 - Version 0.9.215 (patch)
 
 Battle Res audio cue now ships with an asset.
