@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-05-05 - Version 0.9.217 (patch)
+
+CI/test hygiene — four new end-to-end simulators that close known gaps in the SHAREKEYS / sync wire-format coverage and the combat-lockdown defer-and-replay lifecycle. No runtime or UI changes.
+
+- **New end-to-end simulators (`tools/simulate_*.lua`), wired into `.github/workflows/lua-check.yml`:**
+  - **[tools/simulate_multi_peer_convergence.lua](../tools/simulate_multi_peer_convergence.lua)** — 1 SHAREKEYS sender + 4 independent receiver controllers (each loads its own `ContextHelpers` / `Sync` module set, so per-peer `lastKeystoneAt` cooldowns and `Sync` dedupe state cannot bleed across peers). 5 scenarios / 51 checks: convergence (4 chats, one per peer), cooldown isolation (peer1 already on cooldown does not block peer2-4), self-echo on one of four, re-trigger after 35s succeeds for all, re-trigger within 5s blocks all. Pre-existing roundtrip simulator only pinned 1 receiver.
+  - **[tools/simulate_cross_realm_realm_suffix.lua](../tools/simulate_cross_realm_realm_suffix.lua)** — pins `Sync.NormalizePlayerKey` across real EU/US realm formats: "Tarren Mill" (space), "Aman'Thul" (apostrophe), "Twisting-Nether" (dash), "Hyjal" (clean), "Area 52" (digit + space). Phase A: every realm-form variant (explicit name+realm, name-realm suffix, server-stripped) collapses to the same key. Phase B: full `ProcessAddonMessage` SHAREKEYS roundtrip across cross-realm pairs. Phase C: self-echo detected even when the server already stripped the apostrophe in the sender suffix (`Player-AmanThul` matches `Player + Aman'Thul`). 28 checks. Closes the silent-bug class where a normalization mismatch between sender's `"Name-Realm"` string and receiver's `(UnitName, GetRealmName)` tuple would either bypass or incorrectly trigger the self-echo guard.
+  - **[tools/simulate_version_skew.lua](../tools/simulate_version_skew.lua)** — pins HELLO/ACK parser tolerance ahead of 1.0 ship, when 0.9.180-0.9.215 clients will coexist with 1.0.x for weeks. 6 phases / 65 checks: HELLO across 8 variants (old, current, future protocol, forward-compat extra fields, no protocol field, garbage protocol, empty version), ACK across 4 variants (HELLO/ACK asymmetry — ACK never carries protocolVersion), mixed-version group with 3 peers (no state overwrite), in-place version bump, ACK after HELLO preserves stored protocolVersion, SHAREKEYS works without prior handshake.
+  - **[tools/simulate_combat_lockdown_settings.lua](../tools/simulate_combat_lockdown_settings.lua)** — pins the `PLAYER_REGEN_DISABLED` -> defer-queue -> `PLAYER_REGEN_ENABLED` -> drain lifecycle through the real EventHandlers controller. Producer closures (Bindings.ApplyHotkeyBindings, MainFrame visibility / height / width) queue during `InCombatLockdown=true`; the real `HandlePlayerRegenEnabledEvent` drain in [logic/isiLive_event_handlers_runtime.lua:452-486](../logic/isiLive_event_handlers_runtime.lua#L452-L486) consumes the queue. 8 phases / 49 checks: empty-queue no-op, single pending source drains in isolation, multiple pending sources drain together, raid mode clamps `pendingMainFrameVisible=true` to `false` (RULES_LOGIC rule 2), raid mode skips `pendingMainFrameHeight`/`Width` drain (early-return after visibility branch — pending state retained for next non-raid cycle), cycle isolation (drained state does not survive a subsequent regen-enabled), re-entry into combat starts with a clean queue, regen-disabled hooks (KillTrack notification only, no kick-tracker double-fire). Closes the gap between the per-handler branch tests in `testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua` and a true end-to-end combat cycle.
+
+- **Two production-tolerance findings pinned (no fix needed; behavior is intentional but subtle):**
+  - `SplitPayload` uses `gmatch("([^:]+)")` — empty fields collapse. `HELLO::2:1000:hello` splits to `{HELLO, 2, 1000, hello}` with the empty version slot gone, so subsequent fields shift by one. The wire format does not throw on a malformed empty field but the field semantics shift; the simulator now pins this exact behavior so a future strict-empty-preserving split surfaces here.
+  - `ACK:` (empty version) yields `peerAddonVersion = nil` (not `""`) because `parts[2]` is missing after the collapse, and `SetPlayerHelloAckInfo` is correctly skipped via the `peerAddonVersion ~= ""` guard.
+
+- **Documentation updates:**
+  - `docs/ARCHITECTURE.md` Section 4 (static checks) lists all three new simulators.
+  - `docs/WARTUNG.md` Section 3.6 (Sync / ChatThrottleLib) cross-references the SHAREKEYS test surface.
+
 ## 2026-05-05 - Version 0.9.216 (patch)
 
 Incoming-summon audio cue now actually plays.

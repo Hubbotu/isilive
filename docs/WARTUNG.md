@@ -159,8 +159,14 @@ Typische Ursachen fuer Brueche:
 
 Pruefen:
 - `libs/ChatThrottleLib/ChatThrottleLib.lua` (vendored, v24)
-- `logic/isiLive_sync.lua` (`DispatchAddonMessage`)
+- `logic/isiLive_sync.lua` (`DispatchAddonMessage`, `Sync.ProcessAddonMessage`, `Sync.NormalizePlayerKey`)
 - `isiLive.toc` — muss `libs/ChatThrottleLib/ChatThrottleLib.lua` vor allen isiLive-Modulen laden
+- E2E-Simulatoren fuer den SHAREKEYS-Pfad und die Wire-Format-Toleranz:
+  - `tools/simulate_sender_receiver.lua roundtrip` — Sender->Wire->Receiver-Handoff fuer SHAREKEYS (1 Sender + 1 Receiver), pinnt Channel-Resolve und 30s-Cooldown.
+  - `tools/simulate_multi_peer_convergence.lua` — 1 Sender + 4 unabhaengige Receiver, pinnt Konvergenz und Cooldown-Isolation pro Peer.
+  - `tools/simulate_cross_realm_realm_suffix.lua` — `NormalizePlayerKey` ueber Cross-Realm-Formate (Spaces, Apostrophe, Dashes); pinnt Self-Echo auch bei serverseitig gestripptem Sender-Suffix.
+  - `tools/simulate_version_skew.lua` — HELLO/ACK-Parser-Toleranz ueber Versionsgrenzen, Mixed-Version-Group-State, `SplitPayload`-Empty-Field-Collapsing als bewusste Toleranz gepinnt.
+  - `tools/simulate_hello_handshake.lua` — vollstaendiger HELLO/ACK/REQSYNC-Fan-Out (8 Messages: 1 ACK whisper + 7 Group-Broadcasts).
 
 Aktueller Soll-Zustand:
 - Alle Addon-Message-Sends laufen ueber `DispatchAddonMessage(prefix, payload, channel, priority)`.

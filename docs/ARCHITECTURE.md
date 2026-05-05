@@ -1,6 +1,6 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.216`
+Versionsbasis: `0.9.217`
 Zuletzt aktualisiert: `2026-05-05`
 
 ## Zweck
@@ -110,13 +110,17 @@ Lokale Release-Qualitaet ist absichtlich in statische und Runtime-Gates aufgetei
    - `lua tools/simulate_raid_party_cycle.lua` — simuliert den Wechsel Party -> Raid -> Party ueber `Group.HandleGroupRosterUpdate` und pinnt die komplette Transitions-Matrix (Roster-Reset, Inspect-/RIO-/Queue-Cleanup, Hello-Suppression im Raid, Recovery beim Rueckkehr in eine Party).
    - `lua tools/simulate_lfg_join_target_chain.lua` — simuliert LFG-Apply -> Invite-Accepted -> Gruppe fuellt sich auf 5/5 und stellt sicher, dass die Queue-Join-Announce genau einmal feuert (kein Doppelspam, Leader-Suppression, idempotenter Capture, kein Stale-Announce nach Leave+Rejoin).
    - `lua tools/simulate_reload_storm.lua` — simuliert mehrere `/reload`-Zyklen plus wiederholte `MobNameplate.SetEnabled`/`Sync.RegisterPrefix`-Storms innerhalb einer Session und pinnt die Idempotenz-Verträge (kein doppeltes `RegisterEvent`, kein doppelter `OnEvent`-Handler, kein zusätzliches `CreateFrame` bei wiederholtem Enable, sauberes Unregister bei Disable).
+   - `lua tools/simulate_multi_peer_convergence.lua` — simuliert eine 5er-Gruppe mit 1 SHAREKEYS-Sender und 4 unabhaengigen Empfaenger-Controllern (eigene Module-Loads pro Peer) und pinnt: Konvergenz (alle 4 Empfaenger posten ihren Key), Cooldown-Isolation (keine 30s-State-Bleeds zwischen Peers), Self-Echo bei einem von vielen, sowie Re-Trigger-Verhalten innerhalb und nach Ablauf des Cooldowns.
+   - `lua tools/simulate_cross_realm_realm_suffix.lua` — pinnt `Sync.NormalizePlayerKey` ueber Cross-Realm-Formate (Spaces, Apostrophe, Dashes, Digits) als Aequivalenzklassen und treibt fuer jedes Realm-Pair einen vollen `Sync.ProcessAddonMessage`-Roundtrip durch. Erfasst auch Self-Echo, wenn der Server den Apostroph/Space im Sender-Suffix bereits abgestrippt hat.
+   - `lua tools/simulate_version_skew.lua` — pinnt die HELLO/ACK-Toleranz ueber Versionsgrenzen: alter Peer (0.9.180), aktueller, zukuenftiger (1.0.0/1.1.0), Protokoll-Bump (3), Forward-Compat-Felder, fehlende und garbage Felder. Zusaetzlich Mixed-Group-State (drei Peers gleichzeitig, keine State-Ueberschreibung), In-Place-Versions-Bump, ACK preserved protocolVersion und SHAREKEYS ohne vorheriges HELLO. Pinnt das `SplitPayload`-gmatch-Empty-Field-Collapsing als bewusste Toleranz.
+   - `lua tools/simulate_combat_lockdown_settings.lua` — pinnt den `PLAYER_REGEN_DISABLED` -> Defer-Queue -> `PLAYER_REGEN_ENABLED` -> Drain-Lifecycle ueber den echten EventHandlers-Controller. Produzenten-Closures (Bindings-Apply, MainFrame-Visibility/Height/Width) queueen waehrend `InCombatLockdown=true`; die echte `HandlePlayerRegenEnabledEvent`-Drain-Logik aus `logic/isiLive_event_handlers_runtime.lua` leert die Queue. 8 Phasen: Empty-Queue-No-Op, Single-/Multi-Pending-Drain, Raid-Override auf pendingVisible, Raid-Skip auf pendingHeight/Width, Cycle-Isolation (kein Re-Apply nach Drain), Re-Entry-Sauberkeit, Regen-Disabled-Hooks. Schliesst die Luecke zwischen den Per-Handler-Branch-Tests und einem End-to-End-Combat-Cycle.
 2. Runtime-Logik-Checks:
    - `lua tools/validate_rules_logic.lua`
    - `lua tools/validate_architecture_rules.lua`
    - `lua tools/validate_usecases.lua`
 3. `tools/validate_rules_logic.lua` validiert aktive Vertraege aus `RULES_LOGIC.md` gegen deterministische Testnamen.
 4. `tools/validate_architecture_rules.lua` validiert aktive Architekturvertraege aus `ARCHITECTURE_RULES.md` gegen deterministische Testnamen.
-5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1362 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
+5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1386 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
    Zusaetzlich laeuft der gleiche Validator-Lauf in CI unter `luacov` (`lua -lluacov tools/validate_usecases.lua`), damit `tools/coverage_summary.lua` die Line-Coverage pro Schicht in das GitHub-Actions-Step-Summary schreibt und der vollstaendige `luacov.report.out` als Artefakt hochgeladen wird.
    Baseline (`2026-04-22`, Commit nach Coverage-Einfuehrung): **78.62% Gesamt-Line-Coverage** ueber 19487 Produktionszeilen. Per-Schicht: `locale/` 97%, `logic/` 84%, `core/` 82%, `game/` 81%, `ui/` 79%, `factory/` 47%. Die `factory/`-Luecke ist erwartet (Composition-Root-Code, der ohne Blizzard-API-Context schwer isoliert testbar ist) und bildet den konkreten naechsten Schwerpunkt fuer UI-nahe Test-Erweiterungen.
 6. Der M+-Forces-DB-Refresh laeuft automatisch ueber `.github/workflows/sync-mplus-forces.yml` (Donnerstag 06:00 UTC plus `workflow_dispatch`): Clone MDT → `tools/sync_mdt_forces.lua` → voller CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, Nameplate-Key-Start-Simulator, SavedVariables-Reload-Simulator, Key-Start-Lifecycle-Simulator, usecases) → Commit + Push nach `main`. Ohne Diff im DB-File laeuft der Workflow still durch ohne Commit.
@@ -126,7 +130,7 @@ Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.216 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
+| isiLive                                                 v0.9.217 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
 |---------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
 |---------------------------------------------------------------------------------------------------|

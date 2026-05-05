@@ -164,6 +164,22 @@ jobs:
         run: |
           lua tools/simulate_key_completion_lifecycle.lua
 
+      - name: Multi-Peer Convergence Simulator
+        run: |
+          lua tools/simulate_multi_peer_convergence.lua
+
+      - name: Cross-Realm Realm-Suffix Simulator
+        run: |
+          lua tools/simulate_cross_realm_realm_suffix.lua
+
+      - name: Version-Skew Simulator
+        run: |
+          lua tools/simulate_version_skew.lua
+
+      - name: Combat-Lockdown Defer-and-Replay Simulator
+        run: |
+          lua tools/simulate_combat_lockdown_settings.lua
+
       - name: Deterministic Usecase + Rules Logic Validation
         run: |
           lua tools/validate_usecases.lua

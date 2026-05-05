@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global
 -- End-to-end simulation: drive the real SoundUtils helpers and verify that
 -- every emitted sound path resolves to a file that actually exists on disk.
 --
