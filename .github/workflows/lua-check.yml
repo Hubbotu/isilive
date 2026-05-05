@@ -180,6 +180,10 @@ jobs:
         run: |
           lua tools/simulate_combat_lockdown_settings.lua
 
+      - name: Role-Marker Macro Simulator
+        run: |
+          lua tools/simulate_role_marker_macro.lua
+
       - name: Deterministic Usecase + Rules Logic Validation
         run: |
           lua tools/validate_usecases.lua
