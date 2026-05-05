@@ -99,9 +99,8 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
     end
 
     if button == "RightButton" then
-      local name = row.tooltipName
-      if name then
-        local target = (row.tooltipRealm and row.tooltipRealm ~= "") and (name .. "-" .. row.tooltipRealm) or name
+      local target = addonTable.StringUtils.BuildQualifiedName(row.tooltipName, row.tooltipRealm)
+      if target then
         local openChat = rawget(_G, "ChatFrame_OpenChat")
         if type(openChat) == "function" then
           pcall(openChat, "/w " .. target .. " ")
@@ -568,9 +567,7 @@ local function RenderRosterImpl(state, roster)
           row.roleButton:Show()
           row.roleButton:SetAttribute("type1", "macro")
           row.roleButton:SetAttribute("type2", "macro")
-          local name = (type(info.name) == "string" and info.name ~= "") and info.name or nil
-          local realm = (type(info.realm) == "string" and info.realm ~= "") and info.realm or nil
-          local target = name and (realm and (name .. "-" .. realm) or name) or nil
+          local target = addonTable.StringUtils.BuildQualifiedName(info.name, info.realm)
           local marker = target and ROLE_MARKER[role]
           if marker then
             local prefix = "/target " .. target .. "\n/tm "

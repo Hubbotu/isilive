@@ -76,4 +76,47 @@ return function(test, ctx)
     Assert.Equal(addon.StringUtils.IsBlank(" "), false, "whitespace-only is intentionally NOT blank")
     Assert.Equal(addon.StringUtils.IsBlank("hello"), false, "regular string must not be blank")
   end)
+
+  test("StringUtils.BuildQualifiedName returns nil when name is blank or non-string", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(addon.StringUtils.BuildQualifiedName(nil, "Realm"), nil, "nil name must yield nil")
+    Assert.Equal(addon.StringUtils.BuildQualifiedName("", "Realm"), nil, "empty name must yield nil")
+    Assert.Equal(addon.StringUtils.BuildQualifiedName(123, "Realm"), nil, "non-string name must yield nil")
+  end)
+
+  test("StringUtils.BuildQualifiedName returns bare name when realm is blank", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(addon.StringUtils.BuildQualifiedName("Felix", nil), "Felix", "nil realm yields bare name")
+    Assert.Equal(addon.StringUtils.BuildQualifiedName("Felix", ""), "Felix", "empty realm yields bare name")
+    Assert.Equal(addon.StringUtils.BuildQualifiedName("Felix", 0), "Felix", "non-string realm yields bare name")
+  end)
+
+  test("StringUtils.BuildQualifiedName joins name and realm with a dash for cross-realm", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    Assert.Equal(
+      addon.StringUtils.BuildQualifiedName("Felix", "Tichondrius"),
+      "Felix-Tichondrius",
+      "name + realm joined with dash"
+    )
+    Assert.Equal(
+      addon.StringUtils.BuildQualifiedName("Anna", "TwistingNether"),
+      "Anna-TwistingNether",
+      "compound realm name preserved as-is"
+    )
+  end)
+
+  test("StringUtils.BuildQualifiedName preserves UTF-8 multi-byte names byte-for-byte", function()
+    local addon = LoadAddonModules({ "isiLive_string_utils.lua" })
+    -- ü = \195\188 (0xC3 0xBC); ç = \195\167; ı = \196\177
+    Assert.Equal(
+      addon.StringUtils.BuildQualifiedName("M\195\188ller", ""),
+      "M\195\188ller",
+      "UTF-8 same-realm passthrough"
+    )
+    Assert.Equal(
+      addon.StringUtils.BuildQualifiedName("\195\135a\196\159r\196\177", "Tichondrius"),
+      "\195\135a\196\159r\196\177-Tichondrius",
+      "UTF-8 cross-realm passthrough"
+    )
+  end)
 end

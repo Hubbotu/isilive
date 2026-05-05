@@ -872,9 +872,8 @@ local function InitializeFactoryPrimaryControllers(ctx)
           if type(unit) == "string" and unit ~= "" and type(info) == "table" and not info.isGhost then
             local okLeader, isLeader = pcall(unitIsGroupLeaderFn, unit)
             if okLeader and isLeader == true then
-              if type(info.name) == "string" and info.name ~= "" then
-                preferredOwnerName = info.realm and info.realm ~= "" and (info.name .. "-" .. info.realm) or info.name
-              end
+              preferredOwnerName = addonTable.StringUtils.BuildQualifiedName(info.name, info.realm)
+                or preferredOwnerName
               break
             end
           end
