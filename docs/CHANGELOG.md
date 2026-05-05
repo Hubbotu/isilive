@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-05 - Version 0.9.220 (patch)
+
+Follow-up to v0.9.219: pure intra-role spec swaps (e.g. Mage Arcane → Frost, both DAMAGER) updated the cached spec name but skipped the `updateUI` call because `RefreshRosterRoles` only fires `updateUI` when the role itself changed. Result: the spec column kept showing the old spec name until the next full GROUP_ROSTER_UPDATE.
+
+- **Fix** ([logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua)) — `RefreshPlayerSpecCache` now returns a boolean indicating whether `info.spec` changed; `HandlePlayerSpecializationChangedEvent` calls `ctx.updateUI()` whenever the spec changed even if the role stayed the same. The role-flip path keeps its existing `updateUI` from `RefreshRosterRoles`, so a Druid Balance → Guardian swap still renders both updates without a double refresh that matters.
+- **Test**: new branch test "PLAYER_SPECIALIZATION_CHANGED triggers updateUI on intra-role spec swap (Arcane → Frost)" pins the bug. Total usecase scenarios: 1454 (was 1453).
+
 ## 2026-05-05 - Version 0.9.219 (patch)
 
 Two roster bugs that surfaced under the WoW 12.0+ secret-value / secret-token regression chain: the cached role + spec did not follow live in-game changes, and the role-marker click failed on the local-realm player because the `/target` macro carried a home-realm suffix that WoW cannot resolve.
