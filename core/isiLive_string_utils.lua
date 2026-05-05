@@ -45,9 +45,8 @@ function StringUtils.IsBlank(value)
   return type(value) ~= "string" or value == ""
 end
 
---- Builds a `name-realm` cross-realm qualified target string used by /target,
---- /whisper, and other slash commands that accept a character name. Returns
---- the bare name when realm is blank, and nil when name itself is blank.
+--- Builds a `name-realm` cross-realm target. Returns bare name when realm is
+--- blank, nil when name is blank.
 --- @param name string|nil
 --- @param realm string|nil
 --- @return string|nil

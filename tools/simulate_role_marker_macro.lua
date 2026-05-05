@@ -131,10 +131,6 @@ local function BuildMemberRows()
   return rows
 end
 
--- All defaults (no-op closures, empty values, role/unit priority maps,
--- BuildOrderedRoster wiring) come from RosterMocks.BuildDefaultRenderState.
--- This sim's scenarios run at static t=100 with ready-check inactive — no
--- overrides needed.
 local function BuildState(memberRows, addonRoster)
   return RosterMocks.BuildDefaultRenderState(memberRows, addonRoster)
 end

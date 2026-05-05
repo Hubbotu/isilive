@@ -1,28 +1,7 @@
--- Shared frame-mock + state-builder helpers for simulators that drive the
--- real RenderRosterImpl from `ui/isiLive_roster_panel_render.lua`.
---
--- Sims load this with the same `LoadLocal(path)` pattern they use for
--- `testmodul/isilive_test_harness.lua`:
---
---   local RosterMocks = LoadLocal("testmodul/isilive_test_render_roster_mocks.lua")
---
--- What's shared and what isn't:
---
---   * `MakeFontStringMock` — identical NoOp font string in every sim.
---   * `MakeFrameMock` — identical NoOp frame; sim-specific texture mocks
---     can be wired through `opts.makeTexture` so e.g. an instrumented
---     readyCheckBackground stays sim-local.
---   * `BuildDefaultRenderState` — the ~50-field state object that
---     `RenderRosterImpl` reads. Every field has a safe default; sims
---     override only the closures that drive their scenario (e.g.
---     `isReadyCheckActive`, `getReadyCheckReadyUntil`, `getTime`).
---
--- What stays sim-local (deliberately):
---
---   * Background mocks with instrumentation (frameLog, color recording).
---   * Role-button mocks with attribute capture.
---   * `BuildMemberRows` — different sims need different per-row wiring
---     (roleButton present vs. nil, instrumented bg vs. NoOp bg).
+-- Shared frame-mock + state-builder helpers for simulators that drive
+-- RenderRosterImpl. Sim-local mocks (instrumented backgrounds, role-button
+-- attribute capture, BuildMemberRows) stay in each sim because their
+-- behaviour differs per scenario.
 ---@diagnostic disable: undefined-global
 local M = {}
 

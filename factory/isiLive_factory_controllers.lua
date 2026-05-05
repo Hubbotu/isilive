@@ -873,7 +873,6 @@ local function InitializeFactoryPrimaryControllers(ctx)
             local okLeader, isLeader = pcall(unitIsGroupLeaderFn, unit)
             if okLeader and isLeader == true then
               preferredOwnerName = addonTable.StringUtils.BuildQualifiedName(info.name, info.realm)
-                or preferredOwnerName
               break
             end
           end

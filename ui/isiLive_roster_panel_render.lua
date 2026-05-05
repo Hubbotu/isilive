@@ -554,10 +554,8 @@ local function RenderRosterImpl(state, roster)
         showButton = false
       end
 
-      -- Target by character name, never by unit token. /target party1 is
-      -- broken in 12.0.5 (party tokens are secret unit tokens); /target
-      -- <name-realm> still works because slash-command name parsing is not
-      -- token-based. See CLAUDE.md "Role-marker click feature: target by
+      -- Target by character name, never by unit token (12.0.5 secret-token
+      -- regression). See CLAUDE.md "Role-marker click feature: target by
       -- character name".
       if not IsCombatLockdownActive() then
         if showButton and not isCollapsed then
