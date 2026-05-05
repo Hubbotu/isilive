@@ -1064,6 +1064,10 @@ local function RegisterRosterPanelRowInteractionTests(test, Assert, WithGlobals,
           SetAlpha = function() end,
           EnableMouse = function() end,
           RegisterForClicks = function() end,
+          SetFrameLevel = function() end,
+          GetFrameLevel = function()
+            return 1
+          end,
           SetScript = function(self, script, handler)
             self[script] = handler
           end,

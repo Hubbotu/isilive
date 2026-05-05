@@ -70,6 +70,12 @@ local function BuildTooltipFrameStub()
   function f:SetFrameStrata(s)
     self._strata = s
   end
+  function f:SetFrameLevel(level)
+    self._frameLevel = level
+  end
+  function f:GetFrameLevel()
+    return self._frameLevel or 1
+  end
   function f:SetClampedToScreen(v)
     self._clamped = v
   end

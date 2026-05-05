@@ -40,6 +40,10 @@ local function NewRowTooltipCreateFrameStub(createdFrames, tooltipLines, tooltip
     f.SetAlpha = function() end
     f.EnableMouse = function() end
     f.RegisterForClicks = function() end
+    f.SetFrameLevel = function() end
+    f.GetFrameLevel = function()
+      return 1
+    end
     f.SetScript = function(self, script, handler)
       self[script] = handler
     end
@@ -106,6 +110,10 @@ local function NewTooltipMainFrameStub()
   return {
     SetBackdrop = function() end,
     SetBackdropColor = function() end,
+    SetFrameLevel = function() end,
+    GetFrameLevel = function()
+      return 1
+    end,
     CreateFontString = function()
       return {
         SetPoint = function() end,

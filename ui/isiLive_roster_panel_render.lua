@@ -153,11 +153,8 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
   -- Lift the secure button above the row's hoverFrame: both are siblings of
   -- mainFrame with default level; at equal strata + level, hit-test tie-break
   -- is unstable on 12.0+, and the hoverFrame's RightButton-only OnMouseUp
-  -- silently swallows LeftButton clicks if it ever wins. Type-guard is for
-  -- inline test mocks that do not stub SetFrameLevel/GetFrameLevel.
-  if type(row.roleButton.SetFrameLevel) == "function" and type(mainFrame.GetFrameLevel) == "function" then
-    row.roleButton:SetFrameLevel((mainFrame:GetFrameLevel() or 1) + 10)
-  end
+  -- silently swallows LeftButton clicks if it ever wins.
+  row.roleButton:SetFrameLevel((mainFrame:GetFrameLevel() or 1) + 10)
   row.roleButton:RegisterForClicks("AnyUp", "AnyDown")
   row.roleButton.icon = row.roleButton:CreateTexture(nil, "ARTWORK")
   row.roleButton.icon:SetAllPoints()
