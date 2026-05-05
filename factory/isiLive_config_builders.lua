@@ -166,6 +166,41 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     getRuntimeLogTailFiltered = ctx.getRuntimeLogTailFiltered,
     setRuntimeLogWatch = ctx.setRuntimeLogWatch,
     getRuntimeLogWatchActive = ctx.getRuntimeLogWatchActive,
+    -- Always-on Lua-error capture, exposed to /isilive errorlog.
+    getErrorLogTail = function(limit)
+      local errorLog = addonTable.ErrorLog
+      if type(errorLog) == "table" and type(errorLog.GetTail) == "function" then
+        return errorLog.GetTail(limit)
+      end
+      return {}
+    end,
+    getErrorLogCount = function()
+      local errorLog = addonTable.ErrorLog
+      if type(errorLog) == "table" and type(errorLog.GetCount) == "function" then
+        return errorLog.GetCount()
+      end
+      return 0
+    end,
+    getErrorLogMaxEntries = function()
+      local errorLog = addonTable.ErrorLog
+      if type(errorLog) == "table" and type(errorLog.GetMaxEntries) == "function" then
+        return errorLog.GetMaxEntries()
+      end
+      return 0
+    end,
+    getErrorLogInstalled = function()
+      local errorLog = addonTable.ErrorLog
+      if type(errorLog) == "table" and type(errorLog.IsInstalled) == "function" then
+        return errorLog.IsInstalled()
+      end
+      return false
+    end,
+    clearErrorLog = function()
+      local errorLog = addonTable.ErrorLog
+      if type(errorLog) == "table" and type(errorLog.Clear) == "function" then
+        errorLog.Clear()
+      end
+    end,
     resetDB = ctx.resetDB,
     toggleNameplateTestMode = function(arg)
       local mobNameplate = addonTable.MobNameplate

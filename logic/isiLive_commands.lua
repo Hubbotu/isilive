@@ -76,6 +76,20 @@ local function BuildDeps(opts)
     dumpNameplateState = type(opts.dumpNameplateState) == "function" and opts.dumpNameplateState or function() end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
+    -- Always-on Lua-error capture (see core/isiLive_error_log.lua).
+    getErrorLogTail = type(opts.getErrorLogTail) == "function" and opts.getErrorLogTail or function(_limit)
+      return {}
+    end,
+    getErrorLogCount = type(opts.getErrorLogCount) == "function" and opts.getErrorLogCount or function()
+      return 0
+    end,
+    getErrorLogMaxEntries = type(opts.getErrorLogMaxEntries) == "function" and opts.getErrorLogMaxEntries or function()
+      return 0
+    end,
+    getErrorLogInstalled = type(opts.getErrorLogInstalled) == "function" and opts.getErrorLogInstalled or function()
+      return false
+    end,
+    clearErrorLog = type(opts.clearErrorLog) == "function" and opts.clearErrorLog or function() end,
   }
 end
 
@@ -266,6 +280,59 @@ local function HandleQDebugCommand(ctx, cmd)
   })
 end
 
+-- /isilive errorlog [N|clear|status]
+-- Always-on Lua-error capture (see core/isiLive_error_log.lua). Entries are
+-- structured tables (message, fullText, count, firstSeen, lastSeen) so we
+-- format them differently from the flat-string runtime/queue logs.
+local function HandleErrorLogCommand(ctx, cmd)
+  local arg = cmd:match("^errorlog%s+(%S+)") or "tail"
+
+  if arg == "status" then
+    local count = ctx.getErrorLogCount and ctx.getErrorLogCount() or 0
+    local cap = ctx.getErrorLogMaxEntries and ctx.getErrorLogMaxEntries() or 100
+    local installed = ctx.getErrorLogInstalled and ctx.getErrorLogInstalled() or false
+    ctx.printFn(
+      string.format("Error log: %s | entries: %d / %d", installed and "installed" or "NOT installed", count, cap)
+    )
+    return
+  end
+
+  if arg == "clear" then
+    if ctx.clearErrorLog then
+      ctx.clearErrorLog()
+      ctx.printFn("Error log: cleared")
+    end
+    return
+  end
+
+  -- "tail" or numeric arg: show last N entries (default 10).
+  local limit = tonumber(arg) or 10
+  if limit < 1 then
+    limit = 1
+  elseif limit > 100 then
+    limit = 100
+  end
+
+  local entries = ctx.getErrorLogTail and ctx.getErrorLogTail(limit) or {}
+  if #entries == 0 then
+    ctx.printFn("Error log: no entries.")
+    return
+  end
+
+  ctx.printFn(string.format("Error log tail: %d entries", #entries))
+  for _, entry in ipairs(entries) do
+    if type(entry) == "table" then
+      local countSuffix = entry.count and entry.count > 1 and string.format(" (x%d)", entry.count) or ""
+      local firstStamp = entry.firstSeenDisplay or tostring(entry.firstSeen or "?")
+      local lastStamp = entry.lastSeenDisplay or tostring(entry.lastSeen or "?")
+      ctx.printFn(string.format("[%s..%s%s] %s", firstStamp, lastStamp, countSuffix, tostring(entry.message or "")))
+      if type(entry.fullText) == "string" and entry.fullText ~= entry.message then
+        ctx.printFn("    " .. entry.fullText)
+      end
+    end
+  end
+end
+
 local function HandleBindCheck(printFn)
   local action1 = GetBindingAction("CTRL-F9", true)
   local action2 = GetBindingAction("CTRL-ALT-F9", true)
@@ -419,6 +486,11 @@ local function TryHandleUtilityCommands(ctx, cmd)
 
   if cmd == "qdebug" or cmd:find("^qdebug%s+") == 1 then
     HandleQDebugCommand(ctx, cmd)
+    return true
+  end
+
+  if cmd == "errorlog" or cmd:find("^errorlog%s+") == 1 then
+    HandleErrorLogCommand(ctx, cmd)
     return true
   end
 

@@ -46,6 +46,73 @@ WoW Event
 | Hidden | Fenster ist verborgen, Queue-Scanning ist ausgesetzt; Background-Addon-Sync und Roster-Updates laufen weiter und duerfen UI-State eventgetrieben vor-rendern, ohne zu pollen; das dedizierte Kick-Keep-Alive bleibt fuer Party-Peers aktiv, und hidden `LFG_LIST_*`-Luecken werden spaeter nicht als Queue-Chat nachgereicht. Raid-Gruppen sind ein eigener Hard-off-Zustand, der die UI ausblendet und selbst diesen Background-Sync aussetzt, statt dem Hidden-Keep-Alive-Verhalten zu folgen. |
 | Test/TestAll | Einheitlicher Dummy-Vollpreview-Modus fuer UI und Tests, inklusive positivem RIO-Delta-Preview und Ghost-/Leaver-Zeile |
 
+## SavedVariables Schema
+
+`IsiLiveDB` ist die einzige `## SavedVariables`-Tabelle des Addons (account-wide). Alle persistierten Settings durchlaufen einen zentralen Schema-Sanitizer, der bei `ADDON_LOADED` einmal laeuft und die Tabelle in einen sicheren Zustand bringt, bevor irgendein Live-Modul daraus liest.
+
+**Sanitizer-Modul:** [core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua)
+
+**Hook-Punkt:** [logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua) `HandleAddonLoadedEvent`, direkt nach `IsiLiveDB = IsiLiveDB or {}`.
+
+**Was der Sanitizer leistet:**
+- Fehlende Felder mit deklarierten Defaults befuellen (Pattern-A/B/C aus `CLAUDE.md` weiterhin gueltig).
+- Wrong-type-Felder (z.B. `uiScale = "abc"`) auf den Default zuruecksetzen.
+- Numeric-Range-Verletzungen auf `min`/`max` clampen (`uiScale` 0.5-2.0, `bgAlpha` 0.0-1.0, etc.).
+- Invalide Enum-Strings (`mobNameplatePosition = "MIDDLE"`) auf den Default zuruecksetzen.
+- Nested Tables (z.B. `position.point/relativePoint/x/y`) rekursiv validieren — schliesst die v0.9.208-Crash-Klasse, in der eine partiell-kaputte `position`-Tabelle (Sub-Feld nil) `mainFrame:SetPoint(nil, ...)` ausloeste.
+- Unbekannte Felder werden NICHT geloescht, damit zukuenftige Migrationen sie nicht verlieren.
+- Jede Korrektur wird via `ctx.logRuntimeTrace("[DBSCHEMA] ...")` protokolliert.
+
+**Versionierte Migrationen:** `db.__schemaVersion` stempelt die zuletzt angewendete Schema-Version. `MIGRATIONS[N]` haelt Step-Funktionen fuer Uebergaenge alter -> neuer Form (Renames, Removals, Type-Changes). Beim Bump von z.B. v0.9.222 auf v0.9.223 fuegt man:
+
+```lua
+local LATEST_SCHEMA_VERSION = 2
+local MIGRATIONS = {
+  [2] = function(db, log)
+    if db.oldFieldName ~= nil then
+      db.newFieldName = db.oldFieldName
+      db.oldFieldName = nil
+      log("migrated oldFieldName -> newFieldName")
+    end
+  end,
+}
+```
+
+Jeder Step laeuft genau einmal pro User; `db.__schemaVersion` wird nach erfolgreicher Anwendung auf `LATEST_SCHEMA_VERSION` gesetzt. Bestehende User behalten ihre Settings, neue Felder kriegen Defaults, geaenderte Felder werden migriert.
+
+**Tests:** [testmodul/isilive_test_scenarios_db_schema.lua](../testmodul/isilive_test_scenarios_db_schema.lua) (~25 Szenarien): empty-db-defaults, type-error-repair, range-clamping, enum-validation, nested-table-recursion, partially-broken-position, user-set-preserve, unknown-field-preserve, isolated-default-references, schema-version-stamping, idempotenz.
+
+## Always-on Lua-Error-Erfassung + Size-Guard
+
+`IsiLiveDB.errorLog` ist ein bounded Ring-Buffer (~100 Einträge), der Lua-Errors aus dem isiLive-Code automatisch persistiert — unabhaengig von `runtimeLogEnabled` (debug-mode). Sichtbar in-game ueber `/isilive errorlog [N|status|clear]`.
+
+**Modul:** [core/isiLive_error_log.lua](../core/isiLive_error_log.lua)
+
+**Hook-Punkt:** [logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua) `HandleAddonLoadedEvent`, direkt nach dem DB-Schema-Sanitizer.
+
+**Designprinzipien:**
+- **Always-on, nicht debug-gated.** Errors sind selten und wertvoll; `runtimeLog` ist hochfrequent und opt-in, der Error-Buffer ist niederfrequent und immer aktiv.
+- **Chain-of-responsibility.** `geterrorhandler() -> previous` wird IMMER zuerst aufgerufen, bevor wir capturen. BugSack / `!BugGrabber` / Blizzards `BasicScriptErrors` bleiben uneingeschraenkt aktiv; wir steigen nur als zusaetzlicher Subscriber ein.
+- **Filter auf isiLive-Code.** Nur Errors, deren Message oder Stack-Trace `isiLive` mention, landen im Buffer. Plater / WeakAuras / Blizzard-UI-Errors werden bewusst ignoriert.
+- **Dedup via count++.** Identischer Error (gleicher `fullText` mit Stack) inkrementiert `entry.count` und `lastSeen`, statt 200 Duplikate zu speichern. Ein Error-Storm in einem Combat-Tick belegt einen Slot statt das Buffer zu fluten.
+- **Defensive Capture.** Jeder interner Schritt ist `pcall`-wrapped — ein Error im Error-Logger selbst loest keinen Sekundaer-Cascade aus.
+
+**Size-Guard (Schema-Sanitizer-Integration):** Schema-Felder mit `maxMapEntries`-Property werden vom Sanitizer beschnitten, sobald die Eintraege-Zahl den Cap uebersteigt. Schuetzt vor unbeschraenktem Wachstum bei map-typed Tabellen:
+
+| Feld | Cap | Begruendung |
+|---|---|---|
+| `errorLog` | 200 | ErrorLog-Modul cappt selbst auf 100; Schema ist Sicherheitsnetz |
+| `rioBaseline` | 5000 | unique cross-realm players ueber Lebenszeit (~jahrelang) |
+| `stats.playerLastRunByCharacter` | 5000 | per-character Run-Stats |
+| `runtimeLog` | 800 (in LogBuffer) | Debug-Trace, ring-buffer enforced |
+| `queueDebugLog` | 400 (in LogBuffer) | Queue-Debug-Trace, ring-buffer enforced |
+
+**Trim-Verhalten:** Bei Cap-Ueberschreitung droppt der Sanitizer first-fit-Eintraege via `pairs()`-Iteration (Eviction-Reihenfolge ist absichtlich willkuerlich — Ziel ist Size-Bound, keine spezifische Retention-Policy). Jede Trim-Aktion wird via `[DBSCHEMA] trimmed ...` geloggt.
+
+**Slash-Command:** `/isilive errorlog` zeigt Status (Installed/Count/Cap), `/isilive errorlog 20` zeigt die letzten 20, `/isilive errorlog clear` leert.
+
+**Tests:** [testmodul/isilive_test_scenarios_error_log.lua](../testmodul/isilive_test_scenarios_error_log.lua) (~18 Szenarien): isiLive-Filter, Stack-Frame-Detection, Dedup, Cap-Enforcement, Chain-of-responsibility, Idempotenz, GetTail/Clear-API, Schema-integrierter Map-Trim fuer alle vier capped fields.
+
 ## Deterministischer Regelsatz
 
 1. Dungeon-Ziele werden nur ueber konkrete `activityID -> mapID -> spellID`-Daten aufgeloest.

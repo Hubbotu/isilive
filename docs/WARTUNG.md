@@ -241,6 +241,34 @@ Aktueller Soll-Zustand:
 
 Wenn du hier wieder Fremdspieler persistierst, baust du wieder unbounded Wachstum ein.
 
+**Zusaetzliches Sicherheitsnetz seit dem Schema-Sanitizer ([core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua)):** Map-typed Felder mit `maxMapEntries`-Property werden bei Cap-Ueberschreitung automatisch beim ADDON_LOADED beschnitten. Aktuelle Caps:
+- `errorLog` ≤ 200 (ErrorLog-Modul cappt selbst auf 100; Schema ist Sicherheitsnetz)
+- `rioBaseline` ≤ 5000 (lifetime cross-realm players)
+- `stats.playerLastRunByCharacter` ≤ 5000 (per-character Run-Stats)
+- `runtimeLog` ≤ 800 (LogBuffer-Ring, schon vorher)
+- `queueDebugLog` ≤ 400 (LogBuffer-Ring, schon vorher)
+
+Realistische User sollten diese Caps nie erreichen. Wenn doch, surfaced der Trim einen echten Bug upstream (infinite append in einer Schleife) und haelt die SavedVariables-Datei unter ~3MB statt sie auf Gigabyte-Skala wachsen zu lassen. Jede Trim-Aktion wird via `[DBSCHEMA] trimmed ...` geloggt.
+
+Wenn du ein neues map-typed Feld in IsiLiveDB einfuehrst (z.B. ein per-Player-Cache), MUSS es im Schema mit `maxMapEntries` deklariert werden. Sonst waechst es ungebunden.
+
+### 4.2b Always-on Lua-Error-Erfassung
+
+Pruefen:
+- [core/isiLive_error_log.lua](../core/isiLive_error_log.lua)
+- `IsiLiveDB.errorLog` (Ring-Buffer, persistent)
+- Slash: `/isilive errorlog [N|status|clear]`
+
+Aktueller Soll-Zustand:
+- `geterrorhandler/seterrorhandler`-Hook bei `ADDON_LOADED`, **immer aktiv** (unabhaengig von `runtimeLogEnabled`)
+- Chain-of-responsibility: BugSack/`!BugGrabber`/Blizzard-Default kriegen Errors immer ZUERST, bevor wir capturen
+- Filter auf `isiLive`-mention in Message ODER Stack-Frame; Plater/WeakAuras/Blizzard-UI-Errors werden bewusst gedroppt
+- Dedup via `count++` auf gleichem `fullText`; Combat-Storm = 1 Eintrag mit `count=N`, nicht N Duplikate
+- Hard-Cap 100 Eintraege; oldest-by-`lastSeen` evicted bei Ueberlauf
+- Defensive: jeder interner Schritt `pcall`-wrapped; Error im Error-Logger selbst loest keinen Sekundaer-Cascade aus
+
+Wenn du den Filter aufweichst (alle Errors statt nur isiLive-Errors), wird der Buffer von Fremd-Addon-Errors zugemuellt. Wenn du den Chain-of-responsibility brichst (eigenen Handler statt previous-call-first), zerstoerst du BugSack-Workflow fuer alle isiLive-User.
+
 ### 4.3 Roster-Layout ist absichtlich eng
 
 Pruefen:

@@ -9,6 +9,8 @@ libs/ChatThrottleLib/ChatThrottleLib.lua
 core/isiLive_validation_helpers.lua
 core/isiLive_string_utils.lua
 core/isiLive_sound_utils.lua
+core/isiLive_db_schema.lua
+core/isiLive_error_log.lua
 locale/realm_language_data.lua
 locale/isiLive_languages.lua
 locale/isiLive_locale.lua

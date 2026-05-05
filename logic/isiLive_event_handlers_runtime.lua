@@ -280,6 +280,30 @@ local function ApplyCombatFade(ctx, targetAlpha)
   end
 end
 
+-- Centralized SavedVariables sanitizer + Lua-error capture install. Called
+-- from HandleAddonLoadedEvent, AFTER WoW restored IsiLiveDB but BEFORE any
+-- live module reads from it. Schema details: core/isiLive_db_schema.lua.
+-- Error-log details: core/isiLive_error_log.lua.
+local function SanitizeDBAndInstallErrorLog(ctx)
+  local DBSchema = addonTable.DBSchema
+  if DBSchema and type(DBSchema.Sanitize) == "function" then
+    local corrections, migrations = DBSchema.Sanitize(IsiLiveDB, function(message)
+      if type(ctx.logRuntimeTrace) == "function" then
+        ctx.logRuntimeTrace("[DBSCHEMA] " .. tostring(message))
+      end
+    end)
+    if (corrections > 0 or migrations > 0) and type(ctx.logRuntimeTrace) == "function" then
+      ctx.logRuntimeTrace(
+        string.format("[DBSCHEMA] sanitized: %d correction(s), %d migration(s)", corrections, migrations)
+      )
+    end
+  end
+  local ErrorLog = addonTable.ErrorLog
+  if ErrorLog and type(ErrorLog.Install) == "function" then
+    ErrorLog.Install()
+  end
+end
+
 function RuntimeLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
     or function(_event, ...) end
@@ -326,7 +350,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
 
     IsiLiveDB = IsiLiveDB or {}
-    IsiLiveDB.position = IsiLiveDB.position or { point = "CENTER", relativePoint = "CENTER", x = 0, y = 0 }
+    SanitizeDBAndInstallErrorLog(ctx)
     IsiLiveDB.locale = ctx.resolveLocaleTag(IsiLiveDB.locale or ctx.defaultLocale)
     ctx.setLocaleTable(ctx.locales[IsiLiveDB.locale] or ctx.locales.enUS)
     -- Administrative debug settings are never persisted: always start disabled, user must re-enable each session.
@@ -340,7 +364,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
 
     local mainFrame = ctx.getMainFrame()
     local pos = IsiLiveDB.position
-    if mainFrame and mainFrame.ClearAllPoints and mainFrame.SetPoint then
+    if mainFrame and mainFrame.ClearAllPoints and mainFrame.SetPoint and type(pos) == "table" then
       mainFrame:ClearAllPoints()
       mainFrame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x, pos.y)
     end

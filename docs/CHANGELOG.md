@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+Hardens `IsiLiveDB` against corruption-on-load and introduces a versioned migration framework so future schema changes (rename / remove / type-change of any setting) survive the upgrade path without user action.
+
+- **New: centralized schema sanitizer + migration framework ([core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua)):**
+  - One `DBSchema.Sanitize(IsiLiveDB, logFn)` call replaces the per-field defensive defaults that previously lived inline (`IsiLiveDB.position = IsiLiveDB.position or {...}`, per-read `type(IsiLiveDB.uiScale) == "number"` checks, etc.). Hook-point: [logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua) `HandleAddonLoadedEvent`, immediately after `IsiLiveDB = IsiLiveDB or {}`.
+  - Schema declares the **current** shape of each persistent field: type (boolean / number / string / table), default (value or factory), optional `min`/`max` for numbers, optional `enum` for strings, optional nested `fields` sub-schema for tables.
+  - Sanitizer self-heals: missing fields get defaults, wrong-typed fields get reset, out-of-range numbers get clamped, invalid enum values get reset, nested tables (`position.point/relativePoint/x/y`) get validated recursively. Closes the v0.9.208-era crash class where a partially-broken `position` table (e.g. `point=nil`) caused `mainFrame:SetPoint(nil, ...)`.
+  - Unknown fields are **never** deleted — preserves user data across version downgrades and manual edits.
+  - Every correction logs through `ctx.logRuntimeTrace("[DBSCHEMA] ...")` so we see in the runtime log if any user comes in with a corrupted SavedVariables.
+- **New: versioned migration framework for cross-version schema changes:**
+  - `db.__schemaVersion` stamps the last applied schema version. A `MIGRATIONS[N]` table holds step functions for transitions from older shapes to current shape (renames, removals, type changes, splits).
+  - Each step runs at most once per user. After successful application, `db.__schemaVersion` is bumped to `LATEST_SCHEMA_VERSION`.
+  - When changing a setting between versions (e.g. v0.9.222 → v0.9.223 renames `oldField` → `newField`), the developer adds one entry to `MIGRATIONS` and bumps `LATEST_SCHEMA_VERSION` — every existing user gets their saved value migrated on next load, no user action needed.
+  - Initial `LATEST_SCHEMA_VERSION = 1` (no migrations yet; framework is pre-installed for the first cross-version change).
+- **Schema coverage:** ~35 fields across position/anchor, UI scale, locale + sync, auto-show / auto-close, combat behaviour, roster layout, ESC menu strips, minimap, LFG flags, mob nameplate / forces overlay, sound cues, chat announces, persistent runtime caches (`rioBaseline`, `stats.playerLastRunByCharacter`). Runtime-only fields (`queueDebug`, `runtimeLogEnabled`, `runtimeLogLevel`) are intentionally outside the schema since they get reset at `ADDON_LOADED` regardless of saved value.
+- **Tests:** [testmodul/isilive_test_scenarios_db_schema.lua](../testmodul/isilive_test_scenarios_db_schema.lua) — 25 scenarios covering empty-db defaults, idempotency, type-error repair, range clamping, enum validation, nested-table recursion, partially-broken `position` repair, user-set preservation, unknown-field preservation, isolated default references (no cross-user contamination), schema-version stamping, log-callback delivery, and non-table input safety. Total usecase scenarios: 1411 (was 1386).
+- **Documentation:** new "SavedVariables Schema" section in [docs/ARCHITECTURE.md](ARCHITECTURE.md) explains the sanitizer + migration pattern, including a concrete example of how to author a v0.9.222 → v0.9.223 field rename.
+
+- **New: always-on Lua-error capture ([core/isiLive_error_log.lua](../core/isiLive_error_log.lua)):**
+  - Hooks `geterrorhandler()` / `seterrorhandler()` chain-of-responsibility style — the previous handler (BugSack, `!BugGrabber`, Blizzard's `BasicScriptErrors`) is ALWAYS forwarded first; we are an additional subscriber, never a replacement.
+  - Captures only errors that mention "isiLive" in their message OR stack trace — Plater / WeakAuras / Blizzard UI errors are filtered out.
+  - Dedups identical errors via `count++` instead of appending duplicates: an error storm in a single combat tick produces 1 entry with `count=200`, not 200 separate entries.
+  - Hard-capped ring buffer of 100 distinct errors. Visible in-game via new slash command `/isilive errorlog` (status), `/isilive errorlog [N]` (show last N), `/isilive errorlog clear` (empty buffer).
+  - Always-on, no opt-in. Independent of `runtimeLogEnabled`. Persisted in `IsiLiveDB.errorLog`, survives `/reload` and account-wide login.
+  - Defensive capture: every internal step is `pcall`-wrapped so an error in the error logger itself cannot cause a secondary cascade.
+- **New: SavedVariables size-guard via schema `maxMapEntries`:**
+  - Prevents `IsiLiveDB` from growing unbounded via panic-mode map-trim. When a map-typed field exceeds its cap, the schema sanitizer drops first-fit entries until at cap; the trim action is logged via `[DBSCHEMA] trimmed ...`.
+  - Caps applied: `errorLog` ≤ 200 (Schema safety net; ErrorLog module enforces 100), `rioBaseline` ≤ 5000 (lifetime cross-realm players), `stats.playerLastRunByCharacter` ≤ 5000 (per-character run stats). The existing `runtimeLog` (800) and `queueDebugLog` (400) ring buffers are already capped at the LogBuffer layer.
+  - Realistic users should never hit these caps. Trimming surfaces a real bug upstream (infinite append in a loop) and keeps the SavedVariables file under ~3MB even in pathological cases instead of letting it grow to gigabyte scale.
+- **Tests:** [testmodul/isilive_test_scenarios_error_log.lua](../testmodul/isilive_test_scenarios_error_log.lua) — 18 scenarios covering capture filter (Plater errors filtered out, isiLive errors caught via message OR stack-frame match), dedup (50 identical → 1 entry × 50 count), MAX_ENTRIES cap (150 distinct → ≤ 100), chain-of-responsibility (previous handler always called), `Install()` idempotency, `GetTail` / `Clear` / `GetCount` API, missing-globals safety, and schema-integrated trim for `errorLog`, `rioBaseline`, `stats.playerLastRunByCharacter`. Total usecase scenarios: 1429 (was 1411).
+
 ## 2026-05-05 - Version 0.9.217 (patch)
 
 CI/test hygiene — four new end-to-end simulators that close known gaps in the SHAREKEYS / sync wire-format coverage and the combat-lockdown defer-and-replay lifecycle. No runtime or UI changes.
