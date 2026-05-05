@@ -163,6 +163,28 @@ local function BuildCommandDeps(state, L)
     getRuntimeLogTail = function(limit)
       return BuildRuntimeLogTail(state, limit)
     end,
+    -- Error-log mocks for /isilive errorlog tests.
+    getErrorLogTail = function(limit)
+      local out = {}
+      local count = math.min(tonumber(limit) or 10, #(state.errorLogEntries or {}))
+      for i = 1, count do
+        out[i] = (state.errorLogEntries or {})[i]
+      end
+      return out
+    end,
+    getErrorLogCount = function()
+      return #(state.errorLogEntries or {})
+    end,
+    getErrorLogMaxEntries = function()
+      return state.errorLogMaxEntries or 100
+    end,
+    getErrorLogInstalled = function()
+      return state.errorLogInstalled == true
+    end,
+    clearErrorLog = function()
+      state.errorLogEntries = {}
+      state.errorLogClearCalls = (state.errorLogClearCalls or 0) + 1
+    end,
   }
 end
 
@@ -482,6 +504,89 @@ local function RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddon
     Assert.Equal(state.bgAlpha, 0.50, "resetui must restore the background opacity default")
     Assert.True(state.prints[#state.prints]:find("defaults") ~= nil, "resetui must print a defaults confirmation")
     Assert.True(state.prints[#state.prints]:find("center") ~= nil, "resetui must print a center confirmation")
+  end)
+
+  -- /isilive errorlog [N|status|clear] -------------------------------------
+
+  test("Commands errorlog status prints install state and counts", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state.errorLogInstalled = true
+    state.errorLogEntries = { { message = "isiLive: foo" } }
+    state.errorLogMaxEntries = 100
+    state._execute("errorlog status")
+    local statusLine = state.prints[#state.prints]
+    Assert.True(statusLine:find("installed") ~= nil, "status must print install state")
+    Assert.True(statusLine:find("1") ~= nil, "status must print entry count")
+    Assert.True(statusLine:find("100") ~= nil, "status must print cap")
+  end)
+
+  test("Commands errorlog clear empties the buffer", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state.errorLogEntries = { { message = "isiLive: foo" }, { message = "isiLive: bar" } }
+    state._execute("errorlog clear")
+    Assert.Equal(state.errorLogClearCalls, 1, "clear must call clearErrorLog once")
+    Assert.True(state.prints[#state.prints]:find("cleared") ~= nil, "clear must print confirmation")
+  end)
+
+  test("Commands errorlog tail prints recent entries", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state.errorLogEntries = {
+      {
+        message = "isiLive: error A",
+        fullText = "isiLive: error A\nstack frame 1",
+        count = 1,
+        firstSeenDisplay = "12:00:00",
+        lastSeenDisplay = "12:00:00",
+      },
+      {
+        message = "isiLive: error B",
+        fullText = "isiLive: error B",
+        count = 5,
+        firstSeenDisplay = "12:01:00",
+        lastSeenDisplay = "12:01:30",
+      },
+    }
+    state._execute("errorlog 5")
+    local found = {}
+    for _, msg in ipairs(state.prints) do
+      if msg:find("isiLive: error A", 1, true) then
+        found.errorA = true
+      end
+      if msg:find("isiLive: error B", 1, true) then
+        found.errorB = true
+      end
+      if msg:find("x5", 1, true) then
+        found.dedupCount = true
+      end
+    end
+    Assert.True(found.errorA, "errorlog tail must include error A")
+    Assert.True(found.errorB, "errorlog tail must include error B")
+    Assert.True(found.dedupCount, "errorlog tail must include the (xN) dedup suffix")
+  end)
+
+  test("Commands errorlog with empty buffer prints no-entries message", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state.errorLogEntries = {}
+    state._execute("errorlog")
+    local lastMessage = state.prints[#state.prints]
+    Assert.True(lastMessage:find("no entries") ~= nil, "errorlog with empty buffer must say no entries")
+  end)
+
+  test("Commands errorlog defaults to tail with 10 entries when no arg given", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state.errorLogEntries = {}
+    for i = 1, 25 do
+      state.errorLogEntries[i] = { message = "isiLive: err " .. i, count = 1 }
+    end
+    state._execute("errorlog")
+    local headerFound = false
+    for _, msg in ipairs(state.prints) do
+      if msg:find("Error log tail:") then
+        headerFound = true
+        break
+      end
+    end
+    Assert.True(headerFound, "errorlog must print tail header by default")
   end)
 end
 
