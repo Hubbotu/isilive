@@ -146,6 +146,13 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
   row.roleButton = CreateFrame("Button", nil, mainFrame, "SecureActionButtonTemplate")
   row.roleButton:SetSize(14, 14)
   row.roleButton:SetPoint("TOPLEFT", ROLE_BUTTON_X, yOffset - 1)
+  -- Lift the secure button above the row's hoverFrame: both are siblings of
+  -- mainFrame with default level; at equal strata + level, hit-test tie-break
+  -- is unstable on 12.0+, and the hoverFrame's RightButton-only OnMouseUp
+  -- silently swallows LeftButton clicks if it ever wins.
+  if type(row.roleButton.SetFrameLevel) == "function" and type(mainFrame.GetFrameLevel) == "function" then
+    row.roleButton:SetFrameLevel((mainFrame:GetFrameLevel() or 1) + 10)
+  end
   row.roleButton:RegisterForClicks("AnyUp", "AnyDown")
   row.roleButton.icon = row.roleButton:CreateTexture(nil, "ARTWORK")
   row.roleButton.icon:SetAllPoints()
@@ -545,19 +552,32 @@ local function RenderRosterImpl(state, roster)
         showButton = false
       end
 
+      -- Target by character name, never by unit token. /target party1 is
+      -- broken in 12.0.5 (party tokens are secret unit tokens; the slash
+      -- command silently fails from secure macros). /target Felix-Tichondrius
+      -- works because slash-command name parsing is not token-based. See
+      -- CLAUDE.md "Role-marker click feature: target by character name".
       if not IsCombatLockdownActive() then
         if showButton and not isCollapsed then
           row.roleButton:Show()
           row.roleButton:SetAttribute("type1", "macro")
           row.roleButton:SetAttribute("type2", "macro")
-          if role == "TANK" then
+          local entryInfo = entry.info
+          local name = (type(entryInfo) == "table" and type(entryInfo.name) == "string" and entryInfo.name ~= "")
+              and entryInfo.name
+            or nil
+          local realm = (type(entryInfo) == "table" and type(entryInfo.realm) == "string" and entryInfo.realm ~= "")
+              and entryInfo.realm
+            or nil
+          local target = name and (realm and (name .. "-" .. realm) or name) or nil
+          if target and role == "TANK" then
             -- Blue Square = 6
-            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 6\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
-          elseif role == "HEALER" then
+            row.roleButton:SetAttribute("macrotext1", "/target " .. target .. "\n/tm 6\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target " .. target .. "\n/tm 0\n/targetlasttarget")
+          elseif target and role == "HEALER" then
             -- Green Triangle = 4
-            row.roleButton:SetAttribute("macrotext1", "/target " .. entry.unit .. "\n/tm 4\n/targetlasttarget")
-            row.roleButton:SetAttribute("macrotext2", "/target " .. entry.unit .. "\n/tm 0\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext1", "/target " .. target .. "\n/tm 4\n/targetlasttarget")
+            row.roleButton:SetAttribute("macrotext2", "/target " .. target .. "\n/tm 0\n/targetlasttarget")
           else
             row.roleButton:SetAttribute("macrotext1", nil)
             row.roleButton:SetAttribute("macrotext2", nil)

@@ -471,8 +471,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Zusammenfassung: Die Rollensymbole im Roster-Panel sind interaktive Buttons und ermoeglichen per Klick das manuelle Markieren von Tank (Blau) und Heiler (Gruen).
 - Erforderliche Tests:
   - Roster role icon is a secure action button
-  - Roster role icon click applies Blue Square to Tank unit
-  - Roster role icon click applies Green Triangle to Healer unit
+  - Roster Tank role button targets by character name (not unit token)
+  - Roster Healer role button targets by character name with cross-realm suffix
 
 ### RULE-ROSTER-RAID-NOTICE
 - Regelnummer: 40

@@ -1,42 +1,25 @@
--- Standalone CLI tool: regression pin for the tank/healer role-icon click
--- macro form, fixed in v0.9.208 after a v0.9.203 "speculative hardening"
--- broke it.
+-- Standalone CLI tool: regression pin for the tank/healer role-icon macro.
 --
--- The bug class:
---   * v0.9.203 changed the secure macro from `/target party1` to
---     `/target [@party1]` as forward-looking defense against future Blizzard
---     unit-token tightening.
---   * `[@unit]` is a valid targeting CONDITIONAL for /cast and /use, but
---     `/target` does NOT parse it as a unit selector — the macro silently
---     resolves to nothing, then `/tm 6` marks whatever the previous target
---     was. From the user's perspective the click "places the marker on the
---     wrong player" or does nothing.
---   * v0.9.208 reverted to the bare-form `/target unit` (e.g. `/target party1`).
+-- Hard contract enforced by this simulator (see CLAUDE.md "Role-marker click
+-- feature: target by character name"):
 --
--- This simulator drives the real RenderRosterImpl from roster_panel_render.lua
--- against frame mocks that capture every SetAttribute call, then asserts the
--- macrotext1 / macrotext2 strings are exactly the bare-form macros for the
--- TANK and HEALER roles, and explicitly NOT the [@unit] form.
+--   * The macro must target by CHARACTER NAME, never by unit token.
+--     /target party1 is broken in WoW 12.0.5 (party tokens are secret unit
+--     tokens; the slash command silently fails from secure macros).
+--   * Same-realm units use bare "/target Name", cross-realm units use
+--     "/target Name-Realm" — same shape as the existing whisper code.
+--   * UTF-8 character names are passed through byte-for-byte. WoW's slash-
+--     command parser handles Müller / Sébastien / Юрий / José / Çağrı /
+--     Lucía / Aleksandr natively. We must NOT normalize or transliterate.
+--   * If info.name is missing/empty, no macro is set (no partial macro).
 --
--- Verifies:
---   * TANK row: macrotext1 = "/target <unit>\n/tm 6\n/targetlasttarget"
---   * TANK row: macrotext2 = "/target <unit>\n/tm 0\n/targetlasttarget"
---   * HEALER row: macrotext1 = "/target <unit>\n/tm 4\n/targetlasttarget"
---   * HEALER row: macrotext2 = "/target <unit>\n/tm 0\n/targetlasttarget"
---   * DAMAGER row: macrotext1 / macrotext2 = nil (no marker buttons for DPS)
---   * No macrotext anywhere contains "[@" (the broken v0.9.203 form)
---   * type1 = type2 = "macro" so the secure handler routes the click to
---     macrotext, not to a different action.
+-- This drives the real RenderRosterImpl from roster_panel_render.lua against
+-- frame mocks that capture every SetAttribute call. The roster mixes locales
+-- and same-realm/cross-realm to catch any byte mangling or token regression.
 --
 -- End-to-end discipline (CLAUDE.md "Tests & simulators: end-to-end by default"):
--- the real RenderRosterImpl from the production render module is loaded;
--- frame mocks record every SetAttribute call. The same module-boundary
--- exception as simulate_ready_check_frame_overrides applies — _RosterInternal
--- / _RosterPanelInternal is reached via reflection because no public API
--- accepts the mock state object the test feeds.
---
--- COMPONENT-ONLY exception (per CLAUDE.md): see simulate_ready_check_frame_overrides
--- header — _RosterPanelInternal reflection. Documented here too.
+-- the real RenderRosterImpl is loaded; frame mocks record SetAttribute. Same
+-- module-boundary exception as simulate_ready_check_frame_overrides.
 ---@diagnostic disable: undefined-global
 local io = io
 ---@diagnostic disable-next-line: undefined-global
@@ -67,10 +50,10 @@ local function Check(condition, message)
 end
 
 -- ----------------------------------------------------------------------
--- Frame mocks. The role button is created with the SecureActionButtonTemplate;
+-- Frame mocks. The role button is created with SecureActionButtonTemplate;
 -- production calls SetAttribute("type1"|"type2"|"macrotext1"|"macrotext2"|...).
--- We capture each attribute keyed by the unit so test assertions can lookup
--- per row.
+-- We capture each attribute keyed by the unit so the roster-name assertions
+-- can look up per row.
 -- ----------------------------------------------------------------------
 local function NoOp() end
 
@@ -87,7 +70,7 @@ local function MakeRoleButtonMock()
   local mock = {
     _attributes = {},
     _shown = false,
-    icon = icon, -- production CreateMemberRow attaches a Texture here
+    icon = icon,
   }
   function mock:SetAttribute(key, value)
     self._attributes[key] = value
@@ -103,6 +86,7 @@ local function MakeRoleButtonMock()
   end
   mock.SetSize = NoOp
   mock.SetPoint = NoOp
+  mock.SetFrameLevel = NoOp
   mock.RegisterForClicks = NoOp
   mock.SetScript = NoOp
   mock.HookScript = NoOp
@@ -142,6 +126,10 @@ local function MakeFrameMock()
   mock.SetPoint = NoOp
   mock.SetSize = NoOp
   mock.SetAllPoints = NoOp
+  mock.GetFrameLevel = function()
+    return 1
+  end
+  mock.SetFrameLevel = NoOp
   mock.CreateTexture = function()
     return MakeBackgroundMock()
   end
@@ -156,7 +144,6 @@ local function MakeFrameMock()
   return mock
 end
 
--- Build five member rows, each with a real-shape role button mock pre-wired.
 local function BuildMemberRows()
   local rows = {}
   for i = 1, 5 do
@@ -177,8 +164,6 @@ local function BuildMemberRows()
   return rows
 end
 
--- Build the state table RenderRosterImpl reads from. Same shape as the
--- production controller hands it, minus side-effect callbacks we don't need.
 local function BuildState(memberRows, addonRoster)
   return {
     memberRows = memberRows,
@@ -207,11 +192,11 @@ local function BuildState(memberRows, addonRoster)
       return nil
     end,
     buildDisplayData = addonRoster.Roster.BuildDisplayData,
-    truncateName = function(text)
-      return text
+    truncateName = function(t)
+      return t
     end,
-    getShortSpecLabel = function(text)
-      return text
+    getShortSpecLabel = function(t)
+      return t
     end,
     getLanguageFlagMarkup = function()
       return ""
@@ -260,7 +245,6 @@ local function BuildState(memberRows, addonRoster)
   }
 end
 
--- Look up the row that ended up assigned to a given unit after BuildOrderedRoster.
 local function FindRowForUnit(memberRows, unit)
   for i = 1, #memberRows do
     if memberRows[i].unit == unit then
@@ -318,96 +302,240 @@ Harness.WithGlobals({
   end
   assert(RI, "could not locate RosterPanelInternal")
 
-  local memberRows = BuildMemberRows()
-  local state = BuildState(memberRows, addon)
+  -- ----------------------------------------------------------------------
+  -- Scenario 1: same-realm same-locale (English) — sanity baseline.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 1: same-realm baseline (no realm suffix) ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "Felix", realm = "", class = "WARRIOR", role = "TANK" },
+      party1 = { name = "Anna", realm = "", class = "PRIEST", role = "HEALER" },
+      party2 = { name = "Bob", realm = "", class = "MAGE", role = "DAMAGER" },
+      party3 = { name = "Carl", realm = "", class = "ROGUE", role = "DAMAGER" },
+      party4 = { name = "Dave", realm = "", class = "WARLOCK", role = "DAMAGER" },
+    }
+    RI.RenderRosterImpl(state, roster)
 
-  local roster = {
-    player = { name = "Tank", class = "WARRIOR", role = "TANK" },
-    party1 = { name = "Healer", class = "PRIEST", role = "HEALER" },
-    party2 = { name = "Dps1", class = "MAGE", role = "DAMAGER" },
-    party3 = { name = "Dps2", class = "ROGUE", role = "DAMAGER" },
-    party4 = { name = "Dps3", class = "WARLOCK", role = "DAMAGER" },
-  }
+    local tank = FindRowForUnit(memberRows, "player")
+    Check(tank ~= nil, "TANK row rendered")
+    if tank then
+      Check(
+        tank.roleButton:GetAttribute("macrotext1") == "/target Felix\n/tm 6\n/targetlasttarget",
+        "TANK macrotext1 = '/target Felix\\n/tm 6\\n/targetlasttarget' (no realm, no token)"
+      )
+      Check(
+        tank.roleButton:GetAttribute("macrotext2") == "/target Felix\n/tm 0\n/targetlasttarget",
+        "TANK macrotext2 (clear) = '/target Felix\\n/tm 0\\n/targetlasttarget'"
+      )
+    end
 
-  print("\n========== Scenario 1: TANK + HEALER bare-form macros (v0.9.208 regression pin) ==========")
-  RI.RenderRosterImpl(state, roster)
+    local heal = FindRowForUnit(memberRows, "party1")
+    Check(heal ~= nil, "HEALER row rendered")
+    if heal then
+      Check(
+        heal.roleButton:GetAttribute("macrotext1") == "/target Anna\n/tm 4\n/targetlasttarget",
+        "HEALER macrotext1 = '/target Anna\\n/tm 4\\n/targetlasttarget'"
+      )
+    end
 
-  -- TANK row: macrotext1 = /tm 6 (Blue Square), macrotext2 = /tm 0 (clear).
-  local tankRow = FindRowForUnit(memberRows, "player")
-  Check(tankRow ~= nil, "TANK row (unit=player) is rendered")
-  if tankRow then
-    local m1 = tankRow.roleButton:GetAttribute("macrotext1")
-    local m2 = tankRow.roleButton:GetAttribute("macrotext2")
-    Check(
-      m1 == "/target player\n/tm 6\n/targetlasttarget",
-      "TANK macrotext1 is the BARE form '/target player\\n/tm 6\\n/targetlasttarget' (no [@unit])"
-    )
-    Check(
-      m2 == "/target player\n/tm 0\n/targetlasttarget",
-      "TANK macrotext2 (clear) is the BARE form '/target player\\n/tm 0\\n/targetlasttarget'"
-    )
-    Check(
-      type(m1) == "string" and m1:find("[@", 1, true) == nil,
-      "TANK macrotext1 does NOT contain '[@' (the v0.9.203 regression form)"
-    )
-    Check(
-      type(m2) == "string" and m2:find("[@", 1, true) == nil,
-      "TANK macrotext2 does NOT contain '[@' (the v0.9.203 regression form)"
-    )
-    Check(tankRow.roleButton:GetAttribute("type1") == "macro", "TANK type1='macro'")
-    Check(tankRow.roleButton:GetAttribute("type2") == "macro", "TANK type2='macro'")
-  end
-
-  -- HEALER row: macrotext1 = /tm 4 (Green Triangle), macrotext2 = /tm 0.
-  local healerRow = FindRowForUnit(memberRows, "party1")
-  Check(healerRow ~= nil, "HEALER row (unit=party1) is rendered")
-  if healerRow then
-    local m1 = healerRow.roleButton:GetAttribute("macrotext1")
-    local m2 = healerRow.roleButton:GetAttribute("macrotext2")
-    Check(
-      m1 == "/target party1\n/tm 4\n/targetlasttarget",
-      "HEALER macrotext1 is the BARE form '/target party1\\n/tm 4\\n/targetlasttarget' (no [@unit])"
-    )
-    Check(
-      m2 == "/target party1\n/tm 0\n/targetlasttarget",
-      "HEALER macrotext2 (clear) is the BARE form '/target party1\\n/tm 0\\n/targetlasttarget'"
-    )
-    Check(
-      type(m1) == "string" and m1:find("[@", 1, true) == nil,
-      "HEALER macrotext1 does NOT contain '[@' (the v0.9.203 regression form)"
-    )
-  end
-
-  -- DAMAGER rows: no marker macrotext (the production code clears them on DPS).
-  print("\n========== Scenario 2: DAMAGER rows have no marker macrotext ==========")
-  for _, dpsUnit in ipairs({ "party2", "party3", "party4" }) do
-    local dpsRow = FindRowForUnit(memberRows, dpsUnit)
-    Check(dpsRow ~= nil, "DAMAGER row (unit=" .. dpsUnit .. ") is rendered")
-    if dpsRow then
-      local m1 = dpsRow.roleButton:GetAttribute("macrotext1")
-      local m2 = dpsRow.roleButton:GetAttribute("macrotext2")
-      Check(m1 == nil, "DAMAGER " .. dpsUnit .. " macrotext1 is nil (no marker for DPS)")
-      Check(m2 == nil, "DAMAGER " .. dpsUnit .. " macrotext2 is nil (no marker for DPS)")
+    for _, unit in ipairs({ "party2", "party3", "party4" }) do
+      local dps = FindRowForUnit(memberRows, unit)
+      if dps then
+        Check(
+          dps.roleButton:GetAttribute("macrotext1") == nil,
+          "DAMAGER " .. unit .. " macrotext1 is nil (no marker for DPS)"
+        )
+      end
     end
   end
 
-  -- Belt-and-braces: scan every row's macrotext for the broken form. A future
-  -- regression that re-introduces [@unit] would be caught even if the per-role
-  -- assertions above were also accidentally relaxed.
-  print("\n========== Scenario 3: every macrotext is free of '[@' across the whole roster ==========")
-  local sawBrokenForm = false
-  for i = 1, #memberRows do
-    local m1 = memberRows[i].roleButton:GetAttribute("macrotext1")
-    local m2 = memberRows[i].roleButton:GetAttribute("macrotext2")
-    if (type(m1) == "string" and m1:find("[@", 1, true)) or (type(m2) == "string" and m2:find("[@", 1, true)) then
-      sawBrokenForm = true
+  -- ----------------------------------------------------------------------
+  -- Scenario 2: cross-realm — realm suffix appended exactly as whisper does.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 2: cross-realm name-realm suffix ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "Felix", realm = "Tichondrius", class = "WARRIOR", role = "TANK" },
+      party1 = { name = "Anna", realm = "TwistingNether", class = "PRIEST", role = "HEALER" },
+    }
+    RI.RenderRosterImpl(state, roster)
+
+    local tank = FindRowForUnit(memberRows, "player")
+    if tank then
+      Check(
+        tank.roleButton:GetAttribute("macrotext1") == "/target Felix-Tichondrius\n/tm 6\n/targetlasttarget",
+        "TANK cross-realm macrotext1 has '-Tichondrius' suffix"
+      )
+    end
+
+    local heal = FindRowForUnit(memberRows, "party1")
+    if heal then
+      Check(
+        heal.roleButton:GetAttribute("macrotext1") == "/target Anna-TwistingNether\n/tm 4\n/targetlasttarget",
+        "HEALER cross-realm macrotext1 has '-TwistingNether' suffix"
+      )
     end
   end
-  Check(not sawBrokenForm, "no row's macrotext contains '[@' anywhere across the whole roster")
+
+  -- ----------------------------------------------------------------------
+  -- Scenario 3: UTF-8 multi-byte names from every LFG-supported locale must
+  -- pass through byte-for-byte. This is the regression pin against any
+  -- accidental sanitization / transliteration.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 3: UTF-8 multi-byte names pass through unchanged ==========")
+  do
+    local cases = {
+      -- { locale, tank, healer, expectedTankFragment, expectedHealerFragment }
+      -- Decimal escapes (\DDD) are Lua 5.1 compatible; \xHH would only work on 5.2+.
+      -- ü=\195\188, ä=\195\164, é=\195\169, î=\195\174, í=\195\173,
+      -- ã=\195\163, ç=\195\167, ò=\195\178, ì=\195\172, Ç=\195\135,
+      -- ğ=\196\159, ı=\196\177, İ=\196\176
+      { "deDE", "M\195\188ller", "Sch\195\164fer", "M\195\188ller", "Sch\195\164fer" },
+      { "frFR", "S\195\169bastien", "Beno\195\174t", "S\195\169bastien", "Beno\195\174t" },
+      { "esES", "Luc\195\173a", "Jos\195\169", "Luc\195\173a", "Jos\195\169" },
+      { "ptBR", "Jo\195\163o", "Concei\195\167\195\163o", "Jo\195\163o", "Concei\195\167\195\163o" },
+      { "itIT", "Niccol\195\178", "Beatr\195\172ce", "Niccol\195\178", "Beatr\195\172ce" },
+      -- Cyrillic Юрий = \208\174\209\128\208\184\208\185, Алекс = \208\144\208\187\208\181\208\186\209\129
+      {
+        "ruRU",
+        "\208\174\209\128\208\184\208\185",
+        "\208\144\208\187\208\181\208\186\209\129",
+        "\208\174\209\128\208\184\208\185",
+        "\208\144\208\187\208\181\208\186\209\129",
+      },
+      -- Turkish Çağrı = \195\135a\196\159r\196\177, İlhan = \196\176lhan
+      { "trTR", "\195\135a\196\159r\196\177", "\196\176lhan", "\195\135a\196\159r\196\177", "\196\176lhan" },
+    }
+    for _, case in ipairs(cases) do
+      local locale, tankName, healerName, tankExpect, healerExpect = case[1], case[2], case[3], case[4], case[5]
+      local memberRows = BuildMemberRows()
+      local state = BuildState(memberRows, addon)
+      local roster = {
+        player = { name = tankName, realm = "", class = "WARRIOR", role = "TANK" },
+        party1 = { name = healerName, realm = "", class = "PRIEST", role = "HEALER" },
+      }
+      RI.RenderRosterImpl(state, roster)
+
+      local tank = FindRowForUnit(memberRows, "player")
+      if tank then
+        local m1 = tank.roleButton:GetAttribute("macrotext1") or ""
+        Check(
+          m1 == "/target " .. tankExpect .. "\n/tm 6\n/targetlasttarget",
+          locale .. ": TANK macrotext1 has UTF-8 name byte-for-byte (" .. tankExpect .. ")"
+        )
+      end
+
+      local heal = FindRowForUnit(memberRows, "party1")
+      if heal then
+        local m1 = heal.roleButton:GetAttribute("macrotext1") or ""
+        Check(
+          m1 == "/target " .. healerExpect .. "\n/tm 4\n/targetlasttarget",
+          locale .. ": HEALER macrotext1 has UTF-8 name byte-for-byte (" .. healerExpect .. ")"
+        )
+      end
+    end
+  end
+
+  -- ----------------------------------------------------------------------
+  -- Scenario 4: hard ban on unit tokens. No macrotext anywhere may contain
+  -- partyN / raidN / target / focus / boss / nameplate — those are the
+  -- secret-unit-token forms that 12.0.5 silently breaks.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 4: no macrotext contains a unit token ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "Felix", realm = "Tichondrius", class = "WARRIOR", role = "TANK" },
+      party1 = { name = "Anna", realm = "Tichondrius", class = "PRIEST", role = "HEALER" },
+    }
+    RI.RenderRosterImpl(state, roster)
+
+    local TOKEN_PATTERNS = {
+      "/target party",
+      "/target raid",
+      "/target target",
+      "/target focus",
+      "/target boss",
+      "/target nameplate",
+      "/target arena",
+    }
+    for i = 1, #memberRows do
+      for _, attr in ipairs({ "macrotext1", "macrotext2" }) do
+        local m = memberRows[i].roleButton:GetAttribute(attr)
+        if type(m) == "string" then
+          for _, bad in ipairs(TOKEN_PATTERNS) do
+            Check(m:find(bad, 1, true) == nil, string.format("row %d %s does NOT contain '%s'", i, attr, bad))
+          end
+        end
+      end
+    end
+  end
+
+  -- ----------------------------------------------------------------------
+  -- Scenario 5: defensive — empty / nil name drops the macro entirely.
+  -- Rather than emit a partial "/target \n/tm 6\n..." which would target
+  -- nothing and mark the previous target.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 5: missing name => no macro at all ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "", realm = "", class = "WARRIOR", role = "TANK" },
+      party1 = { class = "PRIEST", role = "HEALER" },
+    }
+    RI.RenderRosterImpl(state, roster)
+
+    local tank = FindRowForUnit(memberRows, "player")
+    if tank then
+      Check(tank.roleButton:GetAttribute("macrotext1") == nil, "empty-name TANK: macrotext1 is nil")
+      Check(tank.roleButton:GetAttribute("macrotext2") == nil, "empty-name TANK: macrotext2 is nil")
+    end
+
+    local heal = FindRowForUnit(memberRows, "party1")
+    if heal then
+      Check(heal.roleButton:GetAttribute("macrotext1") == nil, "missing-name HEALER: macrotext1 is nil")
+      Check(heal.roleButton:GetAttribute("macrotext2") == nil, "missing-name HEALER: macrotext2 is nil")
+    end
+  end
+
+  -- ----------------------------------------------------------------------
+  -- Scenario 6: type1/type2 are wired so the secure handler routes the
+  -- click to the macro. Without these, the macrotext is dead weight.
+  -- ----------------------------------------------------------------------
+  print("\n========== Scenario 6: type1/type2 = 'macro' for active rows ==========")
+  do
+    local memberRows = BuildMemberRows()
+    local state = BuildState(memberRows, addon)
+    local roster = {
+      player = { name = "Felix", realm = "", class = "WARRIOR", role = "TANK" },
+      party1 = { name = "Anna", realm = "", class = "PRIEST", role = "HEALER" },
+    }
+    RI.RenderRosterImpl(state, roster)
+
+    local tank = FindRowForUnit(memberRows, "player")
+    if tank then
+      Check(tank.roleButton:GetAttribute("type1") == "macro", "TANK type1 = 'macro'")
+      Check(tank.roleButton:GetAttribute("type2") == "macro", "TANK type2 = 'macro'")
+    end
+    local heal = FindRowForUnit(memberRows, "party1")
+    if heal then
+      Check(heal.roleButton:GetAttribute("type1") == "macro", "HEALER type1 = 'macro'")
+      Check(heal.roleButton:GetAttribute("type2") == "macro", "HEALER type2 = 'macro'")
+    end
+  end
 end)
 
 if failures > 0 then
   print(string.format("\nRole-marker macro simulator failed: %d check(s) failed", failures))
+  print("If you are intentionally changing the macro contract, update CLAUDE.md")
+  print('"Role-marker click feature: target by character name" first, then update')
+  print("this simulator to encode the new contract.")
   os.exit(1)
 end
 

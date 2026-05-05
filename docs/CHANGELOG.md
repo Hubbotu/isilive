@@ -1,6 +1,21 @@
 # Changelog
 
-## Unreleased
+## 2026-05-05 - Version 0.9.218 (patch)
+
+Restores the tank/healer role-icon click in the roster after the WoW 12.0.5 secret-unit-token regression, and ships the previously-staged SavedVariables hardening (schema sanitizer + always-on Lua-error capture + size-guard) in the same release.
+
+### Role-marker click: target by character name, never by unit token
+
+The tank/healer role-icon click stopped working after WoW 12.0.5 because the secure macro used a unit token (`/target party1`) to switch target before marking. Patch 12.0.5 turned `partyN` / `raidN` / boss / target-of-target into "secret unit tokens" — the token-based slash command silently fails from secure macros, so `/tm 6` ended up marking the previous target (invisible to the user). Symptom: click did nothing.
+
+- **Macro now targets by character name** with optional `-Realm` suffix — same shape as the existing whisper code in `hoverFrame.OnMouseUp`. Source is `entry.info.name` + `entry.info.realm`, never `entry.unit`. WoW's slash-command name parser is not in the 12.0.5 restriction scope, so `/target Felix-Tichondrius` keeps working where `/target party1` doesn't.
+- **UTF-8 names pass through byte-for-byte** — `Müller`, `Sébastien`, `Юрий`, `José`, `Çağrı`, `Lucía` etc. ride straight through the slash command without normalisation. Covers every locale in the EU/RU LFG server pool.
+- **Defensive frame-level layering**: `roleButton:SetFrameLevel(mainFrame:GetFrameLevel() + 10)` in `CreateMemberRow`. Previously `roleButton` and `hoverFrame` were siblings of `mainFrame` with default frame level (both end up at +1) — at identical strata + level, hit-test tie-break is unstable on 12.0+, and the `hoverFrame` only handles RightButton in `OnMouseUp` (LeftButton would fall through silently).
+- **Empty/missing-name guard**: `info.name` empty → no macro is set at all (no partial `/target \n/tm 6\n…` that would mark the previous target).
+- **Tests/Sims:** rewritten [tools/simulate_role_marker_macro.lua](../tools/simulate_role_marker_macro.lua) — 6 scenarios covering same-realm baseline, cross-realm `-Realm` suffix, UTF-8 byte-level pass-through across deDE/frFR/esES/ptBR/itIT/ruRU/trTR, hard ban on `/target party*` / `/target raid*` / `/target target` etc., empty-name guard, and `type1=type2="macro"` wiring. The two taint scenarios in [testmodul/isilive_test_scenarios_taint.lua](../testmodul/isilive_test_scenarios_taint.lua) now assert `/target Felix\n/tm 6\n/targetlasttarget` (TANK) and `/target Anna-Tichondrius\n/tm 4\n/targetlasttarget` (HEALER cross-realm). Total usecase scenarios: 1434 (was 1429).
+- **Documentation:** [CLAUDE.md](../CLAUDE.md) section `Role-marker click feature: target by character name, never by unit token` records the patch-version regression chain (12.0.0 protected `SetRaidTarget`, 12.0.1 `/tm [@partyN]` broken in dungeons, 12.0.5 secret unit tokens), the bug history (v0.9.203 / v0.9.208 / 2026-05), the hard rule against regressing to `entry.unit`, and the defensive frame-level requirement.
+
+### SavedVariables hardening
 
 Hardens `IsiLiveDB` against corruption-on-load and introduces a versioned migration framework so future schema changes (rename / remove / type-change of any setting) survive the upgrade path without user action.
 

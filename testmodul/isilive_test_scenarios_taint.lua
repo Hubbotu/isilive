@@ -456,11 +456,19 @@ local function BuildRosterPanelController(WithGlobals, LoadAddonModules, overrid
   return controller, createdFrames, stubs, mainFrame, addon
 end
 
-local function FindSecureRoleButton(createdFrames, unit)
+-- Locate a SecureActionButtonTemplate frame whose macrotext1 contains
+-- "/target <targetName>". The role-marker macro targets by character name
+-- (with optional "-Realm" suffix), never by unit token — see CLAUDE.md
+-- "Role-marker click feature: target by character name". Pass nil to grab
+-- any secure action button (used in tests that only render a single row).
+local function FindSecureRoleButton(createdFrames, targetName)
   for _, frame in ipairs(createdFrames) do
     if frame._template == "SecureActionButtonTemplate" then
       local macrotext1 = frame:GetAttribute("macrotext1")
-      if unit == nil or (type(macrotext1) == "string" and macrotext1:find("/target " .. unit, 1, true) ~= nil) then
+      if
+        targetName == nil
+        or (type(macrotext1) == "string" and macrotext1:find("/target " .. targetName, 1, true) ~= nil)
+      then
         return frame
       end
     end
@@ -702,11 +710,11 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
 
     WithGlobals(stubs, function()
       controller.RenderRoster({
-        player = { name = "Tank", role = "TANK", class = "WARRIOR" },
+        player = { name = "Tank", realm = "", role = "TANK", class = "WARRIOR" },
       })
     end)
 
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Tank")
     Assert.NotNil(roleButton, "tank row should create a role button")
     roleButton = RequireNonNil(roleButton, "tank row should create a role button")
     Assert.Equal(roleButton._template, "SecureActionButtonTemplate", "role icon must use a secure action button")
@@ -714,14 +722,14 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
     Assert.Equal(roleButton:GetAttribute("type2"), "macro", "right click must be wired as a secure macro action")
   end)
 
-  test("Roster role icon click applies Blue Square to Tank unit", function()
+  test("Roster Tank role button targets by character name (not unit token)", function()
     local cleanupTraps = RegisterProtectedApiTraps()
     local controller, createdFrames, stubs = BuildRosterPanelController(WithGlobals, LoadAddonModules)
 
     local ok, err = pcall(function()
       WithGlobals(stubs, function()
         controller.RenderRoster({
-          player = { name = "Tank", role = "TANK", class = "WARRIOR" },
+          player = { name = "Felix", realm = "", role = "TANK", class = "WARRIOR" },
         })
       end)
     end)
@@ -729,29 +737,29 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
     cleanupTraps()
 
     Assert.True(ok, "tank render crashed or hit a taint trap: " .. tostring(err))
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Felix")
     Assert.NotNil(roleButton, "tank row should create a role button")
     roleButton = RequireNonNil(roleButton, "tank row should create a role button")
     Assert.Equal(
       roleButton:GetAttribute("macrotext1"),
-      "/target player\n/tm 6\n/targetlasttarget",
-      "tank role button must mark Blue Square"
+      "/target Felix\n/tm 6\n/targetlasttarget",
+      "tank role button must target by character name (not party-token; 12.0.5 secret-token regression)"
     )
     Assert.Equal(
       roleButton:GetAttribute("macrotext2"),
-      "/target player\n/tm 0\n/targetlasttarget",
-      "tank role button right click must clear marker"
+      "/target Felix\n/tm 0\n/targetlasttarget",
+      "tank role button right click must clear marker on the same character name"
     )
   end)
 
-  test("Roster role icon click applies Green Triangle to Healer unit", function()
+  test("Roster Healer role button targets by character name with cross-realm suffix", function()
     local cleanupTraps = RegisterProtectedApiTraps()
     local controller, createdFrames, stubs = BuildRosterPanelController(WithGlobals, LoadAddonModules)
 
     local ok, err = pcall(function()
       WithGlobals(stubs, function()
         controller.RenderRoster({
-          party1 = { name = "Heal", role = "HEALER", class = "PRIEST" },
+          party1 = { name = "Anna", realm = "Tichondrius", role = "HEALER", class = "PRIEST" },
         })
       end)
     end)
@@ -759,18 +767,18 @@ local function RegisterRosterPanelRoleButtonTests(test, Assert, WithGlobals, Loa
     cleanupTraps()
 
     Assert.True(ok, "healer render crashed or hit a taint trap: " .. tostring(err))
-    local roleButton = FindSecureRoleButton(createdFrames, "party1")
+    local roleButton = FindSecureRoleButton(createdFrames, "Anna-Tichondrius")
     Assert.NotNil(roleButton, "healer row should create a role button")
     roleButton = RequireNonNil(roleButton, "healer row should create a role button")
     Assert.Equal(
       roleButton:GetAttribute("macrotext1"),
-      "/target party1\n/tm 4\n/targetlasttarget",
-      "healer role button must mark Green Triangle"
+      "/target Anna-Tichondrius\n/tm 4\n/targetlasttarget",
+      "cross-realm healer role button must include '-Realm' suffix in the target"
     )
     Assert.Equal(
       roleButton:GetAttribute("macrotext2"),
-      "/target party1\n/tm 0\n/targetlasttarget",
-      "healer role button right click must clear marker"
+      "/target Anna-Tichondrius\n/tm 0\n/targetlasttarget",
+      "cross-realm healer right click must clear marker on the same name-realm"
     )
   end)
 end
@@ -810,7 +818,7 @@ local function RegisterRosterPanelReadyCheckTaintTests(test, Assert, WithGlobals
       controller.RenderRoster(roster)
     end)
 
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Tank")
     Assert.NotNil(roleButton, "tank row should create a secure role button before ready-check refresh")
     assert(roleButton ~= nil)
     local type1Before = roleButton:GetAttribute("type1")
@@ -891,7 +899,7 @@ local function RegisterRosterPanelReadyCheckTaintTests(test, Assert, WithGlobals
       controller.RenderRoster(roster)
     end)
 
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Tank")
     Assert.NotNil(roleButton, "tank row should create a secure role button before ready-check refresh")
     local readyCheckHoverFrame = nil
     local readyCheckBackground = nil
@@ -1027,7 +1035,7 @@ local function RegisterRosterPanelCombatTaintTests(test, Assert, WithGlobals, Lo
     end)
 
     local collapseButton = FindCollapseButton(createdFrames)
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Tank")
 
     Assert.NotNil(collapseButton, "collapse button should exist")
     Assert.NotNil(roleButton, "secure role button should exist before combat collapse test")
@@ -1058,7 +1066,7 @@ local function RegisterRosterPanelCombatTaintTests(test, Assert, WithGlobals, Lo
     end)
 
     local collapseButton = FindHorizontalCollapseButton(createdFrames)
-    local roleButton = FindSecureRoleButton(createdFrames, "player")
+    local roleButton = FindSecureRoleButton(createdFrames, "Tank")
 
     Assert.NotNil(collapseButton, "horizontal collapse button should exist")
     Assert.NotNil(roleButton, "secure role button should exist before combat collapse test")
