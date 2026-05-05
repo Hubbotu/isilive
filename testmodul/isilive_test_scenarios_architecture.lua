@@ -631,16 +631,26 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
     local playCalls = 0
     local playedPath = nil
     local playedChannel = nil
+    local playedSoundKit = nil
+    local SOUNDKIT_GROUP_FINDER_RECEIVE_APPLICATION = 31337 -- mock kit id
     local now = 0
     local db = {}
     WithGlobals({
       IsiLiveDB = db,
+      SOUNDKIT = {
+        UI_GROUP_FINDER_RECEIVE_APPLICATION = SOUNDKIT_GROUP_FINDER_RECEIVE_APPLICATION,
+      },
       GetTime = function()
         return now
       end,
       PlaySoundFile = function(path, channel)
         playCalls = playCalls + 1
         playedPath = path
+        playedChannel = channel
+      end,
+      PlaySound = function(id, channel)
+        playCalls = playCalls + 1
+        playedSoundKit = id
         playedChannel = channel
       end,
     }, function()
@@ -691,6 +701,11 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         portalEntry.settingKey,
         "soundPortalAvailableEnabled",
         "portal sound should map to the portal-enabled setting key"
+      )
+      Assert.Equal(
+        portalEntry.soundKit,
+        "UI_GROUP_FINDER_RECEIVE_APPLICATION",
+        "portal sound should resolve through the SOUNDKIT registry, not a custom file"
       )
       Assert.True(
         addon.SoundUtils.IsEnabled("portal_available"),
@@ -753,9 +768,9 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       addon.SoundUtils.PlayPortalAvailable()
       Assert.Equal(playCalls, 3, "portal sound helper should play exactly once after the group sound")
       Assert.Equal(
-        playedPath,
-        "Interface\\AddOns\\isiLive\\sounds\\Portal.ogg",
-        "portal sound helper should use the Portal asset"
+        playedSoundKit,
+        SOUNDKIT_GROUP_FINDER_RECEIVE_APPLICATION,
+        "portal sound helper should route through PlaySound with the resolved SOUNDKIT id"
       )
       Assert.Equal(playedChannel, "SFX", "portal sound helper should use the SFX channel")
       addon.SoundUtils.PlayBattleRes()

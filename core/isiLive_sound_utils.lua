@@ -24,7 +24,9 @@ SoundUtils.Registry = {
     defaultChannel = "SFX",
   },
   portal_available = {
-    file = "Interface\\AddOns\\isiLive\\sounds\\Portal.ogg",
+    -- Resolved via SOUNDKIT[name] at play time so the registry entry stays
+    -- portable across patches even if Blizzard renames the constant.
+    soundKit = "UI_GROUP_FINDER_RECEIVE_APPLICATION",
     labelKey = "SETTINGS_SOUND_PORTAL_AVAILABLE",
     settingKey = "soundPortalAvailableEnabled",
     defaultEnabled = true,
@@ -116,16 +118,50 @@ function SoundUtils.Play(soundFile, channel)
   end
 end
 
+-- Plays a Blizzard SoundKit (numeric ID or SOUNDKIT name) with spam protection
+-- on the same window as Play() above. Silently no-ops when the kit name does
+-- not resolve in this client (e.g. constant renamed in a future patch).
+function SoundUtils.PlaySoundKit(soundKit, channel)
+  if soundKit == nil then
+    return
+  end
+  local resolvedKit = soundKit
+  if type(resolvedKit) == "string" then
+    local kitTable = rawget(_G, "SOUNDKIT")
+    resolvedKit = type(kitTable) == "table" and kitTable[soundKit] or nil
+  end
+  if resolvedKit == nil then
+    return
+  end
+  local resolvedChannel = type(channel) == "string" and channel ~= "" and channel or "SFX"
+  local GetTime_ref = rawget(_G, "GetTime")
+  local now = type(GetTime_ref) == "function" and GetTime_ref() or 0
+  local soundKey = "kit\31" .. tostring(resolvedKit) .. "\31" .. resolvedChannel
+  local last = lastPlayedAt[soundKey]
+  if last and (now - last) < SPAM_WINDOW then
+    return
+  end
+  lastPlayedAt[soundKey] = now
+  local playSound = rawget(_G, "PlaySound")
+  if type(playSound) == "function" then
+    playSound(resolvedKit, resolvedChannel)
+  end
+end
+
 function SoundUtils.PlayKey(key)
   local entry = SoundUtils.GetEntry(key)
   if not entry or not SoundUtils.IsEnabled(key) then
+    return
+  end
+  local channel = type(entry.defaultChannel) == "string" and entry.defaultChannel or "SFX"
+  if entry.soundKit ~= nil then
+    SoundUtils.PlaySoundKit(entry.soundKit, channel)
     return
   end
   local soundFile = entry.file
   if type(soundFile) ~= "string" or soundFile == "" then
     return
   end
-  local channel = type(entry.defaultChannel) == "string" and entry.defaultChannel or "SFX"
   SoundUtils.Play(soundFile, channel)
 end
 
