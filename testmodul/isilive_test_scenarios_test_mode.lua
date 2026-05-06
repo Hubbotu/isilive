@@ -402,6 +402,128 @@ local function RegisterDemoRosterTests(test, Assert, WithGlobals, LoadAddonModul
   end)
 end
 
+local function RegisterDemoModeBranchTests(test, Assert, LoadAddonModules)
+  test("TestMode RefreshActivePreview returns false when no test mode is active", function()
+    local controller, state = BuildTestModeController(LoadAddonModules)
+    -- Never enter test mode: state.isTestMode stays false.
+    local refreshed = controller.RefreshActivePreview()
+    Assert.False(refreshed, "RefreshActivePreview must return false when not active")
+    Assert.Equal(state.buildDummyRosterCalls, 0, "no dummy roster build when refresh is a no-op")
+  end)
+
+  test("TestMode ToggleDemoMode prints stopped error and skips activation when state.isStopped", function()
+    local controller, state = BuildTestModeController(LoadAddonModules, { isStopped = true })
+    controller.ToggleDemoMode()
+    Assert.False(state.isTestMode, "demo mode must not activate while stopped")
+    local found = false
+    for _, msg in ipairs(state.prints) do
+      if msg:find("stopped", 1, true) then
+        found = true
+        break
+      end
+    end
+    Assert.True(found, "must print stopped error")
+  end)
+
+  test("TestMode ToggleDemoMode prints paused error and skips activation when state.isPaused", function()
+    local controller, state = BuildTestModeController(LoadAddonModules, { isPaused = true })
+    controller.ToggleDemoMode()
+    Assert.False(state.isTestMode, "demo mode must not activate while paused")
+    local found = false
+    for _, msg in ipairs(state.prints) do
+      if msg:find("paused", 1, true) then
+        found = true
+        break
+      end
+    end
+    Assert.True(found, "must print paused error")
+  end)
+
+  test("TestMode ToggleDemoMode activates the full preview when no test mode is currently active", function()
+    local controller, state = BuildTestModeController(LoadAddonModules)
+    controller.ToggleDemoMode()
+    Assert.True(state.isTestMode, "demo toggle must activate test mode")
+    Assert.True(state.isTestAllMode, "demo toggle delegates to EnterFullDummyPreview")
+    Assert.NotNil(state.roster.player, "demo roster must be populated")
+  end)
+
+  test(
+    "TestMode ToggleDemoMode deactivates without hiding the main frame and without triggerGroupRosterUpdate",
+    function()
+      local triggerCount = 0
+      local mainFrameVisibilityCalls = {}
+
+      local addon = LoadAddonModules({ "isiLive_test_mode.lua" })
+      local state = {
+        isTestMode = true,
+        isTestAllMode = true,
+        isStopped = false,
+        isPaused = false,
+        prints = {},
+      }
+      local controller = addon.TestMode.CreateController({
+        getL = function()
+          return {
+            TEST_ENABLED = "Test mode enabled.",
+            TEST_DISABLED = "Test mode disabled.",
+            ERR_STOPPED_TEST = "stopped",
+            ERR_PAUSED_TEST = "paused",
+            LEAD_TRANSFERRED_CENTER = "leader",
+            TESTALL_CHAT_ACTIVE = "active",
+            CHAT_QUEUE_PREFIX = "Q",
+          }
+        end,
+        printFn = function(msg)
+          table.insert(state.prints, msg)
+        end,
+        getState = function()
+          return state
+        end,
+        setState = function(patch)
+          for k, v in pairs(patch) do
+            state[k] = v
+          end
+        end,
+        buildDummyRoster = function()
+          return {}
+        end,
+        setRoster = function() end,
+        setMainFrameVisible = function(visible)
+          table.insert(mainFrameVisibilityCalls, visible)
+        end,
+        updateUI = function() end,
+        updateLeaderButtons = function() end,
+        showCenterNotice = function() end,
+        resetInspectAll = function() end,
+        clearLatestQueueState = function() end,
+        updateMPlusTeleportButton = function() end,
+        setCenterNoticeVisible = function() end,
+        hideInviteHint = function() end,
+        triggerGroupRosterUpdate = function()
+          triggerCount = triggerCount + 1
+        end,
+        captureRioBaselineSnapshot = function() end,
+        clearRioBaselineSnapshot = function() end,
+        enableRioDeltaDisplay = function() end,
+        setDemoTimerData = function() end,
+        clearDemoTimerData = function() end,
+      })
+
+      controller.ToggleDemoMode()
+
+      Assert.False(state.isTestMode, "demo deactivate must clear isTestMode")
+      Assert.False(state.isTestAllMode, "demo deactivate must clear isTestAllMode")
+      -- Demo deactivate intentionally does NOT call setMainFrameVisible(false)
+      -- (that's ExitTestMode's job). It also does not call
+      -- triggerGroupRosterUpdate — the demo toggle leaves the roster empty
+      -- so the user sees the visualisation collapse without snapping back to
+      -- the live group state.
+      Assert.Equal(#mainFrameVisibilityCalls, 0, "demo deactivate must not toggle main frame visibility")
+      Assert.Equal(triggerCount, 0, "demo deactivate must not call triggerGroupRosterUpdate")
+    end
+  )
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -410,4 +532,5 @@ return function(test, ctx)
   RegisterTestModeToggleTests(test, Assert, LoadAddonModules)
   RegisterTestModeGuardTests(test, Assert, LoadAddonModules)
   RegisterDemoRosterTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterDemoModeBranchTests(test, Assert, LoadAddonModules)
 end

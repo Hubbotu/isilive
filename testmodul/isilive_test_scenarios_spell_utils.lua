@@ -238,6 +238,169 @@ local function RegisterCooldownFrameApplyTests(test, Assert, WithGlobals, LoadAd
   end)
 end
 
+-- Branch coverage for the secret-value defensive paths in GetSpellCooldownSafe,
+-- the IsSpellKnownSafe early returns + happy paths, and the legacy SetCooldown
+-- duration > 0 path in ApplyCooldownFrameSafe.
+local function RegisterSpellUtilsBranchTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("SpellUtils.GetSpellCooldownSafe replaces secret values for enabled, start, duration", function()
+    local SECRET_ENABLED = setmetatable({}, {
+      __tostring = function()
+        return "secret-enabled"
+      end,
+    })
+    local SECRET_START = setmetatable({}, {
+      __tostring = function()
+        return "secret-start"
+      end,
+    })
+    local SECRET_DURATION = setmetatable({}, {
+      __tostring = function()
+        return "secret-duration"
+      end,
+    })
+    WithGlobals({
+      C_Spell = {
+        GetSpellCooldown = function()
+          return {
+            startTime = SECRET_START,
+            duration = SECRET_DURATION,
+            isEnabled = SECRET_ENABLED,
+          }
+        end,
+      },
+      issecretvalue = function(value)
+        return value == SECRET_ENABLED or value == SECRET_START or value == SECRET_DURATION
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      local startTime, duration, enabled = addon.SpellUtils.GetSpellCooldownSafe(42)
+      Assert.Equal(startTime, 0, "secret start must be replaced with 0")
+      Assert.Equal(duration, 0, "secret duration must be replaced with 0")
+      Assert.Equal(enabled, true, "secret enabled must be replaced with true")
+    end)
+  end)
+
+  test("SpellUtils.GetSpellCooldownSafe returns defaults when GetSpellCooldown raises an error", function()
+    WithGlobals({
+      C_Spell = {
+        GetSpellCooldown = function()
+          error("simulated API failure")
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      local startTime, duration, enabled = addon.SpellUtils.GetSpellCooldownSafe(42)
+      Assert.Equal(startTime, 0, "API failure must yield default 0 start")
+      Assert.Equal(duration, 0, "API failure must yield default 0 duration")
+      Assert.Equal(enabled, true, "API failure must yield default true enabled")
+    end)
+  end)
+
+  test("SpellUtils.IsSpellKnownSafe returns false for nil spellID without invoking the API", function()
+    WithGlobals({
+      C_SpellBook = {
+        IsSpellKnown = function()
+          error("must not be called for nil spellID")
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      Assert.False(addon.SpellUtils.IsSpellKnownSafe(nil), "nil spellID must short-circuit to false")
+    end)
+  end)
+
+  test("SpellUtils.IsSpellKnownSafe returns true via IsSpellKnownOrOverridesKnown happy path", function()
+    WithGlobals({
+      C_SpellBook = {
+        IsSpellKnownOrOverridesKnown = function()
+          return true
+        end,
+        IsSpellKnown = function()
+          return false
+        end,
+      },
+      C_Spell = {
+        GetSpellCooldown = function()
+          return { startTime = 0, duration = 0, isEnabled = true }
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      Assert.True(addon.SpellUtils.IsSpellKnownSafe(2139), "IsSpellKnownOrOverridesKnown=true must report known")
+    end)
+  end)
+
+  test("SpellUtils.IsSpellKnownSafe falls back to IsSpellKnown when override-aware API misses", function()
+    WithGlobals({
+      C_SpellBook = {
+        IsSpellKnownOrOverridesKnown = function()
+          return false
+        end,
+        IsSpellKnown = function()
+          return true
+        end,
+      },
+      C_Spell = {
+        GetSpellCooldown = function()
+          return { startTime = 0, duration = 0, isEnabled = true }
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      Assert.True(addon.SpellUtils.IsSpellKnownSafe(2139), "IsSpellKnown=true (after override miss) must report known")
+    end)
+  end)
+
+  test("SpellUtils.GetTeleportCooldownRemaining returns 0 when start is zero", function()
+    WithGlobals({
+      C_Spell = {
+        GetSpellCooldown = function()
+          -- Long duration but start=0 → cannot anchor remaining → 0.
+          return { startTime = 0, duration = 600, isEnabled = true }
+        end,
+      },
+      GetTime = function()
+        return 100
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      local remaining = addon.SpellUtils.GetTeleportCooldownRemaining(2139)
+      Assert.Equal(remaining, 0, "start<=0 with long duration must still report 0 remaining")
+    end)
+  end)
+
+  test(
+    "SpellUtils.ApplyCooldownFrameSafe legacy SetCooldown writes start+duration when enabled and duration > 0",
+    function()
+      -- Force the last-resort legacy path: no SetCooldownFromDurationObject and
+      -- no global CooldownFrame_Set.
+      WithGlobals({
+        CooldownFrame_Set = false,
+        CreateCooldownDuration = false,
+      }, function()
+        local applied
+        local frame = {
+          SetCooldown = function(_self, startTime, duration)
+            applied = { start = startTime, duration = duration }
+          end,
+        }
+        local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+        addon.SpellUtils.ApplyCooldownFrameSafe(frame, 100, 300, true)
+
+        Assert.NotNil(applied, "legacy SetCooldown must fire")
+        Assert.Equal(applied.start, 100, "legacy path must forward the start time")
+        Assert.Equal(applied.duration, 300, "legacy path must forward the duration")
+      end)
+    end
+  )
+
+  test("SpellUtils.ApplyCooldownFrameSafe returns silently for nil cooldownFrame", function()
+    local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+    -- No assert needed: must not raise.
+    addon.SpellUtils.ApplyCooldownFrameSafe(nil, 100, 300, true)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -245,4 +408,5 @@ return function(test, ctx)
 
   RegisterSpellKnownAndCooldownTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCooldownFrameApplyTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterSpellUtilsBranchTests(test, Assert, WithGlobals, LoadAddonModules)
 end

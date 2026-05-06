@@ -276,4 +276,116 @@ return function(test, ctx)
     Assert.True(#trimMessages > 0, "trim action must be logged via callback")
     Assert.True(trimMessages[1]:find("rioBaseline", 1, true) ~= nil, "trim log must name the trimmed field")
   end)
+
+  -- ----------------------------------------------------------------------
+  -- Branch coverage for timestamp helpers, MentionsIsiLive case-insensitivity,
+  -- CaptureStack happy path, and the inner-pcall fallback when capture itself
+  -- raises.
+  -- ----------------------------------------------------------------------
+
+  test("ErrorLog.Capture entries carry numeric firstSeen / lastSeen when GetTime is available", function()
+    ResetIsiLiveDB()
+    local now = 12345.678
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      date = function(fmt)
+        return fmt == "%H:%M:%S" and "11:22:33" or "2026-05-06 11:22:33"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_error_log.lua" })
+      addon.ErrorLog.Capture("isiLive: bang", "isiLive-stack-T", nil)
+      local entries = addon.ErrorLog.GetTail(1)
+      Assert.Equal(entries[1].firstSeen, now, "firstSeen must use the numeric GetTime() value")
+      Assert.Equal(entries[1].lastSeen, now, "lastSeen must use the numeric GetTime() value")
+      Assert.Equal(
+        entries[1].firstSeenDisplay,
+        "2026-05-06 11:22:33",
+        "firstSeenDisplay must use date('%Y-%m-%d %H:%M:%S')"
+      )
+    end)
+  end)
+
+  test("ErrorLog.Capture falls back to date('%H:%M:%S') when GetTime is missing", function()
+    ResetIsiLiveDB()
+    WithGlobals({
+      GetTime = false, -- removes the GetTime branch entirely
+      date = function(fmt)
+        return fmt == "%H:%M:%S" and "09:08:07" or "2026-05-06 09:08:07"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_error_log.lua" })
+      addon.ErrorLog.Capture("isiLive: bang", "isiLive-stack-T", nil)
+      local entries = addon.ErrorLog.GetTail(1)
+      Assert.Equal(
+        entries[1].firstSeen,
+        "09:08:07",
+        "firstSeen must fall back to date('%H:%M:%S') when GetTime is missing"
+      )
+    end)
+  end)
+
+  test("ErrorLog.Capture matches isiLive case-insensitively in the message text", function()
+    ResetIsiLiveDB()
+    local ErrorLog = LoadErrorLog()
+    -- "ISILIVE" upper-case in the message — first-pass `find` misses (FILTER_TOKEN
+    -- is "isiLive"), but the lower-case branch must catch it.
+    ErrorLog.Capture("ERROR FROM ISILIVE: boom", "no-match-stack", nil)
+    Assert.Equal(ErrorLog.GetCount(), 1, "case-insensitive lower-case branch must catch upper-case isiLive mentions")
+  end)
+
+  test("ErrorLog.Capture stack capture falls back to plain message when debug.traceback is unavailable", function()
+    ResetIsiLiveDB()
+    -- No `stack` arg passed (stack=nil). CaptureStack triggers; with debug.traceback
+    -- unavailable it falls back to tostring(message). The message itself contains
+    -- "isiLive" so MentionsIsiLive matches. Mutate debug.traceback in place so
+    -- luacov's debug.sethook stays intact for instrumentation.
+    local debugLib = rawget(_G, "debug")
+    local originalTraceback = debugLib and debugLib.traceback or nil
+    if type(debugLib) == "table" then
+      debugLib.traceback = "not-a-function"
+    end
+
+    local addon = LoadAddonModules({ "isiLive_error_log.lua" })
+    addon.ErrorLog.Capture("isiLive: boom without stack", nil, nil)
+
+    if type(debugLib) == "table" then
+      debugLib.traceback = originalTraceback
+    end
+
+    Assert.Equal(addon.ErrorLog.GetCount(), 1, "must capture even when debug.traceback is unavailable")
+    local entries = addon.ErrorLog.GetTail(1)
+    Assert.Equal(
+      entries[1].fullText,
+      "isiLive: boom without stack",
+      "fullText falls back to tostring(message) when no traceback"
+    )
+  end)
+
+  test("ErrorLog.Capture stack capture uses debug.traceback when it is callable", function()
+    ResetIsiLiveDB()
+    -- Wrap (not replace) debug.traceback so luacov's debug.sethook keeps working.
+    local debugLib = rawget(_G, "debug")
+    local originalTraceback = debugLib and debugLib.traceback or nil
+    if type(debugLib) == "table" then
+      debugLib.traceback = function(msg, _level)
+        return tostring(msg) .. "\n[mock-stack-frame] isiLive"
+      end
+    end
+
+    local addon = LoadAddonModules({ "isiLive_error_log.lua" })
+    addon.ErrorLog.Capture("plain bang", nil, nil)
+
+    if type(debugLib) == "table" then
+      debugLib.traceback = originalTraceback
+    end
+
+    Assert.Equal(addon.ErrorLog.GetCount(), 1, "debug.traceback must surface isiLive frame and match the filter")
+    local entries = addon.ErrorLog.GetTail(1)
+    Assert.True(
+      entries[1].fullText:find("[mock-stack-frame] isiLive", 1, true) ~= nil,
+      "fullText must include the debug.traceback output"
+    )
+  end)
 end

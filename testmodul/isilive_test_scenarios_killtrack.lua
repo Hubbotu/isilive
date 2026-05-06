@@ -469,6 +469,164 @@ local function RegisterDbTotalAndMapIdTests(test, Assert, WithGlobals, LoadAddon
   end)
 end
 
+-- Branch coverage for the rarely-exercised paths inside ReadLiveData,
+-- UpdatePullPercent, FindEnemyForcesCriteria, and GetData/SetDemoData.
+local function RegisterKillTrackBranchTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("KillTrack ReadLiveData zeroes state when no weighted-progress criterion exists", function()
+    local env = BuildKillTrackEnv()
+    -- Override C_ScenarioInfo to never report a weighted-progress criterion.
+    env.globals.C_ScenarioInfo = {
+      GetScenarioStepInfo = function()
+        return { numCriteria = 1 }
+      end,
+      GetCriteriaInfo = function()
+        return { isWeightedProgress = false, totalQuantity = 100, quantity = 50 }
+      end,
+    }
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.True(data.active, "key is active even without an enemy-forces criterion")
+      Assert.Equal(data.percent, 0, "percent zero when no weighted criterion")
+      Assert.Equal(data.total, 0, "total zero when no weighted criterion")
+      Assert.Equal(data.rawCount, 0, "rawCount zero when no weighted criterion")
+    end)
+  end)
+
+  test("KillTrack ReadLiveData uses cInfo.quantity numeric fallback when quantityString is missing", function()
+    local env = BuildKillTrackEnv()
+    env.globals.C_ScenarioInfo = {
+      GetScenarioStepInfo = function()
+        return { numCriteria = 1 }
+      end,
+      GetCriteriaInfo = function()
+        -- No quantityString → must fall back to cInfo.quantity.
+        return { isWeightedProgress = true, totalQuantity = 200, quantity = 75 }
+      end,
+    }
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.rawCount, 75, "rawCount must come from cInfo.quantity fallback")
+      Assert.Equal(data.total, 200, "total must come from cInfo.totalQuantity")
+      Assert.Equal(data.percent, 37.5, "percent must be (75/200)*100 = 37.5")
+    end)
+  end)
+
+  test("KillTrack FindEnemyForcesCriteria returns nil when stepInfo lacks numCriteria", function()
+    local env = BuildKillTrackEnv()
+    env.globals.C_ScenarioInfo = {
+      GetScenarioStepInfo = function()
+        return { numCriteria = nil } -- explicit no-criteria shape
+      end,
+      GetCriteriaInfo = function()
+        error("must not be reached when numCriteria is missing")
+      end,
+    }
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.True(data.active, "key still considered active")
+      Assert.Equal(data.percent, 0, "percent zero when stepInfo has no numCriteria")
+      Assert.Equal(data.total, 0, "total zero when stepInfo has no numCriteria")
+    end)
+  end)
+
+  test("KillTrack ReadLiveData zeroes state when neither apiTotal nor dbTotal is present", function()
+    local env = BuildKillTrackEnv()
+    env.globals.C_ScenarioInfo = {
+      GetScenarioStepInfo = function()
+        return { numCriteria = 1 }
+      end,
+      GetCriteriaInfo = function()
+        return { isWeightedProgress = true, totalQuantity = nil, quantityString = "10" }
+      end,
+    }
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.percent, 0, "percent zero when no total resolvable")
+      Assert.Equal(data.total, 0, "total zero when neither api nor db total is set")
+      Assert.Equal(data.rawCount, 0, "rawCount zero when no total resolvable")
+    end)
+  end)
+
+  test("KillTrack UpdatePullPercent clamps gained<0 to zero (rawCount drop)", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 50, total = 100 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      addon.KillTrack._DispatchEvent("PLAYER_REGEN_DISABLED")
+      -- Pull baseline captured at rawCount=50. Now drop the live count below
+      -- the baseline (would be impossible from a real Blizzard API, but tests
+      -- the clamp).
+      env.scenario.SetQuantity(20)
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.pullPercent, 0, "negative gained must clamp to 0%")
+    end)
+  end)
+
+  test("KillTrack GetData returns SetDemoData payload verbatim, bypassing live state", function()
+    local env = BuildKillTrackEnv()
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+
+      local demo =
+        { active = true, percent = 99.99, rawCount = 999, total = 1000, mapID = 42, inCombat = false, pullPercent = 0 }
+      addon.KillTrack.SetDemoData(demo)
+
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data, demo, "demo data must be returned verbatim while set")
+
+      addon.KillTrack.ClearDemoData()
+      local liveData = addon.KillTrack.GetData()
+      Assert.True(liveData ~= demo, "ClearDemoData must restore live-state path")
+    end)
+  end)
+
+  test("KillTrack ReadLiveData skips drift logger when api and db totals match", function()
+    local logCalls = 0
+    local env = BuildKillTrackEnv({ scenario = { mapID = 555, total = 100, quantity = 10 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      -- Match: api total = 100, db total = 100. No drift log expected.
+      addon.MPlusForces = { dungeonTotal = { [555] = { total = 100 } } }
+      addon.KillTrack.SetDebugLogger(function()
+        logCalls = logCalls + 1
+      end)
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      Assert.Equal(logCalls, 0, "matching api+db totals must not log drift")
+      addon.KillTrack.SetDebugLogger(nil)
+    end)
+  end)
+
+  test("KillTrack ReadLiveData logs drift exactly once when api and db totals diverge", function()
+    local logs = {}
+    local env = BuildKillTrackEnv({ scenario = { mapID = 555, total = 100, quantity = 10 } })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      -- Drift: api=100, db=110 → log once. Repeat refresh must not duplicate.
+      addon.MPlusForces = { dungeonTotal = { [555] = { total = 110 } } }
+      addon.KillTrack.SetDebugLogger(function(...)
+        table.insert(logs, string.format(...))
+      end)
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      Assert.Equal(#logs, 1, "drift log must dedup to a single entry per (mapID, api, db) key")
+      Assert.True(logs[1]:find("api=100", 1, true) ~= nil, "drift log must include the api total")
+      Assert.True(logs[1]:find("db=110", 1, true) ~= nil, "drift log must include the db total")
+      addon.KillTrack.SetDebugLogger(nil)
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -480,4 +638,5 @@ return function(test, ctx)
   RegisterSubscriberTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterTickerTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterDbTotalAndMapIdTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterKillTrackBranchTests(test, Assert, WithGlobals, LoadAddonModules)
 end

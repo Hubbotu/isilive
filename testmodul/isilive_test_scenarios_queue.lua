@@ -371,6 +371,131 @@ local function RegisterQueueCaptureStableIDTests(test, Assert, WithGlobals, Load
   end)
 end
 
+-- Branch coverage for queue debug-logger plumbing and the application-list
+-- enumerator's bail-out paths.
+local function RegisterQueueDebugAndBailOutTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Queue.SetDebugEnabled(true) with a logger routes the 'queue debug enabled' message to the logger", function()
+    local captured = {}
+    local addon = LoadAddonModules({ "isiLive_queue.lua" })
+    addon.Queue.SetDebugLogger(function(msg)
+      table.insert(captured, msg)
+    end)
+    addon.Queue.SetDebugEnabled(true)
+    Assert.True(addon.Queue.IsDebugEnabled(), "debug must be enabled after SetDebugEnabled(true)")
+    local found = false
+    for _, msg in ipairs(captured) do
+      if msg:find("queue debug enabled", 1, true) then
+        found = true
+        break
+      end
+    end
+    Assert.True(found, "logger must receive the enabled-banner DebugLog line")
+    -- Reset for hygiene so other tests are not affected by lingering state.
+    addon.Queue.SetDebugEnabled(false)
+    addon.Queue.SetDebugLogger(nil)
+  end)
+
+  test("Queue DebugLog falls back to global print when no logger is configured", function()
+    local printed = {}
+    WithGlobals({
+      print = function(msg)
+        table.insert(printed, tostring(msg))
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_queue.lua" })
+      addon.Queue.SetDebugLogger(nil)
+      addon.Queue.SetDebugEnabled(true)
+      local found = false
+      for _, msg in ipairs(printed) do
+        if msg:find("[QDBG] queue debug enabled", 1, true) then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "global print must receive the [QDBG]-prefixed line when no logger is set")
+      addon.Queue.SetDebugEnabled(false)
+    end)
+  end)
+
+  test("Queue.SetDebugLogger(nil) and non-function input both clear the configured logger", function()
+    local captured = {}
+    local printed = {}
+    WithGlobals({
+      print = function(msg)
+        table.insert(printed, tostring(msg))
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_queue.lua" })
+      addon.Queue.SetDebugLogger(function(msg)
+        table.insert(captured, msg)
+      end)
+      addon.Queue.SetDebugLogger(nil) -- explicit nil
+      addon.Queue.SetDebugEnabled(true)
+      Assert.Equal(#captured, 0, "logger must be cleared after SetDebugLogger(nil)")
+      Assert.True(#printed > 0, "DebugLog must fall through to print after the logger is cleared")
+
+      -- Same with a non-function input: should also clear.
+      addon.Queue.SetDebugLogger(function(msg)
+        table.insert(captured, msg)
+      end)
+      addon.Queue.SetDebugLogger("not-a-function")
+      addon.Queue.SetDebugEnabled(true)
+      Assert.Equal(#captured, 0, "logger must also be cleared by a non-function value")
+      addon.Queue.SetDebugEnabled(false)
+    end)
+  end)
+
+  test("Queue.CaptureQueueJoinFromApplications returns silently when C_LFGList APIs are missing", function()
+    WithGlobals({
+      C_LFGList = nil,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_queue.lua" })
+      local applyCalls = 0
+      addon.Queue.CaptureQueueJoinFromApplications(function()
+        applyCalls = applyCalls + 1
+      end, function() end)
+      Assert.Equal(applyCalls, 0, "no apply when C_LFGList is missing")
+    end)
+  end)
+
+  test(
+    "Queue.CaptureQueueJoinFromApplications logs unexpected-type DebugLog when GetApplications returns non-table",
+    function()
+      local captured = {}
+      WithGlobals({
+        C_LFGList = {
+          GetApplications = function()
+            return "not-a-table"
+          end,
+          GetApplicationInfo = function() end,
+        },
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_queue.lua" })
+        addon.Queue.SetDebugLogger(function(msg)
+          table.insert(captured, msg)
+        end)
+        addon.Queue.SetDebugEnabled(true)
+        local applyCalls = 0
+        addon.Queue.CaptureQueueJoinFromApplications(function()
+          applyCalls = applyCalls + 1
+        end, function() end)
+
+        Assert.Equal(applyCalls, 0, "non-table GetApplications must short-circuit before any apply")
+        local found = false
+        for _, msg in ipairs(captured) do
+          if msg:find("applications: unexpected type=string", 1, true) then
+            found = true
+            break
+          end
+        end
+        Assert.True(found, "DebugLog must surface the unexpected-type message with formatted varargs")
+        addon.Queue.SetDebugEnabled(false)
+        addon.Queue.SetDebugLogger(nil)
+      end)
+    end
+  )
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -380,4 +505,5 @@ return function(test, ctx)
   RegisterQueueApplicationStatusTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterQueueCaptureCoreTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterQueueCaptureStableIDTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterQueueDebugAndBailOutTests(test, Assert, WithGlobals, LoadAddonModules)
 end

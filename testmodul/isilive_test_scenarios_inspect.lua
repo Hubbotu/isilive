@@ -508,6 +508,229 @@ local function RegisterInspectRobustnessTests(test, Assert, WithGlobals, LoadAdd
   end)
 end
 
+-- Branch coverage targeting the OnUpdate dispatcher (timeout + dispatch_skipped),
+-- partial-cache-hit enqueue, IsUnitInInspectQueue duplicate-skip, and the
+-- logRuntimeTracef trace lines.
+local function RegisterInspectBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Inspect EnqueueInspect skips when the unit is already queued (IsUnitInInspectQueue=true)", function()
+    WithGlobals({
+      UnitExists = function(unit)
+        return unit == "party1"
+      end,
+      UnitGUID = function()
+        return "guid-party1"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local controller = addon.Inspect.CreateController({})
+      local roster = { party1 = { name = "P1" } }
+
+      controller.EnqueueInspect("party1", roster)
+      controller.EnqueueInspect("party1", roster) -- second call must not duplicate
+
+      Assert.Equal(#controller.inspectQueue, 1, "duplicate enqueue must be suppressed via IsUnitInInspectQueue")
+    end)
+  end)
+
+  test("Inspect EnqueueInspect with partial cache hit keeps queueing because rio + spec are still missing", function()
+    WithGlobals({
+      UnitExists = function(unit)
+        return unit == "party1"
+      end,
+      UnitGUID = function()
+        return "guid-party1"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local controller = addon.Inspect.CreateController({})
+      controller.ilvlCache["guid-party1"] = 615 -- only ilvl cached, rio + spec missing
+
+      local roster = { party1 = { name = "P1" } }
+      controller.EnqueueInspect("party1", roster)
+
+      Assert.Equal(roster.party1.ilvl, 615, "cached ilvl must be applied to roster entry")
+      Assert.True(roster.party1._localIlvlFresh == true, "ilvl freshness flag must be set")
+      Assert.Nil(roster.party1.rio, "rio remains nil when only ilvl was cached")
+      Assert.Equal(#controller.inspectQueue, 1, "unit must still enqueue when not all three caches are populated")
+    end)
+  end)
+
+  test("Inspect OnUpdate triggers OnInspectTimeout when isInspecting exceeds inspectTimeout", function()
+    local now = 0
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local traces = {}
+      local controller = addon.Inspect.CreateController({
+        inspectTimeout = 2,
+        retryInterval = 5,
+        logRuntimeTracef = function(fmt, ...)
+          table.insert(traces, string.format(fmt, ...))
+        end,
+      })
+      controller.isInspecting = "party1"
+      controller.lastInspectTime = 0
+
+      now = 10 -- well past the 2s timeout
+      controller.OnUpdate()
+
+      Assert.Nil(controller.isInspecting, "isInspecting must clear on timeout")
+      Assert.Equal(#controller.retryQueue, 1, "retry queue must receive a re-attempt entry")
+      Assert.Equal(controller.retryQueue[1].unit, "party1", "retry entry must remember the timed-out unit")
+      Assert.Equal(controller.retryQueue[1].nextRetry, 10 + 5, "retry must schedule at now + retryInterval")
+      local found = false
+      for _, line in ipairs(traces) do
+        if line:find("[INSPECT] timeout unit=party1", 1, true) then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "logRuntimeTracef must surface the timeout line")
+    end)
+  end)
+
+  test("Inspect OnUpdate dispatch logs not-inspectable skip when UnitIsVisible returns false", function()
+    local now = 100
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      UnitExists = function()
+        return true
+      end,
+      UnitIsVisible = function()
+        return false -- forces IsUnitInspectable -> false
+      end,
+      CanInspect = function()
+        return true
+      end,
+      NotifyInspect = function()
+        error("NotifyInspect must not fire when unit is not inspectable")
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local traces = {}
+      local controller = addon.Inspect.CreateController({
+        inspectDelay = 0,
+        retryInterval = 5,
+        logRuntimeTracef = function(fmt, ...)
+          table.insert(traces, string.format(fmt, ...))
+        end,
+      })
+      table.insert(controller.inspectQueue, "party1")
+      controller.lastInspectTime = 0
+
+      controller.OnUpdate()
+
+      Assert.Nil(controller.isInspecting, "must not start inspecting an invisible unit")
+      Assert.Equal(#controller.retryQueue, 1, "invisible unit must be moved to the retry queue")
+      Assert.Equal(controller.retryQueue[1].unit, "party1", "retry entry must remember the unit")
+      Assert.Equal(controller.retryQueue[1].nextRetry, now + 5, "retry must schedule at now + retryInterval")
+      local found = false
+      for _, line in ipairs(traces) do
+        if line:find("dispatch_skipped unit=party1 not_inspectable", 1, true) then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "logRuntimeTracef must surface the dispatch_skipped line")
+    end)
+  end)
+
+  test("Inspect OnUpdate dispatch logs the dispatch line when unit IS inspectable", function()
+    local now = 100
+    local notifyTarget
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      UnitExists = function()
+        return true
+      end,
+      UnitIsVisible = function()
+        return true
+      end,
+      CanInspect = function()
+        return true
+      end,
+      NotifyInspect = function(unit)
+        notifyTarget = unit
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local traces = {}
+      local controller = addon.Inspect.CreateController({
+        inspectDelay = 0,
+        logRuntimeTracef = function(fmt, ...)
+          table.insert(traces, string.format(fmt, ...))
+        end,
+      })
+      table.insert(controller.inspectQueue, "party2")
+      controller.lastInspectTime = 0
+
+      controller.OnUpdate()
+
+      Assert.Equal(notifyTarget, "party2", "NotifyInspect must be called with the dispatched unit")
+      Assert.Equal(controller.isInspecting, "party2", "controller must mark the unit as actively inspected")
+      local found = false
+      for _, line in ipairs(traces) do
+        if line:find("dispatch unit=party2 queueRemaining=0", 1, true) then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "logRuntimeTracef must surface the dispatch line")
+    end)
+  end)
+
+  test("Inspect OnInspectReady emits the result trace when logRuntimeTracef is configured", function()
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      UnitExists = function()
+        return true
+      end,
+      UnitGUID = function()
+        return "guid-party3"
+      end,
+      C_PaperDollInfo = {
+        GetInspectItemLevel = function()
+          return 620
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_inspect.lua" })
+      local traces = {}
+      local controller = addon.Inspect.CreateController({
+        logRuntimeTracef = function(fmt, ...)
+          table.insert(traces, string.format(fmt, ...))
+        end,
+      })
+      controller.isInspecting = "party3"
+      local roster = { party3 = { name = "P3" } }
+
+      controller.OnInspectReady("guid-party3", roster, function()
+        return 2500
+      end, function()
+        return "Frost"
+      end, nil)
+
+      local found = false
+      for _, line in ipairs(traces) do
+        if line:find("[INSPECT] result unit=party3", 1, true) and line:find("ilvl=620", 1, true) then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "logRuntimeTracef must surface the result line with the captured values")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -516,4 +739,5 @@ return function(test, ctx)
   RegisterInspectRetryTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterInspectFreshnessTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterInspectRobustnessTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterInspectBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
 end
