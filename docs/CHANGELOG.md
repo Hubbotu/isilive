@@ -1,5 +1,68 @@
 # Changelog
 
+## 2026-05-06 - Version 0.9.221 (patch)
+
+Bug fix to the kick-tracker base cooldown for Mage Counterspell, plus a large
+internal test-coverage push (no other runtime changes).
+
+### Mage Counterspell base cooldown corrected to the in-game tooltip value
+
+`SPEC_DATA[62/63/64].cd` was set to `20` with comment "Counterspell (20s base)",
+but the in-game spell tooltip is `25` seconds. The talent *Geistesgegenwärtig*
+(spellID 382297) reduces Counterspell by 5 seconds, taking it from 25 → 20.
+`CD_REDUCTION_DEFS[382297]` already had `reduction = 5` with comment "Counterspell
+25→20", so the two sources were inconsistent.
+
+In real WoW, `GetSpellBaseCooldown(2139)` returns 25000ms and overrides the
+SPEC_DATA value at runtime via `ReadBaseCd`, so the tooltip user saw the correct
+number. The SPEC_DATA fallback (kick-tracker without talent-scan path or with a
+mocked `GetSpellBaseCooldown`) was wrong.
+
+- **Fix** ([game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua)) —
+  `cd = 20` → `cd = 25` across all three Mage specs; comment updated to
+  "25s base; talent 382297 reduces to 20".
+- **Test** ([testmodul/isilive_test_scenarios_kick_tracker.lua](../testmodul/isilive_test_scenarios_kick_tracker.lua))
+  — `GetSpellBaseCooldown` mock for spell 2139 returns 25000ms (matches real WoW).
+
+Per the CLAUDE.md tooltip rule: external interrupt-tracker addons are not
+authoritative; the in-game spell tooltip is.
+
+### Refactor — LFGDetect activityIDs guard inline (LSP fix, behaviour unchanged)
+
+`ResolveInviteEntry` ([game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua))
+tracked an intermediate `hasActivityIDs` boolean that the Lua language server
+could not flow-narrow through. Inlining the guard at the call sites and switching
+the two mutually-exclusive activityIDs / activityID branches to `if / elseif`
+restores flow-narrowing without changing runtime behaviour.
+
+### Branch-coverage push — 88.72% → 91.35%
+
+Targeted branch tests across 19 files; no production changes apart from the two
+items above. Highlights — every file moved out of the bottom of the per-file
+coverage list:
+
+- `logic/isiLive_events.lua`: 80.00% → 92.73%
+- `ui/isiLive_teleport_debug.lua`: 80.92% → 97.37%
+- `ui/isiLive_roster_panel_render.lua`: 80.72% → 86.65%
+- `logic/isiLive_commands.lua`: 81.62% → 92.89%
+- `ui/isiLive_mob_nameplate.lua`: 81.54% → 84.84%
+- `game/isiLive_season_data.lua`: 81.67% → 99.39%
+- `ui/isiLive_ui_common.lua`: 82.02% → 84.74%
+- `logic/isiLive_test_mode.lua`: 82.48% → 99.27%
+- `logic/isiLive_queue.lua`: 82.56% → 84.20%
+- `logic/isiLive_inspect.lua`: 83.33% → 95.00%
+- `game/isiLive_spell_utils.lua`: 83.75% → 100.00%
+- `logic/isiLive_event_handlers_runtime.lua`: 84.60% → 90.85%
+- `locale/isiLive_locale.lua`: 84.80% → 93.14%
+- `logic/isiLive_event_handlers_challenge.lua`: 85.23% → 90.93%
+- `core/isiLive_error_log.lua`: 85.29% → 93.38%
+- `game/isiLive_killtrack.lua`: 86.54% → 93.75%
+- `ui/isiLive_roster_panel_cd_row.lua`: 86.22% → 97.24%
+- `logic/isiLive_keysync.lua`: 87.16% → 92.36%
+- `game/isiLive_lfg_detect.lua`: 89.25% → 92.20%
+
+Total usecase scenarios: 1614 (was 1454).
+
 ## 2026-05-05 - Version 0.9.220 (patch)
 
 Follow-up to v0.9.219: pure intra-role spec swaps (e.g. Mage Arcane → Frost, both DAMAGER) updated the cached spec name but skipped the `updateUI` call because `RefreshRosterRoles` only fires `updateUI` when the role itself changed. Result: the spec column kept showing the old spec name until the next full GROUP_ROSTER_UPDATE.
