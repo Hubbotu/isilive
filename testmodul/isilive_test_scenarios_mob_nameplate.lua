@@ -921,6 +921,219 @@ local function RegisterDebugSurfaceTests(test, Assert, WithGlobals, LoadAddonMod
   end)
 end
 
+-- Branch coverage: targets the rarely-exercised paths inside UpdateNameplate
+-- and its helpers. ResolveMobContributionFromDB happy path (DB hits override
+-- the C_ScenarioInfo API), ResolveRemainingPercent rawCount-nil percent
+-- fallback, BuildText showPercent=false guard, the GetNameplate-returns-nil
+-- hide path, the not-in-challenge hide path, and SetEnabled(false) cleanup.
+local function RegisterBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("MobNameplate ResolveMobContributionFromDB returns percent from MDT-synced DB and overrides the API", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      -- Set the API percent to a marker so we can prove DB wins.
+      progressValues = { nameplate1 = { count = 99, total = 100, percent = "99.99" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        MPlusForces = {
+          byNpcId = {
+            -- npcId 76132 from the GUID above.
+            [76132] = { mapID = 161, count = 25 },
+          },
+          dungeonTotal = {
+            [161] = { total = 1000 },
+          },
+        },
+      })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must be created when DB has a hit")
+      -- 25 / 1000 = 2.50% (DB) — must beat the API "99.99".
+      Assert.Equal(frame.text._text, "2.50%", "DB percent must override the API percent")
+    end)
+  end)
+
+  test(
+    "MobNameplate ResolveMobContributionFromDB returns nil when DB entry's mapID does not match active key",
+    function()
+      local globals = BuildEnv({
+        mapID = 161,
+        units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+        nameplates = { nameplate1 = MakeFrame() },
+        progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+      })
+      WithGlobals(globals, function()
+        local addon = LoadModule(LoadAddonModules, {
+          MPlusForces = {
+            byNpcId = {
+              -- DB lists this NPC under a DIFFERENT map: must fall back to API.
+              [76132] = { mapID = 999, count = 25 },
+            },
+            dungeonTotal = {
+              [161] = { total = 1000 },
+              [999] = { total = 1000 },
+            },
+          },
+        })
+        addon.MobNameplate.SetEnabled(true)
+        addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+        local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+        frame = Assert.NotNil(frame, "API fallback must still produce a frame")
+        Assert.Equal(frame.text._text, "1.16%", "mismatched DB mapID must fall through to the API value")
+      end)
+    end
+  )
+
+  test("MobNameplate ResolveRemainingPercent computes rawCount from percent when KillTrack omits rawCount", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        KillTrack = {
+          GetData = function()
+            -- No rawCount; only percent + total. 50% of 431 = 215.5; remaining
+            -- = 215.5 / 431 = 50.00%.
+            return { active = true, mapID = 161, total = 431, percent = 50 }
+          end,
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, showRemaining = true })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must be created")
+      Assert.Equal(
+        frame.text._text,
+        "1.16%/50.00%",
+        "remaining percent must be derived from KillTrack percent when rawCount is missing"
+      )
+    end)
+  end)
+
+  test("MobNameplate omits remaining percent when KillTrack reports active=false", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules, {
+        KillTrack = {
+          GetData = function()
+            return { active = false, mapID = 161, total = 431, percent = 50 }
+          end,
+        },
+      })
+      addon.MobNameplate.SetFormat({ showPercent = true, showRemaining = true })
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      frame = Assert.NotNil(frame, "frame must be created")
+      Assert.Equal(frame.text._text, "1.16%", "active=false must not append a remaining percent")
+    end)
+  end)
+
+  test("MobNameplate hides the frame when SetFormat({showPercent=false}) yields nothing to render", function()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = MakeFrame() },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      -- First update creates the frame; capture it before flipping showPercent.
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.NotNil(frame, "first update must create the frame")
+      Assert.True(frame._shown == true, "frame must be visible after first render")
+
+      addon.MobNameplate.SetFormat({ showPercent = false })
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+
+      -- Frame survives but is hidden when there is nothing to render.
+      Assert.True(frame._shown == false, "frame must be hidden when showPercent is disabled")
+    end)
+  end)
+
+  test("MobNameplate hides any existing frame when GetNamePlateForUnit returns nil for the unit", function()
+    local plate = MakeFrame()
+    local globals = BuildEnv({
+      mapID = 161,
+      units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+      nameplates = { nameplate1 = plate },
+      progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadModule(LoadAddonModules)
+      addon.MobNameplate.SetEnabled(true)
+      addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+      Assert.True(frame and frame._shown == true, "frame must be visible after first render")
+
+      -- Drop the nameplate from C_NamePlate's pool to simulate it disappearing
+      -- from the Blizzard side (e.g. unit despawn).
+      globals.C_NamePlate = {
+        GetNamePlateForUnit = function()
+          return nil
+        end,
+      }
+      WithGlobals(globals, function()
+        addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+      end)
+
+      Assert.True(frame._shown == false, "frame must hide when the underlying nameplate disappears")
+    end)
+  end)
+
+  test(
+    "MobNameplate hides any existing frame when the active key ends mid-render (challenge no longer active)",
+    function()
+      local globals = BuildEnv({
+        mapID = 161,
+        units = { nameplate1 = { guid = "Creature-0-3889-161-12345-76132-0", reaction = 2 } },
+        nameplates = { nameplate1 = MakeFrame() },
+        progressValues = { nameplate1 = { count = 5, total = 431, percent = "1.16" } },
+      })
+      WithGlobals(globals, function()
+        local addon = LoadModule(LoadAddonModules)
+        addon.MobNameplate.SetEnabled(true)
+        addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+        local frame = addon.MobNameplate._Test_GetFrames()["nameplate1"]
+        Assert.True(frame and frame._shown == true, "frame must be visible during active key")
+
+        -- End the key mid-session: IsChallengeModeActive flips to false.
+        globals.C_ChallengeMode = {
+          IsChallengeModeActive = function()
+            return false
+          end,
+          GetActiveChallengeMapID = function()
+            return nil
+          end,
+        }
+        WithGlobals(globals, function()
+          addon.MobNameplate._Test_UpdateNameplate("nameplate1")
+        end)
+
+        Assert.True(frame._shown == false, "frame must hide when the key ends")
+      end)
+    end
+  )
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -931,4 +1144,5 @@ return function(test, ctx)
   RegisterDefensivePathTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterFontSizeTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterDebugSurfaceTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
 end
