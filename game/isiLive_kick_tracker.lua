@@ -37,9 +37,9 @@ local SPEC_DATA = {
   [254] = { spellID = 147362, cd = 24 }, -- MM: Counter Shot
   [255] = { spellID = 187707, cd = 15 }, -- Survival: Muzzle
   -- Mage
-  [62] = { spellID = 2139, cd = 20 }, -- Counterspell (20s base)
-  [63] = { spellID = 2139, cd = 20 },
-  [64] = { spellID = 2139, cd = 20 },
+  [62] = { spellID = 2139, cd = 25 }, -- Counterspell (25s base; talent 382297 reduces to 20)
+  [63] = { spellID = 2139, cd = 25 },
+  [64] = { spellID = 2139, cd = 25 },
   -- Monk
   [268] = { spellID = 116705, cd = 15 }, -- Brewmaster: Spear Hand Strike
   [269] = { spellID = 116705, cd = 15 }, -- Windwalker: Spear Hand Strike

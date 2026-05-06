@@ -191,7 +191,7 @@ local function RegisterKickMatrixTests(test, Assert, WithGlobals, LoadAddonModul
               return 18000 -- Evoker Quell (Midnight: 18s)
             end
             if spellID == 2139 then
-              return 20000 -- Mage Counterspell (Midnight: 20s)
+              return 25000 -- Mage Counterspell (25s base; talent 382297 reduces to 20s)
             end
             if spellID == 147362 then
               return 24000
