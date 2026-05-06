@@ -13,6 +13,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_season_data.lua",
   "testmodul/isilive_test_scenarios_teleport.lua",
   "testmodul/isilive_test_scenarios_teleport_ui.lua",
+  "testmodul/isilive_test_scenarios_ui_common.lua",
   "testmodul/isilive_test_scenarios_group.lua",
   "testmodul/isilive_test_scenarios_event_utils.lua",
   "testmodul/isilive_test_scenarios_runtime_state.lua",

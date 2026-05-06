@@ -474,10 +474,153 @@ local function RegisterReadyCheckHoldTests(test, Assert, _WithGlobals, LoadAddon
   end)
 end
 
+-- Branch-coverage tests for MarkReadyCheckInitiatorReady. The initiator-name
+-- arg of the READY_CHECK event flows into roster lookup; on READY_CHECK_FINISHED,
+-- a matched initiator lands on setReadyCheckReadyUntil while a non-match
+-- promotes the unit to declined via the unanswered-hold path. We observe both
+-- via the public dispatch surface — no _Test_GetCtx backdoor needed.
+local function BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+  local readyCheckActive = false
+  local readyUntilByUnit = {}
+  local declinedUntilByUnit = {}
+  local now = 100
+
+  local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
+  local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+    setReadyCheckActive = function(value)
+      readyCheckActive = value and true or false
+    end,
+    isReadyCheckActive = function()
+      return readyCheckActive
+    end,
+    getTime = function()
+      return now
+    end,
+    getRoster = function()
+      return roster
+    end,
+    setReadyCheckReadyUntil = function(unit, value)
+      readyUntilByUnit[unit] = value
+    end,
+    clearAllReadyCheckReady = function()
+      readyUntilByUnit = {}
+    end,
+    clearExpiredReadyCheckReady = function()
+      return false
+    end,
+    setReadyCheckDeclinedUntil = function(unit, value)
+      declinedUntilByUnit[unit] = value
+    end,
+    clearAllReadyCheckDeclined = function()
+      declinedUntilByUnit = {}
+    end,
+    clearExpiredReadyCheckDeclined = function()
+      return false
+    end,
+    timerAfter = function() end,
+  })
+  return controller, function()
+    return readyUntilByUnit
+  end, function()
+    return declinedUntilByUnit
+  end
+end
+
+local function RegisterReadyCheckInitiatorTests(test, Assert, _WithGlobals, LoadAddonModules, Fixtures)
+  test("READY_CHECK same-realm initiator name flags the matching unit as ready", function()
+    local roster = {
+      player = { name = "Me", realm = "Tichondrius" },
+      party1 = { name = "Mematiwow", realm = "Blackmoore" },
+      party2 = { name = "Other", realm = "Tichondrius" },
+    }
+    local controller, getReadyUntil = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+
+    -- Bare name (no '-Realm') — must still match Mematiwow's row by name only.
+    controller:Dispatch("READY_CHECK", "Mematiwow")
+    controller:Dispatch("READY_CHECK_FINISHED")
+
+    Assert.NotNil(getReadyUntil().party1, "matched initiator unit must land in setReadyCheckReadyUntil after FINISHED")
+    Assert.Nil(getReadyUntil().party2, "unrelated unit must not get a ready hold")
+  end)
+
+  test("READY_CHECK cross-realm initiator 'Name-Realm' splits and matches by name + realm", function()
+    local roster = {
+      player = { name = "Me", realm = "Tichondrius" },
+      party1 = { name = "Mematiwow", realm = "Blackmoore" },
+      party2 = { name = "Mematiwow", realm = "Tichondrius" }, -- same name, different realm
+    }
+    local controller, getReadyUntil = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+
+    controller:Dispatch("READY_CHECK", "Mematiwow-Blackmoore")
+    controller:Dispatch("READY_CHECK_FINISHED")
+
+    Assert.NotNil(getReadyUntil().party1, "the cross-realm match must mark Mematiwow-Blackmoore as ready")
+    Assert.Nil(
+      getReadyUntil().party2,
+      "the same-named, different-realm unit must NOT be flagged when realm hint disambiguates"
+    )
+  end)
+
+  test("READY_CHECK initiator name with empty realm suffix falls back to bare-name match", function()
+    local roster = {
+      player = { name = "Me", realm = "Tichondrius" },
+      party1 = { name = "Solo", realm = "Blackmoore" },
+    }
+    local controller, getReadyUntil = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+
+    -- Empty realm after dash: hintRealm becomes nil, falls through to bare-name match.
+    controller:Dispatch("READY_CHECK", "Solo-")
+    controller:Dispatch("READY_CHECK_FINISHED")
+
+    Assert.NotNil(getReadyUntil().party1, "trailing dash with empty realm must still match by bare name")
+  end)
+
+  test("READY_CHECK with no matching initiator promotes unanswered units to declined on FINISHED", function()
+    local roster = {
+      player = { name = "Me", realm = "Tichondrius" },
+      party1 = { name = "Other", realm = "Realm1" },
+    }
+    local controller, getReadyUntil, getDeclinedUntil = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+
+    controller:Dispatch("READY_CHECK", "DoesNotMatch")
+    controller:Dispatch("READY_CHECK_FINISHED")
+
+    Assert.Nil(getReadyUntil().party1, "no match → no ready hold")
+    Assert.NotNil(
+      getDeclinedUntil().party1,
+      "unanswered unit must land in declined hold via PromoteUnansweredReadyCheckUnitsToDeclined"
+    )
+  end)
+
+  test("READY_CHECK ignores empty initiator name and ghost roster entries", function()
+    local roster = {
+      player = { name = "Me", realm = "Tichondrius" },
+      party1 = { name = "Initiator", realm = "X", isGhost = true }, -- ghost must be skipped
+      party2 = { name = "Initiator", realm = "Y" }, -- non-ghost twin must win
+    }
+    local controller, getReadyUntil = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+
+    -- Empty / non-string initiator → MarkReadyCheckInitiatorReady early-return.
+    controller:Dispatch("READY_CHECK", "")
+    controller:Dispatch("READY_CHECK_FINISHED")
+    Assert.Nil(getReadyUntil().party1, "empty initiator must not flag anyone")
+    Assert.Nil(getReadyUntil().party2, "empty initiator must not flag anyone")
+
+    -- Real initiator name: ghost row at party1 must be skipped, party2 wins.
+    -- Build a fresh env so the previous READY_CHECK_FINISHED state is gone.
+    local controller2, getReadyUntil2 = BuildInitiatorReadyEnv(LoadAddonModules, Fixtures, roster)
+    controller2:Dispatch("READY_CHECK", "Initiator")
+    controller2:Dispatch("READY_CHECK_FINISHED")
+    Assert.Nil(getReadyUntil2().party1, "ghost row must NOT be matched even when name fits")
+    Assert.NotNil(getReadyUntil2().party2, "non-ghost twin must be the matched initiator")
+  end)
+end
+
 local function RegisterReadyCheckAndStatsTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
   RegisterReadyCheckLifecycleTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
   RegisterReadyCheckHoldTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
   RegisterReadyCheckHoldAndRunRecordTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
+  RegisterReadyCheckInitiatorTests(test, Assert, WithGlobals, LoadAddonModules, Fixtures)
 end
 
 return function(test, ctx)
