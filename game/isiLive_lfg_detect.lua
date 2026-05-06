@@ -312,15 +312,12 @@ local function ResolveInviteEntry(searchResultID)
 
   local mapID = nil
 
-  local hasActivityIDs = type(info) == "table" and type(info.activityIDs) == "table" and next(info.activityIDs) ~= nil
-
-  -- Try activityIDs table first (most reliable)
-  if hasActivityIDs then
+  -- Try activityIDs table first (most reliable). The type guard on info is
+  -- inline rather than indirected through a boolean so the Lua language server
+  -- can flow-narrow `info` to non-nil here.
+  if type(info) == "table" and type(info.activityIDs) == "table" and next(info.activityIDs) ~= nil then
     mapID = MapIDFromActivityIDs(info.activityIDs)
-  end
-
-  -- Try single activityID
-  if not mapID and not hasActivityIDs and type(info) == "table" and info.activityID then
+  elseif type(info) == "table" and info.activityID then
     mapID = MapIDFromActivityID(info.activityID)
   end
 
