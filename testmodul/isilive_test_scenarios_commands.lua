@@ -590,6 +590,245 @@ local function RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddon
   end)
 end
 
+-- Branch-coverage tests targeting the rarely-exercised command handlers:
+-- /isilive log watch (with and without trace-chat-frame integration), filtered
+-- tail, qdebug-watch-not-supported, /isilive reset, /isilive nptest, /isilive
+-- npstate, log-tail clamp boundaries, and the logRuntimeTracef trace hook.
+local function RegisterCommandBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
+  -- Variant of BuildCommandExecutor that lets tests inject extra deps (watch
+  -- callbacks, resetDB, nameplate hooks, trace hook) on top of the standard set.
+  local function BuildExecutorWithExtras(extras)
+    local state = BuildCommandState(nil)
+    local L = BuildCommandLocale()
+    local executor = nil
+
+    WithGlobals({
+      strtrim = function(s)
+        return s:match("^%s*(.-)%s*$")
+      end,
+      SLASH_ISILIVE1 = nil,
+      SlashCmdList = SlashCmdList or {},
+      GetBindingAction = function(_binding, _mode)
+        return nil
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_commands.lua" })
+      local deps = BuildCommandDeps(state, L)
+      for k, v in pairs(extras or {}) do
+        deps[k] = v
+      end
+      addon.Commands.RegisterSlashCommands(deps)
+      executor = SlashCmdList["ISILIVE"]
+    end)
+
+    state._execute = function(msg)
+      _G.strtrim = function(s)
+        return s:match("^%s*(.-)%s*$")
+      end
+      _G.GetBindingAction = function(_binding, _mode)
+        return nil
+      end
+      if type(executor) == "function" then
+        executor(msg)
+      end
+    end
+
+    return state
+  end
+
+  local function findPrint(state, needle)
+    for _, msg in ipairs(state.prints) do
+      if msg:find(needle, 1, true) then
+        return msg
+      end
+    end
+    return nil
+  end
+
+  test("Commands log watch toggles ON via raw print sink when no trace chat frame is wired", function()
+    local watchActive = false
+    local installedSink = nil
+    local state = BuildExecutorWithExtras({
+      setRuntimeLogWatch = function(fn)
+        installedSink = fn
+        watchActive = fn ~= nil
+      end,
+      getRuntimeLogWatchActive = function()
+        return watchActive
+      end,
+    })
+    state._execute("log watch")
+    Assert.True(watchActive, "watch must be installed")
+    Assert.NotNil(findPrint(state, "watch ON"), "watch ON message must be printed")
+    Assert.True(type(installedSink) == "function", "sink callback must be installed")
+  end)
+
+  test("Commands log watch streams entries to trace chat frame when the hooks are provided", function()
+    local watchActive = false
+    local openCalls = 0
+    local sinkMessages = {}
+    local state = BuildExecutorWithExtras({
+      setRuntimeLogWatch = function(fn)
+        watchActive = fn ~= nil
+      end,
+      getRuntimeLogWatchActive = function()
+        return watchActive
+      end,
+      openTraceChatFrame = function()
+        openCalls = openCalls + 1
+      end,
+      addTraceChatFrameMessage = function(entry)
+        table.insert(sinkMessages, entry)
+      end,
+    })
+    state._execute("log watch")
+    Assert.Equal(openCalls, 1, "trace chat frame must be opened on watch ON")
+    Assert.NotNil(findPrint(state, "trace chat tab"), "trace-chat ON message must be printed")
+  end)
+
+  test("Commands log watch turns OFF when already active and closes the trace chat frame", function()
+    local watchActive = true
+    local clearedSink = false
+    local closeCalls = 0
+    local state = BuildExecutorWithExtras({
+      setRuntimeLogWatch = function(fn)
+        if fn == nil then
+          clearedSink = true
+          watchActive = false
+        end
+      end,
+      getRuntimeLogWatchActive = function()
+        return watchActive
+      end,
+      closeTraceChatFrame = function()
+        closeCalls = closeCalls + 1
+      end,
+    })
+    state._execute("log watch")
+    Assert.True(clearedSink, "watch must be cleared")
+    Assert.Equal(closeCalls, 1, "trace chat frame must be closed on watch OFF")
+    Assert.NotNil(findPrint(state, "watch OFF"), "watch OFF message must be printed")
+  end)
+
+  test("Commands qdebug watch reports unsupported because qdebug does not register a watch callback", function()
+    local state = BuildExecutorWithExtras({})
+    state._execute("qdebug watch")
+    Assert.NotNil(
+      findPrint(state, "watch not supported"),
+      "qdebug must report watch-not-supported (qdebug has no setWatchFn wiring)"
+    )
+  end)
+
+  test("Commands log tail with tag filter delegates to getFilteredTail and renders filter header", function()
+    local capturedLimit, capturedTag
+    local state = BuildExecutorWithExtras({
+      getRuntimeLogTailFiltered = function(limit, tag)
+        capturedLimit = limit
+        capturedTag = tag
+        return { "[CMD] foo", "[CMD] bar" }, 17
+      end,
+    })
+    state._execute("log tail 5 CMD")
+    Assert.Equal(capturedLimit, 5, "filtered-tail must receive numeric limit")
+    Assert.Equal(capturedTag, "cmd", "filtered-tail must receive tag (input is lowercased before dispatch)")
+    Assert.NotNil(findPrint(state, "(filter=cmd)"), "header must mention the filter")
+    Assert.NotNil(findPrint(state, "[CMD] foo"), "filtered entries must be printed")
+  end)
+
+  test("Commands log tail clamps negative or zero limit to 1", function()
+    local capturedLimit
+    local state = BuildExecutorWithExtras({
+      getRuntimeLogTail = function(limit)
+        capturedLimit = limit
+        return {}
+      end,
+    })
+    state._execute("log tail 0")
+    Assert.Equal(capturedLimit, 1, "limit < 1 must be clamped to 1")
+  end)
+
+  test("Commands log tail clamps oversized limit to 100", function()
+    local capturedLimit
+    local state = BuildExecutorWithExtras({
+      getRuntimeLogTail = function(limit)
+        capturedLimit = limit
+        return {}
+      end,
+    })
+    state._execute("log tail 9999")
+    Assert.Equal(capturedLimit, 100, "limit > 100 must be clamped to 100")
+  end)
+
+  test("Commands reset routes /isilive reset to ctx.resetDB", function()
+    local resetCalls = 0
+    local state = BuildExecutorWithExtras({
+      resetDB = function()
+        resetCalls = resetCalls + 1
+      end,
+    })
+    state._execute("reset")
+    Assert.Equal(resetCalls, 1, "/isilive reset must call ctx.resetDB exactly once")
+  end)
+
+  test("Commands nptest without arg toggles nameplate test mode and prints ON banner", function()
+    local capturedArg = "<unset>"
+    local state = BuildExecutorWithExtras({
+      toggleNameplateTestMode = function(arg)
+        capturedArg = arg
+        return true
+      end,
+    })
+    state._execute("nptest")
+    Assert.Equal(capturedArg, nil, "nptest without arg must pass nil")
+    Assert.NotNil(findPrint(state, "Nameplate test mode ON"), "ON banner must be printed")
+  end)
+
+  test(
+    "Commands nptest with arg parses arg after whitespace and prints OFF banner when toggle returns false",
+    function()
+      local capturedArg
+      local state = BuildExecutorWithExtras({
+        toggleNameplateTestMode = function(arg)
+          capturedArg = arg
+          return false
+        end,
+      })
+      state._execute("nptest 50")
+      Assert.Equal(capturedArg, "50", "nptest must forward the trimmed arg string")
+      Assert.NotNil(findPrint(state, "Nameplate test mode OFF"), "OFF banner must be printed")
+    end
+  )
+
+  test("Commands npstate forwards arg to dumpNameplateState", function()
+    local capturedArg
+    local state = BuildExecutorWithExtras({
+      dumpNameplateState = function(arg)
+        capturedArg = arg
+      end,
+    })
+    state._execute("npstate target")
+    Assert.Equal(capturedArg, "target", "npstate must forward the parsed arg")
+  end)
+
+  test("Commands ExecuteSlashCommand emits trace via logRuntimeTracef when provided", function()
+    local traces = {}
+    local state = BuildExecutorWithExtras({
+      logRuntimeTracef = function(fmt, ...)
+        table.insert(traces, string.format(fmt, ...))
+      end,
+    })
+    state._execute("test")
+    local found = false
+    for _, line in ipairs(traces) do
+      if line:find("[CMD] execute cmd=test", 1, true) then
+        found = true
+        break
+      end
+    end
+    Assert.True(found, "logRuntimeTracef must receive an [CMD] execute trace line")
+  end)
+end
+
 return function(test, ctx)
   local Assert = ctx.assert
   local WithGlobals = ctx.with_globals
@@ -598,4 +837,5 @@ return function(test, ctx)
   RegisterCommandCoreTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCommandRuntimeLogTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterCommandBranchCoverageTests(test, Assert, WithGlobals, LoadAddonModules)
 end

@@ -263,6 +263,126 @@ local function RegisterEventGateTests(test, Assert, LoadAddonModules)
       Assert.Equal(capturedResult.values[3], "third", "third argument after nil hole must be preserved")
     end
   end)
+
+  test("Events gate uses default isStopped/isPaused/isTestMode/isInCombat fallbacks when config omits them", function()
+    local dispatched = 0
+
+    local addon = LoadAddonModules({ "isiLive_events.lua" })
+    local gate = addon.Events.CreateGate({
+      dispatch = function(_frame, _event, ...)
+        local _ = ...
+        dispatched = dispatched + 1
+      end,
+    })
+
+    local frame = {
+      IsShown = function()
+        return true
+      end,
+    }
+    gate(frame, "GROUP_ROSTER_UPDATE")
+
+    Assert.Equal(dispatched, 1, "default false-returning fallbacks must allow dispatch through")
+  end)
+
+  test("Events gate suppresses non-ADDON_LOADED events when isStopped returns true", function()
+    local dispatched = 0
+
+    local addon = LoadAddonModules({ "isiLive_events.lua" })
+    local gate = addon.Events.CreateGate({
+      dispatch = function(_frame, _event, ...)
+        local _ = ...
+        dispatched = dispatched + 1
+      end,
+      isStopped = function()
+        return true
+      end,
+    })
+
+    local frame = {
+      IsShown = function()
+        return true
+      end,
+    }
+    gate(frame, "GROUP_ROSTER_UPDATE")
+    gate(frame, "ADDON_LOADED")
+
+    Assert.Equal(dispatched, 1, "isStopped must suppress every event except ADDON_LOADED")
+  end)
+
+  test("Events gate suppresses non-ADDON_LOADED events when isPaused returns true", function()
+    local dispatched = 0
+
+    local addon = LoadAddonModules({ "isiLive_events.lua" })
+    local gate = addon.Events.CreateGate({
+      dispatch = function(_frame, _event, ...)
+        local _ = ...
+        dispatched = dispatched + 1
+      end,
+      isStopped = function()
+        return false
+      end,
+      isPaused = function()
+        return true
+      end,
+    })
+
+    local frame = {
+      IsShown = function()
+        return true
+      end,
+    }
+    gate(frame, "GROUP_ROSTER_UPDATE")
+    gate(frame, "ADDON_LOADED")
+
+    Assert.Equal(dispatched, 1, "isPaused must suppress every event except ADDON_LOADED")
+  end)
+
+  test("Events gate xpcall handler falls back to raw error message when debug.traceback is unavailable", function()
+    local reports = {}
+
+    local addon = LoadAddonModules({ "isiLive_events.lua" })
+    local gate = addon.Events.CreateGate({
+      dispatch = function(_frame, _event, ...)
+        local _ = ...
+        error("simulated dispatch error without traceback")
+      end,
+      onDispatchError = function(_frame, event, err)
+        table.insert(reports, { event = event, err = tostring(err) })
+      end,
+    })
+
+    local frame = {
+      IsShown = function()
+        return true
+      end,
+    }
+
+    -- Force the xpcall fallback path: replace debug.traceback with a non-function
+    -- value so the handler hits the `return msg` branch. Mutating the field in
+    -- place (instead of swapping out _G.debug) keeps debug.sethook intact, which
+    -- is required for luacov's instrumentation to keep running during the test.
+    local debugLib = rawget(_G, "debug")
+    local originalTraceback = debugLib and debugLib.traceback or nil
+    if type(debugLib) == "table" then
+      debugLib.traceback = "not-a-function"
+    end
+
+    local ok = pcall(function()
+      gate(frame, "GROUP_ROSTER_UPDATE")
+    end)
+
+    if type(debugLib) == "table" then
+      debugLib.traceback = originalTraceback
+    end
+
+    Assert.True(ok, "gate must catch dispatch error even without debug.traceback")
+    Assert.Equal(#reports, 1, "error must still be reported once")
+    Assert.True(
+      reports[1].err:lower():find("simulated", 1, true) ~= nil,
+      "raw message must reach the error callback when traceback is missing"
+    )
+  end)
 end
 
 local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)

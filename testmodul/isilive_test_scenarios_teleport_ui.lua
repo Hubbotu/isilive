@@ -1024,10 +1024,399 @@ local function RegisterTeleportUIAudioAndDebugTests(test, Assert, WithGlobals, L
   end)
 end
 
+-- Branch-coverage tests for the remaining TeleportDebug paths: missing center
+-- button, long-cooldown ("teleport") branch, ready-state ("ready") branch via
+-- enabled=false, grid loop with multiple buttons, ResolveHostedSpell scan via
+-- activityIDs, and ForceTeleportTestTarget end-to-end.
+local function RegisterTeleportDebugBranchTests(test, Assert, WithGlobals, LoadAddonModules)
+  -- Build a dummy spell-attribute button stub. cooldown describes the button's
+  -- own spellID cooldown via getSpellCooldownSafe.
+  local function MakeSpellButton(opts)
+    opts = opts or {}
+    return {
+      IsShown = function()
+        return opts.shown ~= false
+      end,
+      GetAttribute = function(_self, key)
+        if key == "type" then
+          return "spell"
+        end
+        if key == "spell" then
+          return opts.spellID
+        end
+        return nil
+      end,
+      spellID = opts.spellID,
+      mapName = opts.mapName,
+      isActiveTarget = opts.isActiveTarget == true,
+    }
+  end
+
+  local function BuildController(opts)
+    local addon = LoadAddonModules({ "isiLive_teleport_debug.lua" })
+    return addon.TeleportDebug.CreateController(opts)
+  end
+
+  test("Teleport debug labels long cooldowns as 'teleport' on the resolved spell", function()
+    local prints = {}
+    WithGlobals({
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local controller = BuildController({
+        printFn = function(msg)
+          prints[#prints + 1] = tostring(msg)
+        end,
+        getL = function()
+          return {}
+        end,
+        updateMPlusTeleportButton = function() end,
+        resolveActiveTeleportSpellID = function()
+          return 12345
+        end,
+        isSpellKnownSafe = function()
+          return true
+        end,
+        getTeleportCooldownRemaining = function()
+          return 540
+        end,
+        getSpellCooldownSafe = function()
+          return 1000, 600, true
+        end,
+        formatCooldownSeconds = function(value)
+          return tostring(value or 0)
+        end,
+        getLatestQueueState = function()
+          return "Dungeon", 999, 12345, 558
+        end,
+        resolveMapIDByActivityID = function()
+          return 558
+        end,
+        resolveTeleportSpellIDByActivityID = function()
+          return 12345
+        end,
+        resolveTeleportSpellIDByMapID = function()
+          return 12345
+        end,
+        getNormalizedActiveEntryInfo = function()
+          return { active = true, activityID = 999 }
+        end,
+        getCenterNoticeTeleportButton = function()
+          return MakeSpellButton({ spellID = 12345, mapName = "Test", isActiveTarget = true })
+        end,
+        getMplusTeleportButtons = function()
+          return {}
+        end,
+        showCenterNotice = function() end,
+        setLatestQueueState = function() end,
+      })
+      controller.PrintTeleportDebug()
+
+      local foundTeleport = false
+      for _, line in ipairs(prints) do
+        if line:find("cdType=teleport", 1, true) then
+          foundTeleport = true
+          break
+        end
+      end
+      Assert.True(foundTeleport, "long cooldown must be labelled cdType=teleport")
+    end)
+  end)
+
+  test("Teleport debug treats enabled=false as 'ready' on the resolved spell", function()
+    local prints = {}
+    WithGlobals({
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local controller = BuildController({
+        printFn = function(msg)
+          prints[#prints + 1] = tostring(msg)
+        end,
+        getL = function()
+          return {}
+        end,
+        updateMPlusTeleportButton = function() end,
+        resolveActiveTeleportSpellID = function()
+          return 12345
+        end,
+        isSpellKnownSafe = function()
+          return true
+        end,
+        getTeleportCooldownRemaining = function()
+          return 0
+        end,
+        getSpellCooldownSafe = function()
+          -- enabled=false must collapse to "ready" regardless of duration
+          return 1000, 600, false
+        end,
+        formatCooldownSeconds = function(value)
+          return tostring(value or 0)
+        end,
+        getLatestQueueState = function()
+          return "Dungeon", 999, 12345, 558
+        end,
+        resolveMapIDByActivityID = function()
+          return 558
+        end,
+        resolveTeleportSpellIDByActivityID = function()
+          return 12345
+        end,
+        resolveTeleportSpellIDByMapID = function()
+          return 12345
+        end,
+        getNormalizedActiveEntryInfo = function()
+          return nil
+        end,
+        getCenterNoticeTeleportButton = function()
+          return MakeSpellButton({ spellID = 12345 })
+        end,
+        getMplusTeleportButtons = function()
+          return {}
+        end,
+        showCenterNotice = function() end,
+        setLatestQueueState = function() end,
+      })
+      controller.PrintTeleportDebug()
+
+      local foundReady = false
+      for _, line in ipairs(prints) do
+        if line:find("cdType=ready", 1, true) then
+          foundReady = true
+          break
+        end
+      end
+      Assert.True(foundReady, "enabled=false must collapse to cdType=ready")
+    end)
+  end)
+
+  test("Teleport debug emits <missing> for the center button when nil and iterates the grid loop", function()
+    local prints = {}
+    WithGlobals({
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local controller = BuildController({
+        printFn = function(msg)
+          prints[#prints + 1] = tostring(msg)
+        end,
+        getL = function()
+          return {}
+        end,
+        updateMPlusTeleportButton = function() end,
+        resolveActiveTeleportSpellID = function()
+          return nil
+        end,
+        isSpellKnownSafe = function()
+          return false
+        end,
+        getTeleportCooldownRemaining = function()
+          return 0
+        end,
+        getSpellCooldownSafe = function()
+          return 0, 0, true
+        end,
+        formatCooldownSeconds = function(value)
+          return tostring(value or 0)
+        end,
+        getLatestQueueState = function()
+          return nil, nil, nil, nil
+        end,
+        resolveMapIDByActivityID = function()
+          return nil
+        end,
+        resolveTeleportSpellIDByActivityID = function()
+          return nil
+        end,
+        resolveTeleportSpellIDByMapID = function()
+          return nil
+        end,
+        getNormalizedActiveEntryInfo = function()
+          return nil
+        end,
+        getCenterNoticeTeleportButton = function()
+          return nil
+        end,
+        getMplusTeleportButtons = function()
+          return {
+            MakeSpellButton({ spellID = 11111 }),
+            MakeSpellButton({ spellID = 22222 }),
+          }
+        end,
+        showCenterNotice = function() end,
+        setLatestQueueState = function() end,
+      })
+      controller.PrintTeleportDebug()
+
+      local foundMissing, foundGrid1, foundGrid2 = false, false, false
+      for _, line in ipairs(prints) do
+        if line:find("TP center: <missing>", 1, true) then
+          foundMissing = true
+        end
+        if line:find("TP grid[1]", 1, true) then
+          foundGrid1 = true
+        end
+        if line:find("TP grid[2]", 1, true) then
+          foundGrid2 = true
+        end
+      end
+      Assert.True(foundMissing, "missing center button must produce <missing> output")
+      Assert.True(foundGrid1, "grid loop must dump button index 1")
+      Assert.True(foundGrid2, "grid loop must dump button index 2")
+    end)
+  end)
+
+  test("Teleport debug ResolveHostedSpell scans entryInfo.activityIDs when the primary activityID misses", function()
+    local prints = {}
+    WithGlobals({
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local controller = BuildController({
+        printFn = function(msg)
+          prints[#prints + 1] = tostring(msg)
+        end,
+        getL = function()
+          return {}
+        end,
+        updateMPlusTeleportButton = function() end,
+        resolveActiveTeleportSpellID = function()
+          return nil
+        end,
+        isSpellKnownSafe = function()
+          return false
+        end,
+        getTeleportCooldownRemaining = function()
+          return 0
+        end,
+        getSpellCooldownSafe = function()
+          return 0, 0, true
+        end,
+        formatCooldownSeconds = function(value)
+          return tostring(value or 0)
+        end,
+        getLatestQueueState = function()
+          return nil, nil, nil, nil
+        end,
+        -- activityID 1 → no map; activityID 7 → map 558 → spell 12345
+        resolveMapIDByActivityID = function(activityID)
+          if activityID == 7 then
+            return 558
+          end
+          return nil
+        end,
+        resolveTeleportSpellIDByActivityID = function()
+          return nil
+        end,
+        resolveTeleportSpellIDByMapID = function(mapID)
+          if mapID == 558 then
+            return 12345
+          end
+          return nil
+        end,
+        getNormalizedActiveEntryInfo = function()
+          return { active = true, activityID = 1, activityIDs = { 3, 7, 9 } }
+        end,
+        getCenterNoticeTeleportButton = function()
+          return nil
+        end,
+        getMplusTeleportButtons = function()
+          return {}
+        end,
+        showCenterNotice = function() end,
+        setLatestQueueState = function() end,
+      })
+      controller.PrintTeleportDebug()
+
+      local found = false
+      for _, line in ipairs(prints) do
+        if
+          line:find("TP host detail", 1, true)
+          and line:find("activityID=7", 1, true)
+          and line:find("spell=12345", 1, true)
+        then
+          found = true
+          break
+        end
+      end
+      Assert.True(found, "activityIDs scan must surface the matching activity in TP host detail line")
+    end)
+  end)
+
+  test("Teleport debug ForceTeleportTestTarget seeds queue state, refreshes button, shows notice", function()
+    local prints = {}
+    local seededState
+    local centerNotice
+    local refreshed = 0
+    local controller = BuildController({
+      printFn = function(msg)
+        prints[#prints + 1] = tostring(msg)
+      end,
+      getL = function()
+        return {
+          TESTALL_DUMMY_DUNGEON = "Dawnbreaker",
+          TESTALL_DUMMY_GROUP = "Test Group",
+          UNKNOWN_GROUP = "?",
+          JOINED_FROM_QUEUE_DUNGEON = "%s joined %s",
+        }
+      end,
+      updateMPlusTeleportButton = function()
+        refreshed = refreshed + 1
+      end,
+      resolveActiveTeleportSpellID = function() end,
+      isSpellKnownSafe = function() end,
+      getTeleportCooldownRemaining = function() end,
+      getSpellCooldownSafe = function() end,
+      formatCooldownSeconds = function() end,
+      getLatestQueueState = function() end,
+      resolveMapIDByActivityID = function() end,
+      resolveTeleportSpellIDByActivityID = function() end,
+      resolveTeleportSpellIDByMapID = function(mapID)
+        if mapID == 2662 then
+          return 99999
+        end
+        return nil
+      end,
+      getNormalizedActiveEntryInfo = function() end,
+      getCenterNoticeTeleportButton = function() end,
+      getMplusTeleportButtons = function() end,
+      showCenterNotice = function(msg, _duration, dungeon)
+        centerNotice = { msg = msg, dungeon = dungeon }
+      end,
+      setLatestQueueState = function(dungeon, activityID, spellID, mapID)
+        seededState = { dungeon = dungeon, activityID = activityID, spellID = spellID, mapID = mapID }
+      end,
+    })
+
+    controller.ForceTeleportTestTarget()
+
+    Assert.NotNil(seededState, "setLatestQueueState must be called")
+    Assert.Equal(seededState.dungeon, "Dawnbreaker", "dungeon must come from L.TESTALL_DUMMY_DUNGEON")
+    Assert.Equal(seededState.mapID, 2662, "target mapID must be hard-coded 2662")
+    Assert.Equal(seededState.spellID, 99999, "spellID must be resolved via mapID")
+    Assert.Equal(refreshed, 1, "updateMPlusTeleportButton must be called exactly once")
+    Assert.NotNil(centerNotice, "center notice must be shown")
+    Assert.Equal(centerNotice.dungeon, "Dawnbreaker", "center notice must carry the dungeon name")
+    local found = false
+    for _, line in ipairs(prints) do
+      if line:find("Teleport test target set: Dawnbreaker", 1, true) then
+        found = true
+        break
+      end
+    end
+    Assert.True(found, "confirmation message must be printed")
+  end)
+end
+
 local function RegisterTeleportUITests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterTeleportUIEmptyStateTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterTeleportUIVisualTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterTeleportUIAudioAndDebugTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterTeleportDebugBranchTests(test, Assert, WithGlobals, LoadAddonModules)
 end
 
 return function(test, ctx)
