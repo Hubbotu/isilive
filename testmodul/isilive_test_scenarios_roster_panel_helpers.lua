@@ -96,4 +96,231 @@ return function(test, ctx)
     RI.SetFontStringTextColorSafe(nil, 1, 1, 1)
     RI.SetFontStringTextColorSafe({}, 1, 1, 1)
   end)
+
+  -- UpdateCdTrackerRow branch coverage. Lives in isiLive_roster_panel_cd_row.lua;
+  -- exposed via _RosterInternal. Pure-function over a row stub + cdController
+  -- stub, so we drive every branch without FrameXML.
+  local function MakeFontStringStub()
+    local fs = { _text = "", _color = nil }
+    function fs:SetText(text)
+      self._text = tostring(text or "")
+    end
+    function fs:SetTextColor(r, g, b, a)
+      self._color = { r, g, b, a }
+    end
+    function fs:GetText()
+      return self._text
+    end
+    -- Helpers used by ApplyFontStringSize via cd_row CD_TRACKER_FONT_SIZE
+    -- writeback (called once during row creation only — not in update path).
+    fs.SetFont = function() end
+    fs.GetFont = function()
+      return "Fonts\\\\X.TTF", 12, "OUTLINE"
+    end
+    return fs
+  end
+
+  local function MakeIconStub()
+    local icon = { _shown = false, _texture = nil }
+    function icon:SetTexture(tex)
+      self._texture = tex
+    end
+    function icon:Show()
+      self._shown = true
+    end
+    function icon:Hide()
+      self._shown = false
+    end
+    return icon
+  end
+
+  local function MakeCdRowStub(opts)
+    opts = opts or {}
+    return {
+      bresIcon = MakeIconStub(),
+      bresText = MakeFontStringStub(),
+      lustIcon = MakeIconStub(),
+      lustText = MakeFontStringStub(),
+      mplusBox = {
+        _shown = false,
+        Show = function(self)
+          self._shown = true
+        end,
+        Hide = function(self)
+          self._shown = false
+        end,
+      },
+      mp1Text = MakeFontStringStub(),
+      mp2Text = MakeFontStringStub(),
+      mp3Text = MakeFontStringStub(),
+      mpDeathText = MakeFontStringStub(),
+      _bresIconReady = opts.bresIconReady ~= false,
+      _lustIconReady = opts.lustIconReady ~= false,
+      _lustDefaultIcon = opts.lustDefaultIcon or "Interface\\Icons\\BL_Default",
+    }
+  end
+
+  local function LoadCdRow()
+    local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+    return addon._RosterInternal
+  end
+
+  test("UpdateCdTrackerRow returns silently for nil row", function()
+    local RI = LoadCdRow()
+    RI.UpdateCdTrackerRow(nil, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+  end)
+
+  test("UpdateCdTrackerRow renders BR charges + remaining cooldown when remain > 0", function()
+    local RI = LoadCdRow()
+    local row = MakeCdRowStub()
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return { charges = 1, maxCharges = 2, cooldownRemain = 95 }
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+    Assert.Equal(row.bresText:GetText(), "1/2  1:35", "BR text must include charges + mm:ss cooldown")
+  end)
+
+  test("UpdateCdTrackerRow renders BR charges-only when cooldownRemain is zero", function()
+    local RI = LoadCdRow()
+    local row = MakeCdRowStub()
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return { charges = 2, maxCharges = 2, cooldownRemain = 0 }
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+    Assert.Equal(row.bresText:GetText(), "2/2", "BR text must omit cooldown when remain is zero")
+  end)
+
+  test("UpdateCdTrackerRow renders BR placeholder when controller has no BR info", function()
+    local RI = LoadCdRow()
+    local row = MakeCdRowStub()
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+    Assert.Equal(row.bresText:GetText(), "BR: --", "BR text must render '--' when info is missing")
+  end)
+
+  test("UpdateCdTrackerRow renders BL countdown with active aura icon override", function()
+    local RI = LoadCdRow()
+    local row = MakeCdRowStub()
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return { remain = 35, icon = "Interface\\Icons\\Heroism" }
+      end,
+    })
+    Assert.Equal(row.lustText:GetText(), "BL: 0:35", "BL text must include mm:ss countdown")
+    Assert.Equal(row.lustIcon._texture, "Interface\\Icons\\Heroism", "active aura icon must override the default")
+    Assert.True(row.lustIcon._shown, "lust icon must be shown while active")
+  end)
+
+  test("UpdateCdTrackerRow restores default BL icon and renders BL: -- when no active aura", function()
+    local RI = LoadCdRow()
+    local row = MakeCdRowStub({ lustDefaultIcon = "Interface\\Icons\\BL_Default" })
+    -- Pretend a previous render had set a different texture; default must be re-applied.
+    row.lustIcon._texture = "Interface\\Icons\\Heroism"
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return { remain = 0 }
+      end,
+    })
+    Assert.Equal(row.lustText:GetText(), "BL: --", "BL text must render '--' when not active")
+    Assert.Equal(row.lustIcon._texture, "Interface\\Icons\\BL_Default", "icon must revert to the default texture")
+  end)
+
+  test("UpdateCdTrackerRow renders the M+ timer block when MplusTimer is running", function()
+    -- Inject MplusTimer onto the SAME addonTable that owns _RosterInternal —
+    -- the production code reads addonTable.MplusTimer at the closure scope, so
+    -- a second LoadAddonModules() call would land on a different table.
+    local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+    local RI = addon._RosterInternal
+    local row = MakeCdRowStub()
+    addon.MplusTimer = {
+      GetTimerData = function()
+        return {
+          running = true,
+          completed = false,
+          timeRemaining3 = 130,
+          timeRemaining2 = 65,
+          timeRemaining1 = 30,
+          deaths = 2,
+          deathTimeLost = 30,
+        }
+      end,
+    }
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+    addon.MplusTimer = nil
+
+    Assert.True(row.mplusBox._shown, "M+ box must be visible during a running key")
+    Assert.Equal(row.mp3Text:GetText(), "2:10", "+3 timer formats mm:ss")
+    Assert.Equal(row.mp2Text:GetText(), "1:05", "+2 timer formats mm:ss")
+    Assert.Equal(row.mp1Text:GetText(), "0:30", "+1 timer formats mm:ss")
+    Assert.True(
+      row.mpDeathText:GetText():find("(+30s)", 1, true) ~= nil,
+      "death cell must include both deaths and deathTimeLost penalty"
+    )
+  end)
+
+  test("UpdateCdTrackerRow renders red overshoot text on +1 when timeRemaining1 is negative", function()
+    local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+    local RI = addon._RosterInternal
+    local row = MakeCdRowStub()
+    addon.MplusTimer = {
+      GetTimerData = function()
+        return {
+          running = true,
+          completed = false,
+          timeRemaining3 = -5, -- already past +3 cap
+          timeRemaining2 = -3, -- already past +2 cap
+          timeRemaining1 = -120, -- 2 minutes overshoot on the par cap
+          deaths = 0,
+          deathTimeLost = 0,
+        }
+      end,
+    }
+    RI.UpdateCdTrackerRow(row, {
+      GetBResInfo = function()
+        return nil
+      end,
+      GetLustInfo = function()
+        return nil
+      end,
+    })
+    addon.MplusTimer = nil
+
+    Assert.Equal(row.mp3Text:GetText(), "--:--", "+3 collapses to placeholder when negative")
+    Assert.Equal(row.mp2Text:GetText(), "--:--", "+2 collapses to placeholder when negative")
+    Assert.True(row.mp1Text:GetText():sub(1, 1) == "-", "+1 overshoot must render with leading '-'")
+  end)
 end

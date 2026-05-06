@@ -1234,6 +1234,170 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
     Assert.Nil(info.syncKickOnCooldown, "no-interrupt sync state must clear cooldown marker")
     Assert.Nil(info.syncKickRemain, "no-interrupt sync state must clear cooldown remaining seconds")
   end)
+
+  -- Branch coverage: kick-info interpolation against GetTime + extras drift.
+  -- The default mock SetPlayerKickInfo doesn't carry receivedAtGetTime / extras,
+  -- so these tests override GetPlayerKickInfo with a richer payload.
+
+  test("KeySync ApplyKnownKeyToRosterEntry interpolates cooldownRemain against elapsed GetTime", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "InterpUser" and realm == "InterpRealm" then
+        return {
+          hasKick = true,
+          onCooldown = true,
+          cooldownRemain = 10,
+          receivedAtGetTime = 100,
+        }
+      end
+      return nil
+    end
+
+    WithGlobals({
+      GetTime = function()
+        return 103 -- 3 seconds elapsed since receivedAtGetTime=100
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = { name = "InterpUser", realm = "InterpRealm" }
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.True(changed, "first apply must report a change")
+      Assert.Equal(info.syncKickOnCooldown, true, "onCooldown must be propagated")
+      Assert.Equal(info.syncKickRemain, 7, "cooldownRemain must be interpolated to 10 - 3 = 7")
+    end)
+  end)
+
+  test("KeySync ApplyKnownKeyToRosterEntry clamps interpolated cooldownRemain to 0 when fully elapsed", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "ExpiredUser" and realm == "ExpiredRealm" then
+        return {
+          hasKick = true,
+          onCooldown = true,
+          cooldownRemain = 5,
+          receivedAtGetTime = 100,
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 200 -- 100s elapsed > 5s remaining
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = { name = "ExpiredUser", realm = "ExpiredRealm" }
+      ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.Equal(info.syncKickRemain, 0, "elapsed > remain must clamp to 0 (math.max guard)")
+    end)
+  end)
+
+  test("KeySync ApplyKnownKeyToRosterEntry interpolates extras and drops entries whose remain has expired", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "ExtrasUser" and realm == "ExtrasRealm" then
+        return {
+          hasKick = true,
+          onCooldown = true,
+          cooldownRemain = 10,
+          receivedAtGetTime = 100,
+          extras = {
+            [31935] = { cooldownRemain = 12 }, -- 12 - 5 = 7 → kept
+            [89766] = { cooldownRemain = 2 }, -- 2 - 5 < 0 → dropped
+          },
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 105 -- 5s elapsed
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = { name = "ExtrasUser", realm = "ExtrasRealm" }
+      ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.NotNil(info.syncKickExtras, "extras table must be populated")
+      Assert.Equal(info.syncKickExtras[31935].cooldownRemain, 7, "kept extra must be interpolated to 12-5=7")
+      Assert.Nil(info.syncKickExtras[89766], "expired extra (remain<elapsed) must be dropped")
+    end)
+  end)
+
+  test("KeySync ApplyKnownKeyToRosterEntry signals extrasChanged when a previously-tracked extra disappears", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "DriftUser" and realm == "DriftRealm" then
+        return {
+          hasKick = true,
+          onCooldown = true,
+          cooldownRemain = 8,
+          receivedAtGetTime = 100,
+          extras = {
+            [31935] = { cooldownRemain = 7 }, -- still active (no elapsed drift)
+          },
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 100 -- no elapsed → interpolated values match incoming
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "DriftUser",
+        realm = "DriftRealm",
+        syncHasKick = true,
+        syncKickOnCooldown = true,
+        syncKickRemain = 8,
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 7 },
+          [89766] = { cooldownRemain = 5 }, -- not in new payload → must trigger extrasChanged
+        },
+      }
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.True(changed, "removing a previously-tracked extra must mark roster as changed")
+      Assert.Nil(info.syncKickExtras[89766], "missing extra must be dropped from roster entry")
+    end)
+  end)
+
+  test("KeySync ApplyKnownKeyToRosterEntry signals no change when extras drift stays under 0.6s threshold", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "StableUser" and realm == "StableRealm" then
+        return {
+          hasKick = true,
+          onCooldown = true,
+          cooldownRemain = 8,
+          receivedAtGetTime = 100,
+          extras = {
+            [31935] = { cooldownRemain = 7.4 }, -- only 0.4s drift from existing 7.0
+          },
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "StableUser",
+        realm = "StableRealm",
+        syncHasKick = true,
+        syncKickOnCooldown = true,
+        syncKickRemain = 8,
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 7 }, -- 0.4s diff from incoming 7.4 → below 0.6s drift cap
+        },
+      }
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.False(changed, "sub-threshold extras drift must not trigger a roster change")
+    end)
+  end)
 end
 
 return function(test, ctx)
