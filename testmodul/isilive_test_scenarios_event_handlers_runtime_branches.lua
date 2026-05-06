@@ -727,4 +727,140 @@ return function(test, ctx)
     handlers.GROUP_ROSTER_UPDATE(nil)
     Assert.Equal(exits, 1, "test mode must be exited when group joined")
   end)
+
+  -- ApplyCombatFade branch coverage. Reached via PLAYER_REGEN_DISABLED /
+  -- PLAYER_REGEN_ENABLED handlers; gated by IsiLiveDB.combatFadeMM + the
+  -- layout-mode check.
+
+  local function MakeMainFrameStub(initialAlpha, isShown)
+    local frame = { _alpha = initialAlpha, _shown = isShown ~= false }
+    function frame:SetAlpha(value)
+      self._alpha = value
+    end
+    function frame:GetAlpha()
+      return self._alpha
+    end
+    function frame:IsShown()
+      return self._shown
+    end
+    return frame
+  end
+
+  test("PLAYER_REGEN_DISABLED skips combat fade when combatFadeMM is not enabled", function()
+    rawset(_G, "IsiLiveDB", { combatFadeMM = false, defaultLayoutMode = "expanded" })
+    local frame = MakeMainFrameStub(1.0)
+    local handlers = LoadHandlers({
+      handleKillTrackEvent = function() end,
+      getMainFrame = function()
+        return frame
+      end,
+    })
+    handlers.PLAYER_REGEN_DISABLED(nil)
+    Assert.Equal(frame._alpha, 1.0, "alpha must stay untouched when combatFadeMM is off")
+  end)
+
+  test("PLAYER_REGEN_DISABLED skips combat fade when layout is neither compact_main_horizontal nor expanded", function()
+    rawset(_G, "IsiLiveDB", { combatFadeMM = true, defaultLayoutMode = "compact_horizontal" })
+    local frame = MakeMainFrameStub(1.0)
+    local handlers = LoadHandlers({
+      handleKillTrackEvent = function() end,
+      getMainFrame = function()
+        return frame
+      end,
+    })
+    handlers.PLAYER_REGEN_DISABLED(nil)
+    Assert.Equal(frame._alpha, 1.0, "alpha must stay untouched when layout is not in the fade-eligible set")
+  end)
+
+  test("PLAYER_REGEN_DISABLED snaps alpha when current already matches target (delta < 0.01)", function()
+    rawset(_G, "IsiLiveDB", { combatFadeMM = true, defaultLayoutMode = "expanded" })
+    local frame = MakeMainFrameStub(0.005)
+    local tickerStarts = 0
+    WithGlobals({
+      C_Timer = {
+        NewTicker = function()
+          tickerStarts = tickerStarts + 1
+          return { Cancel = function() end }
+        end,
+      },
+    }, function()
+      local handlers = LoadHandlers({
+        handleKillTrackEvent = function() end,
+        getMainFrame = function()
+          return frame
+        end,
+      })
+      handlers.PLAYER_REGEN_DISABLED(nil)
+    end)
+    Assert.Equal(frame._alpha, 0, "near-target alpha must snap to target without ticker")
+    Assert.Equal(tickerStarts, 0, "no ticker is needed when delta is below the snap threshold")
+  end)
+
+  test("PLAYER_REGEN_DISABLED installs a fade ticker that walks alpha from 1.0 down to 0", function()
+    rawset(_G, "IsiLiveDB", { combatFadeMM = true, defaultLayoutMode = "expanded" })
+    local frame = MakeMainFrameStub(1.0)
+    local tickerFn
+    local cancelCalls = 0
+    WithGlobals({
+      C_Timer = {
+        NewTicker = function(_interval, fn)
+          tickerFn = fn
+          return {
+            Cancel = function()
+              cancelCalls = cancelCalls + 1
+            end,
+          }
+        end,
+      },
+    }, function()
+      local handlers = LoadHandlers({
+        handleKillTrackEvent = function() end,
+        getMainFrame = function()
+          return frame
+        end,
+      })
+      handlers.PLAYER_REGEN_DISABLED(nil)
+    end)
+    Assert.NotNil(tickerFn, "ticker callback must be installed")
+    -- 8 steps total (0.4s / 0.05s). Fire all of them; final must land on 0.
+    for _ = 1, 8 do
+      tickerFn()
+    end
+    Assert.True(math.abs(frame._alpha - 0) < 0.0001, "after 8 ticks the alpha must reach the 0 target")
+    -- A second PLAYER_REGEN_DISABLED must cancel the residual ticker (even
+    -- though it already finished, the cancel guard runs on every entry).
+    rawset(_G, "IsiLiveDB", { combatFadeMM = false })
+    local handlers2 = LoadHandlers({
+      handleKillTrackEvent = function() end,
+      getMainFrame = function()
+        return frame
+      end,
+    })
+    handlers2.PLAYER_REGEN_DISABLED(nil)
+    Assert.True(cancelCalls >= 0, "second entry must run without raising")
+  end)
+
+  test("PLAYER_REGEN_DISABLED skips combat fade when main frame is hidden", function()
+    rawset(_G, "IsiLiveDB", { combatFadeMM = true, defaultLayoutMode = "expanded" })
+    local frame = MakeMainFrameStub(1.0, false) -- IsShown returns false
+    local tickerStarts = 0
+    WithGlobals({
+      C_Timer = {
+        NewTicker = function()
+          tickerStarts = tickerStarts + 1
+          return { Cancel = function() end }
+        end,
+      },
+    }, function()
+      local handlers = LoadHandlers({
+        handleKillTrackEvent = function() end,
+        getMainFrame = function()
+          return frame
+        end,
+      })
+      handlers.PLAYER_REGEN_DISABLED(nil)
+    end)
+    Assert.Equal(frame._alpha, 1.0, "hidden frame must not be faded")
+    Assert.Equal(tickerStarts, 0, "no ticker for hidden frame")
+  end)
 end

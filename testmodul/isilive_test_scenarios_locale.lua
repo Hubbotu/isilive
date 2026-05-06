@@ -311,4 +311,121 @@ return function(test, ctx)
       Assert.Equal(language, "??", "missing units must resolve to unknown language without raw unit API calls")
     end)
   end)
+
+  -- ----------------------------------------------------------------------
+  -- Branch coverage: language flag/markup/name helpers and realm-locale
+  -- lookup paths.
+  -- ----------------------------------------------------------------------
+
+  test("Locale.GetLanguageNameTables returns the LANGUAGE_NAME_BY_LOCALE map", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    local tables = addon.Locale.GetLanguageNameTables()
+    Assert.True(type(tables) == "table", "must return a table")
+    Assert.True(type(tables.enUS) == "table", "must include enUS row")
+    Assert.True(type(tables.deDE) == "table", "must include deDE row")
+  end)
+
+  test("Locale.LocaleToLanguageTag returns '??' for nil input", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Equal(addon.Locale.LocaleToLanguageTag(nil), "??", "nil locale must resolve to '??'")
+  end)
+
+  test("Locale.LocaleToLanguageTag normalizes dashed locales and resolves supported tags", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Equal(addon.Locale.LocaleToLanguageTag("de-DE"), "DE", "dash-separated locale must normalize")
+    Assert.Equal(addon.Locale.LocaleToLanguageTag("en"), "EN", "alias 'en' must resolve to 'EN'")
+    Assert.Equal(addon.Locale.LocaleToLanguageTag("kokr"), "KR", "extra locale 'kokr' must resolve to 'KR'")
+  end)
+
+  test("Locale.GetLanguageFlagTexturePath returns nil for unknown languages", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Nil(addon.Locale.GetLanguageFlagTexturePath("ZZ"), "unknown tag must return nil texture path")
+    Assert.Nil(addon.Locale.GetLanguageFlagTexturePath(nil), "nil tag must return nil texture path")
+  end)
+
+  test("Locale.GetLanguageFlagMarkup returns texture markup when texture exists, gray text otherwise", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    local deMarkup = addon.Locale.GetLanguageFlagMarkup("DE")
+    Assert.True(deMarkup:find("|T", 1, true) ~= nil, "DE flag must render as a |T texture markup")
+    local krMarkup = addon.Locale.GetLanguageFlagMarkup("KR")
+    Assert.True(krMarkup:find("|cffbfbfbf", 1, true) ~= nil, "KR (no texture asset) must fall back to gray text")
+    Assert.True(krMarkup:find("KR", 1, true) ~= nil, "fallback markup must include the language tag")
+  end)
+
+  test("Locale.GetLanguageDisplayName looks up the localized name and falls back to the tag", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    -- Forcing a known display locale; the result must be a non-empty string.
+    local nameDE = addon.Locale.GetLanguageDisplayName("DE", "enUS")
+    Assert.True(type(nameDE) == "string" and nameDE ~= "", "DE display name in enUS must be set")
+    -- Unknown tag should fall back to the tag itself.
+    Assert.Equal(
+      addon.Locale.GetLanguageDisplayName("ZZ", "enUS"),
+      "ZZ",
+      "unknown language tag must fall back to itself"
+    )
+  end)
+
+  test("Locale.GetLanguageTooltipMarkup combines flag and display name", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    local markup = addon.Locale.GetLanguageTooltipMarkup("DE", "enUS")
+    Assert.True(type(markup) == "string", "tooltip markup must be a string")
+    Assert.True(markup:find("|T", 1, true) ~= nil, "tooltip markup must include flag texture")
+  end)
+
+  test("Locale.NormalizeRealmLookupKey returns empty string for nil input", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Equal(addon.Locale.NormalizeRealmLookupKey(nil), "", "nil realm must normalize to empty string")
+  end)
+
+  test("Locale.NormalizeRealmLookupKey strips whitespace + punctuation and lowercases", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Equal(
+      addon.Locale.NormalizeRealmLookupKey("Twisting Nether"),
+      "twistingnether",
+      "spaces must be stripped, casing lowered"
+    )
+    Assert.Equal(
+      addon.Locale.NormalizeRealmLookupKey("Aegwynn-Nethersturm"),
+      "aegwynnnethersturm",
+      "dashes must be stripped, casing lowered"
+    )
+  end)
+
+  test("Locale.GetRealmLocaleFromStaticData returns nil for blank realm", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    Assert.Nil(addon.Locale.GetRealmLocaleFromStaticData(""), "blank realm must return nil")
+    Assert.Nil(addon.Locale.GetRealmLocaleFromStaticData(nil), "nil realm must return nil")
+  end)
+
+  test("Locale.GetRealmLocaleFromStaticData uses exact-name lookup when present", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    addon.RealmData = {
+      IsiLiveRealmLocaleByExactName = {
+        ["aegwynn"] = "deDE",
+      },
+      IsiLiveRealmLocaleByNormalizedName = {
+        someothernormalized = "frFR",
+      },
+    }
+    Assert.Equal(
+      addon.Locale.GetRealmLocaleFromStaticData("Aegwynn"),
+      "deDE",
+      "exact-lookup hit must be returned (case-folded)"
+    )
+  end)
+
+  test("Locale.GetRealmLocaleFromStaticData falls back to normalized lookup when exact misses", function()
+    local addon = LoadAddonModules({ "isiLive_languages.lua", "isiLive_locale.lua" })
+    addon.RealmData = {
+      IsiLiveRealmLocaleByExactName = {},
+      IsiLiveRealmLocaleByNormalizedName = {
+        ["twistingnether"] = "enGB",
+      },
+    }
+    Assert.Equal(
+      addon.Locale.GetRealmLocaleFromStaticData("Twisting Nether"),
+      "enGB",
+      "normalized lookup must catch space-and-case variations"
+    )
+  end)
 end

@@ -1387,10 +1387,175 @@ local function RegisterLFGDetectInviteHintTests(test, ctx)
   end)
 end
 
+-- Branch coverage for ParseTitleKeyLevel pattern-B ("N+" trailing-plus form),
+-- the Log/LogDeep helpers when a logger is wired, MapIDFromActivityIDs cache
+-- population, and ResolveInviteEntry early returns.
+local function RegisterLFGDetectBranchCoverageTests(test, ctx)
+  local Assert = ctx.assert
+  local LoadAddonModules = ctx.load_modules
+  local WithGlobals = ctx.with_globals
+
+  test("LFGDetect ParseTitleKeyLevel resolves 'N+' trailing-plus form via OnInvited title", function()
+    -- activityID 1542 → mapID 557 (Windrunner Spire) is statically mapped, so
+    -- the invite resolves and the title level is promoted on inviteaccepted.
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [42] = {
+            -- Pattern A "+N" intentionally absent; only trailing-plus form.
+            activityID = 1542,
+            name = "12+ NPX gogo",
+            leaderName = "Pusher-Realm",
+          },
+        }, nil),
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 12, "pattern B '12+' must resolve to 12")
+    end)
+  end)
+
+  test("LFGDetect ParseTitleKeyLevel rejects out-of-range numbers (>40)", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [43] = { activityID = 1542, name = "+99 farm", leaderName = "X" },
+        }, nil),
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 43, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 43, "inviteaccepted")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteTitleLevel(), "+99 must be rejected as out of [1,40]")
+    end)
+  end)
+
+  test("LFGDetect ParseTitleKeyLevel picks the highest level when multiple +N tags appear", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [44] = { activityID = 1542, name = "+10/+12/+14 NPX", leaderName = "Push" },
+        }, nil),
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 44, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 44, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 14, "must select the highest +N tag")
+    end)
+  end)
+
+  test("LFGDetect Log helpers route through wired logger and trace-logger callbacks", function()
+    local logCalls = {}
+    local traceCalls = {}
+    local deepTraceCalls = {}
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return false
+      end,
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetLogger(function(msg)
+        table.insert(logCalls, msg)
+      end)
+      addon.LFGDetect.SetTraceLogger(function(msg)
+        table.insert(traceCalls, msg)
+      end)
+      addon.LFGDetect.SetDeepTraceLogger(function(msg)
+        table.insert(deepTraceCalls, msg)
+      end)
+
+      -- Drive any event that flows through Log; GROUP_ROSTER_UPDATE always fires.
+      fire("GROUP_ROSTER_UPDATE")
+    end)
+    Assert.True(#logCalls + #traceCalls + #deepTraceCalls > 0, "at least one logger callback must receive a line")
+  end)
+
+  test("LFGDetect MapIDFromActivityIDs caches the resolved mapID for repeat lookups", function()
+    local activityCalls = 0
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 50 then
+              return {
+                activityID = nil, -- not directly resolvable
+                activityIDs = { 9001 },
+                name = "+15 SH",
+                leaderName = "Lead",
+              }
+            end
+            return nil
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            activityCalls = activityCalls + 1
+            if activityID == 9001 then
+              return { mapID = 2773 }
+            end
+            return nil
+          end,
+        },
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 50, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 50, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 2773, "first lookup must populate cache and resolve")
+      local callsAfterFirst = activityCalls
+      -- Trigger a second resolve-path entry: clear and re-invite.
+      addon.LFGDetect.ClearAllState()
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 50, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 50, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 2773, "cached lookup must still resolve")
+      Assert.Equal(activityCalls, callsAfterFirst, "GetActivityInfoTable must NOT be called again (cache hit)")
+    end)
+  end)
+
+  test("LFGDetect ResolveInviteEntry returns nil when C_LFGList global is absent", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = { C_LFGList = false }, -- explicit nil-out
+    })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 99, "invited")
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "no C_LFGList → invite cannot resolve")
+    end)
+  end)
+end
+
 return function(test, ctx)
   RegisterLFGDetectResolutionTests(test, ctx)
   RegisterLFGDetectInviteAcceptRaceTests(test, ctx)
   RegisterLFGDetectQueueStateTests(test, ctx)
   RegisterLFGDetectResetTests(test, ctx)
   RegisterLFGDetectInviteHintTests(test, ctx)
+  RegisterLFGDetectBranchCoverageTests(test, ctx)
 end
