@@ -1551,11 +1551,214 @@ local function RegisterLFGDetectBranchCoverageTests(test, ctx)
   end)
 end
 
+-- Tests for the post-accept Center Notice trigger. The notice is rendered
+-- exclusively from the pendingInvites entry of the accepted searchResultID:
+-- sibling listings (other searchResultIDs) must not influence the payload,
+-- and missing data (no "+N" in title) must surface as nil rather than be
+-- inferred from roster/sync state.
+local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
+  local Assert = ctx.assert
+  local LoadAddonModules = ctx.load_modules
+  local WithGlobals = ctx.with_globals
+
+  -- Test A: multiple pendingInvites for the SAME dungeon at different levels.
+  -- Accepting the higher-level listing must not let the lower-level sibling
+  -- bleed into the notice payload.
+  test("AcceptedInviteNotice picks the level of the accepted listing among same-dungeon parallel invites", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [101] = { activityID = 1542, name = "+12 spire chill", leaderName = "Tank-A" },
+          [102] = { activityID = 1542, name = "+15 spire push", leaderName = "Tank-B" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 101, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 102, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 102, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "AcceptedInviteNotice must fire exactly once on inviteaccepted")
+      Assert.Equal(payloads[1].level, 15, "level must be the +15 of the accepted listing, not the +12 sibling")
+      Assert.Equal(payloads[1].mapID, 557, "mapID must resolve from accepted listing")
+      Assert.Equal(payloads[1].activityID, 1542, "activityID must propagate for teleport-button wiring")
+      Assert.Equal(payloads[1].searchResultID, 102, "searchResultID must be the accepted one")
+      Assert.Equal(payloads[1].leaderName, "Tank-B", "leaderName must be from accepted listing")
+    end)
+  end)
+
+  -- Test B: parallel invites for DIFFERENT dungeons. Accepting one must
+  -- surface its mapID and level; the unaccepted sibling must not contribute.
+  test(
+    "AcceptedInviteNotice surfaces the dungeon of the accepted listing among different-dungeon parallel invites",
+    function()
+      local globals, fire = BuildLFGDetectEnv({
+        globals = {
+          C_LFGList = BuildC_LFGList({
+            [201] = { activityID = 1542, name = "+13 spire", leaderName = "S" }, -- mapID 557
+            [202] = { activityID = 182, name = "+10 sky", leaderName = "K" }, -- mapID 161
+          }, nil),
+        },
+      })
+
+      WithGlobals(globals, function()
+        local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+        local payloads = {}
+        addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+          payloads[#payloads + 1] = payload
+        end)
+        addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+          return true
+        end)
+
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 201, "invited")
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 202, "invited")
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 202, "inviteaccepted")
+
+        Assert.Equal(#payloads, 1, "exactly one notice on accept")
+        Assert.Equal(payloads[1].mapID, 161, "mapID must be from the Skyreach listing the player accepted")
+        Assert.Equal(payloads[1].level, 10, "level must be Skyreach's +10, not Spire's +13")
+        Assert.Equal(payloads[1].activityID, 182, "activityID must be Skyreach's, for the teleport button")
+      end)
+    end
+  )
+
+  -- Test C: a sibling listing is delisted/declined AFTER the accept fires.
+  -- The notice must not re-fire and must not have its content mutated.
+  test("AcceptedInviteNotice ignores sibling-listing declines after the accept fired", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [301] = { activityID = 1542, name = "+12 spire", leaderName = "A" },
+          [302] = { activityID = 1542, name = "+14 spire", leaderName = "B" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 301, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 302, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 302, "inviteaccepted")
+      -- Sibling listing 301 gets delisted after our accept landed.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 301, "declined_delisted")
+
+      Assert.Equal(#payloads, 1, "decline of a sibling listing must not re-trigger the notice")
+      Assert.Equal(payloads[1].level, 14, "accepted listing's level must remain unchanged after sibling decline")
+    end)
+  end)
+
+  -- Test D: group title without "+N" suffix. The notice must surface
+  -- level=nil rather than guess from defaults or sibling data.
+  test("AcceptedInviteNotice surfaces level=nil when the group title has no '+N' marker", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [401] = { activityID = 1542, name = "chill spire run", leaderName = "Z" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 401, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 401, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "notice must still fire even without a level")
+      Assert.Nil(payloads[1].level, "level must stay nil rather than be inferred")
+      Assert.Equal(payloads[1].mapID, 557, "mapID must still resolve")
+      Assert.Equal(payloads[1].groupName, "chill spire run", "raw group title must propagate for the subline")
+    end)
+  end)
+
+  -- Test E: when the toggle is off, the callback must not be invoked.
+  test("AcceptedInviteNotice stays silent when the enabled-fn returns false", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [501] = { activityID = 1542, name = "+11 spire", leaderName = "X" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return false
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 501, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 501, "inviteaccepted")
+
+      Assert.Equal(#payloads, 0, "disabled toggle must suppress the notice callback entirely")
+    end)
+  end)
+
+  -- Test F: when only the enabled-fn is wired (no callback), MaybeShow must
+  -- early-return without crashing — i.e. callback wiring is independent of
+  -- enabled-fn wiring.
+  test("AcceptedInviteNotice early-returns cleanly when callback is unwired", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [601] = { activityID = 1542, name = "+9", leaderName = "Q" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+      -- No callback set.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 601, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 601, "inviteaccepted")
+      Assert.Equal(
+        addon.LFGDetect.GetDetectedMapID(),
+        557,
+        "missing notice callback must not break the existing pipeline"
+      )
+    end)
+  end)
+end
+
 return function(test, ctx)
   RegisterLFGDetectResolutionTests(test, ctx)
   RegisterLFGDetectInviteAcceptRaceTests(test, ctx)
   RegisterLFGDetectQueueStateTests(test, ctx)
   RegisterLFGDetectResetTests(test, ctx)
   RegisterLFGDetectInviteHintTests(test, ctx)
+  RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
   RegisterLFGDetectBranchCoverageTests(test, ctx)
 end

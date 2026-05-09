@@ -676,6 +676,57 @@ local function InitializeFactoryRuntimeHelpers(ctx)
 end
 FI.InitializeFactoryRuntimeHelpers = InitializeFactoryRuntimeHelpers
 
+-- Builds the acceptedInviteNotice payload renderer. Extracted so the wiring
+-- block in InitializeFactoryPrimaryControllers stays under the function-line
+-- metrics gate. Pulls ALL data from the supplied payload (the pendingInvites
+-- snapshot of the accepted searchResultID); never reads roster/sync state.
+-- payload.level may legitimately be nil when the LFG group title carries no
+-- "+N" marker; we render the headline without "+N" rather than guess.
+local function RenderAcceptedInviteNotice(ctx, modules, payload)
+  if type(payload) ~= "table" or type(ctx.ShowCenterNotice) ~= "function" then
+    return
+  end
+  local L = ctx.GetL() or {}
+
+  local mapName
+  if modules.teleport and type(modules.teleport.GetTeleportInfoByMapID) == "function" and payload.mapID then
+    local info = modules.teleport.GetTeleportInfoByMapID(payload.mapID)
+    if type(info) == "table" then
+      if type(info.mapName) == "string" and info.mapName ~= "" then
+        mapName = info.mapName
+      elseif type(info.name) == "string" and info.name ~= "" then
+        mapName = info.name
+      end
+    end
+  end
+  if not mapName or mapName == "" then
+    mapName = L.INVITE_HINT_UNKNOWN_DUNGEON or "Unknown dungeon"
+  end
+
+  local headline
+  local level = tonumber(payload.level)
+  if level and level > 0 then
+    local template = L.INVITE_ACCEPTED_NOTICE_HEADLINE_WITH_LEVEL or "%s +%d"
+    headline = string.format(template, mapName, math.floor(level))
+  else
+    local template = L.INVITE_ACCEPTED_NOTICE_HEADLINE_NO_LEVEL or "%s"
+    headline = string.format(template, mapName)
+  end
+
+  local sublineBottom
+  if type(payload.groupName) == "string" and payload.groupName ~= "" then
+    local template = L.INVITE_ACCEPTED_NOTICE_GROUP or "Group: %s"
+    sublineBottom = string.format(template, payload.groupName)
+  end
+
+  ctx.ShowCenterNotice(headline, 12, mapName, payload.activityID, {
+    sublineTop = L.INVITE_ACCEPTED_NOTICE_SUBLINE_TOP,
+    sublineBottom = sublineBottom,
+    fontScale = 1.4,
+    textColor = { 1, 0.92, 0.7 },
+  })
+end
+
 local function InitializeFactoryPrimaryControllers(ctx)
   local modules = ctx.modules
   local initResult = modules.controllerInit.CreateControllers({
@@ -997,6 +1048,27 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end
     if type(lfgDetect.SetInviteHintLocaleFn) == "function" then
       lfgDetect.SetInviteHintLocaleFn(ctx.GetL)
+    end
+
+    -- Post-accept Center Notice plumbing. Triggered from OnInviteAccepted with
+    -- a payload extracted exclusively from the accepted searchResultID's
+    -- pendingInvites entry. Sibling listings (different searchResultID) cannot
+    -- influence the rendered content. Level is taken straight from
+    -- entry.titleLevel — when nil (group title without "+N"), the headline is
+    -- rendered without a level suffix; never inferred from roster/sync data.
+    if type(lfgDetect.SetAcceptedInviteNoticeCallback) == "function" then
+      lfgDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        RenderAcceptedInviteNotice(ctx, modules, payload)
+      end)
+    end
+    if type(lfgDetect.SetAcceptedInviteNoticeEnabledFn) == "function" then
+      lfgDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        local db = rawget(_G, "IsiLiveDB")
+        if type(db) ~= "table" then
+          return true
+        end
+        return db.acceptedInviteNoticeEnabled ~= false
+      end)
     end
   end
 

@@ -1365,10 +1365,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        27,
+        28,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, combat-fade, and nameplate-subtoggle checkboxes visible"
+          .. " chat-announce, combat-fade, nameplate-subtoggle, and accepted-invite-notice checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
@@ -1376,9 +1376,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
-        27,
+        28,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
-          .. " while preserving the visible sound, chat-announce, combat-fade, and nameplate-subtoggle checkboxes"
+          .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
+          .. " and accepted-invite-notice checkboxes"
       )
     end)
   end)

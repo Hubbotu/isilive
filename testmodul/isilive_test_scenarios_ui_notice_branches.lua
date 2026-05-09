@@ -34,6 +34,9 @@ local function CreateFontStringStub()
   function fs:SetPoint(...)
     self._point = { ... }
   end
+  function fs:ClearAllPoints()
+    self._point = nil
+  end
   function fs:GetPoint()
     local p = self._point
     if not p then
@@ -82,6 +85,12 @@ local function CreateFrameStub(_frameType, _name, parent, _template)
   }
   function frame:SetSize(w, h)
     self._width = w
+    self._height = h
+  end
+  function frame:SetWidth(w)
+    self._width = w
+  end
+  function frame:SetHeight(h)
     self._height = h
   end
   function frame:GetWidth()
@@ -144,8 +153,12 @@ local function CreateFrameStub(_frameType, _name, parent, _template)
   function frame:EnableMouse() end
   function frame:SetMovable() end
   function frame:RegisterForDrag() end
+  function frame:RegisterForClicks() end
+  function frame:SetAttribute() end
   function frame:SetClampedToScreen() end
   function frame:SetIgnoreParentAlpha() end
+  function frame:Enable() end
+  function frame:Disable() end
   return frame
 end
 
@@ -469,6 +482,123 @@ local function RegisterPortalNavigatorBranchTests(test, Assert, WithGlobals, Loa
   end)
 end
 
+local function RegisterCenterNoticeSublineTests(test, Assert, WithGlobals, LoadAddonModules)
+  local function CreateCenterNoticeForSublineTest()
+    local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+    local Notice = RequireValue(addon.Notice, "Notice module should load")
+    return Notice.CreateCenterNotice({
+      parent = UIParent,
+      isInCombat = function()
+        return false
+      end,
+    })
+  end
+
+  test("Center notice exposes top/bottom subline FontStrings", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForSublineTest()
+      Assert.NotNil(centerNotice.sublineTop, "sublineTop FontString must be exposed on the controller")
+      Assert.NotNil(centerNotice.sublineBottom, "sublineBottom FontString must be exposed on the controller")
+      Assert.False(centerNotice.sublineTop._shown == true, "sublineTop must be hidden by default before any Show call")
+      Assert.False(
+        centerNotice.sublineBottom._shown == true,
+        "sublineBottom must be hidden by default before any Show call"
+      )
+    end)
+  end)
+
+  test("Center notice Show with sublineTop/sublineBottom renders both sublines", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForSublineTest()
+      centerNotice.Show("Windrunner Spire +15", 12, nil, nil, {
+        sublineTop = "Joined",
+        sublineBottom = "Group: Push lobby",
+      })
+
+      Assert.True(centerNotice.sublineTop._shown, "sublineTop must be shown when sublineTop option is set")
+      Assert.Equal(centerNotice.sublineTop:GetText(), "Joined", "sublineTop must contain the supplied text")
+      Assert.True(centerNotice.sublineBottom._shown, "sublineBottom must be shown when sublineBottom option is set")
+      Assert.Equal(
+        centerNotice.sublineBottom:GetText(),
+        "Group: Push lobby",
+        "sublineBottom must contain the supplied text"
+      )
+    end)
+  end)
+
+  test("Center notice Show without subline options keeps sublines hidden (legacy 1-line layout)", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForSublineTest()
+      centerNotice.Show("Plain notice", 20, nil, nil, {})
+      Assert.False(centerNotice.sublineTop._shown, "sublineTop must remain hidden in legacy single-line layout")
+      Assert.False(centerNotice.sublineBottom._shown, "sublineBottom must remain hidden in legacy single-line layout")
+    end)
+  end)
+
+  test("Center notice Show resets sublines when reused with a single-line message after a stacked one", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForSublineTest()
+      centerNotice.Show("Stacked headline", 12, nil, nil, {
+        sublineTop = "Joined",
+        sublineBottom = "Group: X",
+      })
+      Assert.True(centerNotice.sublineTop._shown, "sublineTop visible after first stacked Show")
+
+      centerNotice.Show("Plain follow-up", 12, nil, nil, {})
+      Assert.False(
+        centerNotice.sublineTop._shown,
+        "sublineTop must be hidden again when the next Show passes no subline option"
+      )
+      Assert.False(
+        centerNotice.sublineBottom._shown,
+        "sublineBottom must be hidden again when the next Show passes no subline option"
+      )
+    end)
+  end)
+
+  test("Center notice Show treats empty-string sublines as absent", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForSublineTest()
+      centerNotice.Show("Headline only", 12, nil, nil, {
+        sublineTop = "",
+        sublineBottom = "",
+      })
+      Assert.False(centerNotice.sublineTop._shown, "empty-string sublineTop must not be shown")
+      Assert.False(centerNotice.sublineBottom._shown, "empty-string sublineBottom must not be shown")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = RequireValue(ctx.assert, "ui_notice_branches scenario ctx.assert should exist")
   local WithGlobals = RequireValue(ctx.with_globals, "ui_notice_branches scenario ctx.with_globals should exist")
@@ -476,4 +606,5 @@ return function(test, ctx)
 
   RegisterInviteHintTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterPortalNavigatorBranchTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterCenterNoticeSublineTests(test, Assert, WithGlobals, LoadAddonModules)
 end

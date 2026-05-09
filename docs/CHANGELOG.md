@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-05-10 - Version 0.9.223 (minor)
+
+Re-introduces the post-accept Center Notice that was removed in v0.9.211 when
+the dead-code `logic/isiLive_queue_flow.lua` was deleted. The notice now
+fires from the LFG-detect layer, sources its data exclusively from the
+accepted invite's `pendingInvites` entry, and renders a modern two-line
+layout (subline + headline + group subline + teleport button) using the
+existing `ShowCenterNotice` infrastructure.
+
+### Center Notice after accepted LFG invite (re-activated, modernised)
+
+When the player accepts an LFG invite, a center-screen notice now appears
+showing the dungeon name and key level (e.g. `Windrunner Spire +15`) plus
+the LFG group title and a teleport button. The notice auto-hides after
+12 seconds or on right-click.
+
+- **Multi-invite correctness**: when the player holds parallel LFG invites
+  (push lobbies routinely post `+12 / +13 / +14` for the same dungeon, or
+  totally different dungeons), the notice payload comes from the exact
+  `searchResultID` the player accepted. Sibling listings — including ones
+  that get delisted or declined right after the accept — cannot influence
+  the rendered content. The same `acceptedInviteSearchResultID` guard that
+  e39f98c (v0.9.213) introduced for the chat announce now also gates the
+  notice.
+- **Level source has zero guessing**: the level comes straight from
+  `entry.titleLevel` (the `+N` parsed from the accepted listing's group
+  title). When the title carries no `+N` marker (`"chill spire run"`),
+  the notice renders the headline without `+N`. It does **not** fall
+  through to roster-owner key levels or synced-target levels — that path
+  belongs to the post-accept chat announce, not the notice. The two
+  channels stay separate so the notice can never lock onto a sibling
+  listing's level via roster sync.
+- **Modern stack layout**: `ShowCenterNotice` learned an optional
+  `showOptions.sublineTop` / `showOptions.sublineBottom` mode that
+  renders three text rows (small gold subline + large warm-white
+  headline + small grey group subline) plus the teleport button below.
+  The legacy single-line layout used by lead-transfer, non-mythic-entry,
+  and test-mode notices is unchanged — both paths share the same frame
+  and the same close/right-click semantics.
+- **New setting**: `acceptedInviteNoticeEnabled` (default on), separate
+  from the existing pre-accept `inviteHintEnabled` toggle so the two
+  UX stages can be controlled independently. Live-read per trigger,
+  no `/reload` needed.
+- **Wiring**: `LFGDetect.SetAcceptedInviteNoticeCallback` /
+  `SetAcceptedInviteNoticeEnabledFn` injected from the factory next to
+  the existing `SetInviteHintCallback` block. `ResolveInviteEntry` now
+  also returns the listing's primary `activityID` so the notice's
+  teleport button can be wired without a second API roundtrip.
+
+### Coverage uplift
+
+- `testmodul/isilive_test_scenarios_lfg_detect.lua`:
+  `RegisterLFGDetectAcceptedInviteNoticeTests` adds 6 scenarios covering
+  the multi-invite race (same-dungeon different-level, different-dungeon
+  parallel invites), sibling-decline-after-accept, missing `+N` in title,
+  toggle-off, and missing-callback wiring.
+- `testmodul/isilive_test_scenarios_ui_notice_branches.lua`:
+  `RegisterCenterNoticeSublineTests` adds 5 scenarios for the new
+  subline layout (default-hidden, render-both-sublines, legacy-single-line
+  preserved, reset between consecutive Show calls, empty-string
+  treated as absent).
+- 1625 / 1625 usecase scenarios pass; full local CI preflight (stylua,
+  luacheck, syntax, metrics, locale, usecases, rules-logic) green.
+
 ## 2026-05-09 - Version 0.9.222 (patch)
 
 Internal refactor and routine M+ data refresh. No user-facing changes; all

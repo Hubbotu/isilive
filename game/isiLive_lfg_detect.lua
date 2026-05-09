@@ -142,6 +142,17 @@ local inviteHintEnabledFn = nil
 local teleportLookupByMapID = nil
 local inviteHintLocaleFn = nil
 
+-- Post-accept Center Notice plumbing. The factory injects:
+--   * acceptedInviteNoticeCallback(payload): renders the modern center notice
+--     with dungeon name + key level + group title + teleport button. nil disables.
+--   * acceptedInviteNoticeEnabledFn(): reads IsiLiveDB.acceptedInviteNoticeEnabled
+--     (~= false). nil treats the feature as enabled.
+-- Source of truth is exclusively the pendingInvites entry of the accepted
+-- searchResultID — never roster data, never sync data. Sibling listings cannot
+-- influence the notice content.
+local acceptedInviteNoticeCallback = nil
+local acceptedInviteNoticeEnabledFn = nil
+
 local debugLog = nil
 local debugTrace = nil
 local debugTraceDeep = nil
@@ -196,6 +207,14 @@ end
 
 function LFGDetect.SetInviteHintLocaleFn(fn)
   inviteHintLocaleFn = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetAcceptedInviteNoticeCallback(fn)
+  acceptedInviteNoticeCallback = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetAcceptedInviteNoticeEnabledFn(fn)
+  acceptedInviteNoticeEnabledFn = type(fn) == "function" and fn or nil
 end
 
 function LFGDetect.SetLogger(fn)
@@ -338,10 +357,31 @@ local function ResolveInviteEntry(searchResultID)
   end
   local titleLevel = nil
   local groupName = nil
+  -- Capture the listing's primary activityID so the post-accept Center Notice
+  -- can wire its teleport button to the same dungeon the player just joined.
+  -- activityIDs[1] is the canonical entry for single-dungeon listings; for
+  -- multi-activity listings (which all share the same mapID) we still take
+  -- the first since the teleport spell is mapID-driven, not activityID-driven.
+  local primaryActivityID = nil
   if type(info) == "table" then
     titleLevel = ParseTitleKeyLevel(info.name)
     if type(info.name) == "string" and info.name ~= "" then
       groupName = info.name
+    end
+    if type(info.activityIDs) == "table" then
+      for _, actID in ipairs(info.activityIDs) do
+        local numericActID = tonumber(actID)
+        if numericActID and numericActID > 0 then
+          primaryActivityID = numericActID
+          break
+        end
+      end
+    end
+    if not primaryActivityID and info.activityID then
+      local numericActID = tonumber(info.activityID)
+      if numericActID and numericActID > 0 then
+        primaryActivityID = numericActID
+      end
     end
   end
 
@@ -350,6 +390,7 @@ local function ResolveInviteEntry(searchResultID)
     leaderName = leaderName,
     titleLevel = titleLevel,
     groupName = groupName,
+    activityID = primaryActivityID,
   }
 end
 
@@ -406,6 +447,33 @@ local function MaybeShowInviteHint(entry, searchResultID)
   -- variants of the same dungeon), the hint must not present text that does
   -- not match the dialog the player is about to act on.
   inviteHintCallback(headline .. "\n" .. subline, 8, searchResultID)
+end
+
+-- Renders the post-accept Center Notice. Pulls ALL data from the supplied
+-- entry — the pendingInvites snapshot of the searchResultID the player just
+-- accepted. Sibling listings (other searchResultIDs in pendingInvites) cannot
+-- influence the payload. No roster lookup, no sync data, no LFG-title
+-- re-parse: if entry.titleLevel is nil (group title without "+N"), the notice
+-- renders without a level — never inferred.
+local function MaybeShowAcceptedInviteNotice(entry, searchResultID)
+  if type(acceptedInviteNoticeCallback) ~= "function" then
+    return
+  end
+  if type(entry) ~= "table" or not entry.mapID then
+    return
+  end
+  if type(acceptedInviteNoticeEnabledFn) == "function" and acceptedInviteNoticeEnabledFn() == false then
+    return
+  end
+
+  acceptedInviteNoticeCallback({
+    mapID = entry.mapID,
+    activityID = entry.activityID,
+    level = entry.titleLevel,
+    leaderName = entry.leaderName,
+    groupName = entry.groupName,
+    searchResultID = searchResultID,
+  })
 end
 
 local function OnInvited(searchResultID)
@@ -465,6 +533,7 @@ local function OnInviteAccepted(searchResultID)
     Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
     Log("state_set", "var=acceptedInviteSearchResultID val=%s", tostring(searchResultID))
     TriggerHighlightUpdate("invite")
+    MaybeShowAcceptedInviteNotice(entry, searchResultID)
   end
 end
 

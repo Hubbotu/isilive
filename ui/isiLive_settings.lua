@@ -1193,6 +1193,21 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
     "SETTINGS_INVITE_HINT_ENABLED"
   )
 
+  controls.acceptedInviteNotice, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED or "Accepted-invite notice",
+    function()
+      local db = config.getDB()
+      return db.acceptedInviteNoticeEnabled ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.acceptedInviteNoticeEnabled = checked
+    end,
+    "SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED"
+  )
+
   return yOffset
 end
 
@@ -2309,6 +2324,12 @@ local function RefreshSettingsControls(controls, config)
   if controls.inviteHint then
     controls.inviteHint.label:SetText(freshL.SETTINGS_INVITE_HINT_ENABLED or "LFG invite hint")
     controls.inviteHint.check:SetChecked(db.inviteHintEnabled ~= false)
+  end
+  if controls.acceptedInviteNotice then
+    controls.acceptedInviteNotice.label:SetText(
+      freshL.SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED or "Accepted-invite notice"
+    )
+    controls.acceptedInviteNotice.check:SetChecked(db.acceptedInviteNoticeEnabled ~= false)
   end
   if controls.nameplateDisplayMode and type(controls.nameplateDisplayMode.UpdateHighlight) == "function" then
     controls.nameplateDisplayMode.UpdateHighlight()

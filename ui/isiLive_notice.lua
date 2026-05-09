@@ -275,6 +275,29 @@ local function CreateCenterNoticeText(frame, config)
   return text
 end
 
+local function CreateCenterNoticeSubline(frame, config, position)
+  local subline = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  -- Subline font is intentionally smaller than the main text: only half the
+  -- standard fontDelta is applied so the subline reads as secondary metadata,
+  -- not a competing headline.
+  IncreaseFontSize(subline, math.max(0, math.floor((tonumber(config.fontDelta) or 0) / 2)))
+  subline:SetJustifyH("CENTER")
+  subline:SetJustifyV("MIDDLE")
+  subline:SetWordWrap(false)
+  if subline.SetNonSpaceWrap then
+    subline:SetNonSpaceWrap(false)
+  end
+  if position == "top" then
+    -- Warm gold for "Joined" / status banners — matches PortalNavigator title color.
+    subline:SetTextColor(1, 0.82, 0.25)
+  else
+    -- Muted grey for secondary context (group name, etc.).
+    subline:SetTextColor(0.7, 0.7, 0.7)
+  end
+  subline:Hide()
+  return subline
+end
+
 local function CreateCenterNoticeCloseButton(frame)
   return createRedCloseButton(frame, {
     point = { "TOPRIGHT", frame, "TOPRIGHT", -2, -2 },
@@ -499,16 +522,23 @@ local function ApplyCenterNoticeTextColor(state, showOptions)
   state.text:SetTextColor(state.baseTextR, state.baseTextG, state.baseTextB)
 end
 
-local function ShowCenterNotice(state, message, durationSeconds, dungeonName, activityID, showOptions)
-  showOptions = showOptions or {}
-  state.isPersistent = showOptions.persistent == true
-  state.isBlinking = showOptions.blink == true
-  state.blinkTime = 0
+local SUBLINE_GAP = 4
 
-  ApplyCenterNoticeFontScale(state, showOptions)
-  ApplyCenterNoticeTextColor(state, showOptions)
+local function ApplyCenterNoticeSubline(fontString, content)
+  if type(content) == "string" and content ~= "" then
+    fontString:SetText(content)
+    fontString:Show()
+    return true
+  end
+  fontString:SetText("")
+  fontString:Hide()
+  return false
+end
 
-  local hasTeleportButton = ConfigureCenterNoticeTeleportButton(state, dungeonName, activityID)
+local function ApplyLegacyCenterNoticeLayout(state, message, hasTeleportButton)
+  state.text:ClearAllPoints()
+  state.text:SetPoint("TOPLEFT", state.frame, "TOPLEFT", state.config.paddingX, -state.config.paddingY)
+  state.text:SetPoint("BOTTOMRIGHT", state.frame, "BOTTOMRIGHT", -state.config.paddingX, state.config.paddingY)
   state.text:SetText(message)
   state.text:SetWidth(state.frame:GetWidth() - (state.config.paddingX * 2))
   local textHeight = state.text:GetStringHeight() or 0
@@ -525,6 +555,70 @@ local function ShowCenterNotice(state, message, durationSeconds, dungeonName, ac
     local textOffsetDown = math.ceil(textHeight / 2) + state.config.buttonGap
     SetCenterNoticeTeleportButtonAnchor(state, -textOffsetDown)
   end
+end
+
+-- Stack layout for sublines: vertical pile of [paddingY] [topSubline] [text]
+-- [bottomSubline] [teleport button]. Each item has its own anchor relative to
+-- frame TOP, so the stack is stable when the frame height is recomputed.
+local function ApplyCenterNoticeStackLayout(state, message, hasSublineTop, hasSublineBottom, hasTeleportButton)
+  local innerWidth = state.frame:GetWidth() - (state.config.paddingX * 2)
+
+  if hasSublineTop then
+    state.sublineTop:ClearAllPoints()
+    state.sublineTop:SetPoint("TOP", state.frame, "TOP", 0, -state.config.paddingY)
+    state.sublineTop:SetWidth(innerWidth)
+  end
+
+  state.text:ClearAllPoints()
+  state.text:SetText(message)
+  state.text:SetWidth(innerWidth)
+  local sublineTopHeight = hasSublineTop and (state.sublineTop:GetStringHeight() or 0) or 0
+  local textTopOffset = state.config.paddingY + (hasSublineTop and (sublineTopHeight + SUBLINE_GAP) or 0)
+  state.text:SetPoint("TOP", state.frame, "TOP", 0, -textTopOffset)
+  local textHeight = state.text:GetStringHeight() or 0
+
+  local sublineBottomHeight = 0
+  if hasSublineBottom then
+    state.sublineBottom:ClearAllPoints()
+    state.sublineBottom:SetPoint("TOP", state.text, "BOTTOM", 0, -SUBLINE_GAP)
+    state.sublineBottom:SetWidth(innerWidth)
+    sublineBottomHeight = state.sublineBottom:GetStringHeight() or 0
+  end
+
+  local stackHeight = textTopOffset + textHeight + (hasSublineBottom and (SUBLINE_GAP + sublineBottomHeight) or 0)
+  local extraHeight = hasTeleportButton and (state.config.buttonHeight + state.config.buttonGap) or 0
+  local frameHeight = math.min(
+    state.config.maxHeight,
+    math.max(state.config.minHeight, math.ceil(stackHeight + state.config.paddingY + extraHeight))
+  )
+  state.frame:SetHeight(frameHeight)
+
+  if hasTeleportButton then
+    local buttonOffset = stackHeight + state.config.buttonGap
+    SetCenterNoticeTeleportButtonAnchor(state, -buttonOffset)
+  end
+end
+
+local function ShowCenterNotice(state, message, durationSeconds, dungeonName, activityID, showOptions)
+  showOptions = showOptions or {}
+  state.isPersistent = showOptions.persistent == true
+  state.isBlinking = showOptions.blink == true
+  state.blinkTime = 0
+
+  ApplyCenterNoticeFontScale(state, showOptions)
+  ApplyCenterNoticeTextColor(state, showOptions)
+
+  local hasSublineTop = ApplyCenterNoticeSubline(state.sublineTop, showOptions.sublineTop)
+  local hasSublineBottom = ApplyCenterNoticeSubline(state.sublineBottom, showOptions.sublineBottom)
+
+  local hasTeleportButton = ConfigureCenterNoticeTeleportButton(state, dungeonName, activityID)
+
+  if hasSublineTop or hasSublineBottom then
+    ApplyCenterNoticeStackLayout(state, message, hasSublineTop, hasSublineBottom, hasTeleportButton)
+  else
+    ApplyLegacyCenterNoticeLayout(state, message, hasTeleportButton)
+  end
+
   state.endsAt = state.isPersistent and math.huge or (GetTime() + (durationSeconds or 20))
   SetCenterNoticeVisible(state, true)
 end
@@ -660,6 +754,8 @@ local function BuildCenterNoticeController(state)
   return {
     frame = state.frame,
     text = state.text,
+    sublineTop = state.sublineTop,
+    sublineBottom = state.sublineBottom,
     closeButton = state.closeButton,
     teleportButton = state.teleportButton,
     SetVisible = SetVisible,
@@ -676,10 +772,14 @@ function Notice.CreateCenterNotice(opts)
   local baseFontPath, baseFontSize, baseFontFlags = text:GetFont()
   local closeButton = CreateCenterNoticeCloseButton(frame)
   local teleportButton = CreateCenterNoticeTeleportButton(frame, config)
+  local sublineTop = CreateCenterNoticeSubline(frame, config, "top")
+  local sublineBottom = CreateCenterNoticeSubline(frame, config, "bottom")
   local state = {
     config = config,
     frame = frame,
     text = text,
+    sublineTop = sublineTop,
+    sublineBottom = sublineBottom,
     closeButton = closeButton,
     teleportButton = teleportButton,
     tooltip = createPrivateTooltip(frame),
