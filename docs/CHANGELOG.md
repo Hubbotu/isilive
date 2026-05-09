@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-05-09 - Version 0.9.222 (patch)
+
+Internal refactor and routine M+ data refresh. No user-facing changes; all
+prior behavior is preserved (1614/1614 usecase scenarios pass, full local CI
+preflight green).
+
+### M+ forces database refreshed from MDT 6.1.2
+
+The auto-sync workflow (`tools/sync_mdt_forces.ps1`) regenerated
+[data/isiLive_mplus_forces.lua](../data/isiLive_mplus_forces.lua) against
+upstream MythicDungeonTools 6.1.2. Tooltip / nameplate forces overlays
+follow the latest mob counts and dungeon totals; lifetime stamp pushed
+forward to keep the `tools/check_mplus_db_lifetime.lua` gate green.
+
+### Long functions in keysync and kick_tracker split into focused helpers
+
+`logic/isiLive_keysync.lua::ApplyKnownKeyToRosterEntry` was 174 LOC of
+inline branches for key/stats/dps/loc/kick backfill plus kick-extras
+interpolation and drift detection. The body is now five `BackfillKey` /
+`BackfillStats` / `BackfillDps` / `BackfillLoc` / `BackfillKick` helpers
+plus six pure sub-helpers (`InterpolateKickRemain`, `InterpolateKickExtras`,
+`DidExtrasChange`, `ClearKickFields`, `ApplyHasNoKick`, `ApplyActiveKick`,
+`ResolveElapsedSinceReceived`); the main function shrinks to 22 LOC.
+
+`game/isiLive_kick_tracker.lua::CreateController` (408 LOC closure) gets
+five pure helpers extracted to module scope: `IsExtraKickSpellForClass`,
+`LookupExtraKickCd`, `ApplyTalentCdReduction`, `ForEachActiveTalentDefinition`,
+`CollectActiveExtras`. `ScanOwnTalents` collapses from ~54 LOC to ~14
+via the iterator-callback pattern. `CreateController` itself drops to 312 LOC.
+
+- **Refactor** ([logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua),
+  [game/isiLive_kick_tracker.lua](../game/isiLive_kick_tracker.lua))
+  — semantically identical; all condition flips use De-Morgan equivalence
+  (`A ~= a or B ~= b` ↔ `not (A == a and B == b)`).
+- **Verification** — `tools/validate_usecases.lua` 1614/1614 pass,
+  `tools/validate_ci_local.ps1` (stylua, luacheck, syntax, metrics, locale
+  drift, M+ DB lifetime, usecases) all green; pure helpers are now
+  callable from tests without instantiating a controller.
+
+### Interrupt-audit skill reference refreshed for Midnight values
+
+The `interrupt-audit` skill's reference table in
+[`.claude/skills/interrupt-audit/SKILL.md`](../.claude/skills/interrupt-audit/SKILL.md)
+(canonical source in the workspace repo) had stale CD values for two
+specs that no longer matched the in-game tooltip:
+
+- Solar Beam (Druid Balance) `60s` → `45s` (Midnight value).
+- Quell (Evoker, all specs) `20s` → `18s` (Midnight value).
+- Holy Paladin (spec 65) and Mistweaver Monk (spec 270) split out as
+  no-interrupt specs (matches `NO_INTERRUPT_SPEC_IDS` in
+  `kick_tracker.lua`).
+- Demo Warlock Axe Toss spell ID corrected to player-facing `119914`
+  (pet-cast event ID `89766` noted as comment).
+
+The live `SPEC_DATA` table already had the correct Midnight values; only
+the audit-skill reference was lagging.
+
 ## 2026-05-06 - Version 0.9.221 (patch)
 
 Bug fix to the kick-tracker base cooldown for Mage Counterspell, plus a large
