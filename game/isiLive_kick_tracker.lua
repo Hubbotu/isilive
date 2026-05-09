@@ -405,6 +405,119 @@ end
 -- Read actual cooldown duration via C_Spell.GetSpellCooldown.
 -- Safe to call from C_Timer.After callbacks (untainted context).
 
+-- Pure helpers (no controller state) extracted from CreateController.
+
+local function IsExtraKickSpellForClass(class, primarySpellID, spellID)
+  if not class then
+    return false
+  end
+  local list = CLASS_INTERRUPT_LIST[class]
+  if type(list) ~= "table" then
+    return false
+  end
+  if spellID == primarySpellID then
+    return false -- this is the primary, not an extra
+  end
+  for _, candidate in ipairs(list) do
+    if candidate == spellID then
+      return true
+    end
+  end
+  return false
+end
+
+local function LookupExtraKickCd(spellID)
+  local cd = EXTRA_KICK_CD[spellID]
+  if cd and cd > 0 then
+    return cd
+  end
+  -- Fallback: this spell is some other spec's primary in our SPEC_DATA.
+  -- E.g. for Demo Warlock with Felhunter, Spell Lock (19647) is the primary
+  -- of Aff/Destro -- we look up its CD there to avoid hardcoding twice.
+  for _, spec in pairs(SPEC_DATA) do
+    if type(spec) == "table" then
+      if type(spec.spellID) == "number" and spec.spellID == spellID and type(spec.cd) == "number" then
+        return spec.cd
+      end
+      if type(spec.spells) == "table" then
+        for _, s in ipairs(spec.spells) do
+          if type(s) == "table" and s.spellID == spellID and type(s.cd) == "number" then
+            return s.cd
+          end
+        end
+      end
+    end
+  end
+  return 30 -- conservative default
+end
+
+local function ApplyTalentCdReduction(base, talent)
+  if not base or base <= 0 or not talent then
+    return base
+  end
+  local newCd
+  if talent.pctReduction then
+    newCd = math.floor(base * (1 - talent.pctReduction / 100) + 0.5)
+  else
+    newCd = base - talent.reduction
+  end
+  return math.max(1, newCd)
+end
+
+-- Iterate active class-talent nodes and call visit(definitionSpellID) for each.
+-- Returns true if iteration ran, false on missing API surface.
+local function ForEachActiveTalentDefinition(visit)
+  local C_ClassTalents_ref = rawget(_G, "C_ClassTalents")
+  if type(C_ClassTalents_ref) ~= "table" then
+    return false
+  end
+  local ok0, cid = pcall(C_ClassTalents_ref.GetActiveConfigID)
+  if not ok0 or not cid then
+    return false
+  end
+  local C_Traits_ref = rawget(_G, "C_Traits")
+  if type(C_Traits_ref) ~= "table" then
+    return false
+  end
+  local ok1, cfg = pcall(C_Traits_ref.GetConfigInfo, cid)
+  if not ok1 or not cfg or not cfg.treeIDs or #cfg.treeIDs == 0 then
+    return false
+  end
+  for _, treeID in ipairs(cfg.treeIDs) do
+    local ok2, nodes = pcall(C_Traits_ref.GetTreeNodes, treeID)
+    if ok2 and type(nodes) == "table" then
+      for _, nodeID in ipairs(nodes) do
+        local ok3, node = pcall(C_Traits_ref.GetNodeInfo, cid, nodeID)
+        if ok3 and node and node.activeEntry and node.activeRank and node.activeRank > 0 then
+          local ok4, entry = pcall(C_Traits_ref.GetEntryInfo, cid, node.activeEntry.entryID)
+          if ok4 and entry and entry.definitionID then
+            local ok5, def = pcall(C_Traits_ref.GetDefinitionInfo, entry.definitionID)
+            if ok5 and def and def.spellID then
+              visit(def.spellID)
+            end
+          end
+        end
+      end
+    end
+  end
+  return true
+end
+
+local function CollectActiveExtras(extras, now)
+  local out = nil
+  for spellID, data in pairs(extras) do
+    if type(data) == "table" and type(data.cdEnd) == "number" and data.cdEnd > now then
+      out = out or {}
+      out[spellID] = {
+        onCooldown = true,
+        cooldownRemain = math.max(0, data.cdEnd - now),
+        cd = data.cd,
+      }
+    end
+  end
+  return out
+end
+
 function KickTracker.CreateController(opts)
   opts = opts or {}
   local getTime = type(opts.getTime) == "function" and opts.getTime or GetTime
@@ -439,51 +552,6 @@ function KickTracker.CreateController(opts)
       cachedPlayerClass = classToken
     end
     return cachedPlayerClass
-  end
-
-  local function FindExtraKickSpell(spellID)
-    local class = ResolvePlayerClass()
-    if not class then
-      return false
-    end
-    local list = CLASS_INTERRUPT_LIST[class]
-    if type(list) ~= "table" then
-      return false
-    end
-    if spellID == watchedSpellID then
-      return false -- this is the primary, not an extra
-    end
-    for _, candidate in ipairs(list) do
-      if candidate == spellID then
-        return true
-      end
-    end
-    return false
-  end
-
-  local function ResolveExtraKickCd(spellID)
-    local cd = EXTRA_KICK_CD[spellID]
-    if cd and cd > 0 then
-      return cd
-    end
-    -- Fallback: this spell is some other spec's primary in our SPEC_DATA.
-    -- E.g. for Demo Warlock with Felhunter, Spell Lock (19647) is the primary
-    -- of Aff/Destro -- we look up its CD there to avoid hardcoding twice.
-    for _, spec in pairs(SPEC_DATA) do
-      if type(spec) == "table" then
-        if type(spec.spellID) == "number" and spec.spellID == spellID and type(spec.cd) == "number" then
-          return spec.cd
-        end
-        if type(spec.spells) == "table" then
-          for _, s in ipairs(spec.spells) do
-            if type(s) == "table" and s.spellID == spellID and type(s.cd) == "number" then
-              return s.cd
-            end
-          end
-        end
-      end
-    end
-    return 30 -- conservative default
   end
   local ReadBaseCd
   local ScanOwnTalents
@@ -577,52 +645,15 @@ function KickTracker.CreateController(opts)
     if not watchedSpellID then
       return
     end
-    local C_ClassTalents_ref = rawget(_G, "C_ClassTalents")
-    if type(C_ClassTalents_ref) ~= "table" then
-      return
-    end
-    local ok0, cid = pcall(C_ClassTalents_ref.GetActiveConfigID)
-    if not ok0 or not cid then
-      return
-    end
-    local C_Traits_ref = rawget(_G, "C_Traits")
-    if type(C_Traits_ref) ~= "table" then
-      return
-    end
-    local ok1, cfg = pcall(C_Traits_ref.GetConfigInfo, cid)
-    if not ok1 or not cfg or not cfg.treeIDs or #cfg.treeIDs == 0 then
-      return
-    end
-    for _, treeID in ipairs(cfg.treeIDs) do
-      local ok2, nodes = pcall(C_Traits_ref.GetTreeNodes, treeID)
-      if ok2 and type(nodes) == "table" then
-        for _, nodeID in ipairs(nodes) do
-          local ok3, node = pcall(C_Traits_ref.GetNodeInfo, cid, nodeID)
-          if ok3 and node and node.activeEntry and node.activeRank and node.activeRank > 0 then
-            local ok4, entry = pcall(C_Traits_ref.GetEntryInfo, cid, node.activeEntry.entryID)
-            if ok4 and entry and entry.definitionID then
-              local ok5, def = pcall(C_Traits_ref.GetDefinitionInfo, entry.definitionID)
-              if ok5 and def and def.spellID then
-                local talent = CD_REDUCTION_DEFS[def.spellID]
-                if talent and talent.affects == watchedSpellID then
-                  local base = watchedCd
-                  if base and base > 0 then
-                    local newCd
-                    if talent.pctReduction then
-                      newCd = math.floor(base * (1 - talent.pctReduction / 100) + 0.5)
-                    else
-                      newCd = base - talent.reduction
-                    end
-                    watchedCd = math.max(1, newCd)
-                  end
-                end
-              end
-            end
-          end
-        end
+    local ran = ForEachActiveTalentDefinition(function(definitionSpellID)
+      local talent = CD_REDUCTION_DEFS[definitionSpellID]
+      if talent and talent.affects == watchedSpellID then
+        watchedCd = ApplyTalentCdReduction(watchedCd, talent)
       end
+    end)
+    if ran then
+      talentScanDirty = false
     end
-    talentScanDirty = false
   end
 
   SetCooldown = function(active, endTime)
@@ -729,8 +760,8 @@ function KickTracker.CreateController(opts)
     -- primary slot -- e.g. Demo Warlock with Inner Demons casts both Spell
     -- Lock (Felhunter) AND Axe Toss (Felguard), or Prot Paladin with the
     -- Avenger's Shield interrupt talent. Tracked separately from primary.
-    if FindExtraKickSpell(spellID) then
-      local cd = ResolveExtraKickCd(spellID)
+    if IsExtraKickSpellForClass(ResolvePlayerClass(), watchedSpellID, spellID) then
+      local cd = LookupExtraKickCd(spellID)
       extras[spellID] = { cd = cd, cdEnd = getTime() + cd }
       if onCooldownChanged then
         onCooldownChanged(onCooldown, cooldownRemain, watchedSpellID)
@@ -783,32 +814,17 @@ function KickTracker.CreateController(opts)
     end
   end
 
-  local function CollectExtrasInfo()
-    local now = getTime()
-    local out = nil
-    for spellID, data in pairs(extras) do
-      if type(data) == "table" and type(data.cdEnd) == "number" and data.cdEnd > now then
-        out = out or {}
-        out[spellID] = {
-          onCooldown = true,
-          cooldownRemain = math.max(0, data.cdEnd - now),
-          cd = data.cd,
-        }
-      end
-    end
-    return out
-  end
-
   function controller.GetKickInfo()
     local hasKick = availabilityResolved == true and hasKickAvailable == true and watchedSpellID ~= nil
-    local remain = hasKick and (onCooldown and cdEndTime > 0) and math.max(0, cdEndTime - getTime()) or 0
+    local now = getTime()
+    local remain = hasKick and (onCooldown and cdEndTime > 0) and math.max(0, cdEndTime - now) or 0
     return {
       spellID = hasKick and watchedSpellID or nil,
       hasKick = hasKick,
       availabilityResolved = availabilityResolved == true,
       onCooldown = hasKick and onCooldown or false,
       cooldownRemain = remain,
-      extras = CollectExtrasInfo(),
+      extras = CollectActiveExtras(extras, now),
     }
   end
 

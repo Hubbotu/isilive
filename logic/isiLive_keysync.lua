@@ -293,178 +293,237 @@ local function CanBackfillPendingInspectValue(info, currentValue)
   return currentValue == nil
 end
 
-local function ApplyKnownKeyToRosterEntry(sync, info)
-  if type(info) ~= "table" then
-    return false
-  end
-  if info.isDemoEntry then
-    return false
-  end
-
-  local changed = false
-
+local function BackfillKey(sync, info)
   local keyInfo = sync.GetPlayerKeyInfo(info.name, info.realm)
   local newMapID = keyInfo and keyInfo.mapID or nil
   local newLevel = keyInfo and keyInfo.level or nil
-  if info.keyMapID ~= newMapID or info.keyLevel ~= newLevel then
-    info.keyMapID = newMapID
-    info.keyLevel = newLevel
+  if info.keyMapID == newMapID and info.keyLevel == newLevel then
+    return false
+  end
+  info.keyMapID = newMapID
+  info.keyLevel = newLevel
+  return true
+end
+
+local function BackfillStats(sync, info)
+  local statsInfo = sync.GetPlayerStatsInfo(info.name, info.realm)
+  if type(statsInfo) ~= "table" then
+    return false
+  end
+  local changed = false
+  if not info._localSpecFresh and statsInfo.specID then
+    local specName = ResolveSpecName(statsInfo.specID)
+    if specName and CanBackfillPendingInspectValue(info, info.spec) and info.spec ~= specName then
+      info.spec = specName
+      changed = true
+    end
+  end
+  if
+    not info._localIlvlFresh
+    and statsInfo.ilvl
+    and CanBackfillPendingInspectValue(info, info.ilvl)
+    and info.ilvl ~= statsInfo.ilvl
+  then
+    info.ilvl = statsInfo.ilvl
     changed = true
   end
-
-  local statsInfo = sync.GetPlayerStatsInfo(info.name, info.realm)
-  if type(statsInfo) == "table" then
-    if not info._localSpecFresh and statsInfo.specID then
-      local specName = ResolveSpecName(statsInfo.specID)
-      if specName and CanBackfillPendingInspectValue(info, info.spec) and info.spec ~= specName then
-        info.spec = specName
-        changed = true
-      end
-    end
-    if
-      not info._localIlvlFresh
-      and statsInfo.ilvl
-      and CanBackfillPendingInspectValue(info, info.ilvl)
-      and info.ilvl ~= statsInfo.ilvl
-    then
-      info.ilvl = statsInfo.ilvl
-      changed = true
-    end
-    if
-      not info._localRioFresh
-      and statsInfo.rio ~= nil
-      and CanBackfillPendingInspectValue(info, info.rio)
-      and info.rio ~= statsInfo.rio
-    then
-      info.rio = statsInfo.rio
-      changed = true
-    end
+  if
+    not info._localRioFresh
+    and statsInfo.rio ~= nil
+    and CanBackfillPendingInspectValue(info, info.rio)
+    and info.rio ~= statsInfo.rio
+  then
+    info.rio = statsInfo.rio
+    changed = true
   end
+  return changed
+end
 
+local function BackfillDps(sync, info)
   local dpsInfo = sync.GetPlayerDpsInfo(info.name, info.realm)
   if type(dpsInfo) == "table" then
     if info.syncDps ~= dpsInfo.dps then
       info.syncDps = dpsInfo.dps
-      changed = true
+      return true
     end
-  elseif info.syncDps ~= nil and not info.isGhost then
-    -- Ghosts must keep their last-known syncDps so the UI keeps showing it after
-    -- a group disband (clearKnownUsers wipes the sync cache, but the ghost row
-    -- still represents historical state — symmetric to how ilvl/rio are handled
-    -- above: no reset branch, so they stick when the sync cache returns nil).
-    info.syncDps = nil
-    changed = true
+    return false
   end
+  -- Ghosts must keep their last-known syncDps so the UI keeps showing it after
+  -- a group disband (clearKnownUsers wipes the sync cache, but the ghost row
+  -- still represents historical state — symmetric to how ilvl/rio are handled
+  -- above: no reset branch, so they stick when the sync cache returns nil).
+  if info.syncDps ~= nil and not info.isGhost then
+    info.syncDps = nil
+    return true
+  end
+  return false
+end
 
+local function BackfillLoc(sync, info)
   local locInfo = sync.GetPlayerLocInfo(info.name, info.realm)
   if type(locInfo) == "table" then
-    local newLocMapID = locInfo.mapID
-    if info.syncLocMapID ~= newLocMapID then
-      info.syncLocMapID = newLocMapID
-      changed = true
+    if info.syncLocMapID ~= locInfo.mapID then
+      info.syncLocMapID = locInfo.mapID
+      return true
     end
-  elseif info.syncLocMapID ~= nil and not info.isGhost then
+    return false
+  end
+  if info.syncLocMapID ~= nil and not info.isGhost then
     info.syncLocMapID = nil
-    changed = true
+    return true
   end
+  return false
+end
 
-  local kickInfo = type(sync.GetPlayerKickInfo) == "function" and sync.GetPlayerKickInfo(info.name, info.realm)
-  if type(kickInfo) == "table" then
-    local hasKick = kickInfo.hasKick ~= false
-    if not hasKick then
-      if
-        info.syncHasKick ~= false
-        or info.syncKickOnCooldown ~= nil
-        or info.syncKickRemain ~= nil
-        or info.syncKickExtras ~= nil
-      then
-        info.syncHasKick = false
-        info.syncKickOnCooldown = nil
-        info.syncKickRemain = nil
-        info.syncKickExtras = nil
-        changed = true
-      end
-    else
-      local interpolatedRemain = kickInfo.cooldownRemain
-      if kickInfo.onCooldown and kickInfo.receivedAtGetTime then
-        local getTime = rawget(_G, "GetTime")
-        if type(getTime) == "function" then
-          local elapsed = getTime() - kickInfo.receivedAtGetTime
-          interpolatedRemain = math.max(0, kickInfo.cooldownRemain - elapsed)
-        end
-      end
-      -- Interpolate extras the same way: subtract elapsed time off each
-      -- entry's remain. Drop entries whose remain has expired.
-      local interpolatedExtras = nil
-      if type(kickInfo.extras) == "table" then
-        local elapsed = 0
-        if kickInfo.receivedAtGetTime then
-          local getTime = rawget(_G, "GetTime")
-          if type(getTime) == "function" then
-            elapsed = getTime() - kickInfo.receivedAtGetTime
-          end
-        end
-        for spellID, data in pairs(kickInfo.extras) do
-          local remain = type(data) == "table" and tonumber(data.cooldownRemain) or nil
-          if remain then
-            local adjusted = math.max(0, remain - elapsed)
-            if adjusted > 0 then
-              interpolatedExtras = interpolatedExtras or {}
-              interpolatedExtras[spellID] = { cooldownRemain = adjusted }
-            end
-          end
-        end
-      end
-      local extrasChanged = (info.syncKickExtras == nil) ~= (interpolatedExtras == nil)
-      -- Drift threshold for extras is intentionally larger than the primary
-      -- (0.6 s vs 0.05 s for syncKickRemain above). Extras are talent / pet-
-      -- swap interrupts (typically 30 s CDs); a sub-second drift is below
-      -- visual perception in the tooltip and not worth a full re-render burst.
-      -- Primary cooldowns drive the bright Kick column and need tighter sync
-      -- so the displayed countdown ticks smoothly second-by-second.
-      if not extrasChanged and interpolatedExtras and info.syncKickExtras then
-        for sid, d in pairs(interpolatedExtras) do
-          local pd = info.syncKickExtras[sid]
-          if not pd or math.abs((pd.cooldownRemain or 0) - d.cooldownRemain) > 0.6 then
-            extrasChanged = true
-            break
-          end
-        end
-        if not extrasChanged then
-          for sid in pairs(info.syncKickExtras) do
-            if not interpolatedExtras[sid] then
-              extrasChanged = true
-              break
-            end
-          end
-        end
-      end
-      if
-        info.syncHasKick ~= true
-        or info.syncKickOnCooldown ~= kickInfo.onCooldown
-        or math.abs((info.syncKickRemain or 0) - interpolatedRemain) > 0.05
-        or extrasChanged
-      then
-        info.syncHasKick = true
-        info.syncKickOnCooldown = kickInfo.onCooldown
-        info.syncKickRemain = interpolatedRemain
-        info.syncKickExtras = interpolatedExtras
-        changed = true
+local function ResolveElapsedSinceReceived(receivedAtGetTime)
+  if not receivedAtGetTime then
+    return 0
+  end
+  local getTime = rawget(_G, "GetTime")
+  if type(getTime) ~= "function" then
+    return 0
+  end
+  return getTime() - receivedAtGetTime
+end
+
+local function InterpolateKickRemain(kickInfo)
+  if not (kickInfo.onCooldown and kickInfo.receivedAtGetTime) then
+    return kickInfo.cooldownRemain
+  end
+  local elapsed = ResolveElapsedSinceReceived(kickInfo.receivedAtGetTime)
+  return math.max(0, kickInfo.cooldownRemain - elapsed)
+end
+
+-- Interpolate extras the same way: subtract elapsed time off each entry's
+-- remain. Drop entries whose remain has expired.
+local function InterpolateKickExtras(kickInfo)
+  if type(kickInfo.extras) ~= "table" then
+    return nil
+  end
+  local elapsed = ResolveElapsedSinceReceived(kickInfo.receivedAtGetTime)
+  local result = nil
+  for spellID, data in pairs(kickInfo.extras) do
+    local remain = type(data) == "table" and tonumber(data.cooldownRemain) or nil
+    if remain then
+      local adjusted = math.max(0, remain - elapsed)
+      if adjusted > 0 then
+        result = result or {}
+        result[spellID] = { cooldownRemain = adjusted }
       end
     end
-  elseif
-    info.syncHasKick ~= nil
-    or info.syncKickOnCooldown ~= nil
-    or info.syncKickRemain ~= nil
-    or info.syncKickExtras ~= nil
+  end
+  return result
+end
+
+-- Drift threshold for extras is intentionally larger than the primary
+-- (0.6 s vs 0.05 s for syncKickRemain). Extras are talent / pet-swap
+-- interrupts (typically 30 s CDs); a sub-second drift is below visual
+-- perception in the tooltip and not worth a full re-render burst.
+-- Primary cooldowns drive the bright Kick column and need tighter sync so
+-- the displayed countdown ticks smoothly second-by-second.
+local function DidExtrasChange(prev, next)
+  if (prev == nil) ~= (next == nil) then
+    return true
+  end
+  if not prev or not next then
+    return false
+  end
+  for sid, d in pairs(next) do
+    local pd = prev[sid]
+    if not pd or math.abs((pd.cooldownRemain or 0) - d.cooldownRemain) > 0.6 then
+      return true
+    end
+  end
+  for sid in pairs(prev) do
+    if not next[sid] then
+      return true
+    end
+  end
+  return false
+end
+
+local function ClearKickFields(info)
+  if
+    info.syncHasKick == nil
+    and info.syncKickOnCooldown == nil
+    and info.syncKickRemain == nil
+    and info.syncKickExtras == nil
   then
-    info.syncHasKick = nil
-    info.syncKickOnCooldown = nil
-    info.syncKickRemain = nil
-    info.syncKickExtras = nil
+    return false
+  end
+  info.syncHasKick = nil
+  info.syncKickOnCooldown = nil
+  info.syncKickRemain = nil
+  info.syncKickExtras = nil
+  return true
+end
+
+local function ApplyHasNoKick(info)
+  if
+    info.syncHasKick == false
+    and info.syncKickOnCooldown == nil
+    and info.syncKickRemain == nil
+    and info.syncKickExtras == nil
+  then
+    return false
+  end
+  info.syncHasKick = false
+  info.syncKickOnCooldown = nil
+  info.syncKickRemain = nil
+  info.syncKickExtras = nil
+  return true
+end
+
+local function ApplyActiveKick(info, kickInfo)
+  local interpolatedRemain = InterpolateKickRemain(kickInfo)
+  local interpolatedExtras = InterpolateKickExtras(kickInfo)
+  local extrasChanged = DidExtrasChange(info.syncKickExtras, interpolatedExtras)
+  if
+    info.syncHasKick == true
+    and info.syncKickOnCooldown == kickInfo.onCooldown
+    and math.abs((info.syncKickRemain or 0) - interpolatedRemain) <= 0.05
+    and not extrasChanged
+  then
+    return false
+  end
+  info.syncHasKick = true
+  info.syncKickOnCooldown = kickInfo.onCooldown
+  info.syncKickRemain = interpolatedRemain
+  info.syncKickExtras = interpolatedExtras
+  return true
+end
+
+local function BackfillKick(sync, info)
+  local kickInfo = type(sync.GetPlayerKickInfo) == "function" and sync.GetPlayerKickInfo(info.name, info.realm)
+  if type(kickInfo) ~= "table" then
+    return ClearKickFields(info)
+  end
+  if kickInfo.hasKick == false then
+    return ApplyHasNoKick(info)
+  end
+  return ApplyActiveKick(info, kickInfo)
+end
+
+local function ApplyKnownKeyToRosterEntry(sync, info)
+  if type(info) ~= "table" or info.isDemoEntry then
+    return false
+  end
+  local changed = false
+  if BackfillKey(sync, info) then
     changed = true
   end
-
+  if BackfillStats(sync, info) then
+    changed = true
+  end
+  if BackfillDps(sync, info) then
+    changed = true
+  end
+  if BackfillLoc(sync, info) then
+    changed = true
+  end
+  if BackfillKick(sync, info) then
+    changed = true
+  end
   return changed
 end
 
