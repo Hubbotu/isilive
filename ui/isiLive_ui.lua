@@ -127,6 +127,22 @@ local HEARTHSTONE_TOY_IDS = {
 }
 local housingSecureButton = nil
 local housingDataEventFrame = nil
+local hearthstoneSecureButton = nil
+local hearthstoneToysEventFrame = nil
+
+local function CollectOwnedHearthstoneToys()
+  local playerHasToy = rawget(_G, "PlayerHasToy")
+  local owned = {}
+  if type(playerHasToy) ~= "function" then
+    return owned
+  end
+  for _, toyId in ipairs(HEARTHSTONE_TOY_IDS) do
+    if playerHasToy(toyId) then
+      owned[#owned + 1] = toyId
+    end
+  end
+  return owned
+end
 local SECOND_PANEL_UI_ENTRIES = {
   {
     id = "arkanatine_key",
@@ -1242,61 +1258,83 @@ function UI.EnsureSecondPanelUI(opts)
       -- expects each click to roll a different one. We re-roll lazily in
       -- the PreClick hook below so the secure action button still casts
       -- in a single click without an extra round-trip.
-      local playerHasToy = rawget(_G, "PlayerHasToy")
-      local ownedToys = {}
-      if type(playerHasToy) == "function" then
-        for _, toyId in ipairs(HEARTHSTONE_TOY_IDS) do
-          if playerHasToy(toyId) then
-            ownedToys[#ownedToys + 1] = toyId
-          end
-        end
-      end
+      local ownedToys = CollectOwnedHearthstoneToys()
 
       if #ownedToys > 0 then
         button._hearthstoneOwnedToys = ownedToys
-        -- Initial selection: random index so the very first click is also
-        -- non-deterministic, not just subsequent ones.
         local initialIndex = math.random(1, #ownedToys)
         button:SetAttribute("type", "toy")
         button:SetAttribute("toy", ownedToys[initialIndex])
-
-        if type(button.HookScript) == "function" or type(button.SetScript) == "function" then
-          local function PickRandomHearthstoneToy()
-            local pool = button._hearthstoneOwnedToys
-            if type(pool) ~= "table" or #pool == 0 then
-              return
-            end
-            local inCombat = rawget(_G, "InCombatLockdown")
-            if type(inCombat) == "function" and inCombat() then
-              -- Cannot rewrite a secure attribute in combat; the previous
-              -- selection stays bound and the click still works.
-              return
-            end
-            -- Avoid re-picking the same toy twice in a row when the user
-            -- owns more than one.
-            local current = button:GetAttribute("toy")
-            local pick
-            if #pool == 1 then
-              pick = pool[1]
-            else
-              repeat
-                pick = pool[math.random(1, #pool)]
-              until pick ~= current
-            end
-            button:SetAttribute("type", "toy")
-            button:SetAttribute("toy", pick)
-          end
-
-          if type(button.HookScript) == "function" then
-            button:HookScript("PreClick", PickRandomHearthstoneToy)
-          else
-            button:SetScript("PreClick", PickRandomHearthstoneToy)
-          end
-        end
       else
-        -- Fallback to default Hearthstone item (item ID 6948) if no toy found.
+        -- Toy cache not warm yet (typical right after a character login on
+        -- the same account: ApplyLocalizationToUI runs from ADDON_LOADED
+        -- before TOYS_UPDATED fires). Use the regular Hearthstone (item
+        -- 6948) as interim. The TOYS_UPDATED listener and the PreClick
+        -- rebuild below upgrade the button to a random toy as soon as the
+        -- cache is available, so the bug where the button stayed stuck on
+        -- the item fallback for the whole session is now self-healing.
         button:SetAttribute("type", "item")
         button:SetAttribute("item", "item:6948")
+      end
+
+      hearthstoneSecureButton = button
+      if not hearthstoneToysEventFrame then
+        hearthstoneToysEventFrame = CreateFrame("Frame")
+        hearthstoneToysEventFrame:SetScript("OnEvent", function(_, event)
+          if event ~= "TOYS_UPDATED" then
+            return
+          end
+          local btn = hearthstoneSecureButton
+          if type(btn) ~= "table" or type(btn.SetAttribute) ~= "function" then
+            return
+          end
+          local inCombat = rawget(_G, "InCombatLockdown")
+          if type(inCombat) == "function" and inCombat() then
+            return
+          end
+          local refreshed = CollectOwnedHearthstoneToys()
+          if #refreshed == 0 then
+            return
+          end
+          btn._hearthstoneOwnedToys = refreshed
+          btn:SetAttribute("type", "toy")
+          btn:SetAttribute("toy", refreshed[math.random(1, #refreshed)])
+        end)
+      end
+      hearthstoneToysEventFrame:RegisterEvent("TOYS_UPDATED")
+
+      if type(button.HookScript) == "function" or type(button.SetScript) == "function" then
+        local function PickRandomHearthstoneToy()
+          local inCombat = rawget(_G, "InCombatLockdown")
+          if type(inCombat) == "function" and inCombat() then
+            return
+          end
+          local pool = button._hearthstoneOwnedToys
+          if type(pool) ~= "table" or #pool == 0 then
+            pool = CollectOwnedHearthstoneToys()
+            if #pool == 0 then
+              return
+            end
+            button._hearthstoneOwnedToys = pool
+          end
+          local current = button:GetAttribute("toy")
+          local pick
+          if #pool == 1 then
+            pick = pool[1]
+          else
+            repeat
+              pick = pool[math.random(1, #pool)]
+            until pick ~= current
+          end
+          button:SetAttribute("type", "toy")
+          button:SetAttribute("toy", pick)
+        end
+
+        if type(button.HookScript) == "function" then
+          button:HookScript("PreClick", PickRandomHearthstoneToy)
+        else
+          button:SetScript("PreClick", PickRandomHearthstoneToy)
+        end
       end
     elseif entry.id == "housing_plot" and type(button.SetAttribute) == "function" then
       housingSecureButton = button

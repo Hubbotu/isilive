@@ -1,6 +1,6 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.224`
+Versionsbasis: `0.9.225`
 Zuletzt aktualisiert: `2026-05-10`
 
 ## Zweck
@@ -197,7 +197,7 @@ Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.224 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
+| isiLive                                                 v0.9.225 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
 |---------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
 |---------------------------------------------------------------------------------------------------|

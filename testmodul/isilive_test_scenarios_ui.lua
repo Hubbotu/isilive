@@ -1054,6 +1054,9 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       PlayerHasToy = function(_itemID)
         return false
       end,
+      InCombatLockdown = function()
+        return false
+      end,
     }, function()
       local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
       local UI = RequireValue(addon.UI, "UI module should load")
@@ -1077,8 +1080,89 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         "item:6948",
         "fallback must bind the classic Hearthstone item id"
       )
+      -- PreClick is always installed so the button can self-heal once the
+      -- account-wide toy cache warms up (typical after a character switch:
+      -- the panel is built from ADDON_LOADED before TOYS_UPDATED fires).
       local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
-      Assert.True(preClick == nil, "PreClick must not be installed when no toys are owned")
+      preClick = Assert.NotNil(preClick, "PreClick handler must be installed even without owned toys")
+
+      -- Calling PreClick while still no toys are owned must be a no-op so the
+      -- secure attributes stay on the item-fallback for this click.
+      preClick(hearthstoneButton)
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("type"),
+        "item",
+        "PreClick must not rewrite type when no toys are owned"
+      )
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("item"),
+        "item:6948",
+        "PreClick must keep the fallback item binding when no toys are owned"
+      )
+    end)
+  end)
+
+  test("UI second game-menu hearthstone button self-heals on PreClick once the toy cache warms up", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    -- Reproduces the character-switch bug: at panel-build time the
+    -- account-wide toy cache is cold and PlayerHasToy reports false for
+    -- everything, so the button falls back to item:6948. Once the cache
+    -- warms up (PlayerHasToy now reports true), the PreClick hook must
+    -- rebuild the pool and rebind the button to a real toy.
+    local cacheWarm = false
+    local ownedToys = { [54452] = true, [64488] = true, [93672] = true }
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(itemID)
+        if not cacheWarm then
+          return false
+        end
+        return ownedToys[itemID] == true
+      end,
+      InCombatLockdown = function()
+        return false
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton =
+        RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist on cold cache")
+      Assert.Equal(hearthstoneButton:GetAttribute("type"), "item", "cold-cache build must fall back to the item action")
+
+      cacheWarm = true
+      local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
+      preClick = Assert.NotNil(preClick, "PreClick handler must be installed for self-heal")
+      preClick(hearthstoneButton)
+
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("type"),
+        "toy",
+        "PreClick must upgrade the button to a toy action once the cache warms up"
+      )
+      local pickedToy = hearthstoneButton:GetAttribute("toy")
+      Assert.True(
+        ownedToys[pickedToy] == true,
+        "self-healed toy must be one of the owned ids (got " .. tostring(pickedToy) .. ")"
+      )
     end)
   end)
 

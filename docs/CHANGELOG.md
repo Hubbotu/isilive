@@ -1,6 +1,34 @@
 # Changelog
 
-## 2026-05-10 - Version 0.9.224 (patch)
+## 2026-05-10 - Version 0.9.225 (patch)
+
+Bug fix for the Travel-panel Hearthstone button. After switching to another
+character on the same WoW account, the button could stay stuck on the regular
+Hearthstone item (item:6948) for the entire session — clicking did nothing on
+characters that did not carry that item in their bags.
+
+### Root cause
+
+`UI.EnsureSecondPanelUI` is invoked from `ApplyLocalizationToUI`, which runs
+from the `ADDON_LOADED` handler in [logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua).
+At that point the account-wide toy collection cache is often not yet warm:
+`PlayerHasToy(...)` returns `false` for every hearthstone toy ID, so the
+setup loop fell through to the `type=item, item=item:6948` fallback. The
+panel state is cached for the whole session — the toy list was never
+rebuilt, even after `TOYS_UPDATED` fired moments later.
+
+### Fix
+
+- New `CollectOwnedHearthstoneToys()` helper in [ui/isiLive_ui.lua](ui/isiLive_ui.lua)
+  centralises the `PlayerHasToy` scan.
+- A static `hearthstoneToysEventFrame` registers `TOYS_UPDATED` and rebinds
+  the secure button to a random owned toy as soon as the cache is available
+  (combat-lockdown guarded, matches the existing housing-button pattern).
+- The `PreClick` hook now also rebuilds the toy pool lazily when it is
+  still empty — so the very first click after a cold login self-heals the
+  button instead of casting the missing item fallback.
+
+
 
 Visual rework of the post-accept Center Notice introduced in v0.9.223. The
 previous subline-stack layout (small "Beigetreten" header + center text +
