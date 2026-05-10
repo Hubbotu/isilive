@@ -298,9 +298,10 @@ local function CreateCenterNoticeSubline(frame, config, position)
   return subline
 end
 
--- Rich-layout primitives (KSP-style invite-accepted notice). Pre-allocated at
--- frame creation; hidden by default. Show paths set their text and visibility
--- per-Show call. Anchored dynamically inside ApplyCenterNoticeRichLayout.
+-- Rich-layout primitives for the post-accept invite info card. Pre-allocated
+-- at frame creation; hidden by default. Show paths set their text and
+-- visibility per-Show call. Anchored dynamically inside
+-- ApplyCenterNoticeRichLayout.
 
 local function CreateCenterNoticeTitle(frame, config)
   local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -313,8 +314,8 @@ local function CreateCenterNoticeTitle(frame, config)
   if title.SetNonSpaceWrap then
     title:SetNonSpaceWrap(false)
   end
-  -- Warm orange-red, evokes the KSP "Group Reminder" header without copying
-  -- the exact color.
+  -- Warm orange-red so the title reads as the dominant header while staying
+  -- distinct from the gold accent used on labels and the separator.
   title:SetTextColor(1, 0.45, 0.2)
   title:Hide()
   return title
@@ -706,7 +707,7 @@ local function HideRichCenterNoticeElements(state)
   end
 end
 
--- Rich KSP-style layout: [paddingY] [title] [separator] [gap] [field rows]
+-- Rich info-card layout: [paddingY] [title] [separator] [gap] [field rows]
 -- [gap] [teleportHeader] [buttonGap] [teleportButton] [paddingY]. Used by the
 -- post-accept invite notice; the regular text body is hidden in this mode
 -- because the field rows carry the structured payload instead.

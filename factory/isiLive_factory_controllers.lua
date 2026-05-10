@@ -771,7 +771,7 @@ local function RenderAcceptedInviteNotice(ctx, modules, payload)
     title = L.INVITE_ACCEPTED_NOTICE_TITLE or "isiLive - Invite accepted",
     fields = fields,
     teleportLabel = L.INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER or "Teleport to dungeon:",
-    -- KSP-style compact card: narrower than the default 680px legacy banner so
+    -- Compact card width: narrower than the default 680px legacy banner so
     -- the layout reads as a focused info card rather than a full-width header.
     frameWidth = 540,
     -- No blink/fontScale — the rich layout already carries its own visual

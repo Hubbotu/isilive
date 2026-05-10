@@ -5,11 +5,11 @@
 Visual rework of the post-accept Center Notice introduced in v0.9.223. The
 previous subline-stack layout (small "Beigetreten" header + center text +
 small group line + teleport button) was too unobtrusive in live testing and
-got missed. The notice now uses a structured KSP-style info card: title bar
-with separator, label/value field rows, and a teleport section header above
+got missed. The notice now uses a structured info card: title bar with
+separator, label/value field rows, and a teleport section header above
 the button.
 
-### Center Notice rich layout (KSP-style info card)
+### Center Notice rich layout (info card)
 
 When the player accepts an LFG invite, the notice renders as a focused 540px
 card with a clear visual hierarchy:
