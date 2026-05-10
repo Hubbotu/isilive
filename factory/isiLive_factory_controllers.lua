@@ -779,6 +779,16 @@ local function RenderAcceptedInviteNotice(ctx, modules, payload)
   })
 end
 
+-- Internal test surface: the four helpers above are wired together inside
+-- InitializeFactoryPrimaryControllers via a single closure, so the only
+-- realistic way to cover their branches in isolation is to expose them on
+-- the _FactoryInternal table the same way the four Initialize* entry
+-- points are. Not part of the public addon API.
+FI.ResolveAcceptedInviteRoleName = ResolveAcceptedInviteRoleName
+FI.ResolveAcceptedInviteDungeonName = ResolveAcceptedInviteDungeonName
+FI.BuildAcceptedInviteFields = BuildAcceptedInviteFields
+FI.RenderAcceptedInviteNotice = RenderAcceptedInviteNotice
+
 local function InitializeFactoryPrimaryControllers(ctx)
   local modules = ctx.modules
   local initResult = modules.controllerInit.CreateControllers({

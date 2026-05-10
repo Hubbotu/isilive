@@ -671,4 +671,294 @@ return function(test, ctx)
       "missing baseline key must resolve to nil"
     )
   end)
+
+  -- =====================================================
+  -- Accepted-Invite Center-Notice helpers (FI exports)
+  -- Covers the four module-local helpers (RoleName, DungeonName,
+  -- BuildFields, Render) that wire the post-accept rich center notice
+  -- in InitializeFactoryPrimaryControllers.
+  -- =====================================================
+
+  local function BuildAcceptedInviteCtx(overrides)
+    overrides = overrides or {}
+    return {
+      GetL = overrides.GetL or function()
+        return {
+          ROLE_NAME_TANK = "Tank-DE",
+          ROLE_NAME_HEALER = "Heal-DE",
+          ROLE_NAME_DAMAGE = "DD-DE",
+          INVITE_HINT_UNKNOWN_DUNGEON = "Unbekannt-DE",
+          INVITE_ACCEPTED_NOTICE_HEADLINE_WITH_LEVEL = "%s +%d",
+          INVITE_ACCEPTED_NOTICE_HEADLINE_NO_LEVEL = "%s",
+          INVITE_ACCEPTED_NOTICE_LABEL_DUNGEON = "Dungeon-DE:",
+          INVITE_ACCEPTED_NOTICE_LABEL_GROUP = "Gruppe-DE:",
+          INVITE_ACCEPTED_NOTICE_LABEL_DESCRIPTION = "Beschr-DE:",
+          INVITE_ACCEPTED_NOTICE_LABEL_ROLE = "Rolle-DE:",
+          INVITE_ACCEPTED_NOTICE_TITLE = "isiLive - Invite-DE",
+          INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER = "TP-DE:",
+        }
+      end,
+      GetUnitRole = overrides.GetUnitRole,
+      ShowCenterNotice = overrides.ShowCenterNotice,
+    }
+  end
+
+  test("factory_controllers: ResolveAcceptedInviteRoleName rejects non-string / empty / NONE input", function()
+    local addon = Load()
+    local resolve = addon._FactoryInternal.ResolveAcceptedInviteRoleName
+    local c = BuildAcceptedInviteCtx()
+    Assert.Nil(resolve(c, nil), "nil role must resolve to nil")
+    Assert.Nil(resolve(c, ""), "empty role must resolve to nil")
+    Assert.Nil(resolve(c, "NONE"), "NONE role must resolve to nil")
+    Assert.Nil(resolve(c, 42), "non-string role must resolve to nil")
+    Assert.Nil(resolve(c, "WHATEVER"), "unknown role must resolve to nil")
+  end)
+
+  test("factory_controllers: ResolveAcceptedInviteRoleName maps TANK / HEALER / DAMAGER to locale strings", function()
+    local addon = Load()
+    local resolve = addon._FactoryInternal.ResolveAcceptedInviteRoleName
+    local c = BuildAcceptedInviteCtx()
+    Assert.Equal(resolve(c, "TANK"), "Tank-DE", "TANK must resolve to L.ROLE_NAME_TANK")
+    Assert.Equal(resolve(c, "HEALER"), "Heal-DE", "HEALER must resolve to L.ROLE_NAME_HEALER")
+    Assert.Equal(resolve(c, "DAMAGER"), "DD-DE", "DAMAGER must resolve to L.ROLE_NAME_DAMAGE")
+  end)
+
+  test("factory_controllers: ResolveAcceptedInviteRoleName falls back when ctx.GetL is missing", function()
+    local addon = Load()
+    local resolve = addon._FactoryInternal.ResolveAcceptedInviteRoleName
+    local c = { GetL = nil }
+    Assert.Nil(resolve(c, "TANK"), "missing locale table must resolve to nil rather than crash")
+  end)
+
+  test("factory_controllers: ResolveAcceptedInviteDungeonName uses mapName when present", function()
+    local addon = Load()
+    local resolve = addon._FactoryInternal.ResolveAcceptedInviteDungeonName
+    local c = BuildAcceptedInviteCtx()
+    local modules = {
+      teleport = {
+        GetTeleportInfoByMapID = function(mapID)
+          Assert.Equal(mapID, 559, "mapID must be forwarded to the teleport lookup")
+          return { mapName = "Halls", name = "FallbackName" }
+        end,
+      },
+    }
+    Assert.Equal(resolve(c, modules, 559), "Halls", "mapName must take priority over name")
+  end)
+
+  test("factory_controllers: ResolveAcceptedInviteDungeonName falls back to info.name when mapName missing", function()
+    local addon = Load()
+    local resolve = addon._FactoryInternal.ResolveAcceptedInviteDungeonName
+    local c = BuildAcceptedInviteCtx()
+    local modules = {
+      teleport = {
+        GetTeleportInfoByMapID = function()
+          return { mapName = "", name = "Backup" }
+        end,
+      },
+    }
+    Assert.Equal(resolve(c, modules, 200), "Backup", "name must be used when mapName is blank")
+  end)
+
+  test(
+    "factory_controllers: ResolveAcceptedInviteDungeonName falls back to locale string on missing teleport / lookup",
+    function()
+      local addon = Load()
+      local resolve = addon._FactoryInternal.ResolveAcceptedInviteDungeonName
+      local c = BuildAcceptedInviteCtx()
+      Assert.Equal(resolve(c, {}, 200), "Unbekannt-DE", "missing teleport module must fall back to locale string")
+      Assert.Equal(
+        resolve(c, { teleport = {} }, 200),
+        "Unbekannt-DE",
+        "missing GetTeleportInfoByMapID must fall back to locale string"
+      )
+      local modules = {
+        teleport = {
+          GetTeleportInfoByMapID = function()
+            return nil
+          end,
+        },
+      }
+      Assert.Equal(resolve(c, modules, 200), "Unbekannt-DE", "nil info must fall back to locale string")
+      Assert.Equal(resolve(c, modules, nil), "Unbekannt-DE", "nil mapID must fall back to locale string")
+      local emptyStrings = {
+        teleport = {
+          GetTeleportInfoByMapID = function()
+            return { mapName = "", name = "" }
+          end,
+        },
+      }
+      Assert.Equal(resolve(c, emptyStrings, 200), "Unbekannt-DE", "blank mapName + name must fall back")
+    end
+  )
+
+  test(
+    "factory_controllers: ResolveAcceptedInviteDungeonName uses hardcoded fallback when locale lacks the key",
+    function()
+      local addon = Load()
+      local resolve = addon._FactoryInternal.ResolveAcceptedInviteDungeonName
+      local c = {
+        GetL = function()
+          return {}
+        end,
+      }
+      Assert.Equal(
+        resolve(c, {}, 200),
+        "Unknown dungeon",
+        "missing INVITE_HINT_UNKNOWN_DUNGEON must use english fallback"
+      )
+    end
+  )
+
+  test("factory_controllers: BuildAcceptedInviteFields renders dungeon row with +N when level > 0", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedInviteFields
+    local c = BuildAcceptedInviteCtx({
+      GetUnitRole = function(unit)
+        Assert.Equal(unit, "player", "unit must always be 'player' for the local role lookup")
+        return "TANK"
+      end,
+    })
+    local fields = build(c, "MyDungeon", { level = 10, groupName = "Crew", comment = "Pls timer" })
+    Assert.Equal(#fields, 4, "must render dungeon + group + description + role rows")
+    Assert.Equal(fields[1].label, "Dungeon-DE:", "row 1 must be the dungeon label")
+    Assert.Equal(fields[1].value, "MyDungeon +10", "row 1 must render +N from the level")
+    Assert.Equal(fields[2].label, "Gruppe-DE:", "row 2 must be the group label")
+    Assert.Equal(fields[2].value, "Crew", "row 2 must echo the group name")
+    Assert.Equal(fields[3].label, "Beschr-DE:", "row 3 must be the description label")
+    Assert.Equal(fields[3].value, "Pls timer", "row 3 must echo the comment")
+    Assert.Equal(fields[4].label, "Rolle-DE:", "row 4 must be the role label")
+    Assert.Equal(fields[4].value, "Tank-DE", "row 4 must render the resolved role name")
+  end)
+
+  test("factory_controllers: BuildAcceptedInviteFields drops level suffix when level is nil or non-positive", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedInviteFields
+    local c = BuildAcceptedInviteCtx()
+
+    local fieldsNoLevel = build(c, "MyDungeon", {})
+    Assert.Equal(fieldsNoLevel[1].value, "MyDungeon", "missing level must render dungeon name without +N")
+
+    local fieldsZero = build(c, "MyDungeon", { level = 0 })
+    Assert.Equal(fieldsZero[1].value, "MyDungeon", "level=0 must render dungeon name without +N")
+
+    local fieldsNeg = build(c, "MyDungeon", { level = -5 })
+    Assert.Equal(fieldsNeg[1].value, "MyDungeon", "negative level must render dungeon name without +N")
+  end)
+
+  test("factory_controllers: BuildAcceptedInviteFields omits optional rows when their source is missing", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedInviteFields
+    local c = BuildAcceptedInviteCtx({
+      GetUnitRole = function()
+        return "NONE"
+      end,
+    })
+
+    local fields = build(c, "MyDungeon", { level = 5 })
+    Assert.Equal(#fields, 1, "no group + no comment + NONE role must leave only the dungeon row")
+    Assert.Equal(fields[1].label, "Dungeon-DE:", "the dungeon row must always be present")
+
+    -- empty / non-string group + comment must be dropped (string guard)
+    local fieldsEmpty = build(c, "MyDungeon", { level = 5, groupName = "", comment = "" })
+    Assert.Equal(#fieldsEmpty, 1, "blank optional strings must be treated as missing")
+
+    local fieldsBadType = build(c, "MyDungeon", { level = 5, groupName = 42, comment = false })
+    Assert.Equal(#fieldsBadType, 1, "non-string optional values must be dropped")
+  end)
+
+  test(
+    "factory_controllers: BuildAcceptedInviteFields uses hardcoded label fallbacks when locale lacks keys",
+    function()
+      local addon = Load()
+      local build = addon._FactoryInternal.BuildAcceptedInviteFields
+      local c = {
+        GetL = function()
+          return {}
+        end,
+        GetUnitRole = function()
+          return "TANK"
+        end,
+      }
+      local fields = build(c, "Dun", { level = 7, groupName = "G", comment = "C" })
+      -- ResolveAcceptedInviteRoleName returns nil when L.ROLE_NAME_TANK is
+      -- missing, so the role row is dropped — only dungeon + group +
+      -- description remain. The english fallback for the role label is
+      -- never reached on an empty locale table; that branch is exercised
+      -- when the locale only lacks the label keys, not the role names.
+      Assert.Equal(#fields, 3, "missing role-name keys drop the role row")
+      Assert.Equal(fields[1].label, "Dungeon:", "missing dungeon label key must fall back to english")
+      Assert.Equal(fields[1].value, "Dun +7", "missing headline template must fall back to english")
+      Assert.Equal(fields[2].label, "Group:", "missing group label key must fall back to english")
+      Assert.Equal(fields[3].label, "Description:", "missing description label key must fall back to english")
+    end
+  )
+
+  test("factory_controllers: RenderAcceptedInviteNotice is a no-op for non-table payload", function()
+    local addon = Load()
+    local render = addon._FactoryInternal.RenderAcceptedInviteNotice
+    local called = false
+    local c = BuildAcceptedInviteCtx({
+      ShowCenterNotice = function()
+        called = true
+      end,
+    })
+    render(c, {}, nil)
+    render(c, {}, "string-payload")
+    render(c, {}, 42)
+    Assert.Equal(called, false, "ShowCenterNotice must not fire for invalid payloads")
+  end)
+
+  test("factory_controllers: RenderAcceptedInviteNotice is a no-op when ShowCenterNotice is missing", function()
+    local addon = Load()
+    local render = addon._FactoryInternal.RenderAcceptedInviteNotice
+    local c = BuildAcceptedInviteCtx()
+    -- Should not crash even though ShowCenterNotice is absent.
+    render(c, {}, { mapID = 200, level = 5 })
+  end)
+
+  test("factory_controllers: RenderAcceptedInviteNotice forwards a populated payload to ShowCenterNotice", function()
+    local addon = Load()
+    local render = addon._FactoryInternal.RenderAcceptedInviteNotice
+    local captured
+    local c = BuildAcceptedInviteCtx({
+      GetUnitRole = function()
+        return "HEALER"
+      end,
+      ShowCenterNotice = function(unit, holdTime, mapName, activityID, opts)
+        captured = {
+          unit = unit,
+          holdTime = holdTime,
+          mapName = mapName,
+          activityID = activityID,
+          opts = opts,
+        }
+      end,
+    })
+    local modules = {
+      teleport = {
+        GetTeleportInfoByMapID = function(mapID)
+          Assert.Equal(mapID, 559, "mapID must be forwarded to the teleport lookup")
+          return { mapName = "Halls" }
+        end,
+      },
+    }
+    render(c, modules, {
+      mapID = 559,
+      activityID = 1234,
+      level = 12,
+      groupName = "Crew",
+      comment = "Pls timer",
+    })
+    Assert.NotNil(captured, "ShowCenterNotice must be invoked once")
+    Assert.Equal(captured.unit, nil, "ShowCenterNotice unit arg must be nil (center notice)")
+    Assert.Equal(captured.holdTime, 12, "ShowCenterNotice must receive the 12s hold time")
+    Assert.Equal(captured.mapName, "Halls", "ShowCenterNotice must receive the resolved mapName")
+    Assert.Equal(captured.activityID, 1234, "ShowCenterNotice must receive the activityID")
+    Assert.Equal(captured.opts.title, "isiLive - Invite-DE", "opts.title must come from the locale table")
+    Assert.Equal(captured.opts.teleportLabel, "TP-DE:", "opts.teleportLabel must come from the locale table")
+    Assert.Equal(captured.opts.frameWidth, 540, "opts.frameWidth must be the compact 540px card width")
+    Assert.Equal(#captured.opts.fields, 4, "opts.fields must contain dungeon + group + comment + role rows")
+    Assert.Equal(captured.opts.fields[1].value, "Halls +12", "dungeon row must carry the resolved mapName + level")
+    Assert.Equal(captured.opts.fields[4].value, "Heal-DE", "role row must reflect HEALER -> ROLE_NAME_HEALER")
+  end)
 end
