@@ -64,8 +64,15 @@ local function CreateFontStringStub(fontObject)
     SetFont = function(_self, _path, size, _flags)
       fontSize = tonumber(size) or fontSize
     end,
-    Hide = function() end,
-    Show = function() end,
+    Hide = function(self)
+      self._shown = false
+    end,
+    Show = function(self)
+      self._shown = true
+    end,
+    IsShown = function(self)
+      return self._shown ~= false
+    end,
   }
 end
 
@@ -118,6 +125,9 @@ local function ApplyFrameMethods(frame)
   end
   frame.SetHeight = function(self, height)
     self._height = tonumber(height) or self._height
+  end
+  frame.SetWidth = function(self, width)
+    self._width = tonumber(width) or self._width
   end
   frame.GetWidth = function(self)
     return self._width

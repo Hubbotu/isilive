@@ -1697,6 +1697,44 @@ local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
     end)
   end)
 
+  -- Test D2: listing comment ("Beschreibung" row in the notice) propagates
+  -- through the payload when present, and stays nil when absent — never
+  -- defaulted to a placeholder string.
+  test("AcceptedInviteNotice forwards info.comment as payload.comment when present", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [402] = {
+            activityID = 1542,
+            name = "+13 spire push",
+            leaderName = "C",
+            comment = "Achiever 2.5k io, no afks",
+          },
+          [403] = { activityID = 1542, name = "+10 chill", leaderName = "D" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 402, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 402, "inviteaccepted")
+      Assert.Equal(payloads[1].comment, "Achiever 2.5k io, no afks", "comment must propagate from info.comment")
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 403, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 403, "inviteaccepted")
+      Assert.Nil(payloads[2].comment, "missing info.comment must surface as nil, never a placeholder")
+    end)
+  end)
+
   -- Test E: when the toggle is off, the callback must not be invoked.
   test("AcceptedInviteNotice stays silent when the enabled-fn returns false", function()
     local globals, fire = BuildLFGDetectEnv({

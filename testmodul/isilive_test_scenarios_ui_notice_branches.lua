@@ -7,26 +7,29 @@
 --   * CreateCenterNotice teleport-button blink animation tick
 
 local function CreateTextureStub()
-  return {
-    _hidden = false,
-    SetAllPoints = function() end,
-    SetColorTexture = function() end,
-    SetTexture = function() end,
-    SetSize = function() end,
-    SetWidth = function() end,
-    SetHeight = function() end,
-    SetPoint = function() end,
-    SetTexCoord = function() end,
-    SetBlendMode = function() end,
-    SetVertexColor = function() end,
-    SetRotation = function() end,
-    Hide = function(self)
-      self._hidden = true
-    end,
-    Show = function(self)
-      self._hidden = false
-    end,
-  }
+  local tex = { _hidden = false }
+  tex.SetAllPoints = function() end
+  tex.SetColorTexture = function() end
+  tex.SetTexture = function() end
+  tex.SetSize = function() end
+  tex.SetWidth = function() end
+  tex.SetHeight = function() end
+  tex.SetPoint = function() end
+  tex.ClearAllPoints = function() end
+  tex.SetTexCoord = function() end
+  tex.SetBlendMode = function() end
+  tex.SetVertexColor = function() end
+  tex.SetRotation = function() end
+  tex.Hide = function(self)
+    self._hidden = true
+  end
+  tex.Show = function(self)
+    self._hidden = false
+  end
+  tex.IsShown = function(self)
+    return self._hidden ~= true
+  end
+  return tex
 end
 
 local function CreateFontStringStub()
@@ -61,6 +64,9 @@ local function CreateFontStringStub()
   end
   function fs:Show()
     self._shown = true
+  end
+  function fs:IsShown()
+    return self._shown == true
   end
   function fs:SetFont() end
   function fs:GetFont()
@@ -599,6 +605,136 @@ local function RegisterCenterNoticeSublineTests(test, Assert, WithGlobals, LoadA
   end)
 end
 
+local function RegisterCenterNoticeRichLayoutTests(test, Assert, WithGlobals, LoadAddonModules)
+  local function CreateCenterNoticeForRichTest()
+    local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+    local Notice = RequireValue(addon.Notice, "Notice module should load")
+    return Notice.CreateCenterNotice({
+      parent = UIParent,
+      isInCombat = function()
+        return false
+      end,
+    })
+  end
+
+  test("Center notice exposes rich-layout primitives (title, separator, fieldRows, teleportHeader)", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForRichTest()
+      Assert.NotNil(centerNotice.titleText, "titleText must be exposed")
+      Assert.NotNil(centerNotice.titleSeparator, "titleSeparator must be exposed")
+      Assert.NotNil(centerNotice.teleportHeader, "teleportHeader must be exposed")
+      Assert.NotNil(centerNotice.fieldRows, "fieldRows must be exposed")
+      Assert.Equal(#centerNotice.fieldRows, 4, "should pre-allocate 4 field rows")
+      Assert.False(centerNotice.titleText._shown, "titleText hidden by default")
+      Assert.False(centerNotice.fieldRows[1].label._shown, "first field row hidden by default")
+    end)
+  end)
+
+  test("Center notice rich Show renders title, separator, field rows, teleport header", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForRichTest()
+      centerNotice.Show(nil, 12, nil, nil, {
+        title = "isiLive - Einladung angenommen",
+        fields = {
+          { label = "Dungeon:", value = "Akademie von Algeth'ar +13" },
+          { label = "Gruppe:", value = "+13 Push-Lobby" },
+        },
+        teleportLabel = "Zum Dungeon teleportieren:",
+      })
+
+      Assert.True(centerNotice.titleText._shown, "titleText must be visible")
+      Assert.Equal(centerNotice.titleText:GetText(), "isiLive - Einladung angenommen", "title text must propagate")
+      Assert.Equal(centerNotice.titleSeparator._hidden, false, "titleSeparator must be visible when title is set")
+
+      Assert.True(centerNotice.fieldRows[1].label._shown, "first field label visible")
+      Assert.Equal(centerNotice.fieldRows[1].label:GetText(), "Dungeon:", "first field label text")
+      Assert.Equal(centerNotice.fieldRows[1].value:GetText(), "Akademie von Algeth'ar +13", "first field value text")
+      Assert.True(centerNotice.fieldRows[2].label._shown, "second field label visible")
+      Assert.Equal(centerNotice.fieldRows[2].value:GetText(), "+13 Push-Lobby", "second field value text")
+      Assert.False(centerNotice.fieldRows[3].label._shown, "third field row stays hidden when only 2 fields supplied")
+
+      Assert.True(centerNotice.teleportHeader._shown, "teleportHeader must be visible")
+      Assert.Equal(centerNotice.teleportHeader:GetText(), "Zum Dungeon teleportieren:", "teleportHeader text")
+
+      Assert.False(centerNotice.text._shown, "regular text body must be hidden in rich mode")
+    end)
+  end)
+
+  test("Center notice rich Show with frameWidth resizes the frame", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForRichTest()
+      centerNotice.Show(nil, 12, nil, nil, {
+        title = "T",
+        fields = { { label = "X:", value = "y" } },
+        frameWidth = 540,
+      })
+      Assert.Equal(centerNotice.frame:GetWidth(), 540, "frameWidth option must resize the frame")
+
+      centerNotice.Show("legacy", 12, nil, nil, {})
+      Assert.Equal(centerNotice.frame:GetWidth(), 680, "legacy Show without frameWidth resets to default 680")
+    end)
+  end)
+
+  test("Center notice transitions rich -> legacy hide rich primitives", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForRichTest()
+      centerNotice.Show(nil, 12, nil, nil, {
+        title = "Rich",
+        fields = { { label = "Dungeon:", value = "Spire" } },
+        teleportLabel = "TP:",
+      })
+      Assert.True(centerNotice.titleText._shown, "rich title visible after rich Show")
+
+      centerNotice.Show("plain follow-up", 12, nil, nil, {})
+      Assert.False(centerNotice.titleText._shown, "title hidden after legacy Show")
+      Assert.False(centerNotice.fieldRows[1].label._shown, "field rows hidden after legacy Show")
+      Assert.False(centerNotice.teleportHeader._shown, "teleportHeader hidden after legacy Show")
+      Assert.True(centerNotice.text._shown, "regular text body shown again in legacy mode")
+    end)
+  end)
+
+  test("Center notice rich Show without title still renders fields (title/separator stay hidden)", function()
+    WithGlobals({
+      UIParent = CreateFrameStub(),
+      CreateFrame = CreateFrameStub,
+      GetTime = function()
+        return 0
+      end,
+    }, function()
+      local centerNotice = CreateCenterNoticeForRichTest()
+      centerNotice.Show(nil, 12, nil, nil, {
+        fields = { { label = "Role:", value = "Tank" } },
+      })
+      Assert.False(centerNotice.titleText._shown, "no title -> titleText stays hidden")
+      Assert.True(centerNotice.fieldRows[1].label._shown, "field row visible without title")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = RequireValue(ctx.assert, "ui_notice_branches scenario ctx.assert should exist")
   local WithGlobals = RequireValue(ctx.with_globals, "ui_notice_branches scenario ctx.with_globals should exist")
@@ -607,4 +743,5 @@ return function(test, ctx)
   RegisterInviteHintTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterPortalNavigatorBranchTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterCenterNoticeSublineTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterCenterNoticeRichLayoutTests(test, Assert, WithGlobals, LoadAddonModules)
 end

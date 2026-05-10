@@ -298,6 +298,88 @@ local function CreateCenterNoticeSubline(frame, config, position)
   return subline
 end
 
+-- Rich-layout primitives (KSP-style invite-accepted notice). Pre-allocated at
+-- frame creation; hidden by default. Show paths set their text and visibility
+-- per-Show call. Anchored dynamically inside ApplyCenterNoticeRichLayout.
+
+local function CreateCenterNoticeTitle(frame, config)
+  local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  -- Title sits above the separator and announces the notice category. Sized
+  -- a touch larger than the body fontDelta so it reads as the dominant header.
+  IncreaseFontSize(title, (tonumber(config.fontDelta) or 0) + 2)
+  title:SetJustifyH("CENTER")
+  title:SetJustifyV("MIDDLE")
+  title:SetWordWrap(false)
+  if title.SetNonSpaceWrap then
+    title:SetNonSpaceWrap(false)
+  end
+  -- Warm orange-red, evokes the KSP "Group Reminder" header without copying
+  -- the exact color.
+  title:SetTextColor(1, 0.45, 0.2)
+  title:Hide()
+  return title
+end
+
+local function CreateCenterNoticeTitleSeparator(frame)
+  if type(frame.CreateTexture) ~= "function" then
+    return nil
+  end
+  local sep = frame:CreateTexture(nil, "ARTWORK")
+  sep:SetHeight(1)
+  -- Soft gold tint at 35% alpha — matches the PortalNavigator separator so
+  -- the visual language across notice variants stays consistent.
+  sep:SetColorTexture(1, 0.82, 0.25, 0.35)
+  sep:Hide()
+  return sep
+end
+
+local FIELD_LABEL_WIDTH = 130
+local MAX_FIELD_ROWS = 4
+
+local function CreateCenterNoticeFieldRow(frame, config)
+  local label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  IncreaseFontSize(label, math.max(0, math.floor((tonumber(config.fontDelta) or 0) / 2)))
+  label:SetJustifyH("LEFT")
+  label:SetJustifyV("TOP")
+  label:SetWordWrap(false)
+  if label.SetNonSpaceWrap then
+    label:SetNonSpaceWrap(false)
+  end
+  -- Gold accent for labels (Dungeon: / Gruppe: / ...).
+  label:SetTextColor(1, 0.82, 0.25)
+  label:SetWidth(FIELD_LABEL_WIDTH)
+  label:Hide()
+
+  local value = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  IncreaseFontSize(value, math.max(0, math.floor((tonumber(config.fontDelta) or 0) / 2)))
+  value:SetJustifyH("LEFT")
+  value:SetJustifyV("TOP")
+  value:SetWordWrap(true)
+  if value.SetNonSpaceWrap then
+    value:SetNonSpaceWrap(false)
+  end
+  -- Warm white for values, slightly muted vs. pure white so the gold labels
+  -- still stand out.
+  value:SetTextColor(0.95, 0.95, 0.92)
+  value:Hide()
+
+  return { label = label, value = value }
+end
+
+local function CreateCenterNoticeTeleportHeader(frame, config)
+  local header = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  IncreaseFontSize(header, math.max(0, math.floor((tonumber(config.fontDelta) or 0) / 2)))
+  header:SetJustifyH("CENTER")
+  header:SetJustifyV("MIDDLE")
+  header:SetWordWrap(false)
+  if header.SetNonSpaceWrap then
+    header:SetNonSpaceWrap(false)
+  end
+  header:SetTextColor(1, 0.82, 0.25)
+  header:Hide()
+  return header
+end
+
 local function CreateCenterNoticeCloseButton(frame)
   return createRedCloseButton(frame, {
     point = { "TOPRIGHT", frame, "TOPRIGHT", -2, -2 },
@@ -599,24 +681,161 @@ local function ApplyCenterNoticeStackLayout(state, message, hasSublineTop, hasSu
   end
 end
 
+-- Hides every rich-layout primitive. Called on every Show invocation so that
+-- subsequent stack-mode / legacy-mode renders do not leak title/separator/
+-- field/teleport-header fragments from a previous rich render.
+local function HideRichCenterNoticeElements(state)
+  if state.titleText then
+    state.titleText:Hide()
+  end
+  if state.titleSeparator then
+    state.titleSeparator:Hide()
+  end
+  if state.teleportHeader then
+    state.teleportHeader:Hide()
+  end
+  if type(state.fieldRows) == "table" then
+    for _, row in ipairs(state.fieldRows) do
+      if row.label then
+        row.label:Hide()
+      end
+      if row.value then
+        row.value:Hide()
+      end
+    end
+  end
+end
+
+-- Rich KSP-style layout: [paddingY] [title] [separator] [gap] [field rows]
+-- [gap] [teleportHeader] [buttonGap] [teleportButton] [paddingY]. Used by the
+-- post-accept invite notice; the regular text body is hidden in this mode
+-- because the field rows carry the structured payload instead.
+local function ApplyCenterNoticeRichLayout(state, payload, hasTeleportButton)
+  local innerWidth = state.frame:GetWidth() - (state.config.paddingX * 2)
+  local paddingX = state.config.paddingX
+  local paddingY = state.config.paddingY
+  local lineGap = math.max(SUBLINE_GAP, 6)
+  local sectionGap = lineGap * 2
+
+  -- Hide the regular text body — rich mode renders payload via field rows.
+  state.text:ClearAllPoints()
+  state.text:SetText("")
+  state.text:Hide()
+
+  local cursorY = paddingY
+
+  if type(payload.title) == "string" and payload.title ~= "" and state.titleText then
+    state.titleText:ClearAllPoints()
+    state.titleText:SetPoint("TOP", state.frame, "TOP", 0, -cursorY)
+    state.titleText:SetWidth(innerWidth)
+    state.titleText:SetText(payload.title)
+    state.titleText:Show()
+    cursorY = cursorY + (state.titleText:GetStringHeight() or 0) + lineGap
+
+    if state.titleSeparator then
+      state.titleSeparator:ClearAllPoints()
+      state.titleSeparator:SetPoint("TOPLEFT", state.frame, "TOPLEFT", paddingX, -cursorY)
+      state.titleSeparator:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", -paddingX, -cursorY)
+      state.titleSeparator:Show()
+      cursorY = cursorY + 1 + sectionGap
+    else
+      cursorY = cursorY + sectionGap
+    end
+  end
+
+  if type(payload.fields) == "table" then
+    local valueWidth = math.max(40, innerWidth - FIELD_LABEL_WIDTH - lineGap)
+    for i, row in ipairs(state.fieldRows) do
+      local field = payload.fields[i]
+      if i > MAX_FIELD_ROWS then
+        break
+      end
+      if type(field) == "table" and type(field.label) == "string" and field.label ~= "" then
+        local valueText = type(field.value) == "string" and field.value or ""
+        row.label:ClearAllPoints()
+        row.label:SetPoint("TOPLEFT", state.frame, "TOPLEFT", paddingX, -cursorY)
+        row.label:SetText(field.label)
+        row.label:Show()
+
+        row.value:ClearAllPoints()
+        row.value:SetPoint("TOPLEFT", state.frame, "TOPLEFT", paddingX + FIELD_LABEL_WIDTH + lineGap, -cursorY)
+        row.value:SetWidth(valueWidth)
+        row.value:SetText(valueText)
+        row.value:Show()
+
+        local rowHeight = math.max(row.label:GetStringHeight() or 0, row.value:GetStringHeight() or 0)
+        cursorY = cursorY + rowHeight + lineGap
+      end
+    end
+    cursorY = cursorY + lineGap
+  end
+
+  if type(payload.teleportLabel) == "string" and payload.teleportLabel ~= "" and state.teleportHeader then
+    state.teleportHeader:ClearAllPoints()
+    state.teleportHeader:SetPoint("TOP", state.frame, "TOP", 0, -cursorY)
+    state.teleportHeader:SetWidth(innerWidth)
+    state.teleportHeader:SetText(payload.teleportLabel)
+    state.teleportHeader:Show()
+    cursorY = cursorY + (state.teleportHeader:GetStringHeight() or 0) + lineGap
+  end
+
+  local buttonExtraHeight = hasTeleportButton and (state.config.buttonHeight + state.config.buttonGap) or 0
+  local frameHeight = math.min(
+    state.config.maxHeight,
+    math.max(state.config.minHeight, math.ceil(cursorY + paddingY + buttonExtraHeight))
+  )
+  state.frame:SetHeight(frameHeight)
+
+  if hasTeleportButton then
+    SetCenterNoticeTeleportButtonAnchor(state, -(cursorY + state.config.buttonGap))
+  end
+end
+
+local function ApplyCenterNoticeFrameWidth(state, showOptions)
+  local requestedWidth = tonumber(showOptions.frameWidth)
+  if requestedWidth and requestedWidth > 0 then
+    state.frame:SetWidth(requestedWidth)
+  else
+    state.frame:SetWidth(680)
+  end
+end
+
 local function ShowCenterNotice(state, message, durationSeconds, dungeonName, activityID, showOptions)
   showOptions = showOptions or {}
   state.isPersistent = showOptions.persistent == true
   state.isBlinking = showOptions.blink == true
   state.blinkTime = 0
 
+  ApplyCenterNoticeFrameWidth(state, showOptions)
   ApplyCenterNoticeFontScale(state, showOptions)
   ApplyCenterNoticeTextColor(state, showOptions)
 
-  local hasSublineTop = ApplyCenterNoticeSubline(state.sublineTop, showOptions.sublineTop)
-  local hasSublineBottom = ApplyCenterNoticeSubline(state.sublineBottom, showOptions.sublineBottom)
+  local hasRich = (type(showOptions.title) == "string" and showOptions.title ~= "")
+    or (type(showOptions.fields) == "table" and #showOptions.fields > 0)
 
   local hasTeleportButton = ConfigureCenterNoticeTeleportButton(state, dungeonName, activityID)
 
-  if hasSublineTop or hasSublineBottom then
-    ApplyCenterNoticeStackLayout(state, message, hasSublineTop, hasSublineBottom, hasTeleportButton)
+  if hasRich then
+    -- Rich mode replaces sublines and the body text. Hide them explicitly so
+    -- a previous Show in stack/legacy mode does not leak fragments through.
+    ApplyCenterNoticeSubline(state.sublineTop, nil)
+    ApplyCenterNoticeSubline(state.sublineBottom, nil)
+    ApplyCenterNoticeRichLayout(state, showOptions, hasTeleportButton)
   else
-    ApplyLegacyCenterNoticeLayout(state, message, hasTeleportButton)
+    -- Non-rich modes never use the rich primitives; clear them defensively.
+    HideRichCenterNoticeElements(state)
+    if not state.text:IsShown() then
+      state.text:Show()
+    end
+
+    local hasSublineTop = ApplyCenterNoticeSubline(state.sublineTop, showOptions.sublineTop)
+    local hasSublineBottom = ApplyCenterNoticeSubline(state.sublineBottom, showOptions.sublineBottom)
+
+    if hasSublineTop or hasSublineBottom then
+      ApplyCenterNoticeStackLayout(state, message, hasSublineTop, hasSublineBottom, hasTeleportButton)
+    else
+      ApplyLegacyCenterNoticeLayout(state, message, hasTeleportButton)
+    end
   end
 
   state.endsAt = state.isPersistent and math.huge or (GetTime() + (durationSeconds or 20))
@@ -756,6 +975,10 @@ local function BuildCenterNoticeController(state)
     text = state.text,
     sublineTop = state.sublineTop,
     sublineBottom = state.sublineBottom,
+    titleText = state.titleText,
+    titleSeparator = state.titleSeparator,
+    teleportHeader = state.teleportHeader,
+    fieldRows = state.fieldRows,
     closeButton = state.closeButton,
     teleportButton = state.teleportButton,
     SetVisible = SetVisible,
@@ -774,12 +997,23 @@ function Notice.CreateCenterNotice(opts)
   local teleportButton = CreateCenterNoticeTeleportButton(frame, config)
   local sublineTop = CreateCenterNoticeSubline(frame, config, "top")
   local sublineBottom = CreateCenterNoticeSubline(frame, config, "bottom")
+  local titleText = CreateCenterNoticeTitle(frame, config)
+  local titleSeparator = CreateCenterNoticeTitleSeparator(frame)
+  local teleportHeader = CreateCenterNoticeTeleportHeader(frame, config)
+  local fieldRows = {}
+  for i = 1, MAX_FIELD_ROWS do
+    fieldRows[i] = CreateCenterNoticeFieldRow(frame, config)
+  end
   local state = {
     config = config,
     frame = frame,
     text = text,
     sublineTop = sublineTop,
     sublineBottom = sublineBottom,
+    titleText = titleText,
+    titleSeparator = titleSeparator,
+    teleportHeader = teleportHeader,
+    fieldRows = fieldRows,
     closeButton = closeButton,
     teleportButton = teleportButton,
     tooltip = createPrivateTooltip(frame),

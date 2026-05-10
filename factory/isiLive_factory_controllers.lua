@@ -676,54 +676,106 @@ local function InitializeFactoryRuntimeHelpers(ctx)
 end
 FI.InitializeFactoryRuntimeHelpers = InitializeFactoryRuntimeHelpers
 
+-- Maps the canonical role token returned by Units.GetUnitRole("player") to a
+-- localized label. Any unexpected token (or "NONE") returns nil so the caller
+-- can omit the row entirely instead of rendering an empty value.
+local function ResolveAcceptedInviteRoleName(ctx, role)
+  if type(role) ~= "string" or role == "" or role == "NONE" then
+    return nil
+  end
+  local L = ctx.GetL and ctx.GetL() or {}
+  if role == "TANK" then
+    return L.ROLE_NAME_TANK
+  end
+  if role == "HEALER" then
+    return L.ROLE_NAME_HEALER
+  end
+  if role == "DAMAGER" then
+    return L.ROLE_NAME_DAMAGE
+  end
+  return nil
+end
+
+-- Resolves the dungeon name for the post-accept notice. Same source as the
+-- Status chat announce (modules.teleport.GetTeleportInfoByMapID) so both
+-- channels stay in lockstep. Falls back to the localized "Unknown dungeon"
+-- string when the lookup misses — never invents a name.
+local function ResolveAcceptedInviteDungeonName(ctx, modules, mapID)
+  if modules.teleport and type(modules.teleport.GetTeleportInfoByMapID) == "function" and mapID then
+    local info = modules.teleport.GetTeleportInfoByMapID(mapID)
+    if type(info) == "table" then
+      if type(info.mapName) == "string" and info.mapName ~= "" then
+        return info.mapName
+      end
+      if type(info.name) == "string" and info.name ~= "" then
+        return info.name
+      end
+    end
+  end
+  local L = ctx.GetL and ctx.GetL() or {}
+  return L.INVITE_HINT_UNKNOWN_DUNGEON or "Unknown dungeon"
+end
+
+-- Builds the rich-layout field rows for the post-accept notice from the
+-- payload. Order is fixed (Dungeon first, then Group, Description, Role) so
+-- the visual hierarchy is stable across invites. Optional rows (Description,
+-- Role) are dropped when their source is missing — never filled with "-" or
+-- "Unknown" placeholders.
+local function BuildAcceptedInviteFields(ctx, mapName, payload)
+  local L = ctx.GetL and ctx.GetL() or {}
+  local fields = {}
+
+  local level = tonumber(payload.level)
+  local dungeonValue
+  if level and level > 0 then
+    dungeonValue = string.format(L.INVITE_ACCEPTED_NOTICE_HEADLINE_WITH_LEVEL or "%s +%d", mapName, math.floor(level))
+  else
+    dungeonValue = string.format(L.INVITE_ACCEPTED_NOTICE_HEADLINE_NO_LEVEL or "%s", mapName)
+  end
+  fields[#fields + 1] = { label = L.INVITE_ACCEPTED_NOTICE_LABEL_DUNGEON or "Dungeon:", value = dungeonValue }
+
+  if type(payload.groupName) == "string" and payload.groupName ~= "" then
+    fields[#fields + 1] = { label = L.INVITE_ACCEPTED_NOTICE_LABEL_GROUP or "Group:", value = payload.groupName }
+  end
+
+  if type(payload.comment) == "string" and payload.comment ~= "" then
+    fields[#fields + 1] =
+      { label = L.INVITE_ACCEPTED_NOTICE_LABEL_DESCRIPTION or "Description:", value = payload.comment }
+  end
+
+  local role = type(ctx.GetUnitRole) == "function" and ctx.GetUnitRole("player") or nil
+  local roleName = ResolveAcceptedInviteRoleName(ctx, role)
+  if roleName then
+    fields[#fields + 1] = { label = L.INVITE_ACCEPTED_NOTICE_LABEL_ROLE or "Role:", value = roleName }
+  end
+
+  return fields
+end
+
 -- Builds the acceptedInviteNotice payload renderer. Extracted so the wiring
 -- block in InitializeFactoryPrimaryControllers stays under the function-line
 -- metrics gate. Pulls ALL data from the supplied payload (the pendingInvites
 -- snapshot of the accepted searchResultID); never reads roster/sync state.
 -- payload.level may legitimately be nil when the LFG group title carries no
--- "+N" marker; we render the headline without "+N" rather than guess.
+-- "+N" marker; we render the dungeon row without "+N" rather than guess.
 local function RenderAcceptedInviteNotice(ctx, modules, payload)
   if type(payload) ~= "table" or type(ctx.ShowCenterNotice) ~= "function" then
     return
   end
-  local L = ctx.GetL() or {}
+  local L = ctx.GetL and ctx.GetL() or {}
 
-  local mapName
-  if modules.teleport and type(modules.teleport.GetTeleportInfoByMapID) == "function" and payload.mapID then
-    local info = modules.teleport.GetTeleportInfoByMapID(payload.mapID)
-    if type(info) == "table" then
-      if type(info.mapName) == "string" and info.mapName ~= "" then
-        mapName = info.mapName
-      elseif type(info.name) == "string" and info.name ~= "" then
-        mapName = info.name
-      end
-    end
-  end
-  if not mapName or mapName == "" then
-    mapName = L.INVITE_HINT_UNKNOWN_DUNGEON or "Unknown dungeon"
-  end
+  local mapName = ResolveAcceptedInviteDungeonName(ctx, modules, payload.mapID)
+  local fields = BuildAcceptedInviteFields(ctx, mapName, payload)
 
-  local headline
-  local level = tonumber(payload.level)
-  if level and level > 0 then
-    local template = L.INVITE_ACCEPTED_NOTICE_HEADLINE_WITH_LEVEL or "%s +%d"
-    headline = string.format(template, mapName, math.floor(level))
-  else
-    local template = L.INVITE_ACCEPTED_NOTICE_HEADLINE_NO_LEVEL or "%s"
-    headline = string.format(template, mapName)
-  end
-
-  local sublineBottom
-  if type(payload.groupName) == "string" and payload.groupName ~= "" then
-    local template = L.INVITE_ACCEPTED_NOTICE_GROUP or "Group: %s"
-    sublineBottom = string.format(template, payload.groupName)
-  end
-
-  ctx.ShowCenterNotice(headline, 12, mapName, payload.activityID, {
-    sublineTop = L.INVITE_ACCEPTED_NOTICE_SUBLINE_TOP,
-    sublineBottom = sublineBottom,
-    fontScale = 1.4,
-    textColor = { 1, 0.92, 0.7 },
+  ctx.ShowCenterNotice(nil, 12, mapName, payload.activityID, {
+    title = L.INVITE_ACCEPTED_NOTICE_TITLE or "isiLive - Invite accepted",
+    fields = fields,
+    teleportLabel = L.INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER or "Teleport to dungeon:",
+    -- KSP-style compact card: narrower than the default 680px legacy banner so
+    -- the layout reads as a focused info card rather than a full-width header.
+    frameWidth = 540,
+    -- No blink/fontScale — the rich layout already carries its own visual
+    -- hierarchy through the title bar, separator, and color-coded labels.
   })
 end
 

@@ -363,10 +363,18 @@ local function ResolveInviteEntry(searchResultID)
   -- multi-activity listings (which all share the same mapID) we still take
   -- the first since the teleport spell is mapID-driven, not activityID-driven.
   local primaryActivityID = nil
+  -- The leader-supplied free-form description ("comment") of the LFG listing.
+  -- Surfaced as the "Beschreibung" / "Description" row in the post-accept
+  -- Center Notice so the player can re-read what they just signed up for
+  -- without re-opening the LFG browser.
+  local comment = nil
   if type(info) == "table" then
     titleLevel = ParseTitleKeyLevel(info.name)
     if type(info.name) == "string" and info.name ~= "" then
       groupName = info.name
+    end
+    if type(info.comment) == "string" and info.comment ~= "" then
+      comment = info.comment
     end
     if type(info.activityIDs) == "table" then
       for _, actID in ipairs(info.activityIDs) do
@@ -391,6 +399,7 @@ local function ResolveInviteEntry(searchResultID)
     titleLevel = titleLevel,
     groupName = groupName,
     activityID = primaryActivityID,
+    comment = comment,
   }
 end
 
@@ -472,6 +481,7 @@ local function MaybeShowAcceptedInviteNotice(entry, searchResultID)
     level = entry.titleLevel,
     leaderName = entry.leaderName,
     groupName = entry.groupName,
+    comment = entry.comment,
     searchResultID = searchResultID,
   })
 end

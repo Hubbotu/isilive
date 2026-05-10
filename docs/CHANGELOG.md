@@ -1,5 +1,103 @@
 # Changelog
 
+## 2026-05-10 - Version 0.9.224 (patch)
+
+Visual rework of the post-accept Center Notice introduced in v0.9.223. The
+previous subline-stack layout (small "Beigetreten" header + center text +
+small group line + teleport button) was too unobtrusive in live testing and
+got missed. The notice now uses a structured KSP-style info card: title bar
+with separator, label/value field rows, and a teleport section header above
+the button.
+
+### Center Notice rich layout (KSP-style info card)
+
+When the player accepts an LFG invite, the notice renders as a focused 540px
+card with a clear visual hierarchy:
+
+```
+┌─────────────────────────────────────┐
+│ isiLive - Einladung angenommen   [X]│   <- title (orange-red, GameFontNormalLarge)
+│ ─────────────────────────────────── │   <- gold-tint separator (1px)
+│  Dungeon:    Akademie v. Algeth'ar +13│   <- label (gold) / value (warm white)
+│  Gruppe:     +13 Push-Lobby         │
+│  Beschreibung: Achiever 2.5k io     │
+│  Rolle:      Schaden                │
+│  Zum Dungeon teleportieren:         │   <- teleport section header (gold)
+│              [TP-Icon]              │
+└─────────────────────────────────────┘
+```
+
+- **Title bar + separator**: a leading "isiLive - Einladung angenommen"
+  header (warm orange-red, `GameFontNormalLarge`+2pt) sits above a 1px gold-
+  tint separator, mirroring the PortalNavigator visual language.
+- **Label / value field rows**: pre-allocated 4 rows in `Notice.CreateCenterNotice`,
+  rendered in fixed order: Dungeon, Gruppe, Beschreibung, Rolle. Optional
+  rows (Beschreibung, Rolle) are dropped when their source is missing —
+  never filled with `-` or "Unknown" placeholders. Beschreibung sources
+  `info.comment` from the LFG listing; Rolle uses `Units.GetUnitRole("player")`
+  which prefers `GetSpecializationRole` over `UnitGroupRolesAssigned` so the
+  spec switch is reflected immediately.
+- **Teleport section**: localized "Zum Dungeon teleportieren:" label above
+  the existing teleport button. Same activityID-resolved teleport spell as
+  before — only the surrounding chrome changed.
+- **Compact 540px frame**: the rich card resizes the notice frame to 540px
+  for the duration of the accepted-invite render. Other notice consumers
+  (Lead Transfer, Non-Mythic-Entry, Test Mode) reset to the 680px default
+  on their next Show — no cross-contamination.
+
+### Notice API extension
+
+`ShowCenterNotice` learned three orthogonal modes selected per Show call:
+
+- **Legacy single-line** (Lead Transfer, Non-Mythic-Entry): just `message`.
+  Unchanged.
+- **Stack mode** (`showOptions.sublineTop` / `sublineBottom`): introduced in
+  v0.9.223, still available, no consumers in this release.
+- **Rich mode** (`showOptions.title` / `fields` / `teleportLabel`): new.
+  Hides the regular text body and the sublines, renders the structured
+  card via pre-allocated FontStrings + a separator texture.
+
+`showOptions.frameWidth` was added so rich consumers can resize the frame
+without touching the default 680px banner width used by legacy notices.
+
+### LFG-Detect: `info.comment` propagation
+
+`ResolveInviteEntry` now also captures the listing's free-form description
+field (`info.comment` from `C_LFGList.GetSearchResultInfo`) and threads it
+through `OnInviteAccepted` -> `acceptedInviteNoticeCallback` payload.
+`pendingInvites[searchResultID]` is still the single source of truth for
+the rendered content; sibling-listing comments cannot leak into the notice.
+
+### Locale changes (8 languages)
+
+Removed (no longer used by any consumer):
+
+- `INVITE_ACCEPTED_NOTICE_SUBLINE_TOP`
+- `INVITE_ACCEPTED_NOTICE_GROUP`
+
+Added:
+
+- `INVITE_ACCEPTED_NOTICE_TITLE` ("isiLive - Einladung angenommen")
+- `INVITE_ACCEPTED_NOTICE_LABEL_DUNGEON` / `_GROUP` / `_DESCRIPTION` / `_ROLE`
+- `INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER` ("Zum Dungeon teleportieren:")
+- `ROLE_NAME_TANK` / `ROLE_NAME_HEALER` / `ROLE_NAME_DAMAGE`
+
+Kept:
+
+- `INVITE_ACCEPTED_NOTICE_HEADLINE_WITH_LEVEL` / `_NO_LEVEL` (now used for
+  the Dungeon-row value, not the headline).
+- `SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED`.
+
+### Coverage uplift
+
+- New `RegisterLFGDetectAcceptedInviteNoticeTests` D2 scenario: `info.comment`
+  flows through to the payload when present, and stays `nil` when absent.
+- New `RegisterCenterNoticeRichLayoutTests` (5 scenarios): primitives exposed,
+  rich Show renders all four slots, frameWidth resizes the frame, transition
+  rich -> legacy hides rich primitives, fields-only renders without title.
+- 1631 / 1631 usecase scenarios pass; full local CI preflight (stylua,
+  luacheck, syntax, metrics, locale, usecases, rules-logic) green.
+
 ## 2026-05-10 - Version 0.9.223 (minor)
 
 Re-introduces the post-accept Center Notice that was removed in v0.9.211 when
