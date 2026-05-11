@@ -378,6 +378,10 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
 
     ctx.handleGroupRosterUpdate()
+    -- Back-fill the player spec if PLAYER_SPECIALIZATION_CHANGED fired before
+    -- the player's roster entry existed (typical post-PLAYER_LOGIN ordering):
+    -- the prior call silently dropped the spec because roster.player was nil.
+    RefreshPlayerSpecCache(ctx)
     ctx.handleLeaderWatchEvent("GROUP_ROSTER_UPDATE")
     ctx.handleLFGDetectEvent("GROUP_ROSTER_UPDATE")
     -- Refresh status line after roster settles so the "Ziel-Dungeon: X +Y"
