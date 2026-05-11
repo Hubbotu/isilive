@@ -96,6 +96,10 @@ function FrameBridge.CreateContext(opts)
     centerNotice.UpdateTeleportButtonVisual(spellID, isEnabled, inCombatBlocked)
   end
 
+  -- Deliberately strips dungeonName / activityID: the runtime path is for
+  -- generic notices that must not auto-configure a teleport button. The
+  -- factory wrapper in factory/isiLive_factory_frame_bridge.lua reaches the
+  -- center notice directly when dungeon context is intentional.
   function context.ShowCenterNotice(message, durationSeconds, _dungeonName, _activityID, showOptions)
     centerNotice.Show(message, durationSeconds, nil, nil, showOptions)
   end
