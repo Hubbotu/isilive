@@ -1688,13 +1688,19 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
       kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick, extras)
     end
   elseif bucket == "BRLUST" and parts[2] and parts[3] then
-    local kind = parts[2]
-    if kind == "BR" or kind == "LUST" then
-      combatAnnounce = {
-        kind = kind,
-        caster = parts[3],
-        spellID = tonumber(parts[4]) or 0,
-      }
+    -- Skip self-echo: BroadcastCombatAnnounce already rendered the announce
+    -- locally before sending. CHAT_MSG_ADDON on PARTY/INSTANCE_CHAT echoes
+    -- back to the sender, so without this guard the print + sound fire twice
+    -- for the caster.
+    if senderKey ~= selfKey then
+      local kind = parts[2]
+      if kind == "BR" or kind == "LUST" then
+        combatAnnounce = {
+          kind = kind,
+          caster = parts[3],
+          spellID = tonumber(parts[4]) or 0,
+        }
+      end
     end
   end
 
