@@ -154,5 +154,18 @@ function MplusTimer.HandleEvent(event)
     state.timeLimits = { 0, 0, 0 }
   elseif event == "CHALLENGE_MODE_DEATH_COUNT_UPDATED" then
     UpdateDeaths()
+  elseif event == "PLAYER_ENTERING_WORLD" then
+    -- Clear the frozen post-completion snapshot when we transition out of
+    -- the challenge zone. CHALLENGE_MODE_COMPLETED only freezes the final
+    -- times; without this branch the timer box keeps showing them until
+    -- the next key starts (or until a /reload).
+    if state.completed and not state.running then
+      state.completed = false
+      state.timer = 0
+      state.deaths = 0
+      state.deathTimeLost = 0
+      state.timeLimit = 0
+      state.timeLimits = { 0, 0, 0 }
+    end
   end
 end

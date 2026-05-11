@@ -78,6 +78,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 55. Die Main-UI kann ueber `lockMainFramePosition` gesperrt werden; bei aktivem Lock duerfen Frame und Drag-Handle keinen Positions-Drag starten und die gespeicherte Position bleibt unveraendert.
 56. Runtime-Log-Eintraege werden nur bei aktivem Runtime-Logging geschrieben; jeder Eintrag traegt eine stabile Sequenznummer und einen praezisen Zeitstempel, `[TAG] action`-Nachrichten werden zu `[TAG] event=action` normalisiert, teure Formatierung und Trace-Builder duerfen bei ausgeschaltetem Log oder deaktivierter Deep-Stufe nicht laufen, und der Logspeicher muss seine Tail-Reihenfolge und sein Cap auch bei grossen Log-, Sync- und Roster-Bursts behalten.
 57. Der Ingame-Testmodus muss die aktuellen Demo-Daten fuer M+-Timer, Combat-CDs, den unteren M+-Forces-Tracker und Multi-Kick-Tooltip-Extras setzen und beim Verlassen wieder bereinigen.
+58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
 
 ## Regelbloecke
 
@@ -688,3 +689,12 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Factory test mode populates timer, cooldown and kill-track demo data
   - Demo dummy roster exposes multi-kick extras for tooltip preview
+
+### RULE-MPLUS-TIMER-PEW-RESET
+- Regelnummer: 58
+- Status: aktiv
+- Zusammenfassung: Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren, damit der Final-Stand sichtbar bleibt, solange der Spieler noch in der Challenge-Mode-Zone ist; das naechste `PLAYER_ENTERING_WORLD` muss den Snapshot vollstaendig wegraeumen (`completed=false`, `timer=0`, `timeLimit=0`, `deaths=0`), damit die Timer-Box nicht ueber Reload/Relog/neuen Key hinweg mit veralteten Werten stehen bleibt. `PLAYER_ENTERING_WORLD` waehrend eines aktiv laufenden Keys (`running=true`) darf den Timer nicht stoppen und keine Zeitstaende zuruecksetzen; `CHALLENGE_MODE_RESET` wischt weiterhin sofort und unabhaengig vom Zonenwechsel.
+- Erforderliche Tests:
+  - mplus_timer: PLAYER_ENTERING_WORLD clears the frozen post-COMPLETED snapshot
+  - mplus_timer: PLAYER_ENTERING_WORLD is a no-op while the key is still running
+  - mplus_timer: PLAYER_ENTERING_WORLD before any key is a no-op

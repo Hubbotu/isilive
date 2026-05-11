@@ -75,6 +75,45 @@ seen (very short listings), the resolver falls back to live
   flicker / chat-lock end-to-end) continues to pass unchanged — the new
   resolver is additive, the title-level lock-in stays intact.
 
+
+
+Bug fix for the M+ timer box in the combat-utility tracker row. After a
+key ended (success or out-of-time) the timer kept showing the final
+`+3/+2/+1` cutoff values until the player either started another key,
+reloaded the UI (`/reload`) or relogged. Zoning out of the dungeon did
+not clear the stale snapshot.
+
+### Root cause
+
+`CHALLENGE_MODE_COMPLETED` runs `StopTimer(true)` in
+[game/isiLive_mplus_timer.lua](game/isiLive_mplus_timer.lua), which sets
+`running=false, completed=true` and unhooks the per-tick `OnUpdate`. The
+timer value, time limits and death-penalty counters stay frozen so the
+final result is visible while the group is still in the dungeon. The UI
+in [ui/isiLive_roster_panel_cd_row.lua](ui/isiLive_roster_panel_cd_row.lua)
+keeps rendering the timer box as long as `data.running or data.completed`
+is true — and `completed` was never cleared on a natural zone exit. Only
+`CHALLENGE_MODE_RESET` (manual key abandon from the keystone podium)
+wiped the state.
+
+### Fix
+
+- New `PLAYER_ENTERING_WORLD` branch in `MplusTimer.HandleEvent` clears
+  the frozen post-completion snapshot (`completed=false`, `timer=0`,
+  `timeLimit=0`, `timeLimits={0,0,0}`, `deaths=0`, `deathTimeLost=0`)
+  the next time the player zones. The branch is gated on
+  `state.completed and not state.running`, so a mid-key `PEW` (UI reload
+  while still inside the dungeon) does not abort an active timer.
+- [logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua)
+  dispatches `PLAYER_ENTERING_WORLD` to the M+ timer alongside the
+  existing KillTrack dispatch — same site, one extra line, no new event
+  registration.
+- Three new scenarios in `testmodul/isilive_test_scenarios_mplus_timer.lua`
+  cover the three relevant states: `PEW` after `COMPLETED` clears the
+  snapshot, `PEW` mid-key is a no-op, `PEW` on a fresh idle state is a
+  no-op. The behaviour is gated by the new `RULE-MPLUS-TIMER-PEW-RESET`
+  in [docs/RULES_LOGIC.md](docs/RULES_LOGIC.md).
+
 ## 2026-05-10 - Version 0.9.225 (patch)
 
 Bug fix for the Travel-panel Hearthstone button. After switching to another

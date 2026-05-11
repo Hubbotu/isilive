@@ -485,6 +485,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       return
     end
     ctx.handleKillTrackEvent("PLAYER_ENTERING_WORLD")
+    ctx.handleMplusTimerEvent("PLAYER_ENTERING_WORLD")
     ctx.updateCdTracker()
     UpdateTrackedMythicZeroRun(ctx)
     ScheduleBindingStartupRefresh(ctx)
