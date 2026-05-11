@@ -32,8 +32,15 @@ local function SplitNameRealm(fullName)
   if not fullName then
     return nil, nil
   end
-  local name, realm = fullName:match("^(.+)-(.+)$")
-  return name or fullName, realm
+  -- Split on FIRST dash so realms with embedded hyphens (e.g. "Area-52") stay
+  -- intact. Greedy "^(.+)-(.+)$" would split "Player-Area-52" into
+  -- ("Player-Area", "52"), diverging from the four other name-realm splitters
+  -- in the codebase which all consume the first dash only.
+  local dash = string.find(fullName, "-", 1, true)
+  if not dash then
+    return fullName, nil
+  end
+  return string.sub(fullName, 1, dash - 1), string.sub(fullName, dash + 1)
 end
 
 local function GetTagForResult(resultID)
