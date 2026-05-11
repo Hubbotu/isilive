@@ -14,8 +14,12 @@ local InitializeFactoryRefreshAndStatusControllers = FI.InitializeFactoryRefresh
 local InitializeFactorySecondaryControllers = FI.InitializeFactorySecondaryControllers
 local CreateFactoryMinimapButton = FI.CreateFactoryMinimapButton
 
-local function ResolveAutoCloseMainFrameEnabled(dbRef)
-  return type(dbRef) == "table" and dbRef.autoCloseMainFrame == true
+local function ResolveAutoCloseOnKeyStartEnabled(dbRef)
+  return type(dbRef) == "table" and dbRef.autoCloseOnKeyStart == true
+end
+
+local function ResolveAutoCloseOnSoloChangeEnabled(dbRef)
+  return type(dbRef) == "table" and dbRef.autoCloseOnSoloChange == true
 end
 
 local function ResolveAutoShowMainFrameOnStartupEnabled(dbRef)
@@ -69,7 +73,8 @@ local function ResetMainFrameDefaults(ctx)
   end
 end
 
-FI.ResolveAutoCloseMainFrameEnabled = ResolveAutoCloseMainFrameEnabled
+FI.ResolveAutoCloseOnKeyStartEnabled = ResolveAutoCloseOnKeyStartEnabled
+FI.ResolveAutoCloseOnSoloChangeEnabled = ResolveAutoCloseOnSoloChangeEnabled
 FI.ResolveAutoShowMainFrameOnStartupEnabled = ResolveAutoShowMainFrameOnStartupEnabled
 FI.ResolveAutoOpenMainFrameOnKeyEndEnabled = ResolveAutoOpenMainFrameOnKeyEndEnabled
 FI.ResolveMainFramePositionLockEnabled = ResolveMainFramePositionLockEnabled
@@ -178,8 +183,11 @@ local function FinalizeFactorySettings(ctx)
       onAutoOpenQueueToggle = function(_enabled)
         -- Runtime reads IsiLiveDB.autoOpenOnQueue directly; no additional action needed
       end,
-      onAutoCloseMainFrameToggle = function(_enabled)
-        -- Runtime reads IsiLiveDB.autoCloseMainFrame directly; no additional action needed.
+      onAutoCloseOnKeyStartToggle = function(_enabled)
+        -- Runtime reads IsiLiveDB.autoCloseOnKeyStart directly; no action needed.
+      end,
+      onAutoCloseOnSoloChangeToggle = function(_enabled)
+        -- Runtime reads IsiLiveDB.autoCloseOnSoloChange directly; no action needed.
       end,
       onMainFramePositionLockToggle = function(enabled)
         if ctx.mainUI and type(ctx.mainUI.SetDragLocked) == "function" then
@@ -284,6 +292,19 @@ local function FinalizeFactorySettings(ctx)
       -- to honour the user's prior choice.
       if db.mobNameplateEnabled == true and db.mplusForcesEstimate == true then
         db.mobNameplateEnabled = false
+      end
+
+      -- Legacy split: autoCloseMainFrame was one toggle for two distinct
+      -- triggers (key start + going solo). After the split, the UI only
+      -- writes autoCloseOnKeyStart / autoCloseOnSoloChange, never the old
+      -- field. So autoCloseMainFrame=true plus both new fields not-true is
+      -- uniquely the pre-split persisted state. Clear the old field after
+      -- migrating so the condition does not refire when the user later
+      -- toggles either new setting back off.
+      if db.autoCloseMainFrame == true and db.autoCloseOnKeyStart ~= true and db.autoCloseOnSoloChange ~= true then
+        db.autoCloseOnKeyStart = true
+        db.autoCloseOnSoloChange = true
+        db.autoCloseMainFrame = false
       end
 
       -- M+ forces display-mode migration: if mobNameplateEnabled has never
@@ -533,9 +554,13 @@ local function FinalizeFactoryRuntime(ctx)
     sendRefreshResponse = ctx.SendRefreshResponse,
     sendIsiLiveHello = ctx.SendIsiLiveHello,
     sendLibKeystonePartyData = ctx.SendLibKeystonePartyData,
-    shouldAutoCloseMainFrame = function()
+    shouldAutoCloseOnKeyStart = function()
       local dbRef = rawget(_G, "IsiLiveDB")
-      return ResolveAutoCloseMainFrameEnabled(dbRef)
+      return ResolveAutoCloseOnKeyStartEnabled(dbRef)
+    end,
+    shouldAutoCloseOnSoloChange = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      return ResolveAutoCloseOnSoloChangeEnabled(dbRef)
     end,
     shouldShowMainFrameOnStartup = function()
       local dbRef = rawget(_G, "IsiLiveDB")
@@ -659,12 +684,13 @@ local function FinalizeFactoryRuntime(ctx)
     ctx.runtimeLogController.Log(
       string.format(
         "[INIT] addon_loaded version=%s locale=%s syncEnabled=%s "
-          .. "autoOpenOnQueue=%s autoCloseMainFrame=%s autoShowOnStartup=%s",
+          .. "autoOpenOnQueue=%s autoCloseOnKeyStart=%s autoCloseOnSoloChange=%s autoShowOnStartup=%s",
         tostring(ctx.GetAddonVersionRaw()),
         tostring(db.locale or "default"),
         tostring(db.syncEnabled),
         tostring(db.autoOpenOnQueue),
-        tostring(db.autoCloseMainFrame),
+        tostring(db.autoCloseOnKeyStart),
+        tostring(db.autoCloseOnSoloChange),
         tostring(db.autoShowMainFrameOnStartup)
       )
     )

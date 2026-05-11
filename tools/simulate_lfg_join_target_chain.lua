@@ -225,7 +225,7 @@ local function BuildSim(opts)
     timerAfter = function(delay, callback)
       timers[#timers + 1] = { at = (currentSim and currentSim.now or 0) + delay, callback = callback }
     end,
-    shouldAutoCloseMainFrame = function()
+    shouldAutoCloseOnSoloChange = function()
       return false
     end,
     getRaidTransitionBehavior = function()

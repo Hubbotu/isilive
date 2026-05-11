@@ -69,7 +69,10 @@ local function BuildContext(opts)
   ctx.refreshReadyCheckUI = RequireFunction(opts.refreshReadyCheckUI, "refreshReadyCheckUI")
 
   ctx.setMainFrameVisible = RequireFunction(opts.setMainFrameVisible, "setMainFrameVisible")
-  ctx.shouldAutoCloseMainFrame = OptionalFunction(opts.shouldAutoCloseMainFrame, function()
+  ctx.shouldAutoCloseOnKeyStart = OptionalFunction(opts.shouldAutoCloseOnKeyStart, function()
+    return false
+  end)
+  ctx.shouldAutoCloseOnSoloChange = OptionalFunction(opts.shouldAutoCloseOnSoloChange, function()
     return false
   end)
   ctx.shouldShowMainFrameOnStartup = OptionalFunction(opts.shouldShowMainFrameOnStartup, function()

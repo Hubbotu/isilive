@@ -119,7 +119,7 @@ local function BuildController(opts)
       isRosterCollapsed = function()
         return opts.rosterCollapsed == true
       end,
-      shouldAutoCloseMainFrame = function()
+      shouldAutoCloseOnKeyStart = function()
         return opts.autoClose == true
       end,
       setMainFrameVisible = function(visible)

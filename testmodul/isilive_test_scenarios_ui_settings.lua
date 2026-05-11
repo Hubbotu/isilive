@@ -50,7 +50,8 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -298,7 +299,8 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -411,7 +413,8 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -506,7 +509,8 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -526,21 +530,24 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       })
 
       Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
-      Assert.Nil(db.autoCloseMainFrame, "opening settings should not persist the default auto-close value")
+      Assert.Nil(db.autoCloseOnKeyStart, "opening settings should not persist the default key-start auto-close value")
 
       local autoCloseCheck = nil
       for _, frame in ipairs(createdFrames) do
-        if frame._settingKey == "SETTINGS_AUTO_CLOSE_MAIN_FRAME" then
+        if frame._settingKey == "SETTINGS_AUTO_CLOSE_ON_KEY_START" then
           autoCloseCheck = frame
           break
         end
       end
 
-      autoCloseCheck = Assert.NotNil(autoCloseCheck, "settings panel should create an auto-close checkbox")
+      autoCloseCheck = Assert.NotNil(autoCloseCheck, "settings panel should create a key-start auto-close checkbox")
       ---@diagnostic disable: undefined-field
-      Assert.False(autoCloseCheck:GetChecked(), "auto-close should default to disabled when no saved value exists")
+      Assert.False(
+        autoCloseCheck:GetChecked(),
+        "key-start auto-close should default to disabled when no saved value exists"
+      )
 
-      db.autoCloseMainFrame = true
+      db.autoCloseOnKeyStart = true
       panel.Refresh()
 
       Assert.True(autoCloseCheck:GetChecked(), "refresh should honor an explicit true override")
@@ -580,7 +587,8 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -664,7 +672,8 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
@@ -766,7 +775,8 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -856,7 +866,8 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
             SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
@@ -914,10 +925,9 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
     end)
   end)
 
-  test("Settings panel defaults Raid behavior to Raid Off and persists user choice", function()
+  test("Settings panel renders raid behavior as a status note instead of a single-option selector", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
-    local raidBehaviorChanges = {}
 
     WithGlobals({
       UIParent = {},
@@ -947,7 +957,8 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
@@ -955,8 +966,7 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
-            SETTINGS_RAID_TRANSITION_BEHAVIOR = "Raid Behavior",
-            SETTINGS_RAID_TRANSITION_BEHAVIOR_HIDE = "Raid Off",
+            SETTINGS_RAID_TRANSITION_NOTE = "Raid: main window hides automatically while in a raid group.",
             SETTINGS_ROSTER_COLUMN_GUIDES = "Column Guides",
             SETTINGS_SHOW_TIMEWAYS_NAVIGATOR = "Show Timeways Navigator",
             SETTINGS_QUEUE_DEBUG = "Queue Debug",
@@ -970,32 +980,16 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         getDB = function()
           return db
         end,
-        onRaidTransitionBehaviorChange = function(value)
-          raidBehaviorChanges[#raidBehaviorChanges + 1] = value
-        end,
       })
 
       Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
       Assert.Nil(db.raidTransitionBehavior, "opening settings should not persist the default raid behavior")
 
-      local hideButton = nil
+      -- The single-option raid-behavior selector was replaced with a static
+      -- status note. No clickable "hide" option button must be created.
       for _, frame in ipairs(createdFrames) do
-        if frame._optionValue == "hide" then
-          hideButton = frame
-        end
+        Assert.False(frame._optionValue == "hide", "no raid-behavior option button should be created")
       end
-
-      hideButton = Assert.NotNil(hideButton, "settings panel should create a Raid Off raid-behavior button")
-      ---@diagnostic disable: undefined-field
-      Assert.Equal(hideButton._backdropColor[4], 0.25, "Raid Off should be highlighted by default")
-
-      local onClickHide = hideButton._scripts and hideButton._scripts.OnClick or nil
-      onClickHide = Assert.NotNil(onClickHide, "raid-behavior button should define OnClick")
-      onClickHide(hideButton, "LeftButton")
-
-      Assert.Equal(db.raidTransitionBehavior, "hide", "choosing Raid Off should persist the disabled mode")
-      Assert.Equal(raidBehaviorChanges[1], "hide", "raid behavior selector should notify the callback")
-      ---@diagnostic enable: undefined-field
     end)
   end)
 end
@@ -1033,7 +1027,8 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_RAID_TRANSITION_BEHAVIOR = "Raid Behavior",
@@ -1308,7 +1303,8 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
             SETTINGS_MINIMAP_BUTTON = "Minimap Button",
             SETTINGS_SYNC_ENABLED = "Addon Sync",
             SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_MAIN_FRAME = "Auto Close Main Frame",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
             SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
             SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
             SETTINGS_RAID_TRANSITION_BEHAVIOR = "Raid Behavior",
@@ -1365,10 +1361,11 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        28,
+        29,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, combat-fade, nameplate-subtoggle, and accepted-invite-notice checkboxes visible"
+          .. " chat-announce, combat-fade, nameplate-subtoggle, accepted-invite-notice, and the two"
+          .. " auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
@@ -1376,10 +1373,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
-        28,
+        29,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " and accepted-invite-notice checkboxes"
+          .. " accepted-invite-notice, and the two auto-close split checkboxes"
       )
     end)
   end)

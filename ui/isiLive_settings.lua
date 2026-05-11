@@ -30,7 +30,6 @@ local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL = "compact_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = "compact_main_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL_2_LEGACY = "compact_horizontal_2"
 local DEFAULT_LAYOUT_MODE_LAST_USED = "last_used"
-local RAID_TRANSITION_BEHAVIOR_HIDE = "hide"
 
 local function ApplySettingsBackdrop(frame)
   if type(ApplyBackdrop) == "function" then
@@ -659,14 +658,6 @@ local function NormalizeStoredLayoutMode(layoutMode)
   return nil
 end
 
-local function NormalizeStoredRaidTransitionBehavior(behavior)
-  if behavior == nil or behavior == false or behavior == "" then
-    return RAID_TRANSITION_BEHAVIOR_HIDE
-  end
-
-  return RAID_TRANSITION_BEHAVIOR_HIDE
-end
-
 local function CreateSettingsOptionSelector(
   parent,
   yOffset,
@@ -797,7 +788,8 @@ local function ResolveSettingsOptions(opts)
     onSyncToggle = opts.onSyncToggle,
     onMinimapButtonToggle = opts.onMinimapButtonToggle,
     onAutoOpenQueueToggle = opts.onAutoOpenQueueToggle,
-    onAutoCloseMainFrameToggle = opts.onAutoCloseMainFrameToggle,
+    onAutoCloseOnKeyStartToggle = opts.onAutoCloseOnKeyStartToggle,
+    onAutoCloseOnSoloChangeToggle = opts.onAutoCloseOnSoloChangeToggle,
     onMainFramePositionLockToggle = opts.onMainFramePositionLockToggle,
     onCombatFadeMMToggle = opts.onCombatFadeMMToggle,
     onAutoShowMainFrameOnStartupToggle = opts.onAutoShowMainFrameOnStartupToggle,
@@ -1049,7 +1041,7 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
     end,
     {
       settingKey = "SETTINGS_RESET_UI_POSITION",
-      confirmText = labels.SETTINGS_RESET_CONFIRM_TEXT or "Willst du wirklich zuruecksetzen?",
+      confirmText = labels.SETTINGS_RESET_CONFIRM_TEXT or "Do you really want to reset?",
     },
     nil
   )
@@ -1234,7 +1226,8 @@ local function NormalizeMplusForcesMode(val)
       end
     end
   end
-  return "tooltip"
+  -- Default aligned with ResolveMplusForcesModeFromDB fresh-install branch.
+  return "nameplate"
 end
 
 local function ResolveMplusForcesModeFromDB(db)
@@ -1654,41 +1647,6 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     end
   )
 
-  controls.autoOpen, yOffset = CreateSettingsCheckbox(
-    canvas,
-    yOffset,
-    labels.SETTINGS_AUTO_OPEN_QUEUE or "Auto-Open on M+ Queue",
-    function()
-      local db = config.getDB()
-      return db.autoOpenOnQueue ~= false
-    end,
-    function(checked)
-      local db = config.getDB()
-      db.autoOpenOnQueue = checked
-      if type(config.onAutoOpenQueueToggle) == "function" then
-        config.onAutoOpenQueueToggle(checked)
-      end
-    end
-  )
-
-  controls.autoCloseMainFrame, yOffset = CreateSettingsCheckbox(
-    canvas,
-    yOffset,
-    labels.SETTINGS_AUTO_CLOSE_MAIN_FRAME or "Auto-close when key starts or when going solo",
-    function()
-      local db = config.getDB()
-      return db.autoCloseMainFrame == true
-    end,
-    function(checked)
-      local db = config.getDB()
-      db.autoCloseMainFrame = checked
-      if type(config.onAutoCloseMainFrameToggle) == "function" then
-        config.onAutoCloseMainFrameToggle(checked)
-      end
-    end,
-    "SETTINGS_AUTO_CLOSE_MAIN_FRAME"
-  )
-
   controls.lockMainFramePosition, yOffset = CreateSettingsCheckbox(
     canvas,
     yOffset,
@@ -1725,6 +1683,17 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     "SETTINGS_COMBAT_FADE_MM"
   )
 
+  -- Group the four auto-show/hide triggers together with an explanatory note.
+  -- They are evaluated independently; multiple can be active at once.
+  controls.autoTriggersNote, yOffset = CreateSectionNote(
+    canvas,
+    yOffset,
+    labels.SETTINGS_AUTO_TRIGGERS_NOTE or "Automatic show/hide: each trigger below is independent. Hover for details."
+  )
+  if controls.autoTriggersNote then
+    controls.autoTriggersNote._sectionKey = "SETTINGS_AUTO_TRIGGERS_NOTE"
+  end
+
   controls.autoShowStartup, yOffset = CreateSettingsCheckbox(
     canvas,
     yOffset,
@@ -1741,6 +1710,24 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
       end
     end,
     "SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP"
+  )
+
+  controls.autoOpen, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_AUTO_OPEN_QUEUE or "Auto-Open on M+ Queue",
+    function()
+      local db = config.getDB()
+      return db.autoOpenOnQueue ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.autoOpenOnQueue = checked
+      if type(config.onAutoOpenQueueToggle) == "function" then
+        config.onAutoOpenQueueToggle(checked)
+      end
+    end,
+    "SETTINGS_AUTO_OPEN_QUEUE"
   )
 
   controls.autoOpenKeyEnd, yOffset = CreateSettingsCheckbox(
@@ -1761,34 +1748,55 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     "SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END"
   )
 
-  controls.raidBehavior, yOffset = CreateSettingsOptionSelector(
+  controls.autoCloseOnKeyStart, yOffset = CreateSettingsCheckbox(
     canvas,
     yOffset,
-    "SETTINGS_RAID_TRANSITION_BEHAVIOR",
-    labels.SETTINGS_RAID_TRANSITION_BEHAVIOR or "Raid Behavior",
-    {
-      {
-        value = RAID_TRANSITION_BEHAVIOR_HIDE,
-        labelKey = "SETTINGS_RAID_TRANSITION_BEHAVIOR_HIDE",
-        fallback = labels.SETTINGS_RAID_TRANSITION_BEHAVIOR_HIDE or "Raid Off",
-        width = 96,
-      },
-    },
-    config.getL,
+    labels.SETTINGS_AUTO_CLOSE_ON_KEY_START or "Auto-close when key starts",
     function()
       local db = config.getDB()
-      return NormalizeStoredRaidTransitionBehavior(db.raidTransitionBehavior)
+      return db.autoCloseOnKeyStart == true
     end,
-    function(behavior)
+    function(checked)
       local db = config.getDB()
-      db.raidTransitionBehavior = NormalizeStoredRaidTransitionBehavior(behavior)
-      if type(config.onRaidTransitionBehaviorChange) == "function" then
-        config.onRaidTransitionBehaviorChange(db.raidTransitionBehavior)
+      db.autoCloseOnKeyStart = checked
+      if type(config.onAutoCloseOnKeyStartToggle) == "function" then
+        config.onAutoCloseOnKeyStartToggle(checked)
       end
     end,
-    NormalizeStoredRaidTransitionBehavior,
-    true
+    "SETTINGS_AUTO_CLOSE_ON_KEY_START"
   )
+
+  controls.autoCloseOnSoloChange, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE or "Auto-close when leaving the group",
+    function()
+      local db = config.getDB()
+      return db.autoCloseOnSoloChange == true
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.autoCloseOnSoloChange = checked
+      if type(config.onAutoCloseOnSoloChangeToggle) == "function" then
+        config.onAutoCloseOnSoloChangeToggle(checked)
+      end
+    end,
+    "SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE"
+  )
+
+  -- Raid behaviour is a one-option future stub. Rendering it as a selector
+  -- with a single button confuses users more than it informs them. Show a
+  -- status note that explains the current always-hide behaviour instead;
+  -- db.raidTransitionBehavior stays in the schema so the stub is still
+  -- threaded through the runtime untouched.
+  controls.raidBehaviorNote, yOffset = CreateSectionNote(
+    canvas,
+    yOffset,
+    labels.SETTINGS_RAID_TRANSITION_NOTE or "Raid: main window hides automatically while in a raid group."
+  )
+  if controls.raidBehaviorNote then
+    controls.raidBehaviorNote._sectionKey = "SETTINGS_RAID_TRANSITION_BEHAVIOR"
+  end
 
   return yOffset
 end
@@ -2065,7 +2073,7 @@ local function BuildResetSection(canvas, yOffset, labels, config, controls)
     end,
     {
       settingKey = "SETTINGS_RESET_DB",
-      confirmText = labels.SETTINGS_RESET_CONFIRM_TEXT or "Willst du wirklich zuruecksetzen?",
+      confirmText = labels.SETTINGS_RESET_CONFIRM_TEXT or "Do you really want to reset?",
     }
   )
 
@@ -2215,8 +2223,9 @@ local function RefreshSettingsControls(controls, config)
   controls.minimapBtn.label:SetText(freshL.SETTINGS_MINIMAP_BUTTON or "Minimap Button")
   controls.sync.label:SetText(freshL.SETTINGS_SYNC_ENABLED or "Addon Sync")
   controls.autoOpen.label:SetText(freshL.SETTINGS_AUTO_OPEN_QUEUE or "Auto-Open on M+ Queue")
-  controls.autoCloseMainFrame.label:SetText(
-    freshL.SETTINGS_AUTO_CLOSE_MAIN_FRAME or "Auto-close when key starts or when going solo"
+  controls.autoCloseOnKeyStart.label:SetText(freshL.SETTINGS_AUTO_CLOSE_ON_KEY_START or "Auto-close when key starts")
+  controls.autoCloseOnSoloChange.label:SetText(
+    freshL.SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE or "Auto-close when leaving the group"
   )
   controls.lockMainFramePosition.label:SetText(freshL.SETTINGS_LOCK_MAIN_FRAME_POSITION or "Lock main frame position")
   controls.combatFadeMM.label:SetText(freshL.SETTINGS_COMBAT_FADE_MM or "Fade out in Combat (M2 only)")
@@ -2282,7 +2291,8 @@ local function RefreshSettingsControls(controls, config)
   controls.minimapBtn.check:SetChecked(db.showMinimapButton == true)
   controls.sync.check:SetChecked(db.syncEnabled ~= false)
   controls.autoOpen.check:SetChecked(db.autoOpenOnQueue ~= false)
-  controls.autoCloseMainFrame.check:SetChecked(db.autoCloseMainFrame == true)
+  controls.autoCloseOnKeyStart.check:SetChecked(db.autoCloseOnKeyStart == true)
+  controls.autoCloseOnSoloChange.check:SetChecked(db.autoCloseOnSoloChange == true)
   controls.lockMainFramePosition.check:SetChecked(db.lockMainFramePosition ~= false)
   controls.combatFadeMM.check:SetChecked(db.combatFadeMM == true)
   controls.autoShowStartup.check:SetChecked(db.autoShowMainFrameOnStartup ~= false)

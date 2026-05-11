@@ -416,24 +416,24 @@ local function Run()
     "Pattern A: read site `db.inviteHintEnabled ~= false` returns false after toggle-OFF + reload"
   )
 
-  -- Pattern B on a fresh DB: autoCloseMainFrame is unset; production read
-  -- `db.autoCloseMainFrame == true` must yield false (default-OFF works).
+  -- Pattern B on a fresh DB: autoCloseOnKeyStart is unset; production read
+  -- `db.autoCloseOnKeyStart == true` must yield false (default-OFF works).
   local patternBSession = BuildPanelSession({})
   Check(
-    (patternBSession.db.autoCloseMainFrame == true) == false,
-    "Pattern B on fresh DB: read `db.autoCloseMainFrame == true` is false (default-OFF read pattern works pre-toggle)"
+    (patternBSession.db.autoCloseOnKeyStart == true) == false,
+    "Pattern B on fresh DB: read `db.autoCloseOnKeyStart == true` is false (default-OFF read pattern works pre-toggle)"
   )
 
-  -- User toggles autoCloseMainFrame ON.
-  ClickCheckbox(patternBSession.frames, "SETTINGS_AUTO_CLOSE_MAIN_FRAME", true)
-  Check(patternBSession.db.autoCloseMainFrame == true, "Pattern B: toggle-ON persists explicit `true` in DB")
+  -- User toggles autoCloseOnKeyStart ON.
+  ClickCheckbox(patternBSession.frames, "SETTINGS_AUTO_CLOSE_ON_KEY_START", true)
+  Check(patternBSession.db.autoCloseOnKeyStart == true, "Pattern B: toggle-ON persists explicit `true` in DB")
 
   -- Reload and re-check.
   local patternBReloaded = BuildPanelSession(CopyTable(patternBSession.db))
-  Check(patternBReloaded.db.autoCloseMainFrame == true, "Pattern B: explicit `true` survives /reload")
+  Check(patternBReloaded.db.autoCloseOnKeyStart == true, "Pattern B: explicit `true` survives /reload")
   Check(
-    (patternBReloaded.db.autoCloseMainFrame == true) == true,
-    "Pattern B: read site `db.autoCloseMainFrame == true` returns true after toggle-ON + reload"
+    (patternBReloaded.db.autoCloseOnKeyStart == true) == true,
+    "Pattern B: read site `db.autoCloseOnKeyStart == true` returns true after toggle-ON + reload"
   )
 
   if failures > 0 then

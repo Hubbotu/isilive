@@ -123,7 +123,7 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
     getRaidTransitionBehavior = deps.getRaidTransitionBehavior or function()
       return "hide"
     end,
-    shouldAutoCloseMainFrame = deps.shouldAutoCloseMainFrame or function()
+    shouldAutoCloseOnSoloChange = deps.shouldAutoCloseOnSoloChange or function()
       return false
     end,
     autoCloseMainFrame = deps.autoCloseMainFrame or function() end,
@@ -193,7 +193,7 @@ local function BuildGroupControllerDepsFromContext(ctx)
     timerAfter = BuildTimerAfter(),
     onGroupJoined = function() end,
     getRaidTransitionBehavior = ctx.getRaidTransitionBehavior,
-    shouldAutoCloseMainFrame = ctx.shouldAutoCloseMainFrame,
+    shouldAutoCloseOnSoloChange = ctx.shouldAutoCloseOnSoloChange,
     autoCloseMainFrame = ctx.autoCloseMainFrame,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
     logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
@@ -275,7 +275,7 @@ local function BuildEventHandlersBaseConfig(deps, state, refs, controllers, call
       end,
     sendOwnKeySnapshot = RequireFunction(deps.sendOwnKeySnapshot, "sendOwnKeySnapshot"),
     sendOwnBackgroundSnapshot = RequireFunction(deps.sendOwnBackgroundSnapshot, "sendOwnBackgroundSnapshot"),
-    shouldAutoCloseMainFrame = type(deps.shouldAutoCloseMainFrame) == "function" and deps.shouldAutoCloseMainFrame
+    shouldAutoCloseOnKeyStart = type(deps.shouldAutoCloseOnKeyStart) == "function" and deps.shouldAutoCloseOnKeyStart
       or function()
         return false
       end,
@@ -504,7 +504,7 @@ local function BuildEventHandlersDepsFromContext(ctx)
     sendOwnBackgroundSnapshot = ctx.sendOwnBackgroundSnapshot,
     shouldShowMainFrameOnStartup = ctx.shouldShowMainFrameOnStartup,
     shouldAutoOpenMainFrameOnKeyEnd = ctx.shouldAutoOpenMainFrameOnKeyEnd,
-    shouldAutoCloseMainFrame = ctx.shouldAutoCloseMainFrame,
+    shouldAutoCloseOnKeyStart = ctx.shouldAutoCloseOnKeyStart,
     sendRefreshResponse = ctx.sendRefreshResponse,
     sendRefreshRequest = ctx.sendRefreshRequest,
     triggerShareKeysCooldown = ctx.TriggerShareKeysCooldown,

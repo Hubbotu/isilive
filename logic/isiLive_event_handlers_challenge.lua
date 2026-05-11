@@ -538,7 +538,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     end
     ctx.setActiveJoinedKeyMapID(nil)
     ctx.checkIfEnteredTargetDungeon()
-    if ctx.shouldAutoCloseMainFrame() and not ctx.isRosterCollapsed() then
+    if ctx.shouldAutoCloseOnKeyStart() and not ctx.isRosterCollapsed() then
       ctx.setMainFrameVisible(false)
     end
     ctx.updateLeaderButtons()

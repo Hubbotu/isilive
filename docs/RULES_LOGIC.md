@@ -188,7 +188,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Factory raid kick tracker suppresses sync until raid ends and then recovers
   - Frame bridge blocks show requests while raid mode is active
   - Event handlers suppress background processing while raid mode is active
-  - Settings panel defaults Raid behavior to Raid Off and persists user choice
+  - Settings panel renders raid behavior as a status note instead of a single-option selector
   - Factory raid behavior resolver defaults to raid off and normalizes legacy values
 
 ### RULE-LOCALE-SYMMETRIE-FALLBACK
@@ -493,10 +493,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-MAIN-UI-AUTO-CLOSE-OPTION
 - Regelnummer: 42
 - Status: aktiv
-- Zusammenfassung: Die Behavior-Option `Auto-Close bei Key-Start / Solo` ist standardmaessig deaktiviert. Nur wenn `autoCloseMainFrame == true` gesetzt ist, darf die Main-UI bei `CHALLENGE_MODE_START` und beim Wechsel von Gruppe zu Solo automatisch verborgen werden.
+- Zusammenfassung: Die Behavior-Optionen `Auto-Close bei Key-Start` und `Auto-Close bei Verlassen der Gruppe` sind beide standardmaessig deaktiviert. Sie haben getrennte Persistenz-Felder (`autoCloseOnKeyStart`, `autoCloseOnSoloChange`); jeder Trigger feuert nur, wenn sein eigenes Feld `== true` gesetzt ist.
 - Erforderliche Tests:
   - Settings panel defaults Auto-Close on Key Start / Solo to disabled until the user turns it on
-  - Factory auto-close main frame defaults to disabled unless explicitly enabled
+  - Factory key-start and solo-change auto-close resolvers default to disabled
   - Event handlers auto-hide main frame on challenge start when auto-close is enabled
   - Group leave auto-close hides frame when option is enabled
 

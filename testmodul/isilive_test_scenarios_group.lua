@@ -164,7 +164,7 @@ local function BuildGroupControllerOptions(state, overrides)
     onMemberJoinedGroup = overrides.onMemberJoinedGroup or function()
       state.memberJoinedCalls = state.memberJoinedCalls + 1
     end,
-    shouldAutoCloseMainFrame = overrides.shouldAutoCloseMainFrame or function()
+    shouldAutoCloseOnSoloChange = overrides.shouldAutoCloseOnSoloChange or function()
       return false
     end,
     getRaidTransitionBehavior = overrides.getRaidTransitionBehavior or function()
@@ -886,27 +886,25 @@ local function RegisterGroupLifecycleTests(test, Assert, LoadAddonModules, WithG
 end
 
 local function RegisterGroupLifecycleFollowupTests(test, Assert, LoadAddonModules)
-  test("Factory auto-close main frame defaults to disabled unless explicitly enabled", function()
+  test("Factory key-start and solo-change auto-close resolvers default to disabled", function()
     local addon = LoadAddonModules({ "isiLive_factory.lua" }, {
       _FactoryInternal = {},
     })
 
-    local resolveAutoCloseMainFrameEnabled = addon._FactoryInternal
-        and addon._FactoryInternal.ResolveAutoCloseMainFrameEnabled
-      or nil
+    local resolveKeyStart = addon._FactoryInternal and addon._FactoryInternal.ResolveAutoCloseOnKeyStartEnabled or nil
+    local resolveSolo = addon._FactoryInternal and addon._FactoryInternal.ResolveAutoCloseOnSoloChangeEnabled or nil
 
-    Assert.NotNil(resolveAutoCloseMainFrameEnabled, "factory should export the auto-close resolver")
-    local resolveAutoClose = resolveAutoCloseMainFrameEnabled
-    if resolveAutoClose == nil then
-      error("factory should export the auto-close resolver")
+    Assert.NotNil(resolveKeyStart, "factory should export the key-start auto-close resolver")
+    Assert.NotNil(resolveSolo, "factory should export the solo-change auto-close resolver")
+    if resolveKeyStart == nil or resolveSolo == nil then
+      error("factory should export both auto-close resolvers")
     end
-    Assert.False(resolveAutoClose(nil), "missing saved data should default auto-close to disabled")
-    Assert.False(resolveAutoClose({}), "missing saved value should default auto-close to disabled")
-    Assert.True(resolveAutoClose({ autoCloseMainFrame = true }), "explicit true should enable runtime auto-close")
-    Assert.False(
-      resolveAutoClose({ autoCloseMainFrame = false }),
-      "explicit false should keep runtime auto-close disabled"
-    )
+    Assert.False(resolveKeyStart(nil), "missing saved data should default key-start auto-close to disabled")
+    Assert.False(resolveKeyStart({}), "missing saved value should default key-start auto-close to disabled")
+    Assert.True(resolveKeyStart({ autoCloseOnKeyStart = true }), "explicit true enables key-start auto-close")
+    Assert.False(resolveKeyStart({ autoCloseOnKeyStart = false }), "explicit false keeps key-start auto-close off")
+    Assert.True(resolveSolo({ autoCloseOnSoloChange = true }), "explicit true enables solo-change auto-close")
+    Assert.False(resolveSolo({ autoCloseOnSoloChange = false }), "explicit false keeps solo-change auto-close off")
   end)
 
   test("Factory startup and key-end auto-open resolvers default to enabled", function()
@@ -1035,7 +1033,7 @@ local function RegisterGroupLifecycleFollowupTests(test, Assert, LoadAddonModule
       end,
       wasInGroup = true,
       mainFrameVisible = true,
-      shouldAutoCloseMainFrame = function()
+      shouldAutoCloseOnSoloChange = function()
         return true
       end,
     })

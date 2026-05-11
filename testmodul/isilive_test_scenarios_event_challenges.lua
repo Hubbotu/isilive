@@ -35,7 +35,7 @@ local function RegisterChallengeStartAndDelayTests(test, Assert, _WithGlobals, L
 
     local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
     local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
-      shouldAutoCloseMainFrame = function()
+      shouldAutoCloseOnKeyStart = function()
         return true
       end,
       setMainFrameVisible = function(visible)

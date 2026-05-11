@@ -13,15 +13,24 @@ return function(test, ctx)
   local Assert = ctx.assert
   local LoadAddonModules = ctx.load_modules
 
-  test("factory resolvers: ResolveAutoCloseMainFrameEnabled requires explicit true", function()
+  test("factory resolvers: ResolveAutoCloseOnKeyStartEnabled requires explicit true", function()
     local addon = Load(LoadAddonModules)
-    local fn = addon._FactoryInternal.ResolveAutoCloseMainFrameEnabled
+    local fn = addon._FactoryInternal.ResolveAutoCloseOnKeyStartEnabled
     Assert.Equal(fn(nil), false, "nil DB must default to disabled")
     Assert.Equal(fn({}), false, "empty table must default to disabled")
-    Assert.Equal(fn({ autoCloseMainFrame = false }), false)
-    Assert.Equal(fn({ autoCloseMainFrame = "true" }), false, "only strict boolean true counts")
-    Assert.Equal(fn({ autoCloseMainFrame = true }), true)
+    Assert.Equal(fn({ autoCloseOnKeyStart = false }), false)
+    Assert.Equal(fn({ autoCloseOnKeyStart = "true" }), false, "only strict boolean true counts")
+    Assert.Equal(fn({ autoCloseOnKeyStart = true }), true)
     Assert.Equal(fn("not-a-table"), false, "non-table input must degrade to false")
+  end)
+
+  test("factory resolvers: ResolveAutoCloseOnSoloChangeEnabled requires explicit true", function()
+    local addon = Load(LoadAddonModules)
+    local fn = addon._FactoryInternal.ResolveAutoCloseOnSoloChangeEnabled
+    Assert.Equal(fn(nil), false, "nil DB must default to disabled")
+    Assert.Equal(fn({}), false, "empty table must default to disabled")
+    Assert.Equal(fn({ autoCloseOnSoloChange = false }), false)
+    Assert.Equal(fn({ autoCloseOnSoloChange = true }), true)
   end)
 
   test("factory resolvers: ResolveAutoShowMainFrameOnStartupEnabled defaults true", function()

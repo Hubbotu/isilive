@@ -88,7 +88,7 @@ local function BuildDeps(opts)
     timerAfter = opts.timerAfter or function(_, cb)
       cb()
     end,
-    shouldAutoCloseMainFrame = opts.shouldAutoCloseMainFrame or falsefn,
+    shouldAutoCloseOnSoloChange = opts.shouldAutoCloseOnSoloChange or falsefn,
     getRaidTransitionBehavior = opts.getRaidTransitionBehavior or function()
       return "hide"
     end,
@@ -144,7 +144,7 @@ local function HandleNoGroup(deps, wasInGroupBefore)
   deps.updateLeaderButtons()
 
   -- Optional runtime auto-close on solo transition
-  if leftGroupNow and deps.shouldAutoCloseMainFrame() and type(deps.autoCloseMainFrame) == "function" then
+  if leftGroupNow and deps.shouldAutoCloseOnSoloChange() and type(deps.autoCloseMainFrame) == "function" then
     deps.autoCloseMainFrame()
   end
 end

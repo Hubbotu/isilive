@@ -90,7 +90,11 @@ local SCHEMA = {
 
   -- Auto-show / auto-close behaviour.
   autoShowMainFrameOnStartup = { type = "boolean", default = true },
+  -- Legacy single-toggle; superseded by the two split fields below. Kept in
+  -- the schema so the legacy migration in ApplyDBSettings can detect it.
   autoCloseMainFrame = { type = "boolean", default = false },
+  autoCloseOnKeyStart = { type = "boolean", default = false },
+  autoCloseOnSoloChange = { type = "boolean", default = false },
   autoOpenMainFrameOnKeyEnd = { type = "boolean", default = true },
   autoOpenOnQueue = { type = "boolean", default = true },
 
