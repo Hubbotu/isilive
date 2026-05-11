@@ -511,6 +511,10 @@ function TeleportUI.CreateController(opts)
   end
 
   local function BuildButtonsInternal()
+    -- Hide old buttons before re-creating; CreateTeleportButton always builds
+    -- a fresh frame, so the previous ones would otherwise stay parented to
+    -- mainFrame with their secure attributes intact.
+    HideExistingButtons()
     buttons = {}
     local entries = deps.getEntries()
     UpdateEmptyState(entries)
