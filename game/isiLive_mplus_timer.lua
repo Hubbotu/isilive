@@ -105,8 +105,15 @@ end
 local function UpdateDeaths()
   local ok, count, timeLost = pcall(C_ChallengeMode.GetDeathCount)
   if ok then
-    state.deaths = count or 0
-    state.deathTimeLost = timeLost or 0
+    if type(count) == "number" then
+      state.deaths = count
+    end
+    -- Keep previous timeLost when the API momentarily returns nil (secret-value
+    -- masking in tainted mid-key contexts). Without this guard the UI flickers
+    -- 75s -> 0 -> 75s on every transient mask.
+    if type(timeLost) == "number" then
+      state.deathTimeLost = timeLost
+    end
   end
 end
 
