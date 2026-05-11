@@ -194,15 +194,17 @@ local function InitializeRioHelpers(ctx, runtimeState)
     local roster = ctx.GetRoster()
 
     for unit, info in pairs(roster) do
-      local playerKey = ctx.BuildRosterInfoPlayerKey(info)
-      if playerKey and playerKey ~= "" then
-        local rioValue = tonumber(info and info.rio)
-        if not rioValue then
-          rioValue = tonumber(ctx.GetUnitRio(unit))
-        end
-        if rioValue then
-          snapshot[playerKey] = math.floor(rioValue)
-          hasSnapshotData = true
+      if type(info) == "table" and not info.isGhost then
+        local playerKey = ctx.BuildRosterInfoPlayerKey(info)
+        if playerKey and playerKey ~= "" then
+          local rioValue = tonumber(info and info.rio)
+          if not rioValue then
+            rioValue = tonumber(ctx.GetUnitRio(unit))
+          end
+          if rioValue then
+            snapshot[playerKey] = math.floor(rioValue)
+            hasSnapshotData = true
+          end
         end
       end
     end
@@ -478,7 +480,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     local levelConflict = false
 
     for _, info in pairs(roster) do
-      if type(info) == "table" then
+      if type(info) == "table" and not info.isGhost then
         local targetInfo = modules.sync.GetPlayerTargetInfo(info.name, info.realm)
         if type(targetInfo) == "table" then
           local mapID = tonumber(targetInfo.mapID)
