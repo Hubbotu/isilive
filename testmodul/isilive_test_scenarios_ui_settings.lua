@@ -1925,6 +1925,131 @@ local function RegisterSettingsPanelNameplateRoundtripTests(test, Assert, WithGl
   end)
 end
 
+-- UC-20: Settings -> Debug clear-log buttons. The button-creation path is
+-- exercised by the broader Advanced tests via Refresh / frame counting, but
+-- the OnClick handler that actually calls config.onClearQueueDebugLog /
+-- config.onClearRuntimeLog had zero coverage. These tests trigger the
+-- handler directly and assert the wired callback runs.
+local function RegisterSettingsPanelClearLogTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Settings panel Clear Queue Debug Log button OnClick invokes the wired callback", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = {}
+    local clearCalls = 0
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_QUEUE_DEBUG_CLEAR = "Clear Queue Debug Log",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+            SETTINGS_RUNTIME_LOG_CLEAR = "Clear Runtime Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+        onClearQueueDebugLog = function()
+          clearCalls = clearCalls + 1
+        end,
+      })
+      Assert.NotNil(panel, "settings panel should be created")
+
+      local btn = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_QUEUE_DEBUG_CLEAR" then
+          btn = frame
+          break
+        end
+      end
+      btn = Assert.NotNil(btn, "Clear Queue Debug Log action button should be created")
+
+      ---@diagnostic disable: undefined-field
+      local onClick = btn._scripts and btn._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "Clear Queue Debug Log button should bind an OnClick handler")
+      onClick(btn, "LeftButton")
+      ---@diagnostic enable: undefined-field
+
+      Assert.Equal(clearCalls, 1, "OnClick must invoke config.onClearQueueDebugLog exactly once")
+    end)
+  end)
+
+  test("Settings panel Clear Runtime Log button OnClick invokes the wired callback", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = {}
+    local clearCalls = 0
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_QUEUE_DEBUG_CLEAR = "Clear Queue Debug Log",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+            SETTINGS_RUNTIME_LOG_CLEAR = "Clear Runtime Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+        onClearRuntimeLog = function()
+          clearCalls = clearCalls + 1
+        end,
+      })
+      Assert.NotNil(panel, "settings panel should be created")
+
+      local btn = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_RUNTIME_LOG_CLEAR" then
+          btn = frame
+          break
+        end
+      end
+      btn = Assert.NotNil(btn, "Clear Runtime Log action button should be created")
+
+      ---@diagnostic disable: undefined-field
+      local onClick = btn._scripts and btn._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "Clear Runtime Log button should bind an OnClick handler")
+      onClick(btn, "LeftButton")
+      ---@diagnostic enable: undefined-field
+
+      Assert.Equal(clearCalls, 1, "OnClick must invoke config.onClearRuntimeLog exactly once")
+    end)
+  end)
+end
+
 return function(test, ctx)
   local Assert = RequireValue(ctx.assert, "UI settings scenario ctx.assert should exist")
   local WithGlobals = RequireValue(ctx.with_globals, "UI settings scenario ctx.with_globals should exist")
@@ -1935,4 +2060,5 @@ return function(test, ctx)
   RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterSettingsPanelNameplateRoundtripTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterSettingsPanelClearLogTests(test, Assert, WithGlobals, LoadAddonModules)
 end

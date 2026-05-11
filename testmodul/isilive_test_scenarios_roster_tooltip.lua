@@ -491,6 +491,101 @@ return function(test, ctx)
     end)
   end)
 
+  -- UC-21: Multi-Kick-Extras rendering inside the rich roster tooltip.
+  -- The data path (KeySync.ApplyKnownKeyToRosterEntry and Sync.SetPlayerKickInfo)
+  -- is covered separately; this test exercises the actual tooltip lines so the
+  -- "Extra kicks:" header and per-spell rows are visible to the user.
+  test("roster_tooltip: ShowRosterInfoTooltip renders multi-kick extras header and per-spell lines", function()
+    -- BuildGlobals only forwards a fixed set of fields; C_Spell needs to be
+    -- merged into the globals table directly so the rawget(_G, "C_Spell")
+    -- call inside ShowRosterInfoTooltip resolves to our stub.
+    local globals = BuildGlobals()
+    globals.C_Spell = {
+      GetSpellName = function(spellID)
+        if spellID == 31935 then
+          return "Avenger's Shield"
+        end
+        return nil
+      end,
+    }
+    WithGlobals(globals, function()
+      local addon = Load()
+      local args = buildShowArgs({
+        name = "Alice",
+        class = "PALADIN",
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 7 },
+        },
+      }, {
+        getL = function()
+          return { TOOLTIP_KICK_EXTRAS_HEADER = "Extra kicks:" }
+        end,
+      })
+      Assert.Equal(callShow(addon, args), true)
+      local tf = args.tooltipFrame
+      local foundHeader = false
+      local foundLine = false
+      for _, line in ipairs(tf._isiLiveTooltipLines) do
+        local text = line:GetText()
+        if text:find("Extra kicks:", 1, true) then
+          foundHeader = true
+        end
+        if text:find("Avenger's Shield", 1, true) and text:find("7s", 1, true) then
+          foundLine = true
+        end
+      end
+      Assert.Equal(foundHeader, true, "extras header line must render")
+      Assert.Equal(foundLine, true, "spell name + remaining cooldown must render as indented line")
+    end)
+  end)
+
+  test("roster_tooltip: ShowRosterInfoTooltip falls back to 'Spell <ID>' when GetSpellName is missing", function()
+    WithGlobals(BuildGlobals(), function()
+      local addon = Load()
+      local args = buildShowArgs({
+        name = "Alice",
+        class = "PALADIN",
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 12 },
+        },
+      })
+      Assert.Equal(callShow(addon, args), true)
+      local tf = args.tooltipFrame
+      local matched = false
+      for _, line in ipairs(tf._isiLiveTooltipLines) do
+        if line:GetText():find("Spell 31935", 1, true) then
+          matched = true
+        end
+      end
+      Assert.Equal(matched, true, "missing GetSpellName must fall back to 'Spell <ID>'")
+    end)
+  end)
+
+  test("roster_tooltip: ShowRosterInfoTooltip omits extras block when all entries expired", function()
+    WithGlobals(BuildGlobals(), function()
+      local addon = Load()
+      local args = buildShowArgs({
+        name = "Alice",
+        class = "PALADIN",
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 0 },
+        },
+      }, {
+        getL = function()
+          return { TOOLTIP_KICK_EXTRAS_HEADER = "Extra kicks:" }
+        end,
+      })
+      Assert.Equal(callShow(addon, args), true)
+      local tf = args.tooltipFrame
+      for _, line in ipairs(tf._isiLiveTooltipLines) do
+        Assert.False(
+          line:GetText():find("Extra kicks:", 1, true) ~= nil,
+          "header must not render when no extras are active"
+        )
+      end
+    end)
+  end)
+
   test("roster_tooltip: ShowRosterInfoTooltip prefers getLanguageTooltipMarkup hit over addon locale", function()
     WithGlobals(BuildGlobals(), function()
       local addon = Load()
