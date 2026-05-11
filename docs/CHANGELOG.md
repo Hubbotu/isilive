@@ -1,5 +1,169 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.227 (patch)
+
+Full-codebase review pass: 13 fixes plus one frozen-timer carry-over from
+the previous patch series. Most are taint-defensive (`pcall` wraps around
+Blizzard APIs that other call sites already guarded) or race fixes in
+event-driven state machines (ready-check, spec-cache, LFG recovery,
+roster ghost handling). No new features, no UI changes a user would
+notice, except the BR/Lust announce now fires exactly once for the
+caster.
+
+### State-machine race fixes
+
+- **LFG recovery branch was permanently neutralised after the first
+  decline in a push-lobby session.** `OnInviteDeclined` writes
+  `pendingInvites[id] = false` (a sentinel that survives the lifetime
+  of the application so the same invite can't be re-accepted), and the
+  GROUP_ROSTER_UPDATE race-recovery used `next(pendingInvites) == nil`
+  to mean "no invites left to wait for". `next()` happily returns
+  false-valued keys though, so once any decline arrived the recovery
+  fallback to `CheckActiveGroup()` was skipped for the rest of that
+  group session. Walk the table explicitly and only fall back when no
+  table-shaped (= unresolved) entry remains. Restores the ffda54b
+  determinism patch's effectiveness in push-lobby spam.
+  ([game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua))
+
+- **Stale ready-check marks at M+ start.**
+  `HandleChallengeModeStart` flipped `readyCheckActive=false` but left
+  `readyCheckReadyUnits` / `readyCheckDeclinedUnits` /
+  `readyCheckHoldUntil` populated. If a READY_CHECK landed seconds
+  before the key start and READY_CHECK_FINISHED never fired between
+  the two events (observed when the leader insta-starts), per-unit
+  marks carried into the run and showed in the roster panel. Reuse
+  the existing `ResetReadyCheckDeclinedTracking` helper.
+  ([logic/isiLive_event_handlers_challenge.lua](logic/isiLive_event_handlers_challenge.lua))
+
+- **Player spec column went empty after login.**
+  `PLAYER_SPECIALIZATION_CHANGED` frequently fires before the first
+  `GROUP_ROSTER_UPDATE` during the PLAYER_LOGIN handshake.
+  `RefreshPlayerSpecCache` silently returned false because `roster.player`
+  did not exist yet, and the change was never re-tried — the spec
+  column then stayed blank until the next user-driven spec switch. Re-run
+  the helper right after `handleGroupRosterUpdate` so the pending change
+  lands as soon as the player's row is built.
+  ([logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua))
+
+- **Ghosts leaked into the owner-key fallback and the RIO baseline.**
+  The leader-resolution path already filtered `info.isGhost`, but the
+  any-member-consensus fallback (used when `UnitIsGroupLeader` is
+  unavailable) and `CaptureRioBaselineSnapshot` iterated the full
+  roster including ghosts of members who had already left. Subsequent
+  RIO delta calculations then showed deltas for non-present players.
+  ([factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua))
+
+### Sync / chat correctness
+
+- **BR/Lust announce fired twice for the caster.**
+  `BroadcastCombatAnnounce` already renders the announce locally before
+  sending the wire message. `CHAT_MSG_ADDON` echoes back to the sender,
+  so without a `senderKey ~= selfKey` guard the BRLUST branch returned
+  a second `combatAnnounce` for the caster's own cast — the line printed
+  twice and `PlayBattleRes` / `PlayBloodlust` played back-to-back. Other
+  self-receive branches (KEY/STATS/DPS/LOC/TARGET/KICK) write the caster's
+  own data into their own peer slot, which is benign — the data is
+  correct either way. BRLUST is the only branch whose return value
+  triggers a side effect outside the sync cache.
+  ([logic/isiLive_sync.lua](logic/isiLive_sync.lua))
+
+- **LFG-flags name-realm split broke for US realm Area-52.**
+  `SplitNameRealm` used the greedy `^(.+)-(.+)$` pattern, so
+  `"Player-Area-52"` resolved to `("Player-Area", "52")` instead of
+  `("Player", "Area-52")`. The four other name-realm splitters in the
+  codebase all consume the first dash only — bring this one in line.
+  ([ui/isiLive_lfg_flags.lua](ui/isiLive_lfg_flags.lua))
+
+### Settings / DB
+
+- **Legacy users got both nameplate AND tooltip M+-forces displays at
+  the same time.** Pre-nameplate users only ever persisted
+  `mplusForcesEstimate=true`. `DBSchema.Sanitize` now fills the schema
+  default `mobNameplateEnabled=true` before `ApplyDBSettings` runs, so
+  both flags end up true and both modules activate. The settings UI
+  enforces mutual exclusion through the display-mode selector — any
+  both-true state is uniquely a legacy collision. Detect it and clear
+  `mobNameplateEnabled` to honour the prior tooltip-only choice.
+  ([factory/isiLive_factory.lua](factory/isiLive_factory.lua))
+
+### WoW 12.0+ taint defense
+
+- **Five Blizzard-API call sites that other code paths already wrap
+  in `pcall` were calling directly.** In tainted contexts (M+ keys,
+  encounters) any of these can raise and tear down the addon's
+  event-dispatch chain:
+  - `controller_wiring.sendAck` — `C_ChatInfo.SendAddonMessage` WHISPER
+    for ACKs.
+  - `queue.CaptureQueueJoinFromApplications` —
+    `C_LFGList.GetApplications`. Sibling call in
+    `game/isiLive_lfg_detect.lua` already had the guard.
+  - `status.GetDungeonDifficultyLabel` — `GetInstanceInfo` and
+    `C_ChallengeMode.GetActiveChallengeMapID`.
+  - `factory_controllers.IsInPartyInstance` — `GetInstanceInfo`.
+  - `units.GetUnitRoleOrSpec` / `units.GetPlayerSpecName` —
+    `GetSpecialization`, `GetSpecializationRole`, `GetSpecializationInfo`.
+  Happy path unchanged; on raise we now bail out the way other call
+  sites already do.
+
+### UI lifecycle
+
+- **Teleport buttons leaked frame references on every re-build.**
+  `BuildButtonsInternal` cleared the `buttons` table without hiding
+  the previous frames first. The old buttons stayed parented to
+  `mainFrame` with their secure attributes intact, leaking ghost
+  frames after any re-build (layout change, locale switch). The
+  `HideExistingButtons` helper was already defined a few lines above
+  — just call it.
+  ([ui/isiLive_teleport_ui.lua](ui/isiLive_teleport_ui.lua))
+
+### Data hygiene
+
+- **`LUST_SATED_IDS` mixed Bloodlust cast IDs with the actual debuff
+  IDs.** `ScanLust` scans HARMFUL auras, so the cast IDs (2825 Bloodlust,
+  32182 Heroism, 80353 Time Warp, 264667 Primal Rage, 390386, 178207,
+  230935, 256740, 381301, 16045) could never match — they exist as
+  helpful buffs, not debuffs. Kept only the six real debuff IDs
+  (57723 Exhaustion, 57724 Sated, 80354 Temporal Displacement,
+  264689 Fatigued, 390435 Ancient Hysteria Exhaustion, 95809 Insanity)
+  with per-ID comments.
+  ([game/isiLive_cd_tracker.lua](game/isiLive_cd_tracker.lua))
+
+### Trace correctness
+
+- **Keystone trace log was useless.** Two trace lines in the
+  send-own-keystone path called `#roster` on a unit-token-keyed hash
+  map (always 0) and deref'd `snapshot.mapID/.level` on a multi-return
+  result (always nil). Memberless logs and nil/nil snapshots made the
+  trace impossible to interpret. Switched to a `pairs()` count and
+  multi-return unpack.
+  ([factory/isiLive_controller_wiring.lua](factory/isiLive_controller_wiring.lua))
+
+### Stability
+
+- **Death-penalty display flickered 75s -> 0 -> 75s.**
+  `C_ChallengeMode.GetDeathCount` can momentarily return nil for
+  `timeLost` mid-key (secret-value masking on tainted reads). The
+  previous code fell back to 0 on every transient mask. Only overwrite
+  when the API returned a real number.
+  ([game/isiLive_mplus_timer.lua](game/isiLive_mplus_timer.lua))
+
+- **Post-completion M+ timer snapshot didn't clear on zone change.**
+  Carried over from the previous patch series — clears the frozen
+  state on `PLAYER_ENTERING_WORLD` so the timer no longer shows the
+  last run's numbers after leaving the dungeon.
+  ([game/isiLive_mplus_timer.lua](game/isiLive_mplus_timer.lua))
+
+### Code-base notes
+
+- **Documented a deliberate API-isolation pattern that recurring
+  reviewers kept flagging as a bug.** The runtime `ShowCenterNotice`
+  drops `dungeonName` / `activityID` on purpose: the factory wrapper
+  layer threads them through when a teleport button on the notice is
+  wanted, while the runtime path must not. Locked in by the
+  "strips dungeon context" contract test in
+  `testmodul/isilive_test_scenarios_ui_frame_bridge.lua`.
+  ([factory/isiLive_frame_bridge.lua](factory/isiLive_frame_bridge.lua))
+
 ## 2026-05-11 - Version 0.9.226 (patch)
 
 Bug fix for the "Ziel-Dungeon" chat announcement and post-accept Center
