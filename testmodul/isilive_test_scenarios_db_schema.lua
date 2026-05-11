@@ -66,6 +66,7 @@ return function(test, ctx)
     local db = { position = "corrupted" }
     DBSchema.Sanitize(db)
     Assert.Equal(type(db.position), "table", "string position must reset to default table")
+    ---@diagnostic disable-next-line: undefined-field
     Assert.Equal(db.position.point, "CENTER", "default position.point")
   end)
 
