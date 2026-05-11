@@ -49,11 +49,18 @@ local function MapIDFromActivityID(activityID)
     return ACTIVITY_TO_MAP[numID]
   end
 
-  -- 2. Dynamic fallback via WoW API (may be tainted/cold; protected by pcall)
+  -- 2. Dynamic fallback via WoW API (may be tainted/cold; protected by pcall).
+  -- The Mythic+ filter below is critical: LFG listings cover every category
+  -- (Mythic+, Raid, Heroic, PvP, Arena, Scenario). Without the filter, a Raid
+  -- LFG invite (which still exposes a valid mapID) would surface in the M+
+  -- detection pipeline and trigger the post-accept Center Notice, the chat
+  -- "Target Dungeon" announce, and the teleport-button highlight — none of
+  -- which apply to Raid content. `info.isMythicPlusActivity` is the
+  -- authoritative Blizzard flag (same one Keystone Polaris uses).
   local lfgList = rawget(_G, "C_LFGList")
   if type(lfgList) == "table" and type(lfgList.GetActivityInfoTable) == "function" then
     local ok, info = pcall(lfgList.GetActivityInfoTable, numID)
-    if ok and type(info) == "table" then
+    if ok and type(info) == "table" and rawget(info, "isMythicPlusActivity") == true then
       local mapID = tonumber(rawget(info, "mapID") or rawget(info, "mapId"))
       if mapID and mapID > 0 then
         ACTIVITY_TO_MAP[numID] = mapID -- cache for future calls
@@ -629,6 +636,19 @@ end
 
 -- Full reset: called on group-leave and explicit factory reset where pending invite
 -- state is no longer relevant.
+--
+-- BUG-RAID-LEAVE-M+-INVITE fix: pending invites are dropped here, but they are
+-- NOT promoted to the suppressed-accepts bucket. That bucket exists only to
+-- guard the decline -> stray accept race for the SAME searchResultID; a reset
+-- from group-leave is unrelated. Sweeping pending invites into suppressed
+-- silently killed legitimate next-invite accepts in the real-world sequence:
+-- (1) user holds both a Raid and an M+ LFG application open in parallel,
+-- (2) Raid leader invites + user accepts -> joins raid, (3) user leaves raid,
+-- ClearAllStateImpl runs and moves every remaining pendingInvite (including
+-- the still-open M+ application slot) into suppressedInviteAccepts, then (4)
+-- the M+ inviteaccepted event arrives but the suppressed bucket blocks the
+-- ResolveInviteEntry fallback in OnInviteAccepted -> mapID resolves to nil,
+-- so no Center Notice, no Target-Dungeon chat announce, no teleport highlight.
 local function ClearAllStateImpl()
   local hadState = detectedMapID ~= nil
     or lastQueueMapID ~= nil
@@ -644,9 +664,6 @@ local function ClearAllStateImpl()
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
   acceptedInviteSearchResultID = nil
-  for resultID in pairs(pendingInvites) do
-    suppressedInviteAccepts[resultID] = true
-  end
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")

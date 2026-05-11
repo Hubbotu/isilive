@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.228 (patch)
+
+Two regressions in the post-accept Center Notice pipeline from v0.9.223/224
+that surfaced in live testing. Both have regression scenarios.
+
+### Fix: Raid LFG invites no longer trigger the M+ Center Notice
+
+`MapIDFromActivityID` accepted every LFG activity that exposed a positive
+`mapID`, including Raid, PvP, Scenario and Heroic listings. When the
+player accepted a Raid LFG invite, the listing's mapID flowed through
+`pendingInvites` → `OnInviteAccepted` → Center Notice and the chat
+"Target Dungeon" announce — both Mythic+-only paths. The notice rendered
+with a fallback "Unknown dungeon" label (because the Raid mapID is not
+in the Teleport DB) but should never have appeared at all.
+
+Filter on `info.isMythicPlusActivity == true` before accepting the mapID
+from `C_LFGList.GetActivityInfoTable`. Activities in the static
+`ACTIVITY_TO_MAP` table are unaffected; all eight active-season entries
+are M+ dungeons. ([game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua))
+
+### Fix: M+ accept after group-leave no longer silently drops
+
+When the player held two parallel LFG applications, the group-leave
+reset (`ClearAllStateImpl`) swept every pending invite into the
+`suppressedInviteAccepts` bucket. The next `inviteaccepted` event for
+the still-open M+ application then found `entry == nil` AND the
+suppressed guard set, skipped the `ResolveInviteEntry` fallback, and
+returned with `mapID == nil`. No Center Notice, no chat announce,
+no teleport highlight. Reproduction:
+
+1. User has parallel Raid + M+ LFG applications.
+2. Raid leader invites; user accepts → joins raid.
+3. User leaves the raid → `GROUP_ROSTER_UPDATE` (no members) →
+   `ClearAllStateImpl` → M+ pending invite promoted to suppressed.
+4. M+ leader invites; user accepts → `inviteaccepted` arrives but
+   `OnInviteAccepted` is silently no-op.
+
+`ClearAllStateImpl` now drops `pendingInvites` without promoting any
+entries to `suppressedInviteAccepts`. The suppressed bucket is reserved
+for its original purpose: the `decline → stray accept` race for the same
+`searchResultID` (still set inside `OnInviteDeclined`).
+([game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua))
+
+### Coverage uplift
+
+- `RegisterLFGDetectAcceptedInviteNoticeTests` Test G: mock activity
+  with `isMythicPlusActivity = false` must not trigger the notice or
+  populate `detectedMapID`.
+- Test H: `invited` → `GROUP_ROSTER_UPDATE` (no members) →
+  `inviteaccepted` must still resolve via the API fallback.
+- Existing "group leave clears all state" test in
+  `RegisterLFGDetectQueueStateTests` rewritten: the late accept after
+  the leave must now re-resolve, not stay silent.
+- 1657 / 1657 usecase scenarios pass; full local CI preflight
+  (stylua, luacheck, syntax, metrics, locale, usecases, rules-logic) green.
+
 ## 2026-05-11 - Version 0.9.227 (patch)
 
 Full-codebase review pass: 13 fixes plus one frozen-timer carry-over from

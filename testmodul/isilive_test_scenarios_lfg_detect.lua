@@ -920,37 +920,49 @@ local function RegisterLFGDetectResetTests(test, ctx)
   -- ClearAllState paths
   -- ---------------------------------------------------------------------------
 
-  test("LFGDetect GROUP_ROSTER_UPDATE not in group clears all state including pendingInvites", function()
-    local callbackCount = 0
+  test(
+    "LFGDetect GROUP_ROSTER_UPDATE not in group clears pending invites but allows late accept to re-resolve",
+    function()
+      -- Behavior change (BUG-RAID-LEAVE-M+-INVITE): ClearAllStateImpl no longer
+      -- promotes pending invites into the suppressed bucket. A late
+      -- inviteaccepted that arrives after group-leave must therefore re-resolve
+      -- via ResolveInviteEntry (which calls back into C_LFGList) and surface
+      -- detectedMapID. This is the desired path: when the user holds two
+      -- parallel LFG applications, the group-leave from group A must not
+      -- silently kill the legitimate accept of group B.
+      local callbackCount = 0
 
-    local globals, fire = BuildLFGDetectEnv({
-      IsInGroup = function()
-        return false
-      end,
-      globals = {
-        C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
-      },
-    })
+      local globals, fire = BuildLFGDetectEnv({
+        IsInGroup = function()
+          return false
+        end,
+        globals = {
+          C_LFGList = BuildC_LFGList({ [1] = { activityID = 1542 } }, nil),
+        },
+      })
 
-    WithGlobals(globals, function()
-      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
-      addon.LFGDetect.SetHighlightCallback(function()
-        callbackCount = callbackCount + 1
+      WithGlobals(globals, function()
+        local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+        addon.LFGDetect.SetHighlightCallback(function()
+          callbackCount = callbackCount + 1
+        end)
+
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+        -- Leave group before accepting — ClearAllStateImpl runs.
+        fire("GROUP_ROSTER_UPDATE")
+
+        -- pendingInvites is wiped, but the late inviteaccepted still resolves
+        -- via the API fallback (the suppressed bucket no longer blocks it).
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+        Assert.Equal(
+          addon.LFGDetect.GetDetectedMapID(),
+          557,
+          "late inviteaccepted after a group-leave reset must re-resolve via the API fallback"
+        )
       end)
-
-      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
-      -- Leave group before accepting
-      fire("GROUP_ROSTER_UPDATE") -- IsInGroup() returns false
-
-      -- pendingInvites must be gone: late inviteaccepted must not set detectedMapID
-      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
-
-      Assert.Nil(
-        addon.LFGDetect.GetDetectedMapID(),
-        "group leave must clear all state; late inviteaccepted must not resurrect detectedMapID"
-      )
-    end)
-  end)
+    end
+  )
 
   test("LFGDetect CHALLENGE_MODE_START keeps confirmed invite highlight until explicit clear", function()
     local globals, fire = BuildLFGDetectEnv({
@@ -1514,7 +1526,7 @@ local function RegisterLFGDetectBranchCoverageTests(test, ctx)
           GetActivityInfoTable = function(activityID)
             activityCalls = activityCalls + 1
             if activityID == 9001 then
-              return { mapID = 2773 }
+              return { mapID = 2773, isMythicPlusActivity = true }
             end
             return nil
           end,
@@ -1787,6 +1799,106 @@ local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
         557,
         "missing notice callback must not break the existing pipeline"
       )
+    end)
+  end)
+
+  -- Test G (BUG-RAID): an LFG activityID that is NOT a Mythic+ activity
+  -- (Raid, PvP, Scenario, ...) must not flow through MapIDFromActivityID's
+  -- API fallback, so the invite never lands in pendingInvites and the
+  -- post-accept notice / chat announce / teleport highlight never fire for
+  -- non-M+ content.
+  test("AcceptedInviteNotice ignores Raid LFG invites (isMythicPlusActivity=false)", function()
+    -- activityID 9999 is intentionally outside the static ACTIVITY_TO_MAP so
+    -- the API fallback is exercised. The mock GetActivityInfoTable returns a
+    -- valid mapID + isMythicPlusActivity=false (Raid LFG case).
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 701 then
+              return { activityID = 9999, name = "+0 Vault Raid", leaderName = "RaidLead" }
+            end
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            if activityID == 9999 then
+              return { mapID = 2657, isMythicPlusActivity = false }
+            end
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "inviteaccepted")
+
+      Assert.Equal(#payloads, 0, "Raid LFG invite must not trigger the M+ notice")
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "Raid mapID must not be promoted into detectedMapID")
+    end)
+  end)
+
+  -- Test H (BUG-RAID-LEAVE-M+): real-world sequence — Raid invite accepted,
+  -- joined, then left; a parallel M+ application gets its invite afterwards.
+  -- Previously ClearAllStateImpl on raid-leave swept all pendingInvites into
+  -- the suppressed bucket, blocking the next ResolveInviteEntry fallback and
+  -- silently killing the M+ accept path.
+  test("AcceptedInviteNotice fires after a ClearAllState reset between two invites", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return false
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      GetNumGroupMembers = function()
+        return 0
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [801] = { activityID = 1542, name = "+12 spire", leaderName = "M+Lead" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      -- Pre-state: a pending invite exists when the user leaves the previous
+      -- group. Simulate the OnInvited that populated pendingInvites[801]
+      -- before the group-leave; then the leave triggers ClearAllStateImpl
+      -- via GROUP_ROSTER_UPDATE with no members.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 801, "invited")
+      fire("GROUP_ROSTER_UPDATE")
+
+      -- Now the actual M+ inviteaccepted lands. Must still resolve via the
+      -- ResolveInviteEntry fallback (suppressed bucket must not block it).
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 801, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "M+ accept after ClearAllState must still fire the notice")
+      Assert.Equal(payloads[1].mapID, 557, "mapID must resolve via ResolveInviteEntry after the reset")
+      Assert.Equal(payloads[1].level, 12, "title level must be parsed from the LFG group name")
     end)
   end)
 end
