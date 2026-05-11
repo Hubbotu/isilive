@@ -154,6 +154,7 @@ Aktuell aktive Architekturvertraege decken ab:
 - `isiLive_runtime_state.lua` als zentrale API fuer gemeinsam genutzten mutierbaren Runtime-State
 - `isiLive_controller_wiring.lua` mit exportierten Context-Factories
 - `isiLive_config_builders.lua` als fokussierte Builder ohne Legacy-Event-/Group-Dependency-Builder
+- Rule-Validator-Indexierung von Testdateien aus Szenario-Manifest sowie statisch eingebundenen `dofile`/`require`-Split-Dateien
 
 ## Deterministische Validierungs-Gates
 
@@ -187,7 +188,7 @@ Lokale Release-Qualitaet ist absichtlich in statische und Runtime-Gates aufgetei
    - `lua tools/validate_usecases.lua`
 3. `tools/validate_rules_logic.lua` validiert aktive Vertraege aus `RULES_LOGIC.md` gegen deterministische Testnamen.
 4. `tools/validate_architecture_rules.lua` validiert aktive Architekturvertraege aus `ARCHITECTURE_RULES.md` gegen deterministische Testnamen.
-5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1386 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
+5. `tools/validate_usecases.lua` fuehrt beide Validatoren zuerst aus und deckt danach 1650 Szenarien ueber die aktuell registrierten Module (siehe `tools/usecase_scenarios.lua`) ab; die Regelvalidatoren indizieren die entsprechenden deterministischen Tests.
    Zusaetzlich laeuft der gleiche Validator-Lauf in CI unter `luacov` (`lua -lluacov tools/validate_usecases.lua`), damit `tools/coverage_summary.lua` die Line-Coverage pro Schicht in das GitHub-Actions-Step-Summary schreibt und der vollstaendige `luacov.report.out` als Artefakt hochgeladen wird.
    Baseline (`2026-04-22`, Commit nach Coverage-Einfuehrung): **78.62% Gesamt-Line-Coverage** ueber 19487 Produktionszeilen. Per-Schicht: `locale/` 97%, `logic/` 84%, `core/` 82%, `game/` 81%, `ui/` 79%, `factory/` 47%. Die `factory/`-Luecke ist erwartet (Composition-Root-Code, der ohne Blizzard-API-Context schwer isoliert testbar ist) und bildet den konkreten naechsten Schwerpunkt fuer UI-nahe Test-Erweiterungen.
 6. Der M+-Forces-DB-Refresh laeuft automatisch ueber `.github/workflows/sync-mplus-forces.yml` (Donnerstag 06:00 UTC plus `workflow_dispatch`): Clone MDT → `tools/sync_mdt_forces.lua` → voller CI-Preflight (stylua, luacheck, syntax, metrics, locale drift, lifetime, Nameplate-Key-Start-Simulator, SavedVariables-Reload-Simulator, Key-Start-Lifecycle-Simulator, usecases) → Commit + Push nach `main`. Ohne Diff im DB-File laeuft der Workflow still durch ohne Commit.
@@ -197,21 +198,20 @@ Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.227 Open/Close CTRL-F9 [H][V][M][M+][L][X]|
-|---------------------------------------------------------------------------------------------------|
-| Spec   Name         Flag Key     iLvl RIO        DPS                M+Managment  Marker    Travel  |
-|---------------------------------------------------------------------------------------------------|
-| [Tank] PlayerOne    [ ]  DB +14  633  (+12)3521 321.1K  [Blue]              [Readycheck]          |
-| [Heal] PlayerTwo    [ ]  DAWN+12 629  (+0)3410  287.4K  [Grn]               [Countdown10]         |
-| [DPS]  PlayerThree  [ ]  -       631  3377      -       [Purp]              [Countdown 0]         |
-| [DPS]  PlayerFour   [ ]  AK +10  626  3290      301.8K  [Red]               [Share Keys]          |
-| [DPS]  PlayerFive   [ ]  OFG+11  628  3333      298.2K  [Yel]               [Re-Sync]             |
-|                                               ... [Circle] [Moon] [Skull] ...                     |
-|                                                                             [Teleport Grid...]    |
-| BR: 2/3 06:20  BL: 05:00                                                                        |
-|---------------------------------------------------------------------------------------------------|
-| Lead: Yes   M+: Active   State: Running   Dungeon: Mythic   Target Dungeon: Ara-Kara +14          |
-+---------------------------------------------------------------------------------------------------+
+| isiLive                                                 v0.9.227 Open/Close CTRL-F9 [H][V][M][M+][L][X]            |
+|------------------------------------------------------------------------------------------------------------------|
+| Spec   Name         Flag Key     iLvl RIO       DPS       Kick    Marker (8x)             M+Managment    Travel  |
+|------------------------------------------------------------------------------------------------------------------|
+| [Tank] PlayerOne    [ ]  DB +14  633  (+12)3521 321.1K    ready   [Blue][Grn][Purp][Red]   [Readycheck]           |
+| [Heal] PlayerTwo    [ ]  DAWN+12 629  (+0)3410  287.4K    -       [Yel][Circle][Moon][Sku] [Countdown10]          |
+| [DPS]  PlayerThree  [ ]  -       631  3377      -         12s                              [Countdown 0]          |
+| [DPS]  PlayerFour   [ ]  AK +14  626  3290      301.8K    ready                            [Share Keys]           |
+| [DPS]  PlayerFive   [ ]  OFG+11  628  3333      298.2K    24s                              [Re-Sync]              |
+|                                                                                            [Teleport Grid (8x)]   |
+| BR: 2/3 06:20  BL: 05:00                                                                                          |
+|------------------------------------------------------------------------------------------------------------------|
+| Lead: Yes   M+: Active   State: Running   Dungeon: Mythic   Target Dungeon: Ara-Kara +14                          |
++------------------------------------------------------------------------------------------------------------------+
 
 Collapsed / Vertical Mini Mode:
 

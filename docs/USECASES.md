@@ -40,6 +40,7 @@ Zuletzt aktualisiert: `2026-05-11`
 | UC-16 | BR- und Bloodlust-Gruppen-Announce im Mythic+ | Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird innerhalb eines aktiven Keys genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt |
 | UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile aus der DB an den Blizzard-Tooltip an |
 | UC-18 | Nameplate-Forces-Overlay im Mythic+ | Optionales Live-Overlay auf jeder feindlichen Namensplakette zeigt den Mob-Forces-Beitrag |
+| UC-19 | (reserviert / nicht vergeben) | Nummer ausgelassen; nicht neu belegen, damit bereits referenzierte Test-/Commit-Querverweise stabil bleiben |
 | UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
 
@@ -153,7 +154,15 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 4. Combat-Sicherheit: Wenn Combat-Lockdown Secure-`ReloadUI`-Button-Refreshes blockiert, zum Beispiel Click-Registration oder Macro-Attribute-Updates, verschiebt das Addon diese Aktualisierung und wiederholt sie auf `PLAYER_REGEN_ENABLED`. Die gemounteten `Esc`-Strips selbst bleiben im Combat read-only, bleiben ueber `GameMenuFrame` sichtbar und machen aus insecure Shortcut-Klicks No-Ops statt Overlay-Layout zu mutieren.
 5. Regel: Der Spellbook-Shortcut muss spellbook-spezifische Opener nutzen und darf nicht ueber das Talents-Panel routen.
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
-7. Ergebnis B: Blizzard Settings zeigen Sprache, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Background Opacity`, `UI Scale`, `Default UI on Open`, `Minimap Button`, `Addon Sync`, `Auto-Open on M+ Queue`, `Auto-Close on Key Start / Solo`, `Column Guides`, die dedizierte `Sounds`-Sektion mit `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res` und `Sound: Bloodlust`, `Queue Debug Log (resets on reload)` und `Runtime Log (resets on reload)`.
+7. Ergebnis B: Blizzard Settings zeigen — gruppiert in sechs Sektionen plus Reset und Beta-Hinweis:
+   - **General**: Sprache, `Default UI on Open`, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Show Timeways Navigator`.
+   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
+   - **Nameplates**: 3-Modi-Selector `Off / Tooltip / Nameplate` fuer den M+-Forces-Overlay, plus `Show percentage`, `Show remaining needed`, `Font size`, `Position`, `X offset`, `Y offset` und ein Live-Preview.
+   - **Behavior**: `Addon Sync`, `Lock main frame position`, `Fade out in Combat (M2 only)`, gefolgt vom Auto-Show/Hide-Block mit Erklaerung (`Show on Login / Reload`, `Auto-Open on M+ Queue`, `Auto-Open on Key End`, `Auto-close when key starts`, `Auto-close when leaving the group`), und einem statischen Raid-Behavior-Hinweis statt einem 1-Optionen-Selector.
+   - **Sounds**: `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res`, `Sound: Bloodlust`.
+   - **Chat Announcements**: `Chat: Announce Battle Res usage in M+`, `Chat: Announce Bloodlust casts in M+`.
+   - **Debug**: `Queue Debug Log (resets on reload)`, `Clear Queue Debug Log`, `Runtime Log (resets on reload)`, `Clear Runtime Log`, `Column Guides`.
+   - **Reset All Settings** plus Beta-Hinweis mit Issue-Tracker-Link.
 8. Regel: Settings-Controls spiegeln live Blizzard-CVars und SavedVariables und wenden Aenderungen sofort an, ohne dass das Main-Addon-Fenster sichtbar sein muss; eine Aenderung von `Background Opacity` aktualisiert live den Main-Frame, die optionalen `Esc`-Tooling- und Travel-Strips und den Settings-Canvas. Der neue `Lock main frame position`-Schalter, der Top-right-Lock-Button sowie die Slash-Commands `/isilive lock`, `/isilive unlock` und `/isilive resetui` spiegeln denselben gespeicherten Lock-State und verhindern unabsichtliches Verschieben der Haupt-UI; `resetui` setzt Position, UI-Skalierung und Hintergrund-Deckkraft wieder auf ihre Default-Werte zurueck und zeigt den Default-Hinweis als separate Textzeile unter dem Button, bevor eine Reset-Bestaetigung abgefragt wird. Hidden Legacy-Controls (`Name Length`, `Teleport Grid Columns`, `Show DPS Column`, `Markers: Leader Only`) bleiben aus der Settings-UI draussen und nutzen derzeit feste Runtime-Defaults: `DPS` an, Marker fuer alle sichtbar, feste Namenstrunkierung und Legacy-`Travel`-Layout mit 2 Spalten.
 9. Erfolgskriterium: Beide Einstiegspunkte bleiben lokalisiert, deterministisch und spiegeln den aktuellen Config- und Runtime-State.
 
@@ -233,6 +242,16 @@ Ziel: Eine optionale Live-Anzeige auf jeder feindlichen Namensplakette waehrend 
 9. Verarbeitung: `appearance.fontSize` wird via `ApplyFont(fontString)` als `SetFont(file, size, flags)` mit dem Template `GameFontNormalOutline` und Default-Fallback `Fonts\\FRIZQT__.TTF` / `OUTLINE` auf den FontString uebertragen, sowohl bei Frame-Erstellung als auch bei jedem Refresh, sodass Slider-Aenderungen ohne `/reload` durchschlagen.
 10. Erfolgskriterium: Im aktiven Key zeigt jede feindliche Namensplakette eine deterministische, lokalisierungsneutrale Forces-Zahl, die der Mouseover-Tooltip-Zeile entspricht; bei aktivierter Restbedarfs-Option folgt der noch benoetigte Dungeon-Fortschritt im Format `<mob>%/<rest>%`. Ausserhalb eines Keys oder bei nicht-feindlichen Units bleibt das Overlay versteckt.
 
+## UC-20 Clear-Log-Buttons im Settings-Debug
+
+Ziel: Den User die beiden On-Reload-Debug-Logs (Queue-Debug, Runtime-Log) per Klick aus dem Settings-Panel leeren lassen, ohne die Slash-Command-Variante kennen zu muessen.
+
+1. Trigger: Klick auf den `Clear Queue Debug Log`- oder `Clear Runtime Log`-Action-Button in der Debug-Sektion des Blizzard-Settings-Canvas.
+2. Verarbeitung: Der Klick ruft `config.onClearQueueDebugLog()` bzw. `config.onClearRuntimeLog()`. Die Factory verdrahtet diese auf `ctx.clearQueueDebugLog` und `ctx.clearRuntimeLog`, dieselben Dispatcher die auch `/isilive qdebug clear` und `/isilive log clear` nutzen.
+3. Regel: Beide Buttons zeigen einen lokalisierten Label-Text aus `L.SETTINGS_QUEUE_DEBUG_CLEAR` / `L.SETTINGS_RUNTIME_LOG_CLEAR`; alle 8 Sprachen synchron.
+4. Regel: Der Refresh-on-Language-Change-Pfad in `RefreshSettingsControls` zieht die Button-Labels nach Sprachwechsel automatisch nach.
+5. Erfolgskriterium: Klick auf einen der beiden Buttons leert sofort den jeweiligen Log-Buffer (verifizierbar via `/isilive log status` oder `/isilive qdebug status`); die Slash-Command-Variante bleibt parallel verfuegbar.
+
 ## UC-21 Multi-Kick-Extras im Roster-Tooltip
 
 Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-Talent, theoretisch auch Demo Warlock Inner Demons) sollen alle ihre aktiven Kick-Cooldowns sichtbar machen, nicht nur den primary. Die Mehrwert-Information bleibt im Hover-Tooltip, damit die `Kick`-Spalte selbst weiterhin kompakt bleibt.
@@ -247,16 +266,6 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 8. Render: `ShowRosterInfoTooltip` (Roster-Hover) zeigt direkt nach der Rio-Zeile einen lokalisierten "Extra kicks:"-Header (Locale-Key `TOOLTIP_KICK_EXTRAS_HEADER` in 8 Sprachen) gefolgt von einer eingerueckten Zeile pro extra: `  <SpellName>: <remain>s`. SpellName kommt aus `C_Spell.GetSpellName(spellID)` (pcall-guarded), Fallback auf `Spell <ID>`.
 9. Bekannter Constraint: Demonology Warlock Inner Demons (Felguard + Felhunter parallel, beide casten ihren eigenen Interrupt-Spell) wird aktuell **nicht** als Multi-Kick gehandhabt, weil `Spell Lock 19647` in `SPEC_DATA[266].spells` als alternativer Primary fuer den Pet-Switch-Fall (Felhunter ohne Felguard) gelistet ist. Den Array auf einen Spell zu reduzieren wuerde den Pet-Switch-Pfad brechen. Dokumentiert als Future-Work.
 10. Erfolgskriterium: Im aktiven Mythic+-Run zeigt der Roster-Hover-Tooltip eines Prot Paladin mit Avenger's-Shield-Talent zwei separate Cooldowns (Rebuke in der `Kick`-Spalte und Avenger's Shield im Tooltip-Extras-Block) ohne dass der primary-Cooldown durch den Avenger's-Shield-Cast gestoert wird; Peers ohne Talent-Kick sehen weder Header noch Extras-Zeilen.
-
-## UC-20 Clear-Log-Buttons im Settings-Debug
-
-Ziel: Den User die beiden On-Reload-Debug-Logs (Queue-Debug, Runtime-Log) per Klick aus dem Settings-Panel leeren lassen, ohne die Slash-Command-Variante kennen zu muessen.
-
-1. Trigger: Klick auf den `Clear Queue Debug Log`- oder `Clear Runtime Log`-Action-Button in der Debug-Sektion des Blizzard-Settings-Canvas.
-2. Verarbeitung: Der Klick ruft `config.onClearQueueDebugLog()` bzw. `config.onClearRuntimeLog()`. Die Factory verdrahtet diese auf `ctx.clearQueueDebugLog` und `ctx.clearRuntimeLog`, dieselben Dispatcher die auch `/isilive qdebug clear` und `/isilive log clear` nutzen.
-3. Regel: Beide Buttons zeigen einen lokalisierten Label-Text aus `L.SETTINGS_QUEUE_DEBUG_CLEAR` / `L.SETTINGS_RUNTIME_LOG_CLEAR`; alle 8 Sprachen synchron.
-4. Regel: Der Refresh-on-Language-Change-Pfad in `RefreshSettingsControls` zieht die Button-Labels nach Sprachwechsel automatisch nach.
-5. Erfolgskriterium: Klick auf einen der beiden Buttons leert sofort den jeweiligen Log-Buffer (verifizierbar via `/isilive log status` oder `/isilive qdebug status`); die Slash-Command-Variante bleibt parallel verfuegbar.
 
 ## Nichtfunktionale Regeln
 
@@ -281,7 +290,7 @@ Ziel: Den User die beiden On-Reload-Debug-Logs (Queue-Debug, Runtime-Log) per Kl
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1346` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1650` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

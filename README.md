@@ -206,7 +206,7 @@ Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 
 - **General** — language, startup auto-show, minimap button
 - **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
-- **Behavior** — addon sync, auto-open on M+ queue, auto-close on key start, raid behavior, column guides
+- **Behavior** — addon sync, auto-show/hide triggers (show on login, auto-open on M+ queue, auto-open on key end, auto-close on key start, auto-close on leaving the group), lock main frame position, fade in combat, raid behavior status
 - **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust
 - **Nameplates** — enable forces overlay, font size, position, percent toggle
 - **Chat Announcements** — announce Battle Res / announce Bloodlust
@@ -216,7 +216,8 @@ Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 
 - Open on joining a group — **on**
 - Open when a key ends — **on**
-- Close automatically on key start or when dropping to solo — **off** (you can turn it on)
+- Close automatically when the key starts — **off** (separate toggle)
+- Close automatically when leaving the group — **off** (separate toggle)
 - Show on login/reload — **on** (except in raid groups)
 - Raid groups hide the window completely and pause all background processing
 
