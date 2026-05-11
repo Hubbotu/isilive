@@ -732,6 +732,101 @@ local function CheckActiveGroup()
   end
 end
 
+-- Authoritative lookup: ask the WoW LFG API which application currently
+-- carries the "inviteaccepted" status. Returns the matching searchResultID,
+-- or nil when no application is in that state (or the API is unavailable /
+-- tainted). Caller MUST treat nil as "do not know yet" — never guess.
+local function FindAcceptedSearchResultID()
+  local C_LFGList_ref = rawget(_G, "C_LFGList")
+  if type(C_LFGList_ref) ~= "table" then
+    return nil
+  end
+  if type(C_LFGList_ref.GetApplications) ~= "function" then
+    return nil
+  end
+  if type(C_LFGList_ref.GetApplicationInfo) ~= "function" then
+    return nil
+  end
+
+  local ok, apps = pcall(C_LFGList_ref.GetApplications)
+  if not ok or type(apps) ~= "table" then
+    return nil
+  end
+
+  for _, applicationID in ipairs(apps) do
+    local infoOk, searchResultID, appStatus = pcall(C_LFGList_ref.GetApplicationInfo, applicationID)
+    if infoOk and type(appStatus) == "string" then
+      if string.lower(appStatus) == "inviteaccepted" then
+        local numericSearchResultID = tonumber(searchResultID)
+        if numericSearchResultID and numericSearchResultID > 0 then
+          return numericSearchResultID
+        end
+      end
+    end
+  end
+  return nil
+end
+
+-- Resolves which pendingInvites entry the player has just accepted, for use
+-- in the GROUP_ROSTER_UPDATE race-recovery branch (when GROUP_ROSTER_UPDATE
+-- arrives before LFG_LIST_APPLICATION_STATUS_UPDATED("inviteaccepted")).
+--
+-- Resolution priority — strictly deterministic, never picks 1-of-N:
+--   1. WoW LFG API authoritative: status == "inviteaccepted" on one of the
+--      player's own applications. Single source of truth from Blizzard.
+--   2. Unambiguous fallback: exactly one pendingInvites entry exists. With
+--      a single candidate there is nothing to guess.
+--   3. Nil — defer. Multiple pendingInvites with no API disambiguation must
+--      wait for the explicit inviteaccepted event, which carries its own
+--      authoritative searchResultID.
+--
+-- Returns (searchResultID, entry) on success; (nil, nil) when the caller
+-- should defer. The entry table is read from pendingInvites first; when the
+-- API names an ID we never observed via OnInvited (e.g. very short listings)
+-- we re-resolve live via ResolveInviteEntry rather than fabricate values.
+local function ResolveAcceptedPendingInvite()
+  local apiSearchResultID = FindAcceptedSearchResultID()
+  if apiSearchResultID then
+    local entry = pendingInvites[apiSearchResultID]
+    if type(entry) ~= "table" then
+      entry = ResolveInviteEntry(apiSearchResultID)
+    end
+    if type(entry) == "table" and entry.mapID then
+      Log(
+        "accept_resolved",
+        "source=api searchResultID=%s mapID=%s",
+        tostring(apiSearchResultID),
+        tostring(entry.mapID)
+      )
+      return apiSearchResultID, entry
+    end
+    Log("accept_resolve_failed", "source=api searchResultID=%s reason=no_entry", tostring(apiSearchResultID))
+    return nil, nil
+  end
+
+  local count, soleID, soleEntry = 0, nil, nil
+  for id, entry in pairs(pendingInvites) do
+    if type(entry) == "table" then
+      count = count + 1
+      if count > 1 then
+        Log("accept_deferred", "reason=ambiguous_pending count=%s", "multi")
+        return nil, nil
+      end
+      soleID, soleEntry = id, entry
+    end
+  end
+  if count == 1 and type(soleEntry) == "table" and soleEntry.mapID then
+    Log(
+      "accept_resolved",
+      "source=single_pending searchResultID=%s mapID=%s",
+      tostring(soleID),
+      tostring(soleEntry.mapID)
+    )
+    return soleID, soleEntry
+  end
+  return nil, nil
+end
+
 function LFGDetect.HandleEvent(event, ...)
   if event == "PLAYER_LOGIN" then
     CheckActiveGroup()
@@ -780,19 +875,30 @@ function LFGDetect.HandleEvent(event, ...)
     end
     local groupMemberCount = GetGroupMemberCount()
     pendingAcceptedInviteMapID = nil
-    -- Joined a group: if we have a pending invite but detectedMapID was not set
-    -- yet (e.g. inviteaccepted fired before GROUP_ROSTER_UPDATE settled),
-    -- apply it now.
+    -- Joined a group: if we have a pending invite but detectedMapID was not
+    -- set yet (e.g. GROUP_ROSTER_UPDATE arrived before the inviteaccepted
+    -- status event), resolve deterministically — never guess 1-of-N.
+    --
+    -- ResolveAcceptedPendingInvite asks the WoW LFG API first (status ==
+    -- "inviteaccepted") and falls back to the unambiguous single-pending
+    -- case. With multiple parallel applications the player can be applied
+    -- to several listings at once (different dungeons, different key
+    -- levels); the prior `next(pendingInvites)` shortcut could surface a
+    -- non-accepted entry, consume it, and leave the real inviteaccepted
+    -- handler unable to recover its data.
     if not detectedMapID then
-      local resultID, entry = next(pendingInvites)
-      if resultID and type(entry) == "table" and entry.mapID then
+      local resultID, entry = ResolveAcceptedPendingInvite()
+      if resultID and entry then
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
         activeInviteTitleLevel = entry.titleLevel
         acceptedInviteSearchResultID = resultID
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")
-      else
+      elseif next(pendingInvites) == nil then
+        -- No pending invites at all — safe to fall back to own-listing
+        -- detection. With pending invites present we defer instead, so a
+        -- queue-listing mapID cannot leak in over an unresolved invite.
         CheckActiveGroup()
       end
     end

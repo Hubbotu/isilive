@@ -1,5 +1,80 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.226 (patch)
+
+Bug fix for the "Ziel-Dungeon" chat announcement and post-accept Center
+Notice when the player has several parallel LFG applications pending. In
+practice that's the 95 % case — players apply to 3–5 listings for the same
+dungeon at different key levels (and often to siblings for different
+dungeons too). Until now the chat could surface a non-accepted listing's
+dungeon name or key level, while the portal-icon highlight stayed correct.
+
+### Root cause
+
+`LFGDetect.HandleEvent("GROUP_ROSTER_UPDATE")` carries a race-recovery
+branch for the case where `GROUP_ROSTER_UPDATE` arrives **before** the
+`LFG_LIST_APPLICATION_STATUS_UPDATED("inviteaccepted")` event sets the
+authoritative state. That branch used `next(pendingInvites)` to fish out
+an entry — Lua table iteration order is **defined as unspecified**, so
+with N parallel pending invites the resolver picked 1-of-N at random,
+**guessing** which invite the player had just accepted. The wrong entry
+was then *consumed* (`pendingInvites[resultID] = nil`), so the real
+`inviteaccepted` arriving shortly after could no longer find its
+`pendingInvites` entry — `ResolveInviteEntry` re-resolved live against
+a frequently delisted `C_LFGList.GetSearchResultInfo` and bailed,
+leaving `detectedMapID`, `activeInviteLeader` and
+`activeInviteTitleLevel` stuck on the guessed values.
+
+The UI portal highlight stayed correct because it routes through a
+different code path (direct `lfgDetect.GetDetectedMapID()` → spell-by-mapID
+lookup) and re-fires from `OnInviteAccepted` independently of the racy
+branch.
+
+### Fix
+
+Two new helpers in [game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
+replace the `next()`-shortcut with a strictly deterministic 3-stage
+resolver:
+
+1. **Authoritative WoW API lookup** — `FindAcceptedSearchResultID` calls
+   `C_LFGList.GetApplications` and iterates `GetApplicationInfo` for the
+   one application whose `appStatus == "inviteaccepted"`. Single source
+   of truth from Blizzard; `pcall`-guarded and case-normalized so 12.0+
+   taint or casing variations are handled the same as the existing
+   `HandleApplicationStatus` path. Returns the API-named `searchResultID`.
+2. **Unambiguous-single fallback** — `ResolveAcceptedPendingInvite` only
+   uses `pendingInvites` when **exactly one** entry exists. With a single
+   candidate there is nothing to guess.
+3. **Defer** — multiple pending entries + API silent → return nil, do
+   nothing for this tick. The subsequent explicit `inviteaccepted` event
+   arrives with its own authoritative `searchResultID` and recovers via
+   the existing `OnInviteAccepted` path. `pendingInvites` is never
+   speculatively consumed.
+
+When the API names a `searchResultID` for which `OnInvited` was never
+seen (very short listings), the resolver falls back to live
+`ResolveInviteEntry(searchResultID)` rather than fabricating values.
+
+### Tests
+
+- New end-to-end simulator `tools/simulate_multi_invite_accept_race.lua`
+  exercises the real `LFGDetect` module through the real event
+  dispatcher across five cases:
+  - Three pending invites, API names ID 3 as accepted → resolver picks
+    ID 3 deterministically; the other two `pendingInvites` entries
+    survive (verified by a follow-up `inviteaccepted` for ID 2 that
+    transitions cleanly to its dungeon/level).
+  - Single pending + API silent → unambiguous fallback fires.
+  - Three pending + API silent → defer; resolver state stays `nil`; the
+    real `inviteaccepted` then sets the right state.
+  - API names a `searchResultID` outside `pendingInvites` → live
+    re-resolution via `C_LFGList.GetSearchResultInfo`.
+  - Regression: single-apply + GROUP_ROSTER_UPDATE first + API
+    unavailable still resolves (the original safety-net intent).
+- The existing `tools/simulate_multi_invite_target_chain.lua` (level-
+  flicker / chat-lock end-to-end) continues to pass unchanged — the new
+  resolver is additive, the title-level lock-in stays intact.
+
 ## 2026-05-10 - Version 0.9.225 (patch)
 
 Bug fix for the Travel-panel Hearthstone button. After switching to another
