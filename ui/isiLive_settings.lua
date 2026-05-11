@@ -24,6 +24,18 @@ local SETTINGS_CONTENT_WIDTH = 700
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
 local SHOW_NAME_MAX_CHARS_SETTING = false
 local SHOW_TELEPORT_COLUMNS_SETTING = false
+-- Brand title with the `isi` prefix as plain text and only `Live` colored
+-- in dodgerblue (`#1e90ff`). The plain `isi` prefix serves two purposes:
+--
+-- 1. Sort key: WoW sorts AddOn-list and Settings-sidebar entries by the
+--    raw title string. If the title starts with `|c...` the sort key
+--    begins with `|` (ASCII 0x7C), which lands after every A-Z entry.
+--    Putting a plain alphabetic prefix in front makes the sort key start
+--    with that letter, so the entry sorts in the expected I-section.
+-- 2. Visual: the plain prefix takes the FontString's default color, which
+--    keeps the brand visually identical to the legacy "isiLive" entry
+--    without any custom SetTextColor calls.
+local ISILIVE_BRAND_TITLE = "isi|cff1e90ffLive|r"
 local DEFAULT_LAYOUT_MODE_EXPANDED = "expanded"
 local DEFAULT_LAYOUT_MODE_COMPACT_VERTICAL = "compact_vertical"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL = "compact_horizontal"
@@ -833,10 +845,13 @@ end
 
 local function CreateSettingsTitle(canvas)
   local title = canvas:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  -- Accent-gold baseline so the plain `isi` prefix in ISILIVE_BRAND_TITLE
+  -- renders in the historical brand color. The `Live` segment overrides
+  -- this default via its embedded |cff1e90ff...|r color code.
   local ag = Colors.ACCENT_GOLD or { 1, 0.82, 0 }
   title:SetTextColor(ag[1], ag[2], ag[3], 1)
   title:SetPoint("TOPLEFT", canvas, "TOPLEFT", PADDING_X, -PADDING_TOP)
-  title:SetText("isiLive")
+  title:SetText(ISILIVE_BRAND_TITLE)
 
   return title
 end
@@ -2473,7 +2488,7 @@ function SettingsPanel.Create(opts)
     scrollFrame:UpdateScrollChildRect()
   end
 
-  local category = blizzardSettings.RegisterCanvasLayoutCategory(canvas, "isiLive")
+  local category = blizzardSettings.RegisterCanvasLayoutCategory(canvas, ISILIVE_BRAND_TITLE)
   if type(blizzardSettings.RegisterAddOnCategory) == "function" then
     blizzardSettings.RegisterAddOnCategory(category)
   end

@@ -1,5 +1,61 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.231 (patch)
+
+Cosmetic: the AddOn-list entry now reads as a three-color block instead
+of a pale seven-step gradient that was invisible against the AddOn-list
+background.
+
+### TOC Title: `isi` default, `Live` dodgerblue, dropped plain-text suffix
+
+`## Title:` was a linear gradient from `4da6ff` (pastel blue) to
+`ffe633` (yellow) across seven letters PLUS a plain-text ` v0.9.XXX`
+version suffix at the end. The AddOn list rendered the entry as plain
+default-yellow because WoW's TOC title renderer falls back to plain
+text as soon as the title string contains ANY plain-text outside
+`|c...|r` color tag pairs — the trailing ` v0.9.230` after the last
+`|r` disabled the entire color stack.
+
+Three changes:
+
+1. Title is now `isi|cff1e90ffLive|r`: the `isi` prefix is plain text
+   (so it falls through to whatever default color the FontString uses
+   — yellow in the AddOn list, accent-gold in the Settings canvas
+   header), and only `Live` is explicitly colored dodgerblue
+   (`#1e90ff`).
+2. Plain-text version suffix removed from `## Title:`. The version
+   itself is still authoritative in `## Version:` and `CHANGELOG_RELEASE.md`.
+3. The plain `isi` prefix doubles as a sort-key fix: WoW sorts
+   AddOn-list and Settings-sidebar entries by the raw title string.
+   If the title starts with `|c...` the sort key begins with `|`
+   (ASCII 0x7C), pushing the entry below every A-Z entry. A plain
+   alphabetic prefix makes the sort key start with the letter, so
+   the entry lands in the expected I-section.
+
+### Blizzard Settings UI: same brand title
+
+The Blizzard Settings sidebar entry (`RegisterCanvasLayoutCategory`) and
+the canvas title-bar `FontString` both used to render the plain string
+`"isiLive"` in default white / accent-gold. Both now use the same
+`ISILIVE_BRAND_TITLE` constant — `isi` plain text + `Live` in dodgerblue
+— so the AddOn appears with the same brand title in:
+
+- the AddOn list (TOC `## Title:`)
+- the Settings sidebar (Escape → Options → AddOns → isiLive)
+- the Settings canvas header (the H1 at the top of the panel)
+
+The canvas title-bar keeps its existing `ACCENT_GOLD` default so the
+plain `isi` segment renders in the historical brand color, and the
+embedded `|cff1e90ff...|r` in the title string colors only the `Live`
+segment dodgerblue.
+([ui/isiLive_settings.lua](ui/isiLive_settings.lua))
+
+Chat brand-prefix (`|cff4da6ffisiLive|r`) in
+[factory/isiLive_factory_frame_bridge.lua](factory/isiLive_factory_frame_bridge.lua)
+is left unchanged — it stays single-color blue for chat-line consistency.
+
+No behaviour or test changes. ([isiLive.toc](isiLive.toc), [ui/isiLive_settings.lua](ui/isiLive_settings.lua))
+
 ## 2026-05-11 - Version 0.9.230 (patch)
 
 UX polish on the post-accept Center Notice based on live testing feedback:
