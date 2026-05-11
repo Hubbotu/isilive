@@ -6,24 +6,18 @@ addonTable.CdTracker = CdTracker
 
 local BRES_SPELL_ID = 20484
 
--- All Bloodlust / Heroism / Time Warp variant spell IDs that inflict Sated/Exhaustion
+-- Sated / Exhaustion / Insanity / Temporal Displacement debuff IDs left behind
+-- by Bloodlust-class effects. ScanLust matches these against the player's
+-- HARMFUL aura list, so only the actual debuff IDs belong here — the cast
+-- IDs (e.g. 2825 Bloodlust, 32182 Heroism, 80353 Time Warp) would never
+-- appear as HARMFUL auras and were dead matches.
 local LUST_SATED_IDS = {
-  [2825] = true,
-  [32182] = true,
-  [80353] = true,
-  [264667] = true,
-  [390386] = true,
-  [381301] = true,
-  [178207] = true,
-  [230935] = true,
-  [256740] = true,
-  [57723] = true,
-  [57724] = true,
-  [80354] = true,
-  [264689] = true,
-  [390435] = true,
-  [95809] = true,
-  [16045] = true,
+  [57723] = true, -- Exhaustion (Bloodlust)
+  [57724] = true, -- Sated (Heroism)
+  [80354] = true, -- Temporal Displacement (Time Warp)
+  [264689] = true, -- Fatigued (Primal Rage)
+  [390435] = true, -- Exhaustion (Ancient Hysteria)
+  [95809] = true, -- Insanity (pet variants)
 }
 
 function CdTracker.CreateController(opts)
