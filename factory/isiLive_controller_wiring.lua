@@ -525,17 +525,28 @@ local function BuildEventHandlersDepsFromContext(ctx)
       local roster = ctx.getRoster and ctx.getRoster()
       if traceDeep then
         traceDeep(function()
-          return string.format("[KEYSTONE] roster_resolved memberCount=%s", tostring(roster and #roster or "nil"))
+          local memberCount = "nil"
+          if type(roster) == "table" then
+            local n = 0
+            for _ in pairs(roster) do
+              n = n + 1
+            end
+            memberCount = tostring(n)
+          end
+          return string.format("[KEYSTONE] roster_resolved memberCount=%s", memberCount)
         end)
       end
 
-      local snapshot = ctx.getOwnedKeystoneSnapshot and ctx.getOwnedKeystoneSnapshot()
+      local snapshotMapID, snapshotLevel
+      if ctx.getOwnedKeystoneSnapshot then
+        snapshotMapID, snapshotLevel = ctx.getOwnedKeystoneSnapshot()
+      end
       if traceDeep then
         traceDeep(function()
           return string.format(
             "[KEYSTONE] snapshot_resolved mapID=%s level=%s",
-            tostring(snapshot and snapshot.mapID or "nil"),
-            tostring(snapshot and snapshot.level or "nil")
+            tostring(snapshotMapID or "nil"),
+            tostring(snapshotLevel or "nil")
           )
         end)
       end
