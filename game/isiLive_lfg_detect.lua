@@ -895,11 +895,25 @@ function LFGDetect.HandleEvent(event, ...)
         acceptedInviteSearchResultID = resultID
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")
-      elseif next(pendingInvites) == nil then
-        -- No pending invites at all — safe to fall back to own-listing
-        -- detection. With pending invites present we defer instead, so a
-        -- queue-listing mapID cannot leak in over an unresolved invite.
-        CheckActiveGroup()
+      else
+        -- "No pending invites at all" means no entry with a table value:
+        -- OnInviteDeclined writes `false` sentinels into pendingInvites
+        -- (line ~554) which `next()` happily returns as non-nil, so the
+        -- recovery fallback to CheckActiveGroup would otherwise be neutralised
+        -- after the first decline in a push-lobby spam scenario.
+        local hasUnresolved = false
+        for _, pendingEntry in pairs(pendingInvites) do
+          if type(pendingEntry) == "table" then
+            hasUnresolved = true
+            break
+          end
+        end
+        if not hasUnresolved then
+          -- Safe to fall back to own-listing detection. With pending invites
+          -- present we defer instead, so a queue-listing mapID cannot leak in
+          -- over an unresolved invite.
+          CheckActiveGroup()
+        end
       end
     end
     EmitGroupRosterTrace(true, groupMemberCount, detectedBefore)
