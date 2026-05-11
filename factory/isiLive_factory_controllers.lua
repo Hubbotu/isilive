@@ -769,13 +769,22 @@ local function RenderAcceptedInviteNotice(ctx, modules, payload)
   local mapName = ResolveAcceptedInviteDungeonName(ctx, modules, payload.mapID)
   local fields = BuildAcceptedInviteFields(ctx, mapName, payload)
 
-  ctx.ShowCenterNotice(nil, 12, mapName, payload.activityID, {
+  -- dungeonName / activityID are passed as nil on purpose: the main M+ UI
+  -- already highlights the matching teleport button, so a second teleport
+  -- button inside the notice would be visual redundancy. ConfigureCenter-
+  -- NoticeTeleportButton early-returns false when both are nil — the button
+  -- and its surrounding header label are then not rendered.
+  ctx.ShowCenterNotice(nil, nil, nil, nil, {
     title = L.INVITE_ACCEPTED_NOTICE_TITLE or "isiLive - Invite accepted",
     fields = fields,
-    teleportLabel = L.INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER or "Teleport to dungeon:",
     -- Compact card width: narrower than the default 680px legacy banner so
     -- the layout reads as a focused info card rather than a full-width header.
     frameWidth = 540,
+    -- Persistent (no auto-hide): the notice stays until the user right-clicks
+    -- it or presses the close button. The auto-timer kept producing too-short
+    -- visibility windows in live testing (12 s missed during a busy invite
+    -- sequence). Right-click / red-X / next ShowCenterNotice still close it.
+    persistent = true,
     -- No blink/fontScale — the rich layout already carries its own visual
     -- hierarchy through the title bar, separator, and color-coded labels.
   })

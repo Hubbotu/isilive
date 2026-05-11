@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.230 (patch)
+
+UX polish on the post-accept Center Notice based on live testing feedback:
+duplicate teleport button removed, auto-hide timer dropped in favour of
+explicit dismissal.
+
+### Notice no longer renders its own teleport button
+
+The notice card used to carry a "Zum Dungeon teleportieren:" header above
+a duplicate teleport-spell icon. The main M+ UI already highlights the
+matching teleport button for the accepted dungeon, so a second button
+inside the notice was pure visual redundancy. `RenderAcceptedInviteNotice`
+now passes `dungeonName = nil` and `activityID = nil` to
+`ShowCenterNotice`; `ConfigureCenterNoticeTeleportButton` early-returns
+when both are absent, so neither the button nor its header label render.
+The notice card collapses to title + four field rows (Dungeon, Gruppe,
+Beschreibung, Rolle). ([factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua))
+
+The `INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER` locale key is removed from
+all eight language tables — no longer referenced. The
+`showOptions.teleportLabel` slot in `Notice.CreateCenterNotice` stays
+available for other potential consumers.
+
+### Notice is now persistent (no auto-hide)
+
+The previous 12 s auto-hide window kept producing too-short visibility
+windows during a busy invite sequence; the notice flickered away while
+the player was still acting on the LFG popup. The notice now passes
+`persistent = true` to `ShowCenterNotice`; it stays open until the user
+right-clicks the frame, presses the red X, or another `ShowCenterNotice`
+call replaces the content. ([factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua))
+
+### Coverage
+
+- `RegisterAcceptedInviteNoticeHelpers` test
+  `RenderAcceptedInviteNotice forwards a populated payload` asserts the
+  new contract: `mapName / activityID = nil`, `opts.teleportLabel = nil`,
+  `opts.persistent = true`, no `holdTime`.
+- 1659 / 1659 usecase scenarios pass; full local CI preflight
+  (stylua, luacheck, syntax, metrics, locale, usecases, rules-logic) green.
+
 ## 2026-05-11 - Version 0.9.229 (patch)
 
 Third follow-up on the post-accept Center Notice live testing — the previous
