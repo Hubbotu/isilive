@@ -274,6 +274,18 @@ local function FinalizeFactorySettings(ctx)
     ctx.ApplyDBSettings = function()
       local db = IsiLiveDB or {}
 
+      -- Legacy cascade fix: pre-nameplate users only ever persisted
+      -- mplusForcesEstimate=true. DBSchema.Sanitize now fills the schema
+      -- default mobNameplateEnabled=true before this runs, so both flags
+      -- end up true and the nameplate + tooltip modules both activate.
+      -- The settings UI enforces mutual exclusion (only one of the two
+      -- can become true via the display-mode selector), so both=true is
+      -- only reachable from the legacy path. Disambiguate to tooltip-only
+      -- to honour the user's prior choice.
+      if db.mobNameplateEnabled == true and db.mplusForcesEstimate == true then
+        db.mobNameplateEnabled = false
+      end
+
       -- M+ forces display-mode migration: if mobNameplateEnabled has never
       -- been set, default to "nameplate" mode. This covers fresh installs
       -- AND legacy users whose only persisted key was mplusForcesEstimate
