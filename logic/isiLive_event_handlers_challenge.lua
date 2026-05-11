@@ -527,6 +527,10 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.lastRecordedRunCaptured = false
     ctx.pendingRecordedRunRetrySignature = nil
     ctx.setReadyCheckActive(false)
+    -- Clear stale ready/declined marks: if a READY_CHECK landed just before
+    -- the M+ start and READY_CHECK_FINISHED never fired between them, the
+    -- per-unit maps would otherwise carry into the run.
+    ResetReadyCheckDeclinedTracking(ctx)
     ResetDamageMeterIfAvailable()
     ctx.captureRioBaselineSnapshot()
     if type(ctx.logRuntimeTrace) == "function" then
