@@ -1,6 +1,6 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.228`
+Versionsbasis: `0.9.229`
 Zuletzt aktualisiert: `2026-05-11`
 
 ## Zweck

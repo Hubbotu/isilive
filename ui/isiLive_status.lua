@@ -403,7 +403,14 @@ local function MaybeShowNonMythicDungeonEntryNotice(state, deps)
   if not inDungeon then
     state.nonMythicNoticeToken = state.nonMythicNoticeToken + 1
     state.lastAnnouncedNonMythicSignature = nil
-    deps.hideCenterNotice()
+    -- Only hide the shared center notice when THIS controller actually owns
+    -- the currently visible content. Otherwise we silently kill the
+    -- Accepted-Invite / Lead-Transfer / Test-Mode notices on every
+    -- non-dungeon INSTANCE_CONTEXT_CHANGED.
+    if state.nonMythicNoticeShown then
+      deps.hideCenterNotice()
+      state.nonMythicNoticeShown = false
+    end
   end
 
   local contextChanged = inDungeon and dungeonContextSignature ~= state.lastDungeonContextSignature
@@ -435,6 +442,10 @@ local function MaybeShowNonMythicDungeonEntryNotice(state, deps)
         fontScale = 1.35,
         textColor = { 1, 0.2, 0.2 },
       })
+      -- Mark ownership so the leave-dungeon path knows it may hide this
+      -- specific notice. Cleared on dungeon-leave / token-bumped pending
+      -- show.
+      state.nonMythicNoticeShown = true
     end
 
     if C_Timer and C_Timer.After then
@@ -639,6 +650,14 @@ function Status.CreateController(opts)
   local state = {
     wasInDungeon = nil,
     nonMythicNoticeToken = 0,
+    -- Tracks whether THIS controller currently has a Non-Mythic-Entry notice
+    -- visible in the shared center-notice frame. Guards the leave-dungeon
+    -- hide path from killing notices that other code paths (Accepted-Invite,
+    -- Lead-Transfer, Test-Mode, ...) own. Without this flag, every
+    -- INSTANCE_CONTEXT_CHANGED / PLAYER_ENTERING_WORLD / OWNED_KEY_CONTEXT
+    -- outside a dungeon called deps.hideCenterNotice() unconditionally and
+    -- closed any active notice after ~1 second.
+    nonMythicNoticeShown = false,
     lastDungeonContextSignature = nil,
     lastAnnouncedNonMythicSignature = nil,
     wasInPortalRoom = nil,

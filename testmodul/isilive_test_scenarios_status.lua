@@ -120,6 +120,110 @@ local function RegisterDungeonDifficultyTests(test, Assert, WithGlobals, LoadAdd
       Assert.Equal(#notices, 2, "repeated heroic refresh should not re-show same notice")
     end)
   end)
+
+  -- BUG-CENTERNOTICE-FLICKER: MaybeShowNonMythicDungeonEntryNotice used to
+  -- call deps.hideCenterNotice() unconditionally whenever the player was
+  -- outside a dungeon. The shared center-notice frame is also used by the
+  -- Accepted-Invite / Lead-Transfer / Test-Mode paths, so every
+  -- INSTANCE_CONTEXT_CHANGED event a second after accepting an LFG invite
+  -- closed the Accepted-Invite notice after roughly one second of visibility.
+  -- The fix gates the hide call behind a controller-owned tracking flag.
+  test("Status MaybeShowNonMythicDungeonEntryNotice must NOT hide notices it does not own", function()
+    local hideCallCount = 0
+    local current = {
+      instanceName = "Stormwind",
+      instanceType = "none",
+      difficultyID = 0,
+    }
+    WithGlobals({
+      GetInstanceInfo = function()
+        return current.instanceName, current.instanceType, current.difficultyID, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+      C_Timer = {
+        After = function(_delay, fn)
+          fn()
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        showCenterNotice = function() end,
+        hideCenterNotice = function()
+          hideCallCount = hideCallCount + 1
+        end,
+      })
+
+      -- First call seeds wasInDungeon=false (no notice ever shown). Second
+      -- call confirms the leave-path no longer fires hide while the
+      -- controller doesn't own the current notice content.
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      Assert.Equal(hideCallCount, 0, "hideCenterNotice must not fire when this controller never showed a notice")
+    end)
+  end)
+
+  test("Status MaybeShowNonMythicDungeonEntryNotice still hides its OWN notice on dungeon leave", function()
+    local hideCallCount = 0
+    local notices = {}
+    local current = {
+      instanceName = "Stormwind",
+      instanceType = "none",
+      difficultyID = 0,
+    }
+    WithGlobals({
+      GetInstanceInfo = function()
+        return current.instanceName, current.instanceType, current.difficultyID, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+      C_Timer = {
+        After = function(_delay, fn)
+          fn()
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        showCenterNotice = function(message, duration)
+          notices[#notices + 1] = { message = message, duration = duration }
+        end,
+        hideCenterNotice = function()
+          hideCallCount = hideCallCount + 1
+        end,
+      })
+
+      -- Seed the previous-state once outside any dungeon.
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+
+      -- Enter a normal dungeon -> controller shows its own non-mythic notice.
+      current.instanceType = "party"
+      current.difficultyID = 1
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      Assert.Equal(#notices, 1, "entering a non-mythic dungeon must show the warning")
+      Assert.Equal(hideCallCount, 0, "no hide call during the show phase")
+
+      -- Leave the dungeon -> THIS time the hide call IS expected because the
+      -- controller still owns the visible notice.
+      current.instanceType = "none"
+      current.difficultyID = 0
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      Assert.Equal(hideCallCount, 1, "leaving the dungeon must hide the controller's own notice once")
+
+      -- Further leave-state ticks must be no-ops (flag was reset).
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      Assert.Equal(hideCallCount, 1, "subsequent ticks outside the dungeon must not re-fire hide")
+    end)
+  end)
 end
 
 local function RegisterPortalNavigatorTests(test, Assert, WithGlobals, LoadAddonModules)

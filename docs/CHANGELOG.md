@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-05-11 - Version 0.9.229 (patch)
+
+Third follow-up on the post-accept Center Notice live testing — the previous
+v0.9.228 fixes made the notice fire correctly for M+ invites, but it
+flickered for ~1 second and then vanished. The Status controller's
+non-Mythic dungeon-entry warning owned a leave-path that called
+`hideCenterNotice()` unconditionally on every non-dungeon
+`INSTANCE_CONTEXT_CHANGED` / `PLAYER_ENTERING_WORLD` / `OWNED_KEY_CONTEXT`
+event, and one of those fires reliably right after `inviteaccepted`.
+
+### Fix: leave-dungeon hide path no longer kills foreign notices
+
+`MaybeShowNonMythicDungeonEntryNotice` now tracks ownership of the
+shared center-notice frame via a `state.nonMythicNoticeShown` flag.
+The leave-dungeon branch only calls `deps.hideCenterNotice()` when the
+flag is set (= this controller actually rendered the warning), and
+clears the flag afterwards. Other notice consumers (Accepted-Invite,
+Lead-Transfer, Test-Mode) keep their notices for the full duration
+they configured. ([ui/isiLive_status.lua](ui/isiLive_status.lua))
+
+### Coverage uplift
+
+- `RegisterDungeonDifficultyTests` gains two scenarios: hide is NOT
+  called when the controller never showed its own warning, and hide
+  IS called exactly once on real dungeon-leave when the controller's
+  own warning is up.
+- 1659 / 1659 usecase scenarios pass; full local CI preflight
+  (stylua, luacheck, syntax, metrics, locale, usecases, rules-logic) green.
+
 ## 2026-05-11 - Version 0.9.228 (patch)
 
 Two regressions in the post-accept Center Notice pipeline from v0.9.223/224
