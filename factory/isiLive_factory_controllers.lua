@@ -120,8 +120,8 @@ local function InitializeGameAPIHelpers(ctx, runtimeState)
     return runtimeState.ClearExpiredReadyCheckDeclined(now)
   end
   ctx.IsInPartyInstance = function()
-    local _, instanceType = GetInstanceInfo()
-    return instanceType == "party"
+    local ok, _, instanceType = pcall(GetInstanceInfo)
+    return ok and instanceType == "party"
   end
   ctx.IsPortalNavigatorEnabled = function()
     local dbRef = rawget(_G, "IsiLiveDB")

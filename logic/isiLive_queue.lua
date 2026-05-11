@@ -533,7 +533,11 @@ function Queue.CaptureQueueJoinFromApplications(updatePendingQueueJoin, resolveT
     return
   end
 
-  local appIDs = C_LFGList.GetApplications()
+  local ok, appIDs = pcall(C_LFGList.GetApplications)
+  if not ok then
+    DebugLog("applications: pcall failed")
+    return
+  end
   if type(appIDs) ~= "table" then
     DebugLog("applications: unexpected type=%s", type(appIDs))
     return

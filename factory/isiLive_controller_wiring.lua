@@ -392,7 +392,13 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
     or function() end
   config.sendAck = function(sender)
     if C_ChatInfo and C_ChatInfo.SendAddonMessage and type(sender) == "string" and sender ~= "" then
-      C_ChatInfo.SendAddonMessage(modules.sync.GetPrefix(), "ACK:" .. deps.getAddonVersionRaw(), "WHISPER", sender)
+      pcall(
+        C_ChatInfo.SendAddonMessage,
+        modules.sync.GetPrefix(),
+        "ACK:" .. deps.getAddonVersionRaw(),
+        "WHISPER",
+        sender
+      )
     end
   end
   config.sendRefreshResponse = RequireFunction(deps.sendRefreshResponse, "sendRefreshResponse")

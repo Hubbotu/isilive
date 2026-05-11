@@ -360,14 +360,20 @@ end
 
 local function GetDungeonDifficultyLabel(getL)
   local L = getL()
-  local instanceName, instanceType, difficultyID = GetInstanceInfo()
+  local okInstance, instanceName, instanceType, difficultyID = pcall(GetInstanceInfo)
+  if not okInstance then
+    return L.DUNGEON_DIFF_UNKNOWN, false, false, nil, nil, nil
+  end
   if instanceType ~= "party" then
     return L.DUNGEON_DIFF_OUTSIDE, false, false, instanceType, difficultyID, instanceName
   end
 
   -- secret-value-ok: existence-guarded short-circuit chain on C_ChallengeMode
-  if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID and C_ChallengeMode.GetActiveChallengeMapID() then
-    return L.DUNGEON_DIFF_MYTHIC, true, true, instanceType, difficultyID, instanceName
+  if C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID then
+    local okMap, activeMapID = pcall(C_ChallengeMode.GetActiveChallengeMapID)
+    if okMap and activeMapID then
+      return L.DUNGEON_DIFF_MYTHIC, true, true, instanceType, difficultyID, instanceName
+    end
   end
 
   if difficultyID == 1 then

@@ -158,10 +158,10 @@ function Units.GetUnitRole(unit)
     isPlayer = ok and value == true
   end
   if isPlayer and GetSpecialization and GetSpecializationRole then
-    local specIndex = GetSpecialization()
-    if specIndex then
-      local specRole = GetSpecializationRole(specIndex)
-      if specRole == "TANK" or specRole == "HEALER" or specRole == "DAMAGER" then
+    local okIndex, specIndex = pcall(GetSpecialization)
+    if okIndex and specIndex then
+      local okRole, specRole = pcall(GetSpecializationRole, specIndex)
+      if okRole and (specRole == "TANK" or specRole == "HEALER" or specRole == "DAMAGER") then
         return specRole
       end
     end
@@ -254,11 +254,14 @@ function Units.GetPlayerSpecName()
   if not GetSpecialization or not GetSpecializationInfo then
     return nil
   end
-  local specIndex = GetSpecialization()
-  if not specIndex or specIndex <= 0 then
+  local okIndex, specIndex = pcall(GetSpecialization)
+  if not okIndex or not specIndex or specIndex <= 0 then
     return nil
   end
-  local _, specName = GetSpecializationInfo(specIndex)
+  local okInfo, _, specName = pcall(GetSpecializationInfo, specIndex)
+  if not okInfo then
+    return nil
+  end
   return specName
 end
 
