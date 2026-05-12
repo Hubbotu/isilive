@@ -358,8 +358,11 @@ local function RegisterCreateMainFrameTests(test, Assert, WithGlobals, LoadAddon
 
   test("MainFrame drag storm: OnDragStop persists position via SavePosition", function()
     local ctx = BuildMainFrameContext({ dragLocked = false })
-    -- IsiLiveDB starts as nil so SavePosition has to allocate a fresh table.
-    ctx.IsiLiveDB = nil
+    -- IsiLiveDB is pre-populated by Blizzard before ADDON_LOADED in production;
+    -- SavePosition no-ops if it ever runs against a nil DB so the
+    -- SavedVariables restore can't be raced. Seed an empty table to mirror the
+    -- post-ADDON_LOADED state the drag handler runs under.
+    ctx.IsiLiveDB = {}
     WithGlobals(ctx, function()
       local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
       local mainFrame = CreateMainFrame(addon, ctx)
@@ -382,11 +385,14 @@ local function RegisterCreateMainFrameTests(test, Assert, WithGlobals, LoadAddon
       Assert.True(mainFrame.frame._stopMovingCalls >= 1, "StopMovingOrSizing was actually invoked")
 
       local db = rawget(_G, "IsiLiveDB")
-      Assert.NotNil(db, "SavePosition allocates IsiLiveDB if missing")
-      Assert.NotNil(db.position, "SavePosition writes IsiLiveDB.position")
-      Assert.Equal(db.position.point, "TOPRIGHT", "saved point matches frame point")
-      Assert.Equal(db.position.x, 17, "saved x offset matches frame point")
-      Assert.Equal(db.position.y, -8, "saved y offset matches frame point")
+      Assert.NotNil(db, "IsiLiveDB stays populated after SavePosition")
+      local savedPosition = db and db.position or nil
+      Assert.NotNil(savedPosition, "SavePosition writes IsiLiveDB.position")
+      if savedPosition ~= nil then
+        Assert.Equal(savedPosition.point, "TOPRIGHT", "saved point matches frame point")
+        Assert.Equal(savedPosition.x, 17, "saved x offset matches frame point")
+        Assert.Equal(savedPosition.y, -8, "saved y offset matches frame point")
+      end
     end)
   end)
 
@@ -406,6 +412,7 @@ local function RegisterCreateMainFrameTests(test, Assert, WithGlobals, LoadAddon
 
   test("MainFrame.SetDragLocked(true) during an active drag finalizes the position", function()
     local ctx = BuildMainFrameContext({ dragLocked = false })
+    ctx.IsiLiveDB = {}
     WithGlobals(ctx, function()
       local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
       local mainFrame = CreateMainFrame(addon, ctx)
@@ -426,8 +433,12 @@ local function RegisterCreateMainFrameTests(test, Assert, WithGlobals, LoadAddon
       )
 
       local db = rawget(_G, "IsiLiveDB")
-      Assert.NotNil(db, "lock-during-drag still triggers SavePosition")
-      Assert.Equal(db.position.point, "BOTTOMLEFT", "saved point reflects the in-flight drag location")
+      Assert.NotNil(db, "IsiLiveDB stays populated through lock-during-drag")
+      local savedPosition = db and db.position or nil
+      Assert.NotNil(savedPosition, "lock-during-drag still triggers SavePosition")
+      if savedPosition ~= nil then
+        Assert.Equal(savedPosition.point, "BOTTOMLEFT", "saved point reflects the in-flight drag location")
+      end
     end)
   end)
 end

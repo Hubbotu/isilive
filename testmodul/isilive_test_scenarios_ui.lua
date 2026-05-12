@@ -1166,6 +1166,184 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  -- ----------------------------------------------------------------------
+  -- Housing-plot teleport button
+  -- ----------------------------------------------------------------------
+
+  local function FindFrameWithEvent(createdFrames, eventName)
+    for _, frame in ipairs(createdFrames or {}) do
+      if frame.IsEventRegistered and frame:IsEventRegistered(eventName) then
+        return frame
+      end
+    end
+    return nil
+  end
+
+  local function BuildHousingScenario()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    return createFrameStub, createdFrames, gameMenuFrame
+  end
+
+  local function BuildHousingGlobals(createFrameStub, gameMenuFrame, isInCombatRef)
+    return {
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(_itemID)
+        return false
+      end,
+      InCombatLockdown = function()
+        return isInCombatRef.value == true
+      end,
+      C_Housing = {
+        GetPlayerOwnedHouses = function() end,
+      },
+    }
+  end
+
+  local function BuildHousingPanels(addon, gameMenuFrame)
+    local UI = RequireValue(addon.UI, "UI module should load")
+    local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+    local travelStrip = UI.EnsureSecondPanelUI({
+      gameMenuFrame = gameMenuFrame,
+      firstPanelState = strip,
+      getL = function()
+        return {
+          BTN_SECOND_HEARTHSTONE = "Hearthstone",
+          BTN_SECOND_HOUSING = "Housing",
+          PANEL_HEADER_TRAVEL = "Travel",
+        }
+      end,
+    })
+    return travelStrip
+  end
+
+  test("UI housing-plot button binds teleporthome attributes on PLAYER_HOUSE_LIST_UPDATED", function()
+    local createFrameStub, createdFrames, gameMenuFrame = BuildHousingScenario()
+    local isInCombat = { value = false }
+
+    WithGlobals(BuildHousingGlobals(createFrameStub, gameMenuFrame, isInCombat), function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local travelStrip = BuildHousingPanels(addon, gameMenuFrame)
+
+      local housingButton = RequireValue(travelStrip.buttonsById.housing_plot, "housing button must exist")
+      Assert.Equal(
+        housingButton:GetAttribute("type"),
+        nil,
+        "no attributes are bound before the housing payload arrives"
+      )
+
+      local housingEventFrame = FindFrameWithEvent(createdFrames, "PLAYER_HOUSE_LIST_UPDATED")
+      housingEventFrame = Assert.NotNil(housingEventFrame, "housing data event frame must be created")
+      if housingEventFrame == nil then
+        return
+      end
+      housingEventFrame:FireEvent("PLAYER_HOUSE_LIST_UPDATED", {
+        {
+          neighborhoodGUID = "ngh-1",
+          houseGUID = "house-1",
+          plotID = 42,
+        },
+      })
+
+      Assert.Equal(housingButton:GetAttribute("type"), "teleporthome", "type must be teleporthome after payload")
+      Assert.Equal(housingButton:GetAttribute("house-neighborhood-guid"), "ngh-1", "neighborhood guid must be bound")
+      Assert.Equal(housingButton:GetAttribute("house-guid"), "house-1", "house guid must be bound")
+      Assert.Equal(housingButton:GetAttribute("house-plot-id"), 42, "plot id must be bound")
+    end)
+  end)
+
+  test("UI housing-plot button keeps listening when the first PLAYER_HOUSE_LIST_UPDATED has no houses", function()
+    local createFrameStub, createdFrames, gameMenuFrame = BuildHousingScenario()
+    local isInCombat = { value = false }
+
+    WithGlobals(BuildHousingGlobals(createFrameStub, gameMenuFrame, isInCombat), function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local travelStrip = BuildHousingPanels(addon, gameMenuFrame)
+
+      local housingButton = RequireValue(travelStrip.buttonsById.housing_plot, "housing button must exist")
+      local housingEventFrame = FindFrameWithEvent(createdFrames, "PLAYER_HOUSE_LIST_UPDATED")
+      housingEventFrame = Assert.NotNil(housingEventFrame, "housing data event frame must be created")
+      if housingEventFrame == nil then
+        return
+      end
+
+      -- First fire arrives with an empty houses list (player has no plot yet).
+      housingEventFrame:FireEvent("PLAYER_HOUSE_LIST_UPDATED", {})
+      Assert.Equal(
+        housingButton:GetAttribute("type"),
+        nil,
+        "no attributes are bound when the payload has no first house"
+      )
+      Assert.True(
+        housingEventFrame:IsEventRegistered("PLAYER_HOUSE_LIST_UPDATED"),
+        "listener must stay registered so a later house assignment still configures the button"
+      )
+
+      -- Later, the player buys a house and the event re-fires with a real payload.
+      housingEventFrame:FireEvent("PLAYER_HOUSE_LIST_UPDATED", {
+        {
+          neighborhoodGUID = "ngh-late",
+          houseGUID = "house-late",
+          plotID = 7,
+        },
+      })
+      Assert.Equal(housingButton:GetAttribute("type"), "teleporthome", "late payload still wires the button")
+      Assert.Equal(housingButton:GetAttribute("house-guid"), "house-late", "late house guid must be bound")
+    end)
+  end)
+
+  test("UI housing-plot button defers SetAttribute during combat and applies on PLAYER_REGEN_ENABLED", function()
+    local createFrameStub, createdFrames, gameMenuFrame = BuildHousingScenario()
+    local isInCombat = { value = true }
+
+    WithGlobals(BuildHousingGlobals(createFrameStub, gameMenuFrame, isInCombat), function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local travelStrip = BuildHousingPanels(addon, gameMenuFrame)
+
+      local housingButton = RequireValue(travelStrip.buttonsById.housing_plot, "housing button must exist")
+      local housingEventFrame = FindFrameWithEvent(createdFrames, "PLAYER_HOUSE_LIST_UPDATED")
+      housingEventFrame = Assert.NotNil(housingEventFrame, "housing data event frame must be created")
+      if housingEventFrame == nil then
+        return
+      end
+
+      housingEventFrame:FireEvent("PLAYER_HOUSE_LIST_UPDATED", {
+        {
+          neighborhoodGUID = "ngh-combat",
+          houseGUID = "house-combat",
+          plotID = 99,
+        },
+      })
+
+      Assert.Equal(
+        housingButton:GetAttribute("type"),
+        nil,
+        "combat must block SetAttribute and keep the button unconfigured for now"
+      )
+
+      -- Locate the combat-retry frame (panelUISecureRetryFrame) and drain it.
+      local retryFrame = FindCombatRetryFrame(createdFrames)
+      retryFrame = Assert.NotNil(retryFrame, "combat retry frame must exist")
+      if retryFrame == nil then
+        return
+      end
+
+      isInCombat.value = false
+      retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
+
+      Assert.Equal(
+        housingButton:GetAttribute("type"),
+        "teleporthome",
+        "post-combat regen drain must apply the pending housing attributes"
+      )
+      Assert.Equal(housingButton:GetAttribute("house-guid"), "house-combat", "deferred house guid must be bound")
+      Assert.Equal(housingButton:GetAttribute("house-plot-id"), 99, "deferred plot id must be bound")
+    end)
+  end)
+
   test("UI game-menu reload button refreshes secure click mode when panel UI is reused", function()
     local useKeyDown = false
     local createFrameStub = BuildCreateFrameStub()

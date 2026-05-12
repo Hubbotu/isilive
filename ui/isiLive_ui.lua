@@ -129,6 +129,29 @@ local housingSecureButton = nil
 local housingDataEventFrame = nil
 local hearthstoneSecureButton = nil
 local hearthstoneToysEventFrame = nil
+-- pendingHousingApply caches the most recent PLAYER_HOUSE_LIST_UPDATED payload
+-- when SetAttribute is blocked by combat lockdown. The panelUISecureRetryFrame
+-- below drains this on PLAYER_REGEN_ENABLED so the housing-teleport button gets
+-- its `teleporthome` attributes after combat ends, instead of staying
+-- permanently unconfigured.
+local pendingHousingApply = nil
+
+local function ApplyHousingAttributes(info, btn)
+  if type(info) ~= "table" or type(btn) ~= "table" or type(btn.SetAttribute) ~= "function" then
+    return false
+  end
+  local inCombat = rawget(_G, "InCombatLockdown")
+  if type(inCombat) == "function" and inCombat() then
+    pendingHousingApply = info
+    return false
+  end
+  btn:SetAttribute("type", "teleporthome")
+  btn:SetAttribute("house-neighborhood-guid", info.neighborhoodGUID)
+  btn:SetAttribute("house-guid", info.houseGUID)
+  btn:SetAttribute("house-plot-id", info.plotID)
+  pendingHousingApply = nil
+  return true
+end
 
 local function CollectOwnedHearthstoneToys()
   local playerHasToy = rawget(_G, "PlayerHasToy")
@@ -230,6 +253,14 @@ panelUISecureRetryFrame:SetScript("OnEvent", function(_, event)
   if event ~= "PLAYER_REGEN_ENABLED" then
     return
   end
+
+  -- Drain a combat-deferred housing-button apply first. ApplyHousingAttributes
+  -- clears pendingHousingApply on success; if it's still blocked (e.g. some
+  -- other combat-lockdown source) we leave it for the next regen tick.
+  if pendingHousingApply ~= nil then
+    ApplyHousingAttributes(pendingHousingApply, housingSecureButton)
+  end
+
   if next(pendingPanelUISecureStateRefresh) == nil then
     return
   end
@@ -967,6 +998,27 @@ RunAfterGameMenuClose = function(callback)
   callback()
 end
 
+-- Single source of truth for non-secure panel-button OnClick. Both EnsurePanelUI
+-- and EnsureSecondPanelUI used to inline near-identical copies of this handler
+-- with subtly different nil-guards on state.actions; centralizing keeps them
+-- in lockstep.
+local function BindNonSecurePanelButtonOnClick(button, state)
+  if type(button) ~= "table" or type(button.SetScript) ~= "function" then
+    return
+  end
+  button:SetScript("OnClick", function(self)
+    if type(state.isInCombat) == "function" and state.isInCombat() == true then
+      return
+    end
+    local action = state.actions and state.actions[self._actionId]
+    if type(action) ~= "function" then
+      return
+    end
+    HideGameMenuFrame(state.gameMenuFrame)
+    RunAfterGameMenuClose(action)
+  end)
+end
+
 ApplyPanelUILocalization = function(state)
   if type(state) ~= "table" then
     return
@@ -1089,21 +1141,8 @@ function UI.EnsurePanelUI(opts)
     button._secureMacroText = entry.secureMacroText
     button._isSecurePanelAction = type(entry.secureMacroText) == "string"
 
-    if type(entry.secureMacroText) == "string" and type(button.SetAttribute) == "function" then
-      button._secureMacroText = entry.secureMacroText
-    else
-      button:SetScript("OnClick", function(self)
-        if type(state.isInCombat) == "function" and state.isInCombat() == true then
-          return
-        end
-        local action = state.actions[self._actionId]
-        if type(action) ~= "function" then
-          return
-        end
-
-        HideGameMenuFrame(state.gameMenuFrame)
-        RunAfterGameMenuClose(action)
-      end)
+    if not (type(entry.secureMacroText) == "string" and type(button.SetAttribute) == "function") then
+      BindNonSecurePanelButtonOnClick(button, state)
     end
 
     state.buttons[index] = button
@@ -1340,24 +1379,21 @@ function UI.EnsureSecondPanelUI(opts)
       housingSecureButton = button
       if not housingDataEventFrame then
         housingDataEventFrame = CreateFrame("Frame")
-        housingDataEventFrame:SetScript("OnEvent", function(self, event, housingInfo)
+        -- Stay registered for the whole session. Earlier revisions self-
+        -- unregistered after the first fire, which left the button without a
+        -- `type` attribute (and silently click-dead) whenever the initial
+        -- PLAYER_HOUSE_LIST_UPDATED arrived with no houses yet or with the
+        -- player still in combat. The combat-deferred path goes through
+        -- pendingHousingApply / panelUISecureRetryFrame.
+        housingDataEventFrame:SetScript("OnEvent", function(_, event, housingInfo)
           if event ~= "PLAYER_HOUSE_LIST_UPDATED" then
             return
           end
-          self:UnregisterEvent("PLAYER_HOUSE_LIST_UPDATED")
           local info = type(housingInfo) == "table" and housingInfo[1] or nil
-          local btn = housingSecureButton
-          if type(info) ~= "table" or type(btn) ~= "table" or type(btn.SetAttribute) ~= "function" then
+          if type(info) ~= "table" then
             return
           end
-          local inCombat = rawget(_G, "InCombatLockdown")
-          if type(inCombat) == "function" and inCombat() then
-            return
-          end
-          btn:SetAttribute("type", "teleporthome")
-          btn:SetAttribute("house-neighborhood-guid", info.neighborhoodGUID)
-          btn:SetAttribute("house-guid", info.houseGUID)
-          btn:SetAttribute("house-plot-id", info.plotID)
+          ApplyHousingAttributes(info, housingSecureButton)
         end)
       end
       housingDataEventFrame:RegisterEvent("PLAYER_HOUSE_LIST_UPDATED")
@@ -1366,17 +1402,7 @@ function UI.EnsureSecondPanelUI(opts)
         pcall(cHousing.GetPlayerOwnedHouses)
       end
     elseif not isSecureMacro then
-      button:SetScript("OnClick", function(self)
-        if type(state.isInCombat) == "function" and state.isInCombat() == true then
-          return
-        end
-        local action = state.actions and state.actions[self._actionId]
-        if type(action) ~= "function" then
-          return
-        end
-        HideGameMenuFrame(state.gameMenuFrame)
-        RunAfterGameMenuClose(action)
-      end)
+      BindNonSecurePanelButtonOnClick(button, state)
     end
 
     state.buttons[index] = button
@@ -1399,10 +1425,13 @@ function UI.EnsureSecondPanelUI(opts)
 end
 
 local function SavePosition(target)
+  -- SavedVariables are restored by Blizzard before ADDON_LOADED and the main
+  -- frame is :Hide()d until then, so this only ever runs once IsiLiveDB is a
+  -- real table. Lazy-allocating IsiLiveDB here would race the SavedVariables
+  -- restore and wipe other settings.
   local db = rawget(_G, "IsiLiveDB")
-  if not db then
-    db = {}
-    IsiLiveDB = db
+  if type(db) ~= "table" then
+    return
   end
   local point, _, relativePoint, x, y = target:GetPoint()
   db.position = { point = point, relativePoint = relativePoint, x = x, y = y }
@@ -1508,16 +1537,15 @@ local function CreateDragLockButton(frame, dragHandle, getDragLocked, setDragLoc
     end
   end)
   button:SetScript("OnClick", function()
-    if type(setDragLocked) == "function" then
-      local nextLocked = not (type(getDragLocked) == "function" and getDragLocked() == true)
-      local db = rawget(_G, "IsiLiveDB")
-      if not db then
-        db = {}
-        IsiLiveDB = db
-      end
-      db.lockMainFramePosition = nextLocked
-      setDragLocked(nextLocked)
+    if type(setDragLocked) ~= "function" then
+      return
     end
+    local nextLocked = not (type(getDragLocked) == "function" and getDragLocked() == true)
+    local db = rawget(_G, "IsiLiveDB")
+    if type(db) == "table" then
+      db.lockMainFramePosition = nextLocked
+    end
+    setDragLocked(nextLocked)
   end)
 
   button.UpdateVisual = UpdateVisual
