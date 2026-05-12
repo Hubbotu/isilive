@@ -56,10 +56,15 @@ function LogBuffer.EnsureSavedTable(key)
   assert(type(key) == "string" and key ~= "", "isiLive: LogBuffer requires non-empty key")
 
   return function()
+    -- SavedVariables are restored before ADDON_LOADED and every consumer of
+    -- this closure (queue_debug, runtime_log) runs from post-ADDON_LOADED
+    -- contexts. Lazy-allocating IsiLiveDB here would race the
+    -- SavedVariables restore and wipe other settings, so on the (theoretical)
+    -- pre-load callsite we hand back a transient buffer instead. Logs written
+    -- to it never persist; this is acceptable for the unreachable edge case.
     local db = rawget(_G, "IsiLiveDB")
-    if not db then
-      db = {}
-      IsiLiveDB = db
+    if type(db) ~= "table" then
+      return {}
     end
     if type(db[key]) ~= "table" then
       db[key] = {}
