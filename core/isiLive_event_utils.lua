@@ -21,11 +21,15 @@ function EventUtils.IsNegativeApplicationStatusValue(value)
     if ContainsNegativeKeyword(string.lower(value)) then
       return true
     end
-  elseif type(value) == "number" and Enum and Enum.LFGListApplicationStatus then
-    for key, enumValue in pairs(Enum.LFGListApplicationStatus) do
-      if enumValue == value then
-        if ContainsNegativeKeyword(string.lower(tostring(key))) then
-          return true
+  elseif type(value) == "number" then
+    local enumRef = rawget(_G, "Enum")
+    local statusEnum = type(enumRef) == "table" and enumRef.LFGListApplicationStatus or nil
+    if type(statusEnum) == "table" then
+      for key, enumValue in pairs(statusEnum) do
+        if enumValue == value then
+          if ContainsNegativeKeyword(string.lower(tostring(key))) then
+            return true
+          end
         end
       end
     end
