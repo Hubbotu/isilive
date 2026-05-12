@@ -71,7 +71,7 @@ local function InitializeFactorySecondaryKickTracker(
     if modules.sync and type(modules.sync.SetPlayerKickInfo) == "function" then
       local selfName = getUnitName and getUnitName("player") or nil
       local selfRealm = getRealmName and getRealmName() or nil
-      if selfName and selfName ~= "" then
+      if not addonTable.StringUtils.IsBlank(selfName) then
         modules.sync.SetPlayerKickInfo(
           selfName,
           selfRealm,
