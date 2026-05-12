@@ -6,12 +6,15 @@ local ContextHelpers = {}
 addonTable.ContextHelpers = ContextHelpers
 
 function ContextHelpers.GetAddonVersionRaw(addonName)
-  local legacyGetAddOnMetadata = rawget(_G, "GetAddOnMetadata")
   local version = nil
-  if C_AddOns and C_AddOns.GetAddOnMetadata then
-    version = C_AddOns.GetAddOnMetadata(addonName, "Version")
-  elseif legacyGetAddOnMetadata then
-    version = legacyGetAddOnMetadata(addonName, "Version")
+  local cAddOns = rawget(_G, "C_AddOns")
+  if type(cAddOns) == "table" and type(cAddOns.GetAddOnMetadata) == "function" then
+    version = cAddOns.GetAddOnMetadata(addonName, "Version")
+  else
+    local legacyGetAddOnMetadata = rawget(_G, "GetAddOnMetadata")
+    if type(legacyGetAddOnMetadata) == "function" then
+      version = legacyGetAddOnMetadata(addonName, "Version")
+    end
   end
   return tostring(version or "?")
 end
@@ -22,8 +25,9 @@ function ContextHelpers.CreateRealmInfoGetter()
     if realmInfoLib ~= nil then
       return realmInfoLib
     end
-    if LibStub and LibStub.GetLibrary then
-      realmInfoLib = LibStub:GetLibrary("LibRealmInfo", true)
+    local libStub = rawget(_G, "LibStub")
+    if type(libStub) == "table" and type(libStub.GetLibrary) == "function" then
+      realmInfoLib = libStub:GetLibrary("LibRealmInfo", true)
     else
       realmInfoLib = false
     end
@@ -90,8 +94,9 @@ function ContextHelpers.BuildKeystoneChatLink(mapID, level)
   end
 
   local dungeonName = nil
-  if C_ChallengeMode and type(C_ChallengeMode.GetMapUIInfo) == "function" then
-    local okName, localizedName = pcall(C_ChallengeMode.GetMapUIInfo, numericMapID)
+  local challengeModeApi = rawget(_G, "C_ChallengeMode")
+  if type(challengeModeApi) == "table" and type(challengeModeApi.GetMapUIInfo) == "function" then
+    local okName, localizedName = pcall(challengeModeApi.GetMapUIInfo, numericMapID)
     if okName and type(localizedName) == "string" and localizedName ~= "" then
       dungeonName = localizedName
     end
