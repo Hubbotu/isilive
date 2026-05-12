@@ -39,10 +39,14 @@ local function NormalizeName(name, realm)
 end
 
 local function EnsureStatsTables()
+  -- SavedVariables are restored by Blizzard before ADDON_LOADED and every
+  -- public Stats entry point runs from a post-ADDON_LOADED context (the
+  -- challenge-mode completion handler and the roster render path). Lazy-
+  -- allocating IsiLiveDB here would race the SavedVariables restore on the
+  -- (theoretical) pre-load callsite and wipe other settings.
   local db = rawget(_G, "IsiLiveDB")
-  if not db then
-    db = {}
-    IsiLiveDB = db
+  if type(db) ~= "table" then
+    return
   end
   if not db.stats then
     db.stats = {}
