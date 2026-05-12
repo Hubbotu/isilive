@@ -999,9 +999,10 @@ end
 --- Registers ISILIVE and LibKS addon message prefixes with C_ChatInfo.
 -- Must be called once (on PLAYER_LOGIN) before addon messages can be received.
 function Sync.RegisterPrefix()
-  if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
-    pcall(C_ChatInfo.RegisterAddonMessagePrefix, ISILIVE_SYNC_PREFIX)
-    pcall(C_ChatInfo.RegisterAddonMessagePrefix, LIBKEYSTONE_SYNC_PREFIX)
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  if type(chatInfo) == "table" and type(chatInfo.RegisterAddonMessagePrefix) == "function" then
+    pcall(chatInfo.RegisterAddonMessagePrefix, ISILIVE_SYNC_PREFIX)
+    pcall(chatInfo.RegisterAddonMessagePrefix, LIBKEYSTONE_SYNC_PREFIX)
   end
 end
 
@@ -1009,7 +1010,8 @@ end
 -- caller visibility, and channel resolution. Returns the outgoing channel string,
 -- or nil when the send should be suppressed.
 local function ResolveSendChannel(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  if type(chatInfo) ~= "table" or type(chatInfo.SendAddonMessage) ~= "function" then
     return nil
   end
   if not IsSyncEnabled() then
@@ -1031,8 +1033,9 @@ local function DispatchAddonMessage(prefix, payload, channel, priority)
   if ctl and type(ctl.SendAddonMessage) == "function" then
     return pcall(ctl.SendAddonMessage, ctl, priority or "NORMAL", prefix, payload, channel)
   end
-  if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-    return C_ChatInfo.SendAddonMessage(prefix, payload, channel) and true or false
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  if type(chatInfo) == "table" and type(chatInfo.SendAddonMessage) == "function" then
+    return chatInfo.SendAddonMessage(prefix, payload, channel) and true or false
   end
   return false
 end
@@ -1414,7 +1417,8 @@ end
 -- @param opts table|nil {force:boolean}
 -- @return boolean true if the message was sent; false if suppressed.
 function Sync.SendLibKeystoneRequest(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  if type(chatInfo) ~= "table" or type(chatInfo.SendAddonMessage) ~= "function" then
     return false
   end
   if not IsSyncEnabled() then
@@ -1451,7 +1455,8 @@ end
 -- @param opts table {mapID:number, level:number, rio:number}
 -- @return boolean true if the message was sent; false if suppressed.
 function Sync.SendLibKeystonePartyData(opts)
-  if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then
+  local chatInfo = rawget(_G, "C_ChatInfo")
+  if type(chatInfo) ~= "table" or type(chatInfo.SendAddonMessage) ~= "function" then
     return false
   end
   if not IsSyncEnabled() then
