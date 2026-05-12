@@ -243,11 +243,30 @@ local function ApplyFrameSizeForFont(frame, size)
   local height = math.max(20, math.ceil(size + 6))
   local widthMultiplier = format.showRemaining and 7 or 4
   local width = math.max(80, math.ceil(size * widthMultiplier))
-  pcall(frame.SetSize, frame, width, height)
+  -- Dirty-check: SetSize is invoked from RefreshAll (every kill in M+) for
+  -- frames whose dimensions haven't changed. Skipping the pcall+API call is
+  -- a measurable win during AoE pulls.
+  if frame._lastSizeW == width and frame._lastSizeH == height then
+    return
+  end
+  if pcall(frame.SetSize, frame, width, height) then
+    frame._lastSizeW = width
+    frame._lastSizeH = height
+  end
 end
 
 local function ApplyFont(fontString)
   if type(fontString) ~= "table" or type(fontString.SetFont) ~= "function" then
+    return
+  end
+  local size = ResolveFontSize()
+  -- Dirty-check: ApplyFont is called from every UpdateNameplate. The font
+  -- size only changes when the user moves the slider or fontSize default
+  -- switches; skip the SetFontObject/SetFont/SetTextHeight chain when nothing
+  -- could have changed. The test "SetAppearance({fontSize}) triggers SetFont"
+  -- still passes because SetFormat/SetAppearance reset _lastFontSize via the
+  -- cache-bust below.
+  if fontString._lastFontSize == size then
     return
   end
   -- Detach from the FontObject template the FontString inherited from at
@@ -271,13 +290,13 @@ local function ApplyFont(fontString)
   if type(flags) ~= "string" or flags == "" then
     flags = "OUTLINE"
   end
-  local size = ResolveFontSize()
   pcall(fontString.SetFont, fontString, file, size, flags)
   -- Belt-and-suspenders: SetTextHeight pins the rendered height even if
   -- SetFont's size argument is overruled by inherited scaling.
   if type(fontString.SetTextHeight) == "function" then
     pcall(fontString.SetTextHeight, fontString, size)
   end
+  fontString._lastFontSize = size
 end
 
 local function CreateOrGetFrame(unit)
@@ -425,8 +444,32 @@ local function UpdateNameplate(unit)
   ApplyPosition(frame, nameplate)
   ApplyFrameSizeForFont(frame, ResolveFontSize())
   ApplyFont(frame.text)
+  -- Dirty-check `_lastText` so RefreshAll (fires on every mob kill in M+)
+  -- does not re-SetText 40 plates when nothing changed. `text` can be a
+  -- Secret Value in 12.0 M+ tainted context — see the BuildText comment
+  -- above re: the percent string masking. Plain compare and plain assign
+  -- both poison the field and raise "tainted by 'isiLive'" on the next
+  -- call, so both the read and the write are pcall-guarded. When the
+  -- value cannot be safely cached, we still call SetText (FontString
+  -- renderer accepts Secret strings) and leave the cache cleared so the
+  -- next refresh keeps working.
   if frame.text and frame.text.SetText then
-    frame.text:SetText(text)
+    local equal = false
+    pcall(function()
+      equal = frame.text._lastText == text
+    end)
+    if not equal then
+      frame.text:SetText(text)
+      local canCache = false
+      pcall(function()
+        canCache = text == text
+      end)
+      if canCache then
+        frame.text._lastText = text
+      else
+        frame.text._lastText = nil
+      end
+    end
   end
   frame:Show()
 end
@@ -440,9 +483,19 @@ local function HideAll()
   end
 end
 
+-- Pre-allocated unit tokens for RefreshAll. The Blizzard nameplate roster
+-- maxes out at 40, so we know up front which tokens to query. Building these
+-- strings every frame ("nameplate" .. i) allocated 40 strings per call;
+-- RefreshAll is triggered on every SCENARIO_CRITERIA_UPDATE (i.e. every mob
+-- kill in M+) so this matters during AoE pulls.
+local NAMEPLATE_UNIT_TOKENS = {}
+for i = 1, 40 do
+  NAMEPLATE_UNIT_TOKENS[i] = "nameplate" .. i
+end
+
 local function RefreshAll()
   for i = 1, 40 do
-    UpdateNameplate("nameplate" .. i)
+    UpdateNameplate(NAMEPLATE_UNIT_TOKENS[i])
   end
 end
 

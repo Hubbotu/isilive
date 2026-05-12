@@ -1786,13 +1786,32 @@ local function InitializeFactorySecondaryCdTracker(
     end
   end
   -- Ticker: scan + UI refresh every second for countdown timers (BL remaining time).
+  -- Gated on the M+ key being active OR a Bloodlust countdown still running, so
+  -- a freshly opened main frame in town does not burn 40 pcall(GetAuraDataByIndex)
+  -- and a full roster render every second for state that cannot change.
   local C_Timer_ref = rawget(_G, "C_Timer")
   if type(C_Timer_ref) == "table" and type(C_Timer_ref.NewTicker) == "function" then
     C_Timer_ref.NewTicker(1.0, function()
       if not IsMainFrameShown() then
         return
       end
-      ctx.UpdateCdTracker()
+      local needsTick = false
+      local MplusTimer = ctx.addonTable and ctx.addonTable.MplusTimer
+      if type(MplusTimer) == "table" and type(MplusTimer.GetTimerData) == "function" then
+        local timerData = MplusTimer.GetTimerData()
+        if timerData and timerData.running then
+          needsTick = true
+        end
+      end
+      if not needsTick and ctx.cdTrackerController and type(ctx.cdTrackerController.GetLustInfo) == "function" then
+        local lustInfo = ctx.cdTrackerController.GetLustInfo()
+        if lustInfo and tonumber(lustInfo.remain) and lustInfo.remain > 0 then
+          needsTick = true
+        end
+      end
+      if needsTick then
+        ctx.UpdateCdTracker()
+      end
     end)
   end
 end

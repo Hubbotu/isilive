@@ -84,6 +84,19 @@ function CombatEvents.CreateController(opts)
 
   local controller = {}
   local recent = {}
+  -- Cache the isInKey() result so a pull of casts (BR + Bloodlust both trigger
+  -- many UNIT_SPELLCAST_SUCCEEDED in seconds) does not hit
+  -- pcall(C_ChallengeMode.GetActiveChallengeMapID) on every cast. The cache is
+  -- invalidated in Reset() which fires on CHALLENGE_MODE_START / COMPLETED /
+  -- RESET — exactly the events at which the value can change.
+  local cachedInKey = nil
+
+  local function IsInKeyCached()
+    if cachedInKey == nil then
+      cachedInKey = isInKey() == true
+    end
+    return cachedInKey
+  end
 
   local function IsEnabledForBR()
     local db = getDB() or {}
@@ -122,7 +135,7 @@ function CombatEvents.CreateController(opts)
     if unit ~= "player" then
       return
     end
-    if not isInKey() then
+    if not IsInKeyCached() then
       return
     end
     if type(spellID) ~= "number" then
@@ -151,6 +164,7 @@ function CombatEvents.CreateController(opts)
 
   function controller.Reset()
     recent = {}
+    cachedInKey = nil
   end
 
   return controller

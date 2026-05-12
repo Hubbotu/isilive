@@ -355,6 +355,14 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
       refs.applySecureSpellToButton(centerNoticeTeleportButton, centerNoticeTeleportButton.spellID)
       centerNoticeTeleportButton:Enable()
     end
+    -- Drain the pending-state captured by SetCenterNoticeTeleportButton* during
+    -- the combat lockdown that just ended. Previously this drain ran in the
+    -- center-notice OnUpdate every frame; now it fires exactly once on the
+    -- regen-enabled edge.
+    local centerNotice = refs.centerNotice
+    if centerNotice and type(centerNotice.ApplyPendingTeleportButtonState) == "function" then
+      centerNotice.ApplyPendingTeleportButtonState()
+    end
   end
   config.handleOwnedKeyRefresh = function()
     if controllers.refresh then

@@ -1,5 +1,206 @@
 # Changelog
 
+## 2026-05-12 - Version 0.9.232 (patch)
+
+Performance audit: five hot paths trimmed across the event pipeline and
+the mob-nameplate render so an active M+ pull no longer drives 600+
+pcalls/sec and 75+ full roster renders/sec for state that effectively
+only changes at ~10 Hz.
+
+### UNIT_AURA filtered against `unitAuraUpdateInfo`
+
+`HandleUnitAuraEvent` in
+[logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua)
+previously called `ctx.updateCdTracker()` on every player UNIT_AURA fire,
+which during combat triggered the 40-slot HARMFUL `pcall(GetAuraDataByIndex)`
+scan in
+[game/isiLive_cd_tracker.lua](game/isiLive_cd_tracker.lua)
+on each DoT tick, proc refresh and stack change — easily 15–20× per
+second in an M+ pull.
+
+A new module-level helper `UnitAuraUpdateRequiresCdScan` consults the
+event's second arg (`unitAuraUpdateInfo`) and short-circuits when none of
+the six tracked Sated/Exhaustion debuff IDs appears in `addedAuras` and
+the payload is not a full update. Conservative fallback: scan on
+`isFullUpdate=true` or when the payload is missing, so `/reload`,
+zone transitions and login still resync.
+
+The Sated-ID list (`LUST_SATED_AURA_IDS`) mirrors the constant in
+`isiLive_cd_tracker.lua` and is kept in sync at the file level so the
+event filter and the scan agree on which IDs are load-bearing.
+
+### SPELL_UPDATE_COOLDOWN / SPELL_UPDATE_CHARGES coalesced
+
+Both events are notorious spam channels — every GCD start/end, every
+charge regen tick, every item cooldown change in combat. The runtime
+handlers `HandleSpellUpdateCooldownEvent` and
+`HandleSpellUpdateChargesEvent` used to fire their downstream chain
+(kick-tracker cache + teleport-button refresh, or full CD-tracker scan)
+unthrottled on each event.
+
+The new module-level builder `BuildSpellCooldownCoalescer` returns a
+fresh closure pair per call so per-controller pending flags stay
+isolated. Each handler sets a `pending` flag and schedules the
+downstream dispatch via `C_Timer.After(0.1, ...)`; further events
+within the 100 ms window are dropped. When no `C_Timer` is available
+(test harness) the handler falls through to a synchronous dispatch so
+the existing branch tests still observe the call in-tick.
+
+### CdTracker 1 s ticker scan-gated
+
+The 1 Hz ticker in
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua)
+called `UpdateCdTracker()` every second while the main frame was shown,
+even outside an M+ key with no active Bloodlust/Exhaustion countdown.
+With the frame open in town that burned ~41 pcalls + a full
+`RefreshCdTracker` every second for state that could not change.
+
+The ticker now gates the work on (a) `MplusTimer.GetTimerData().running`
+being true, or (b) the CD-tracker reporting an active Lust countdown
+(`GetLustInfo().remain > 0`). Idle frames in town no longer poll
+anything.
+
+### Mob-nameplate `RefreshAll`: preallocated tokens + dirty checks
+
+`mobNameplate.RefreshAll()` is subscribed to KillTrack updates
+([factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua))
+and therefore runs on every `SCENARIO_CRITERIA_UPDATE` (i.e. every mob
+kill in M+) plus the KillTrack 0.5 s ticker. The loop in
+[ui/isiLive_mob_nameplate.lua](ui/isiLive_mob_nameplate.lua)
+allocated 40 fresh string concatenations (`"nameplate" .. i`) per call
+and then re-applied font, frame size and text on every plate.
+
+Three targeted dirty-tracking changes:
+
+1. `NAMEPLATE_UNIT_TOKENS` is a module-level array built once at load
+   so `RefreshAll` indexes the pre-allocated tokens instead of building
+   them every call.
+2. `ApplyFont` caches `fontString._lastFontSize`. The
+   `SetFontObject` / `SetFont` / `SetTextHeight` chain runs only when
+   the resolved size actually differs from the previous call. The
+   `SetAppearance({fontSize})` settings path still triggers a fresh
+   `SetFont` because the size value changes — verified by the existing
+   `_setFontCallCount` test.
+3. `ApplyFrameSizeForFont` caches `frame._lastSizeW / _lastSizeH`;
+   `SetSize` only fires on actual dimension changes.
+4. `SetText` on the percent FontString gates on
+   `frame.text._lastText ~= text`, so repeated `RefreshAll` calls with
+   unchanged percent text do not touch the FontString.
+
+### Test changes
+
+- `testmodul/isilive_test_scenarios_event_combat_startup.lua`:
+  rewrote the existing UNIT_AURA scenario to validate the new filter
+  contract: `isFullUpdate=true` and nil-payload trigger a scan;
+  empty-payload / added-non-Sated-ID skip; added-Sated-ID triggers a
+  scan. No other UNIT_AURA tests in the suite were affected.
+
+All other behaviour stays intact — the `UpdateCdTracker → UpdateUI`
+pin in `factory_secondary` still holds because `UpdateCdTracker` is now
+just called less often, not changed internally.
+
+### Secret-Value hardening on the new dirty-caches
+
+In-game testing inside an active M+ keystone surfaced two Secret-Value
+crashes that the initial dirty-cache implementations did not anticipate:
+
+1. `UnitAuraUpdateRequiresCdScan` in
+   [logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua)
+   inspected `aura.spellId` from `addedAuras` with
+   `type(spellId) == "number"` followed by a direct
+   `LUST_SATED_AURA_IDS[spellId]` lookup. In tainted M+/boss context the
+   aura payload can carry Secret Values whose `type()` lies and reports
+   `"number"`, but every table-index operation against the value raises
+   `"attempted to index a table that cannot be indexed with secret keys"`.
+   The whole lookup is now wrapped in pcall, mirroring the long-standing
+   defence in `game/isiLive_cd_tracker.lua:ScanLust`.
+2. `frame.text._lastText` cache in
+   [ui/isiLive_mob_nameplate.lua](ui/isiLive_mob_nameplate.lua)
+   stored the `text` output of `BuildText`, which concatenates the
+   `percentString` returned by `C_ScenarioInfo.GetUnitCriteriaProgressValues`.
+   In an active key that percent string can itself be a Secret string,
+   poisoning `_lastText` and crashing the next compare. Both the
+   compare-read and the cache-write are now pcall-guarded; the cache only
+   stores the new value when a self-compare confirms it is safe.
+
+Lesson recorded in the relevant code comments: any cache that holds a
+value sourced from a WoW API needs pcall on both compare-read and
+compare-write in 12.0+. `type()` is not a sufficient gate.
+
+## 2026-05-13 - Version 0.9.233 (patch)
+
+Stage A of the Notice / CombatEvents OnUpdate cleanup that followed
+the 0.9.232 hot-path audit. Three center-notice OnUpdate handlers and
+one combat-event API hit have been moved off the per-frame path.
+
+### CenterNotice frame OnUpdate: deferred-state drain moved to PLAYER_REGEN_ENABLED
+
+The center-notice OnUpdate handler in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+polled three `pendingTeleportButton*` fields every render frame so it
+could apply the button mutations that `SetCenterNoticeTeleportButton*`
+had captured during combat lockdown. With the notice visible, that was
+60–144 nil-checks per second for state that only changes at the
+combat-end edge.
+
+The polling block has been extracted into
+`ApplyPendingCenterNoticeTeleportButtonState(state)` and exposed on the
+controller as `ApplyPendingTeleportButtonState()`. The
+`tryRestoreCenterNoticeTeleportButton` callback in
+[factory/isiLive_controller_wiring.lua](factory/isiLive_controller_wiring.lua)
+— which already fires on `PLAYER_REGEN_ENABLED` — now drains the
+pending state exactly once on the regen-enabled edge. The OnUpdate
+handler keeps only the blink animation and the `endsAt` auto-hide
+check.
+
+### CenterNotice teleport-button OnUpdate: 0.1 s accumulator
+
+The teleport-button OnUpdate in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+called `getTeleportCooldownRemaining` + `formatCooldownSeconds` +
+`SetText` on every render frame even though the cooldown text only
+needs sub-second resolution. The handler now uses the same 0.1 s
+accumulator pattern as `game/isiLive_mplus_timer.lua`, dropping the
+work rate from 60–144 Hz down to 10 Hz.
+
+### LFG invite-hint OnUpdate: Position() throttled to 0.2 s
+
+The invite-hint OnUpdate in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+re-anchored itself against the LFG popup every render frame. The
+dialog itself never moves faster than the user can drag it, so a
+0.2 s accumulator suffices. `endsAt` and the dialog-mismatch hide
+check stay per-frame so the hint disappears snappily when the popup
+closes.
+
+### CombatEvents: isInKey() result cached across casts
+
+`HandleUnitSpellcastSucceeded` in
+[game/isiLive_combat_events.lua](game/isiLive_combat_events.lua)
+called the configured `isInKey()` (default:
+`pcall(C_ChallengeMode.GetActiveChallengeMapID)`) on every single
+UNIT_SPELLCAST_SUCCEEDED, including the hundreds-per-second self-cast
+spam during an AoE pull where the answer cannot change between casts.
+
+A file-local `cachedInKey` value now memoises the result. The cache
+is invalidated in `controller.Reset()`, which the central
+`HandleEvent` dispatcher already calls on `CHALLENGE_MODE_START` /
+`CHALLENGE_MODE_COMPLETED` / `CHALLENGE_MODE_RESET` — exactly the
+three events at which the underlying API value can transition. Net
+effect: one pcall at the start of each key instead of one per cast.
+
+### Simulator updates
+
+[tools/simulate_challenge_mode_taint_sequence.lua](tools/simulate_challenge_mode_taint_sequence.lua)
+previously flipped its `inKey.value` lambda mid-test without firing
+the matching `CHALLENGE_MODE_*` event. That was an artificial
+construct — in production the live API result only changes when one
+of those events fires — and it broke the new `cachedInKey` memoise.
+The simulator now mirrors production by firing
+`CHALLENGE_MODE_RESET` before the toggle-off and `CHALLENGE_MODE_START`
+before the toggle-on, so the controller picks up the new value on
+its next API check.
+
 ## 2026-05-11 - Version 0.9.231 (patch)
 
 Cosmetic: the AddOn-list entry now reads as a three-color block instead

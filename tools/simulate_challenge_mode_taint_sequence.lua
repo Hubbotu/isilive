@@ -255,11 +255,18 @@ local function VerifyBrLustDetection()
     Check(#broadcasts == 2, "Bloodlust (Shaman) by player triggers broadcast")
     Check(broadcasts[2].kind == "LUST", "broadcast kind=LUST for spellID 2825")
 
-    -- Outside a key → must NOT broadcast.
+    -- Outside a key → must NOT broadcast. The CHALLENGE_MODE_RESET event before
+    -- the toggle is what production fires when the key ends; CombatEvents.Reset()
+    -- invalidates the cached isInKey() so the next cast re-checks the API.
     inKey.value = false
+    addon.CombatEvents.HandleEvent("CHALLENGE_MODE_RESET")
     addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 80353)
     Check(#broadcasts == 2, "Time Warp outside a key does not broadcast")
     inKey.value = true
+    -- Production fires CHALLENGE_MODE_START on the next key; the simulator
+    -- mirrors that so the controller picks up the fresh true value on its
+    -- next isInKey() call.
+    addon.CombatEvents.HandleEvent("CHALLENGE_MODE_START")
 
     -- Random non-BR-non-LUST spell → no broadcast.
     addon.CombatEvents.HandleEvent("UNIT_SPELLCAST_SUCCEEDED", "player", "spell", 1234567)

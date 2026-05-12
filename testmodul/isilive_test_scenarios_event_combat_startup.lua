@@ -246,7 +246,7 @@ local function RegisterCombatStartupCVarAndWorldEntryTests(test, Assert, WithGlo
     Assert.Equal(showCalls, 0, "disabled startup auto-show must not request a frame open on PLAYER_LOGIN")
   end)
 
-  test("Event handlers call updateCdTracker on UNIT_AURA for player", function()
+  test("Event handlers call updateCdTracker only on Sated-relevant UNIT_AURA payloads", function()
     local cdTrackerCalls = 0
 
     local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
@@ -256,11 +256,22 @@ local function RegisterCombatStartupCVarAndWorldEntryTests(test, Assert, WithGlo
       end,
     })
 
+    -- Full-update and missing-payload variants are the conservative path:
+    -- always scan, because we cannot tell what changed.
     controller:Dispatch("UNIT_AURA", "player", { isFullUpdate = true })
-    controller:Dispatch("UNIT_AURA", "player", {})
     controller:Dispatch("UNIT_AURA", "player", nil)
+    Assert.Equal(cdTrackerCalls, 2, "isFullUpdate=true and nil updateInfo must trigger a scan")
 
-    Assert.Equal(cdTrackerCalls, 3, "all player UNIT_AURA variants must call updateCdTracker")
+    -- Empty-payload event from a DoT tick / proc refresh: no aura actually
+    -- added or removed -> no Sated change possible -> skip the 40-slot pcall scan.
+    controller:Dispatch("UNIT_AURA", "player", {})
+    controller:Dispatch("UNIT_AURA", "player", { addedAuras = {} })
+    controller:Dispatch("UNIT_AURA", "player", { addedAuras = { { spellId = 12345 } } })
+    Assert.Equal(cdTrackerCalls, 2, "UNIT_AURA without a Sated-relevant change must skip the CD scan")
+
+    -- Added a Sated debuff -> must scan so the lust countdown is picked up.
+    controller:Dispatch("UNIT_AURA", "player", { addedAuras = { { spellId = 57723 } } })
+    Assert.Equal(cdTrackerCalls, 3, "added Sated debuff must trigger a scan")
   end)
 
   test("Event handlers ignore UNIT_AURA events for non-player units", function()

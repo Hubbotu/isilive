@@ -894,7 +894,18 @@ local function AttachCenterNoticeTeleportButtonScripts(state)
     tooltip:Show()
   end)
 
-  state.teleportButton:SetScript("OnUpdate", function(self)
+  -- The teleport-button cooldown text only needs sub-second resolution. Pre-throttle:
+  -- this ran on every render frame (60–144 Hz) and called getTeleportCooldownRemaining
+  -- + formatCooldownSeconds + SetText each time. 0.1s accumulator matches the same
+  -- pattern as game/isiLive_mplus_timer.lua.
+  state.teleportButton._cooldownTextAccum = 0
+  state.teleportButton:SetScript("OnUpdate", function(self, elapsed)
+    self._cooldownTextAccum = (self._cooldownTextAccum or 0) + (elapsed or 0)
+    if self._cooldownTextAccum < 0.1 then
+      return
+    end
+    self._cooldownTextAccum = 0
+
     if not self.spellID or not self:IsShown() then
       self.cooldownText:Hide()
       return
@@ -917,6 +928,26 @@ local function AttachCenterNoticeTeleportButtonScripts(state)
   end)
 end
 
+-- Apply the deferred teleport-button mutations that SetCenterNoticeTeleportButton*
+-- captured while combat lockdown was active. Called from PLAYER_REGEN_ENABLED via
+-- the controller's ApplyPendingTeleportButtonState entry point, NOT from OnUpdate
+-- — the previous OnUpdate poll burned 60–144 nil-checks per second for state that
+-- only changes at the combat-end edge.
+local function ApplyPendingCenterNoticeTeleportButtonState(state)
+  if state.config.isInCombat() then
+    return
+  end
+  if state.pendingTeleportButtonOffsetY ~= nil then
+    SetCenterNoticeTeleportButtonAnchor(state, state.pendingTeleportButtonOffsetY)
+  end
+  if state.pendingTeleportButtonMouseEnabled ~= nil then
+    SetCenterNoticeTeleportButtonMouseEnabled(state, state.pendingTeleportButtonMouseEnabled)
+  end
+  if state.pendingTeleportButtonVisible ~= nil then
+    SetCenterNoticeTeleportButtonVisible(state, state.pendingTeleportButtonVisible)
+  end
+end
+
 local function AttachCenterNoticeFrameScripts(state)
   state.frame:SetScript("OnMouseUp", function(_, button)
     if button == "RightButton" then
@@ -925,18 +956,6 @@ local function AttachCenterNoticeFrameScripts(state)
   end)
 
   state.frame:SetScript("OnUpdate", function(_, elapsed)
-    if not state.config.isInCombat() then
-      if state.pendingTeleportButtonOffsetY ~= nil then
-        SetCenterNoticeTeleportButtonAnchor(state, state.pendingTeleportButtonOffsetY)
-      end
-      if state.pendingTeleportButtonMouseEnabled ~= nil then
-        SetCenterNoticeTeleportButtonMouseEnabled(state, state.pendingTeleportButtonMouseEnabled)
-      end
-      if state.pendingTeleportButtonVisible ~= nil then
-        SetCenterNoticeTeleportButtonVisible(state, state.pendingTeleportButtonVisible)
-      end
-    end
-
     local isShown = state.frame:IsShown()
     if isShown then
       if state.isBlinking then
@@ -972,6 +991,10 @@ local function BuildCenterNoticeController(state)
     UpdateCenterNoticeTeleportButtonVisual(state, spellID, isEnabled, inCombatBlocked)
   end
 
+  local function ApplyPendingTeleportButtonState()
+    ApplyPendingCenterNoticeTeleportButtonState(state)
+  end
+
   return {
     frame = state.frame,
     text = state.text,
@@ -987,6 +1010,7 @@ local function BuildCenterNoticeController(state)
     Show = Show,
     ConfigureTeleportButton = ConfigureTeleportButton,
     UpdateTeleportButtonVisual = UpdateTeleportButtonVisual,
+    ApplyPendingTeleportButtonState = ApplyPendingTeleportButtonState,
   }
 end
 
@@ -1225,7 +1249,11 @@ function Notice.CreateInviteHint(opts)
     end
   end
 
-  frame:SetScript("OnUpdate", function(self)
+  -- Position() reanchors the hint to the LFG dialog. It does not need to run at
+  -- 60+ Hz — the dialog itself never moves faster than the user can drag it.
+  -- endsAt + dialog-mismatch checks stay per-frame so the hint hides snappily.
+  local repositionAccum = 0
+  frame:SetScript("OnUpdate", function(self, elapsed)
     if GetTime() >= endsAt then
       currentResultID = nil
       self:Hide()
@@ -1235,7 +1263,11 @@ function Notice.CreateInviteHint(opts)
       self:Hide()
       return
     end
-    Position()
+    repositionAccum = repositionAccum + (elapsed or 0)
+    if repositionAccum >= 0.2 then
+      repositionAccum = 0
+      Position()
+    end
   end)
 
   return {
