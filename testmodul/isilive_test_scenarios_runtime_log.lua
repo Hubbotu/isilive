@@ -464,8 +464,10 @@ return function(test, ctx)
     end)
   end)
 
-  test("Runtime log controller seeds IsiLiveDB when missing on SetEnabled/SetLevel", function()
-    -- Explicitly clear the saved DB so the controller has to recreate it.
+  test("Runtime log controller no-ops persistence when IsiLiveDB is absent", function()
+    -- Production never enters this branch (the /isilive log slash runs post-
+    -- ADDON_LOADED, so IsiLiveDB is always present); lazy-seeding pre-load
+    -- would race the SavedVariables restore and clobber other settings.
     WithGlobals({}, function()
       local previous = rawget(_G, "IsiLiveDB")
       rawset(_G, "IsiLiveDB", nil)
@@ -476,10 +478,9 @@ return function(test, ctx)
         end,
       })
       controller.SetEnabled(true)
-      Assert.NotNil(rawget(_G, "IsiLiveDB"), "SetEnabled must seed IsiLiveDB when absent")
-      rawset(_G, "IsiLiveDB", nil)
+      Assert.Nil(rawget(_G, "IsiLiveDB"), "SetEnabled must NOT lazily allocate IsiLiveDB")
       controller.SetLevel("deep")
-      Assert.NotNil(rawget(_G, "IsiLiveDB"), "SetLevel must seed IsiLiveDB when absent")
+      Assert.Nil(rawget(_G, "IsiLiveDB"), "SetLevel must NOT lazily allocate IsiLiveDB")
       rawset(_G, "IsiLiveDB", previous)
     end)
   end)

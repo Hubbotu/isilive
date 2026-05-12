@@ -66,14 +66,17 @@ function RuntimeLog.CreateController(opts)
   end
 
   function controller.SetEnabled(enabled)
+    -- SavedVariables are restored before ADDON_LOADED and SetEnabled only runs
+    -- from the /isilive log slash command (post-load). Lazy-creating
+    -- IsiLiveDB pre-load would race the SavedVariables restore and clobber
+    -- other settings.
     local db = rawget(_G, "IsiLiveDB")
-    if not db then
-      db = {}
-      IsiLiveDB = db
-    end
-    local wasEnabled = db.runtimeLogEnabled == true
     local nextEnabled = enabled and true or false
-    db.runtimeLogEnabled = nextEnabled
+    local wasEnabled = false
+    if type(db) == "table" then
+      wasEnabled = db.runtimeLogEnabled == true
+      db.runtimeLogEnabled = nextEnabled
+    end
     if nextEnabled and not wasEnabled and buildSessionHeader then
       controller.AppendLog("[RUNTIME] session_start " .. tostring(buildSessionHeader()))
     end
@@ -85,12 +88,11 @@ function RuntimeLog.CreateController(opts)
   end
 
   function controller.SetLevel(level)
+    -- See SetEnabled above for the no-op-on-nil rationale.
     local db = rawget(_G, "IsiLiveDB")
-    if not db then
-      db = {}
-      IsiLiveDB = db
+    if type(db) == "table" then
+      db.runtimeLogLevel = NormalizeLevel(level)
     end
-    db.runtimeLogLevel = NormalizeLevel(level)
   end
 
   function controller.GetLevel()

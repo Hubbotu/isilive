@@ -45,10 +45,16 @@ end
 local function ResetMainFrameDefaults(ctx)
   local uiCommon = ctx.addonTable and ctx.addonTable.UICommon
   local defaultBgAlpha = uiCommon and uiCommon.DEFAULT_BG_ALPHA or 0.50
-  local db = IsiLiveDB or {}
-  db.uiScale = 1.0
-  db.bgAlpha = defaultBgAlpha
-  IsiLiveDB = db
+  -- onResetMainFramePosition is wired to the settings panel, which only opens
+  -- after ADDON_LOADED, so IsiLiveDB is always restored by the time we get
+  -- here. Lazy-allocating it pre-load would race the SavedVariables restore
+  -- and wipe other settings, so skip persistence when the DB is missing and
+  -- still apply the in-memory UI resets below.
+  local db = rawget(_G, "IsiLiveDB")
+  if type(db) == "table" then
+    db.uiScale = 1.0
+    db.bgAlpha = defaultBgAlpha
+  end
 
   local mainFrame = ctx.mainFrame
   if mainFrame and type(mainFrame.SetScale) == "function" then
