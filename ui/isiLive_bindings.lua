@@ -38,28 +38,45 @@ function Bindings.CreateController(opts)
   local toggleBindingButton = CreateHiddenBindingButton("isiLiveToggleBindingButton", -100, onToggleMainFrame)
   local testModeBindingButton = CreateHiddenBindingButton("isiLiveTestModeBindingButton", -102, onToggleTestMode)
 
+  local function IsCombatLockdownActive()
+    local inCombat = rawget(_G, "InCombatLockdown")
+    return type(inCombat) == "function" and inCombat() == true
+  end
+
   local function ApplyHotkeyBindings()
     if not (toggleBindingButton and testModeBindingButton) then
       return
     end
-    if InCombatLockdown and InCombatLockdown() then
+    if IsCombatLockdownActive() then
       pendingBindingApply = true
       return
     end
 
-    if ClearOverrideBindings then
-      ClearOverrideBindings(bindingOwnerFrame)
+    local clearOverride = rawget(_G, "ClearOverrideBindings")
+    if type(clearOverride) == "function" then
+      clearOverride(bindingOwnerFrame)
     end
-    SetOverrideBindingClick(bindingOwnerFrame, true, "CTRL-F9", "isiLiveToggleBindingButton", "LeftButton")
-    SetOverrideBindingClick(bindingOwnerFrame, true, "CTRL-ALT-F9", "isiLiveTestModeBindingButton", "LeftButton")
-    SetOverrideBindingClick(bindingOwnerFrame, true, "ALT-CTRL-F9", "isiLiveTestModeBindingButton", "LeftButton")
+    local setOverride = rawget(_G, "SetOverrideBindingClick")
+    if type(setOverride) ~= "function" then
+      -- Without the binding API there is nothing more we can do; leave the
+      -- pending flag set so a later ApplyHotkeyBindings() call can retry.
+      pendingBindingApply = true
+      return
+    end
+    setOverride(bindingOwnerFrame, true, "CTRL-F9", "isiLiveToggleBindingButton", "LeftButton")
+    setOverride(bindingOwnerFrame, true, "CTRL-ALT-F9", "isiLiveTestModeBindingButton", "LeftButton")
+    setOverride(bindingOwnerFrame, true, "ALT-CTRL-F9", "isiLiveTestModeBindingButton", "LeftButton")
     pendingBindingApply = false
   end
 
   local function ExpectedBindingPresent()
-    local a1 = GetBindingAction("CTRL-F9", true)
-    local a2 = GetBindingAction("CTRL-ALT-F9", true)
-    local a3 = GetBindingAction("ALT-CTRL-F9", true)
+    local getBindingAction = rawget(_G, "GetBindingAction")
+    if type(getBindingAction) ~= "function" then
+      return false
+    end
+    local a1 = getBindingAction("CTRL-F9", true)
+    local a2 = getBindingAction("CTRL-ALT-F9", true)
+    local a3 = getBindingAction("ALT-CTRL-F9", true)
     local ok1 = a1 and a1:find("isiLiveToggleBindingButton", 1, true)
     local ok2 = (a2 and a2:find("isiLiveTestModeBindingButton", 1, true))
       or (a3 and a3:find("isiLiveTestModeBindingButton", 1, true))
@@ -67,12 +84,16 @@ function Bindings.CreateController(opts)
   end
 
   local function StartBindingWatchdog()
-    if bindingWatchTicker or not C_Timer or not C_Timer.NewTicker then
+    if bindingWatchTicker then
       return
     end
-    bindingWatchTicker = C_Timer.NewTicker(5, function()
+    local timer = rawget(_G, "C_Timer")
+    if type(timer) ~= "table" or type(timer.NewTicker) ~= "function" then
+      return
+    end
+    bindingWatchTicker = timer.NewTicker(5, function()
       if not ExpectedBindingPresent() then
-        if InCombatLockdown and InCombatLockdown() then
+        if IsCombatLockdownActive() then
           pendingBindingApply = true
         else
           ApplyHotkeyBindings()
