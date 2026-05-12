@@ -118,6 +118,15 @@ function CombatEvents.CreateController(opts)
     if last and (now - last) < DEDUP_WINDOW_SECONDS then
       return true
     end
+    -- Drop entries that fell out of the dedup window before writing the new
+    -- timestamp. Reset() still clears the whole table on CHALLENGE_MODE_*;
+    -- this in-line sweep keeps the map bounded across long sessions where
+    -- those events do not fire (e.g. raid hopping without entering a key).
+    for prevKey, prevWhen in pairs(recent) do
+      if prevWhen and (now - prevWhen) >= DEDUP_WINDOW_SECONDS then
+        recent[prevKey] = nil
+      end
+    end
     recent[key] = now
     return false
   end

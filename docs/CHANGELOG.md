@@ -1,5 +1,114 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.234 (patch)
+
+Stage B of the performance audit: two micro-wins on top of 0.9.233.
+No behaviour change.
+
+### RenderRosterImpl: drop `touchedRowSlots` set, clear sequentially
+
+[ui/isiLive_roster_panel_render.lua](ui/isiLive_roster_panel_render.lua)
+used to track every refilled slot in a `touchedRowSlots` lookup and
+then run a `pairs(memberRows)` cleanup pass to clear the untouched
+ones. `memberRows` is keyed sequentially (1..N) and only ever
+extended, and the render loop always fills slots in order from
+index 1 upward — so the cleanup pass is just `[index, #memberRows]`.
+
+The lookup table allocation and the `pairs` traversal are gone;
+the cleanup now runs as a small numeric `for` loop. The raid-mode
+short-circuit higher up in the function gets the same treatment for
+consistency.
+
+### CombatEvents.ShouldDedup: in-line expiry for the recent map
+
+[game/isiLive_combat_events.lua](game/isiLive_combat_events.lua)
+keyed each cast on `sourceName|spellID` and stored its timestamp in
+`recent`. `controller.Reset()` cleared the whole map on
+`CHALLENGE_MODE_*`, but between those events entries lived forever
+even after they fell out of the 3 s dedup window. In long sessions
+that hopped raids without entering a key, the map could grow
+indefinitely.
+
+`ShouldDedup` now sweeps expired entries (`now - prevWhen >=
+DEDUP_WINDOW_SECONDS`) on every miss, before writing the new
+timestamp. Net effect: the map size is bounded by the number of
+*currently active* casters within the last 3 s, not the cumulative
+history.
+
+## 2026-05-13 - Version 0.9.233 (patch)
+
+Stage A of the Notice / CombatEvents OnUpdate cleanup that followed
+the 0.9.232 hot-path audit. Three center-notice OnUpdate handlers and
+one combat-event API hit have been moved off the per-frame path.
+
+### CenterNotice frame OnUpdate: deferred-state drain moved to PLAYER_REGEN_ENABLED
+
+The center-notice OnUpdate handler in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+polled three `pendingTeleportButton*` fields every render frame so it
+could apply the button mutations that `SetCenterNoticeTeleportButton*`
+had captured during combat lockdown. With the notice visible, that was
+60–144 nil-checks per second for state that only changes at the
+combat-end edge.
+
+The polling block has been extracted into
+`ApplyPendingCenterNoticeTeleportButtonState(state)` and exposed on the
+controller as `ApplyPendingTeleportButtonState()`. The
+`tryRestoreCenterNoticeTeleportButton` callback in
+[factory/isiLive_controller_wiring.lua](factory/isiLive_controller_wiring.lua)
+— which already fires on `PLAYER_REGEN_ENABLED` — now drains the
+pending state exactly once on the regen-enabled edge. The OnUpdate
+handler keeps only the blink animation and the `endsAt` auto-hide
+check.
+
+### CenterNotice teleport-button OnUpdate: 0.1 s accumulator
+
+The teleport-button OnUpdate in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+called `getTeleportCooldownRemaining` + `formatCooldownSeconds` +
+`SetText` on every render frame even though the cooldown text only
+needs sub-second resolution. The handler now uses the same 0.1 s
+accumulator pattern as `game/isiLive_mplus_timer.lua`, dropping the
+work rate from 60–144 Hz down to 10 Hz.
+
+### LFG invite-hint OnUpdate: Position() throttled to 0.2 s
+
+The invite-hint OnUpdate in
+[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
+re-anchored itself against the LFG popup every render frame. The
+dialog itself never moves faster than the user can drag it, so a
+0.2 s accumulator suffices. `endsAt` and the dialog-mismatch hide
+check stay per-frame so the hint disappears snappily when the popup
+closes.
+
+### CombatEvents: isInKey() result cached across casts
+
+`HandleUnitSpellcastSucceeded` in
+[game/isiLive_combat_events.lua](game/isiLive_combat_events.lua)
+called the configured `isInKey()` (default:
+`pcall(C_ChallengeMode.GetActiveChallengeMapID)`) on every single
+UNIT_SPELLCAST_SUCCEEDED, including the hundreds-per-second self-cast
+spam during an AoE pull where the answer cannot change between casts.
+
+A file-local `cachedInKey` value now memoises the result. The cache
+is invalidated in `controller.Reset()`, which the central
+`HandleEvent` dispatcher already calls on `CHALLENGE_MODE_START` /
+`CHALLENGE_MODE_COMPLETED` / `CHALLENGE_MODE_RESET` — exactly the
+three events at which the underlying API value can transition. Net
+effect: one pcall at the start of each key instead of one per cast.
+
+### Simulator updates
+
+[tools/simulate_challenge_mode_taint_sequence.lua](tools/simulate_challenge_mode_taint_sequence.lua)
+previously flipped its `inKey.value` lambda mid-test without firing
+the matching `CHALLENGE_MODE_*` event. That was an artificial
+construct — in production the live API result only changes when one
+of those events fires — and it broke the new `cachedInKey` memoise.
+The simulator now mirrors production by firing
+`CHALLENGE_MODE_RESET` before the toggle-off and `CHALLENGE_MODE_START`
+before the toggle-on, so the controller picks up the new value on
+its next API check.
+
 ## 2026-05-12 - Version 0.9.232 (patch)
 
 Performance audit: five hot paths trimmed across the event pipeline and
@@ -126,80 +235,6 @@ crashes that the initial dirty-cache implementations did not anticipate:
 Lesson recorded in the relevant code comments: any cache that holds a
 value sourced from a WoW API needs pcall on both compare-read and
 compare-write in 12.0+. `type()` is not a sufficient gate.
-
-## 2026-05-13 - Version 0.9.233 (patch)
-
-Stage A of the Notice / CombatEvents OnUpdate cleanup that followed
-the 0.9.232 hot-path audit. Three center-notice OnUpdate handlers and
-one combat-event API hit have been moved off the per-frame path.
-
-### CenterNotice frame OnUpdate: deferred-state drain moved to PLAYER_REGEN_ENABLED
-
-The center-notice OnUpdate handler in
-[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
-polled three `pendingTeleportButton*` fields every render frame so it
-could apply the button mutations that `SetCenterNoticeTeleportButton*`
-had captured during combat lockdown. With the notice visible, that was
-60–144 nil-checks per second for state that only changes at the
-combat-end edge.
-
-The polling block has been extracted into
-`ApplyPendingCenterNoticeTeleportButtonState(state)` and exposed on the
-controller as `ApplyPendingTeleportButtonState()`. The
-`tryRestoreCenterNoticeTeleportButton` callback in
-[factory/isiLive_controller_wiring.lua](factory/isiLive_controller_wiring.lua)
-— which already fires on `PLAYER_REGEN_ENABLED` — now drains the
-pending state exactly once on the regen-enabled edge. The OnUpdate
-handler keeps only the blink animation and the `endsAt` auto-hide
-check.
-
-### CenterNotice teleport-button OnUpdate: 0.1 s accumulator
-
-The teleport-button OnUpdate in
-[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
-called `getTeleportCooldownRemaining` + `formatCooldownSeconds` +
-`SetText` on every render frame even though the cooldown text only
-needs sub-second resolution. The handler now uses the same 0.1 s
-accumulator pattern as `game/isiLive_mplus_timer.lua`, dropping the
-work rate from 60–144 Hz down to 10 Hz.
-
-### LFG invite-hint OnUpdate: Position() throttled to 0.2 s
-
-The invite-hint OnUpdate in
-[ui/isiLive_notice.lua](ui/isiLive_notice.lua)
-re-anchored itself against the LFG popup every render frame. The
-dialog itself never moves faster than the user can drag it, so a
-0.2 s accumulator suffices. `endsAt` and the dialog-mismatch hide
-check stay per-frame so the hint disappears snappily when the popup
-closes.
-
-### CombatEvents: isInKey() result cached across casts
-
-`HandleUnitSpellcastSucceeded` in
-[game/isiLive_combat_events.lua](game/isiLive_combat_events.lua)
-called the configured `isInKey()` (default:
-`pcall(C_ChallengeMode.GetActiveChallengeMapID)`) on every single
-UNIT_SPELLCAST_SUCCEEDED, including the hundreds-per-second self-cast
-spam during an AoE pull where the answer cannot change between casts.
-
-A file-local `cachedInKey` value now memoises the result. The cache
-is invalidated in `controller.Reset()`, which the central
-`HandleEvent` dispatcher already calls on `CHALLENGE_MODE_START` /
-`CHALLENGE_MODE_COMPLETED` / `CHALLENGE_MODE_RESET` — exactly the
-three events at which the underlying API value can transition. Net
-effect: one pcall at the start of each key instead of one per cast.
-
-### Simulator updates
-
-[tools/simulate_challenge_mode_taint_sequence.lua](tools/simulate_challenge_mode_taint_sequence.lua)
-previously flipped its `inKey.value` lambda mid-test without firing
-the matching `CHALLENGE_MODE_*` event. That was an artificial
-construct — in production the live API result only changes when one
-of those events fires — and it broke the new `cachedInKey` memoise.
-The simulator now mirrors production by firing
-`CHALLENGE_MODE_RESET` before the toggle-off and `CHALLENGE_MODE_START`
-before the toggle-on, so the controller picks up the new value on
-its next API check.
 
 ## 2026-05-11 - Version 0.9.231 (patch)
 

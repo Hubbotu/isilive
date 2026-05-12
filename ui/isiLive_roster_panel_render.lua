@@ -455,8 +455,11 @@ local function RenderRosterImpl(state, roster)
 
   -- If in a raid group, clear rows and skip roster render (H mode shows the tool buttons)
   if isRaidGroup and isRaidGroup() then
-    for _, row in pairs(memberRows) do
-      ClearMemberRow(row)
+    for i = 1, #memberRows do
+      local row = memberRows[i]
+      if row then
+        ClearMemberRow(row)
+      end
     end
     if raidNoticeLabel then
       raidNoticeLabel:Hide()
@@ -510,8 +513,11 @@ local function RenderRosterImpl(state, roster)
   -- of row.hoverFrame) to lose its ApplyRowReadyCheckDisplay-set visibility
   -- when the parent hoverFrame was hidden mid-render. Now we only clear
   -- the slots that orderedRoster does NOT touch (group shrink case).
-  local touchedRowSlots = {}
-
+  --
+  -- memberRows is keyed sequentially (1..N) and only ever extended; the
+  -- render loop always fills slots in order from index 1 upward. So instead
+  -- of a touchedRowSlots set + pairs() cleanup pass, we can clear slots
+  -- [index, #memberRows] once the render loop finishes.
   local index = 1
   local orderedRoster = buildOrderedRoster(roster, rolePriority, unitPriority)
   local activeKeyOwnerUnit = resolveActiveKeyOwnerUnit and resolveActiveKeyOwnerUnit() or nil
@@ -630,7 +636,6 @@ local function RenderRosterImpl(state, roster)
         row.hoverFrame:Hide()
       end
     end
-    touchedRowSlots[index] = true
     index = index + 1
   end
 
@@ -638,9 +643,11 @@ local function RenderRosterImpl(state, roster)
   -- Slots that were re-rendered above already have correct visibility from
   -- ApplyRowReadyCheckDisplay; clearing them would re-trigger the parent-Hide
   -- that caused the readyCheck-hold background to flicker out after FINISHED.
-  for slot, row in pairs(memberRows) do
-    if not touchedRowSlots[slot] then
-      ClearMemberRow(row)
+  local lastSlot = #memberRows
+  for slot = index, lastSlot do
+    local staleRow = memberRows[slot]
+    if staleRow then
+      ClearMemberRow(staleRow)
     end
   end
 
