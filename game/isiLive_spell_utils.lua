@@ -7,10 +7,11 @@ addonTable.SpellUtils = SpellUtils
 local TELEPORT_MEANINGFUL_COOLDOWN_MIN_SECONDS = 2
 
 function SpellUtils.GetSpellCooldownSafe(spellID)
-  if not spellID or not (C_Spell and C_Spell.GetSpellCooldown) then
+  local cSpell = rawget(_G, "C_Spell")
+  if not spellID or type(cSpell) ~= "table" or type(cSpell.GetSpellCooldown) ~= "function" then
     return 0, 0, true
   end
-  local ok, info = pcall(C_Spell.GetSpellCooldown, spellID)
+  local ok, info = pcall(cSpell.GetSpellCooldown, spellID)
   if not ok or type(info) ~= "table" then
     return 0, 0, true
   end
@@ -21,14 +22,15 @@ function SpellUtils.GetSpellCooldownSafe(spellID)
   -- WoW internal bug workaround: GetSpellCooldown can return opaque
   -- "SecretValue" types in some builds that bypass normal Lua type checks.
   -- issecretvalue() detects these and replaces them with safe defaults.
-  if _G.issecretvalue then
-    if _G.issecretvalue(enabled) then
+  local issecretvalue = rawget(_G, "issecretvalue")
+  if type(issecretvalue) == "function" then
+    if issecretvalue(enabled) then
       enabled = true
     end
-    if _G.issecretvalue(start) then
+    if issecretvalue(start) then
       start = 0
     end
-    if _G.issecretvalue(duration) then
+    if issecretvalue(duration) then
       duration = 0
     end
   end
@@ -90,16 +92,19 @@ function SpellUtils.IsSpellKnownSafe(spellID)
     return false
   end
 
-  if C_SpellBook and C_SpellBook.IsSpellKnownOrOverridesKnown then
-    local ok, known = pcall(C_SpellBook.IsSpellKnownOrOverridesKnown, spellID)
-    if ok and known == true then
-      return true
+  local cSpellBook = rawget(_G, "C_SpellBook")
+  if type(cSpellBook) == "table" then
+    if type(cSpellBook.IsSpellKnownOrOverridesKnown) == "function" then
+      local ok, known = pcall(cSpellBook.IsSpellKnownOrOverridesKnown, spellID)
+      if ok and known == true then
+        return true
+      end
     end
-  end
-  if C_SpellBook and C_SpellBook.IsSpellKnown then
-    local ok, known = pcall(C_SpellBook.IsSpellKnown, spellID)
-    if ok and known == true then
-      return true
+    if type(cSpellBook.IsSpellKnown) == "function" then
+      local ok, known = pcall(cSpellBook.IsSpellKnown, spellID)
+      if ok and known == true then
+        return true
+      end
     end
   end
 
@@ -124,7 +129,9 @@ function SpellUtils.GetTeleportCooldownRemaining(spellID)
   if duration <= 0 or start <= 0 then
     return 0
   end
-  local remaining = (start + duration) - GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
+  local remaining = (start + duration) - now
   if remaining < 0 then
     remaining = 0
   end
