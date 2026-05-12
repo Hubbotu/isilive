@@ -14,6 +14,40 @@ local CD_TRACKER_ICON_SIZE = 16
 local CD_TRACKER_TEXT_GAP = 6
 local CD_TRACKER_FONT_SIZE = 12
 
+-- Shared shape for the +3 / +2 / +1 timer badges (16x12 colored frame with a
+-- centred colour-coded label). Used three times below; the previous revision
+-- inlined three near-identical do/end blocks.
+local function CreateMplusGradeBadge(parent, leftOffset, bgR, bgG, bgB, labelText)
+  local badge = CreateFrame("Frame", nil, parent)
+  badge:SetSize(16, 12)
+  badge:SetPoint("LEFT", parent, "LEFT", leftOffset, 0)
+  local bg = badge:CreateTexture(nil, "BACKGROUND")
+  if type(bg.SetAllPoints) == "function" then
+    bg:SetAllPoints(badge)
+  end
+  if type(bg.SetTexture) == "function" then
+    bg:SetTexture("Interface\\Buttons\\WHITE8X8")
+  end
+  if type(bg.SetVertexColor) == "function" then
+    bg:SetVertexColor(bgR, bgG, bgB)
+  end
+  local label = badge:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  if type(label.SetAllPoints) == "function" then
+    label:SetAllPoints(badge)
+  end
+  if type(label.SetJustifyH) == "function" then
+    label:SetJustifyH("CENTER")
+  end
+  if type(label.SetJustifyV) == "function" then
+    label:SetJustifyV("MIDDLE")
+  end
+  if type(label.SetText) == "function" then
+    label:SetText(labelText)
+  end
+  ApplyFontStringSize(label, CD_TRACKER_FONT_SIZE)
+  return badge
+end
+
 local function CreateCdTrackerRow(mainFrame)
   local UICommon = addonTable.UICommon or {}
   local row = CreateFrame("Frame", nil, mainFrame)
@@ -134,38 +168,7 @@ local function CreateCdTrackerRow(mainFrame)
     row.mplusLabel = badge
   end
 
-  -- +3 badge icon (16x12 colored frame with "+3" label) + timer text
-  do
-    local badge = CreateFrame("Frame", nil, mplusBox)
-    badge:SetSize(16, 12)
-    badge:SetPoint("LEFT", mplusBox, "LEFT", 32, 0)
-    local bg = badge:CreateTexture(nil, "BACKGROUND")
-    if type(bg.SetAllPoints) == "function" then
-      bg:SetAllPoints(badge)
-    end
-    if type(bg.SetTexture) == "function" then
-      bg:SetTexture("Interface\\Buttons\\WHITE8X8")
-    end
-    if type(bg.SetVertexColor) == "function" then
-      bg:SetVertexColor(0.15, 0.45, 0.15)
-    end
-    local label = badge:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    if type(label.SetAllPoints) == "function" then
-      label:SetAllPoints(badge)
-    end
-    if type(label.SetJustifyH) == "function" then
-      label:SetJustifyH("CENTER")
-    end
-    if type(label.SetJustifyV) == "function" then
-      label:SetJustifyV("MIDDLE")
-    end
-    if type(label.SetText) == "function" then
-      label:SetText("|cff44ff44+3|r")
-    end
-    ApplyFontStringSize(label, CD_TRACKER_FONT_SIZE)
-    row.mp3Icon = badge
-  end
-
+  row.mp3Icon = CreateMplusGradeBadge(mplusBox, 32, 0.15, 0.45, 0.15, "|cff44ff44+3|r")
   row.mp3Text = mplusBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   row.mp3Text:SetPoint("LEFT", mplusBox, "LEFT", 50, 0)
   row.mp3Text:SetWidth(36)
@@ -173,38 +176,7 @@ local function CreateCdTrackerRow(mainFrame)
   row.mp3Text:SetText("--:--")
   ApplyFontStringSize(row.mp3Text, CD_TRACKER_FONT_SIZE)
 
-  -- +2 badge icon (16x12 colored frame with "+2" label) + timer text
-  do
-    local badge = CreateFrame("Frame", nil, mplusBox)
-    badge:SetSize(16, 12)
-    badge:SetPoint("LEFT", mplusBox, "LEFT", 90, 0)
-    local bg = badge:CreateTexture(nil, "BACKGROUND")
-    if type(bg.SetAllPoints) == "function" then
-      bg:SetAllPoints(badge)
-    end
-    if type(bg.SetTexture) == "function" then
-      bg:SetTexture("Interface\\Buttons\\WHITE8X8")
-    end
-    if type(bg.SetVertexColor) == "function" then
-      bg:SetVertexColor(0.45, 0.38, 0.05)
-    end
-    local label = badge:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    if type(label.SetAllPoints) == "function" then
-      label:SetAllPoints(badge)
-    end
-    if type(label.SetJustifyH) == "function" then
-      label:SetJustifyH("CENTER")
-    end
-    if type(label.SetJustifyV) == "function" then
-      label:SetJustifyV("MIDDLE")
-    end
-    if type(label.SetText) == "function" then
-      label:SetText("|cffffd91a+2|r")
-    end
-    ApplyFontStringSize(label, CD_TRACKER_FONT_SIZE)
-    row.mp2Icon = badge
-  end
-
+  row.mp2Icon = CreateMplusGradeBadge(mplusBox, 90, 0.45, 0.38, 0.05, "|cffffd91a+2|r")
   row.mp2Text = mplusBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   row.mp2Text:SetPoint("LEFT", mplusBox, "LEFT", 108, 0)
   row.mp2Text:SetWidth(36)
@@ -212,38 +184,7 @@ local function CreateCdTrackerRow(mainFrame)
   row.mp2Text:SetText("--:--")
   ApplyFontStringSize(row.mp2Text, CD_TRACKER_FONT_SIZE)
 
-  -- +1 badge icon (16x12 colored frame with "+1" label) + timer text
-  do
-    local badge = CreateFrame("Frame", nil, mplusBox)
-    badge:SetSize(16, 12)
-    badge:SetPoint("LEFT", mplusBox, "LEFT", 148, 0)
-    local bg = badge:CreateTexture(nil, "BACKGROUND")
-    if type(bg.SetAllPoints) == "function" then
-      bg:SetAllPoints(badge)
-    end
-    if type(bg.SetTexture) == "function" then
-      bg:SetTexture("Interface\\Buttons\\WHITE8X8")
-    end
-    if type(bg.SetVertexColor) == "function" then
-      bg:SetVertexColor(0.3, 0.3, 0.3)
-    end
-    local label = badge:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    if type(label.SetAllPoints) == "function" then
-      label:SetAllPoints(badge)
-    end
-    if type(label.SetJustifyH) == "function" then
-      label:SetJustifyH("CENTER")
-    end
-    if type(label.SetJustifyV) == "function" then
-      label:SetJustifyV("MIDDLE")
-    end
-    if type(label.SetText) == "function" then
-      label:SetText("|cffdddddd+1|r")
-    end
-    ApplyFontStringSize(label, CD_TRACKER_FONT_SIZE)
-    row.mp1Icon = badge
-  end
-
+  row.mp1Icon = CreateMplusGradeBadge(mplusBox, 148, 0.3, 0.3, 0.3, "|cffdddddd+1|r")
   row.mp1Text = mplusBox:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   row.mp1Text:SetPoint("LEFT", mplusBox, "LEFT", 166, 0)
   row.mp1Text:SetWidth(36)
