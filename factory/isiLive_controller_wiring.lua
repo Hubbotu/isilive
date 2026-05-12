@@ -512,7 +512,8 @@ local function BuildEventHandlersDepsFromContext(ctx)
       local logFn = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil
       local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
       local traceDeep = ctx.runtimeLogController and ctx.runtimeLogController.TraceDeep or nil
-      local now = GetTime()
+      local getTimeFn = rawget(_G, "GetTime")
+      local now = type(getTimeFn) == "function" and getTimeFn() or 0
       if logf then
         logf("[KEYSTONE] share_triggered isInGroup=%s", tostring(ctx.isInGroup and ctx.isInGroup()))
       end

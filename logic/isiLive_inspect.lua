@@ -205,7 +205,8 @@ local function OnInspectReady(
     roster[inspectedUnit]._refreshQueued = nil
   end
   controller.isInspecting = nil
-  controller.lastInspectTime = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  controller.lastInspectTime = type(getTimeFn) == "function" and getTimeFn() or 0
 
   local dataChanged = ilvlChanged or rioChanged or specChanged
   if controller.logRuntimeTracef then
