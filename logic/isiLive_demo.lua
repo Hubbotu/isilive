@@ -176,13 +176,17 @@ local function DefaultGetUnitClass(unit)
 end
 
 local function ResolvePlayerIlvl()
-  if C_Item and C_Item.GetAverageItemLevel then
-    local avgIlvl = C_Item.GetAverageItemLevel()
+  local cItem = rawget(_G, "C_Item")
+  if type(cItem) == "table" and type(cItem.GetAverageItemLevel) == "function" then
+    local avgIlvl = cItem.GetAverageItemLevel()
     if type(avgIlvl) == "number" and avgIlvl > 0 then
       return avgIlvl
     end
-  elseif GetAverageItemLevel then
-    local avgIlvl, equippedIlvl = GetAverageItemLevel()
+  end
+
+  local legacy = rawget(_G, "GetAverageItemLevel")
+  if type(legacy) == "function" then
+    local avgIlvl, equippedIlvl = legacy()
     local resolvedIlvl = equippedIlvl or avgIlvl
     if type(resolvedIlvl) == "number" and resolvedIlvl > 0 then
       return resolvedIlvl

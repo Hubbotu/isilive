@@ -157,8 +157,12 @@ function TestMode.CreateController(opts)
     controller.EnterFullDummyPreview()
   end
 
-  -- Toggles demo mode without closing the visualisation.
-  -- Deactivating loads the real group state via triggerGroupRosterUpdate.
+  -- Toggles demo mode without closing the visualisation. Unlike ExitTestMode
+  -- this path keeps the main frame visible and skips the trailing
+  -- triggerGroupRosterUpdate / updateUI / setMainFrameVisible(false) — the
+  -- caller in factory_controllers wires the real-group restore separately so
+  -- it can SetWasInGroup(true) first and rebuild the solo-player entry on
+  -- HandleNoGroup.
   function controller.ToggleDemoMode()
     local state = deps.getState()
     local L = deps.getL()
