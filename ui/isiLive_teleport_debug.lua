@@ -106,6 +106,8 @@ local function PrintTeleportDebug(deps)
     end
   end
 
+  local inCombatFn = rawget(_G, "InCombatLockdown")
+  local inCombat = type(inCombatFn) == "function" and inCombatFn() or false
   deps.printFn(
     string.format(
       "TP target dungeon=%s activityID=%s mapID=%s queueSpellID=%s resolvedSpellID=%s known=%s cd=%s cdType=%s "
@@ -119,7 +121,7 @@ local function PrintTeleportDebug(deps)
       deps.formatCooldownSeconds(resolvedCooldown),
       tostring(resolvedCooldownType),
       tostring(resolvedDuration),
-      tostring(InCombatLockdown and InCombatLockdown())
+      tostring(inCombat)
     )
   )
 
