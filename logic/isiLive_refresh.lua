@@ -44,8 +44,9 @@ function Refresh.CreateController(opts)
   end
   local getTime = opts.getTime
     or function()
-      if type(GetTime) == "function" then
-        return GetTime()
+      local getTimeFn = rawget(_G, "GetTime")
+      if type(getTimeFn) == "function" then
+        return getTimeFn()
       end
       return nil
     end
@@ -140,8 +141,13 @@ function Refresh.CreateController(opts)
       updateUI()
     end
     if pendingPostChallengeSync or changed then
+      -- "post-challenge" stays for the case that NotifyPostChallengeSync set
+      -- the flag earlier. When the trigger is purely "owned key changed mid-
+      -- session" we tag the snapshot accordingly so the receiver's trace logs
+      -- aren't mislabelled.
+      local source = pendingPostChallengeSync and "post-challenge" or "owned-key-changed"
       pendingPostChallengeSync = false
-      sendOwnKeySnapshot(true, "post-challenge")
+      sendOwnKeySnapshot(true, source)
     else
       sendOwnBackgroundSnapshot("owned-key-refresh")
     end

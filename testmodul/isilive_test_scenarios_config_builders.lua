@@ -34,6 +34,8 @@ return function(test, ctx)
       getActiveChallengeMapID = MakeSentinel("getActiveChallengeMapID"),
       getTime = MakeSentinel("getTime"),
       refreshDebounceSeconds = 5,
+      logRuntimeTrace = MakeSentinel("logRuntimeTrace"),
+      logRuntimeTracef = MakeSentinel("logRuntimeTracef"),
     }
     local result = builders.BuildRefreshControllerOpts(ctx_input)
     for key, val in pairs(ctx_input) do

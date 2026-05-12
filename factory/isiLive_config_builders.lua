@@ -26,6 +26,13 @@ function ConfigBuilders.BuildRefreshControllerOpts(ctx)
     getActiveChallengeMapID = ctx.getActiveChallengeMapID,
     getTime = ctx.getTime,
     refreshDebounceSeconds = ctx.refreshDebounceSeconds,
+    -- Forward the runtime-log handles so refresh.lua's `[REFRESH] ...`
+    -- traces actually fire in production. Earlier revisions silently
+    -- dropped these even though factory_controllers wired them into the
+    -- input ctx, leaving every refresh trace dead behind the
+    -- `if logRuntimeTracef then` guards.
+    logRuntimeTrace = ctx.logRuntimeTrace,
+    logRuntimeTracef = ctx.logRuntimeTracef,
   }
 end
 
