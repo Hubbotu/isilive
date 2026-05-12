@@ -215,7 +215,15 @@ function RuntimeLog.CreateController(opts)
   end
 
   function controller.ClearLog()
-    wipe(EnsureStorage())
+    local wipeFn = rawget(_G, "wipe")
+    local storage = EnsureStorage()
+    if type(wipeFn) == "function" then
+      wipeFn(storage)
+    else
+      for key in pairs(storage) do
+        storage[key] = nil
+      end
+    end
     sequence = 0
     lastRawTime = nil
   end

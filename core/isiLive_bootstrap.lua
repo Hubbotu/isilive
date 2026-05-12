@@ -5,6 +5,11 @@ addonTable = addonTable or {}
 local Bootstrap = {}
 addonTable.Bootstrap = Bootstrap
 
+-- Lua 5.1 exposes unpack as a global; Lua 5.4 only via table.unpack. Pick
+-- whichever the host runtime publishes, going through rawget so a
+-- sandboxed _G can't smuggle nil through the bare global lookup.
+local unpack = rawget(_G, "unpack") or rawget(table, "unpack")
+
 local function RequireFunction(value, name)
   return addonTable.Validators.RequireFunction(value, name, "Bootstrap")
 end
