@@ -344,9 +344,11 @@ function ConfigBuilders.BuildGateOpts(ctx)
     isPaused = ctx.isPaused,
     isTestMode = ctx.isTestMode,
     isInCombat = ctx.isInCombat,
-    isInGroup = ctx.isInGroup,
-    isInPartyInstance = ctx.isInPartyInstance,
-    getActiveChallengeMapID = ctx.getActiveChallengeMapID,
+    -- The gate is bound to the dispatcher frame (always shown) and to the
+    -- mainFrame (the actual UI window). For the dispatcher case `frame:IsShown()`
+    -- would always return true; pass an explicit mainFrame visibility callback so
+    -- the hidden-suppression branch behaves consistently across both bindings.
+    isShown = ctx.isMainFrameShown,
     allowWhenHidden = {
       CHAT_MSG_ADDON = true,
       GROUP_ROSTER_UPDATE = true,

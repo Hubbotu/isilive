@@ -17,6 +17,15 @@ local function BuildMainFrameStub()
   return state
 end
 
+local function BuildEventFrameStub()
+  local state = { onEvent = nil, scriptType = nil }
+  state.SetScript = function(_, scriptType, fn)
+    state.scriptType = scriptType
+    state.onEvent = fn
+  end
+  return state
+end
+
 local function BuildCtx(overrides)
   overrides = overrides or {}
   local calls = { leaderStart = 0 }
@@ -71,6 +80,7 @@ local function BuildCtx(overrides)
     groupModule = { id = "groupModule" },
     eventHandlersModule = { id = "eventHandlersModule" },
     mainFrame = overrides.mainFrame or BuildMainFrameStub(),
+    eventFrame = overrides.eventFrame or BuildEventFrameStub(),
     onEvent = overrides.onEvent or function() end,
   }
   if overrides.scrub then
@@ -102,6 +112,12 @@ return function(test, ctx)
     Assert.Equal(calls.slashRegistered, true, "slash commands must be registered via bootstrap")
     Assert.Equal(c.mainFrame.scriptType, "OnEvent", "mainFrame OnEvent script must be wired")
     Assert.Equal(c.mainFrame.onEvent, gatedHandler, "OnEvent handler must be the gated variant from bootstrap")
+    Assert.Equal(c.eventFrame.scriptType, "OnEvent", "eventFrame OnEvent script must be wired")
+    Assert.Equal(
+      c.eventFrame.onEvent,
+      gatedHandler,
+      "eventFrame OnEvent handler must be the gated variant so natural events pass through the gate"
+    )
     Assert.Equal(result.eventHandlersController.id, "events-ctrl", "result must expose eventHandlersController")
   end)
 

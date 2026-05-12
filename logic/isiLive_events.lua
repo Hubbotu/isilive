@@ -30,6 +30,13 @@ function Events.CreateGate(config)
     or function(_frame, _event, ...) -- luacheck: ignore 212
       return false
     end
+  -- Optional callback that decides "is the addon UI considered visible?".
+  -- When the gate is bound to a frame that is not the visible UI frame (e.g.
+  -- a hidden event-dispatcher frame), falling back to `frame:IsShown()` would
+  -- always return true and skip the hidden-suppression branch. Callers can
+  -- pass an explicit `isShown` (typically `mainFrame:IsShown()`) to decouple
+  -- visibility gating from the dispatch frame's own shown state.
+  local isShown = type(config.isShown) == "function" and config.isShown or nil
   local allowInCombat = config.allowInCombat or {}
   -- shouldAllowInCombat: extension point for callers that want to allow
   -- individual events even during combat. No current caller uses this;
@@ -81,7 +88,13 @@ function Events.CreateGate(config)
       return
     end
 
-    if not frame:IsShown() and not (allowWhenHidden[event] or shouldAllowWhenHidden(frame, event, ...)) then
+    local shown
+    if isShown then
+      shown = isShown() and true or false
+    else
+      shown = frame:IsShown()
+    end
+    if not shown and not (allowWhenHidden[event] or shouldAllowWhenHidden(frame, event, ...)) then
       return
     end
 

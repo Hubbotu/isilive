@@ -478,6 +478,7 @@ local function FinalizeFactoryRuntime(ctx)
     groupModule = modules.group,
     eventHandlersModule = modules.eventHandlers,
     mainFrame = ctx.mainFrame,
+    eventFrame = ctx.eventFrame,
     onEvent = ctx.OnEvent,
     onDispatchError = function(_frame, event, err)
       ctx.Print(string.format("Event dispatch failed (%s): %s", tostring(event), tostring(err)))

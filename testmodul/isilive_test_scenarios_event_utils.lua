@@ -548,7 +548,7 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
     Assert.Equal(dispatched[2], "GROUP_ROSTER_UPDATE", "GROUP_ROSTER_UPDATE should pass")
   end)
 
-  test("Bootstrap gate keeps hidden lifecycle triggers for group join and key start/end", function()
+  test("Bootstrap gate keeps hidden lifecycle triggers for key start/end and summon", function()
     local dispatched = {}
 
     local addon = LoadAddonModules({ "isiLive_events.lua", "isiLive_bootstrap.lua" })
@@ -563,18 +563,20 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
       end,
     }
 
-    gate(frame, "GROUP_ROSTER_UPDATE")
+    -- These events are marked hidden=true in EVENT_REGISTRY, so they must pass
+    -- through the gate even when the addon UI is hidden. GROUP_ROSTER_UPDATE
+    -- is intentionally NOT in this set: its hidden-allow is opt-in via the
+    -- caller's allowWhenHidden override (production sets it via BuildGateOpts).
     gate(frame, "CHALLENGE_MODE_START")
     gate(frame, "CHALLENGE_MODE_COMPLETED")
     gate(frame, "CHALLENGE_MODE_RESET")
     gate(frame, "CONFIRM_SUMMON")
 
-    Assert.Equal(#dispatched, 5, "hidden gate must keep required lifecycle triggers")
-    Assert.Equal(dispatched[1], "GROUP_ROSTER_UPDATE", "group-join trigger should pass hidden gate")
-    Assert.Equal(dispatched[2], "CHALLENGE_MODE_START", "key-start trigger should pass hidden gate")
-    Assert.Equal(dispatched[3], "CHALLENGE_MODE_COMPLETED", "key-end completed trigger should pass hidden gate")
-    Assert.Equal(dispatched[4], "CHALLENGE_MODE_RESET", "key-end reset trigger should pass hidden gate")
-    Assert.Equal(dispatched[5], "CONFIRM_SUMMON", "incoming summon trigger should pass hidden gate")
+    Assert.Equal(#dispatched, 4, "hidden gate must keep required lifecycle triggers")
+    Assert.Equal(dispatched[1], "CHALLENGE_MODE_START", "key-start trigger should pass hidden gate")
+    Assert.Equal(dispatched[2], "CHALLENGE_MODE_COMPLETED", "key-end completed trigger should pass hidden gate")
+    Assert.Equal(dispatched[3], "CHALLENGE_MODE_RESET", "key-end reset trigger should pass hidden gate")
+    Assert.Equal(dispatched[4], "CONFIRM_SUMMON", "incoming summon trigger should pass hidden gate")
   end)
 
   test("Bootstrap gate allows portal navigator zone events while frame is hidden", function()
@@ -714,33 +716,6 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
     )
     Assert.Equal(dispatched[5], "PLAYER_ROLES_ASSIGNED", "config builders gate should pass PLAYER_ROLES_ASSIGNED")
     Assert.Equal(dispatched[6], "ROLE_CHANGED_INFORM", "config builders gate should pass ROLE_CHANGED_INFORM")
-  end)
-
-  test("Bootstrap gate blocks hidden group auto-open while inside non-key dungeon", function()
-    local dispatched = {}
-
-    local addon = LoadAddonModules({ "isiLive_events.lua", "isiLive_bootstrap.lua" })
-    local gate = CreateBootstrapGate(addon, function(_frame, event, ...)
-      local _ = ...
-      table.insert(dispatched, event)
-    end, {
-      isInPartyInstance = true,
-      activeChallengeMapID = nil,
-    })
-
-    local frame = {
-      IsShown = function()
-        return false
-      end,
-    }
-
-    gate(frame, "GROUP_ROSTER_UPDATE")
-    gate(frame, "CHALLENGE_MODE_COMPLETED")
-    gate(frame, "CHALLENGE_MODE_RESET")
-
-    Assert.Equal(#dispatched, 2, "hidden gate must block group auto-open inside non-key dungeon")
-    Assert.Equal(dispatched[1], "CHALLENGE_MODE_COMPLETED", "key-end completed trigger must still pass hidden gate")
-    Assert.Equal(dispatched[2], "CHALLENGE_MODE_RESET", "key-end reset trigger must still pass hidden gate")
   end)
 end
 

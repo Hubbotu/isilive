@@ -125,9 +125,7 @@ return function(test, ctx)
       isPaused = MakeSentinel("isPaused"),
       isTestMode = MakeSentinel("isTestMode"),
       isInCombat = MakeSentinel("isInCombat"),
-      isInGroup = MakeSentinel("isInGroup"),
-      isInPartyInstance = MakeSentinel("isInPartyInstance"),
-      getActiveChallengeMapID = MakeSentinel("getActiveChallengeMapID"),
+      isMainFrameShown = MakeSentinel("isMainFrameShown"),
     }
     local result = builders.BuildGateOpts(ctx_input)
     Assert.Equal(result.events, ctx_input.events, "must pass events")
@@ -137,9 +135,7 @@ return function(test, ctx)
     Assert.Equal(result.isPaused, ctx_input.isPaused, "must pass isPaused")
     Assert.Equal(result.isTestMode, ctx_input.isTestMode, "must pass isTestMode")
     Assert.Equal(result.isInCombat, ctx_input.isInCombat, "must pass isInCombat")
-    Assert.Equal(result.isInGroup, ctx_input.isInGroup, "must pass isInGroup")
-    Assert.Equal(result.isInPartyInstance, ctx_input.isInPartyInstance, "must pass isInPartyInstance")
-    Assert.Equal(result.getActiveChallengeMapID, ctx_input.getActiveChallengeMapID, "must pass getActiveChallengeMapID")
+    Assert.Equal(result.isShown, ctx_input.isMainFrameShown, "must map isMainFrameShown to isShown")
     -- Verify allowWhenHidden contains expected events
     Assert.True(result.allowWhenHidden ~= nil, "must have allowWhenHidden")
     Assert.True(result.allowWhenHidden.CHAT_MSG_ADDON == true, "must allow CHAT_MSG_ADDON when hidden")
@@ -353,6 +349,7 @@ return function(test, ctx)
   end
 
   test("ConfigBuilders slash toggleNameplateTestMode forwards to MobNameplate.SetTestMode", function()
+    ---@type { flag: any, percent: any }|nil
     local lastArgs = nil
     local stub = {
       SetTestMode = function(flag, percent)
@@ -365,8 +362,11 @@ return function(test, ctx)
     local result = opts.toggleNameplateTestMode("42.5")
     Assert.True(result == true, "must propagate SetTestMode return value")
     Assert.NotNil(lastArgs, "SetTestMode must be called")
-    Assert.Equal(lastArgs.flag, nil, "flag must be nil so SetTestMode toggles the current state")
-    Assert.Equal(lastArgs.percent, "42.50", "numeric arg must be normalized to %.2f format")
+    local capturedArgs = lastArgs
+    if capturedArgs ~= nil then
+      Assert.Equal(capturedArgs.flag, nil, "flag must be nil so SetTestMode toggles the current state")
+      Assert.Equal(capturedArgs.percent, "42.50", "numeric arg must be normalized to %.2f format")
+    end
   end)
 
   test("ConfigBuilders slash toggleNameplateTestMode passes non-numeric arg verbatim", function()

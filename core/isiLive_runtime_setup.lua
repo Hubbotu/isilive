@@ -23,6 +23,7 @@ function RuntimeSetup.Configure(ctx)
   local groupModule = assert(ctx.groupModule, "isiLive: RuntimeSetup requires groupModule")
   local eventHandlersModule = assert(ctx.eventHandlersModule, "isiLive: RuntimeSetup requires eventHandlersModule")
   local mainFrame = assert(ctx.mainFrame, "isiLive: RuntimeSetup requires mainFrame")
+  local eventFrame = ctx.eventFrame
   RequireFunction(ctx.onEvent, "onEvent")
 
   local groupController = controllerWiring.CreateGroupControllerFromContext(groupModule, ctx)
@@ -38,6 +39,18 @@ function RuntimeSetup.Configure(ctx)
 
   local gateOpts = configBuilders.BuildGateOpts(ctx)
   local gatedOnEvent = bootstrap.CreateGatedOnEvent(gateOpts)
+  -- Bind the gate on both frames:
+  --   * eventFrame is where Blizzard delivers all natural RegisterEvent fires
+  --     (factory.lua wires RegisterDispatcherEvents to it). Without this the
+  --     gate's stop/pause/testMode/inCombat/hidden suppression would only
+  --     apply to synthetic re-dispatches, never to natural events.
+  --   * mainFrame keeps the gate so the existing synthetic dispatch sites
+  --     (TriggerGroupRosterUpdate / onShownInGroup / RefreshRosterAfterRunStateChange
+  --     via `mainFrame:GetScript("OnEvent")`) stay in lockstep with the natural
+  --     path.
+  if eventFrame and type(eventFrame.SetScript) == "function" then
+    eventFrame:SetScript("OnEvent", gatedOnEvent)
+  end
   mainFrame:SetScript("OnEvent", gatedOnEvent)
 
   return {

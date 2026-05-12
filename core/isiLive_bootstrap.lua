@@ -158,9 +158,6 @@ function Bootstrap.CreateGatedOnEvent(opts)
   local isPaused = RequireFunction(opts.isPaused, "isPaused")
   local isTestMode = RequireFunction(opts.isTestMode, "isTestMode")
   local isInCombat = RequireFunction(opts.isInCombat, "isInCombat")
-  local isInGroup = RequireFunction(opts.isInGroup, "isInGroup")
-  local isInPartyInstance = RequireFunction(opts.isInPartyInstance, "isInPartyInstance")
-  local getActiveChallengeMapID = RequireFunction(opts.getActiveChallengeMapID, "getActiveChallengeMapID")
   local onDispatchError = type(opts.onDispatchError) == "function" and opts.onDispatchError or nil
 
   local allowInCombat, allowWhenHidden, allowInTestMode = BuildGateTables()
@@ -177,18 +174,12 @@ function Bootstrap.CreateGatedOnEvent(opts)
     isPaused = isPaused,
     isTestMode = isTestMode,
     isInCombat = isInCombat,
+    -- isShown decouples the visibility check from the dispatch frame so the
+    -- gate can be bound to a hidden event-dispatcher frame while still
+    -- honouring "suppress when the addon UI is hidden".
+    isShown = type(opts.isShown) == "function" and opts.isShown or nil,
     allowInCombat = allowInCombat,
     allowWhenHidden = allowWhenHidden,
-    shouldAllowWhenHidden = function(_, event)
-      if event ~= "GROUP_ROSTER_UPDATE" and event ~= "PARTY_LEADER_CHANGED" then
-        return false
-      end
-      local inChallenge = getActiveChallengeMapID()
-      if not inChallenge and isInPartyInstance() then
-        return false
-      end
-      return isInGroup() and not inChallenge
-    end,
     allowInTestMode = allowInTestMode,
   })
 end
@@ -214,17 +205,13 @@ function Bootstrap.BindMainFrameScripts(mainFrame, opts)
   opts = opts or {}
 
   assert(mainFrame, "isiLive: Bootstrap.BindMainFrameScripts requires mainFrame")
-  local onEvent = opts.onEvent
   local onShow = RequireFunction(opts.onShow, "onShow")
   local onHide = RequireFunction(opts.onHide, "onHide")
 
-  -- onEvent is intentionally optional: the OnEvent script is normally
-  -- set separately via Bootstrap.CreateGatedOnEvent().
-  -- If passed anyway, it must be a function.
-  if onEvent ~= nil then
-    assert(type(onEvent) == "function", "isiLive: Bootstrap.BindMainFrameScripts – onEvent must be a function")
-    mainFrame:SetScript("OnEvent", onEvent)
-  end
+  -- The OnEvent script is set centrally by RuntimeSetup.Configure via
+  -- Bootstrap.CreateGatedOnEvent on both eventFrame (natural dispatch) and
+  -- mainFrame (synthetic re-dispatches). This helper covers only the show
+  -- and hide hooks.
   mainFrame:SetScript("OnShow", onShow)
   mainFrame:SetScript("OnHide", onHide)
 end
