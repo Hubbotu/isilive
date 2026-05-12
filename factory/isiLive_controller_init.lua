@@ -5,6 +5,27 @@ addonTable = addonTable or {}
 local ControllerInit = {}
 addonTable.ControllerInit = ControllerInit
 
+-- The drag grip is shown for every layout mode EXCEPT the compact ones
+-- (vertical / horizontal). Route the predicate through _RosterInternal so the
+-- magic strings live in exactly one place (isiLive_roster_layout.lua).
+local function ShouldShowDragGrip(layoutMode)
+  local RI = addonTable._RosterInternal
+  if type(RI) == "table" and type(RI.IsCompactLayoutMode) == "function" then
+    return not RI.IsCompactLayoutMode(layoutMode)
+  end
+  -- Fallback for load-order edge cases: hard-coded recognition of the two
+  -- compact modes. Matches the legacy literal-string check this helper
+  -- replaces.
+  return layoutMode ~= "compact_vertical" and layoutMode ~= "compact_horizontal"
+end
+
+local function UpdateMainUIDragGrip(mainUI, layoutMode)
+  if not (mainUI and type(mainUI.SetDragGripVisible) == "function") then
+    return
+  end
+  mainUI.SetDragGripVisible(ShouldShowDragGrip(layoutMode))
+end
+
 local function CreateKeySyncController(ctx)
   local controller = ctx.keySyncModule.CreateController({
     sync = ctx.sync,
@@ -180,19 +201,13 @@ function ControllerInit.CreateControllers(ctx)
     if type(result.rosterPanelController.SetLayoutChangedHandler) == "function" then
       result.rosterPanelController.SetLayoutChangedHandler(function(layoutMode)
         result.teleportUIController.SetLayoutMode(layoutMode)
-        if ctx.mainUI and type(ctx.mainUI.SetDragGripVisible) == "function" then
-          ctx.mainUI.SetDragGripVisible(layoutMode ~= "compact_vertical" and layoutMode ~= "compact_horizontal")
-        end
+        UpdateMainUIDragGrip(ctx.mainUI, layoutMode)
       end)
     end
     if type(result.rosterPanelController.GetLayoutMode) == "function" then
       local currentLayoutMode = result.rosterPanelController.GetLayoutMode()
       result.teleportUIController.SetLayoutMode(currentLayoutMode)
-      if ctx.mainUI and type(ctx.mainUI.SetDragGripVisible) == "function" then
-        ctx.mainUI.SetDragGripVisible(
-          currentLayoutMode ~= "compact_vertical" and currentLayoutMode ~= "compact_horizontal"
-        )
-      end
+      UpdateMainUIDragGrip(ctx.mainUI, currentLayoutMode)
     end
     result.teleportUIController.SetVisible(not result.rosterPanelController.IsCollapsed())
   end
