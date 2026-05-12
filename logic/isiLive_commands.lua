@@ -128,6 +128,17 @@ end
 local ARG_ON = { on = true, ["1"] = true, ["true"] = true }
 local ARG_OFF = { off = true, ["0"] = true, ["false"] = true }
 
+-- Tiny shim so the slash-command parser can run in unit-test contexts that
+-- only stub _G and don't bring the Blizzard `strtrim` global with them. Falls
+-- back to a pure-Lua trim when WoW's helper is missing.
+local function TrimWhitespace(text)
+  local strtrimFn = rawget(_G, "strtrim")
+  if type(strtrimFn) == "function" then
+    return strtrimFn(text or "")
+  end
+  return tostring(text or ""):match("^%s*(.-)%s*$") or ""
+end
+
 -- Generic handler for debug log sub-commands (shared by "log" and "qdebug").
 -- cfg fields: prefix, label, extraOn (table), extraOff (table),
 --             getEnabled, setEnabled, getLevel, setLevel, clearLog, getCount,
@@ -334,9 +345,14 @@ local function HandleErrorLogCommand(ctx, cmd)
 end
 
 local function HandleBindCheck(printFn)
-  local action1 = GetBindingAction("CTRL-F9", true)
-  local action2 = GetBindingAction("CTRL-ALT-F9", true)
-  local action3 = GetBindingAction("ALT-CTRL-F9", true)
+  local getBindingAction = rawget(_G, "GetBindingAction")
+  if type(getBindingAction) ~= "function" then
+    printFn("GetBindingAction is unavailable; cannot inspect override bindings.")
+    return
+  end
+  local action1 = getBindingAction("CTRL-F9", true)
+  local action2 = getBindingAction("CTRL-ALT-F9", true)
+  local action3 = getBindingAction("ALT-CTRL-F9", true)
   printFn("CTRL-F9 => " .. (action1 and action1 ~= "" and action1 or "<none>"))
   printFn("CTRL-ALT-F9 => " .. (action2 and action2 ~= "" and action2 or "<none>"))
   printFn("ALT-CTRL-F9 => " .. (action3 and action3 ~= "" and action3 or "<none>"))
@@ -508,7 +524,7 @@ local function TryHandleUtilityCommands(ctx, cmd)
     local arg = nil
     local space = cmd:find("%s+")
     if space then
-      arg = strtrim(cmd:sub(space + 1))
+      arg = TrimWhitespace(cmd:sub(space + 1))
     end
     local active = ctx.toggleNameplateTestMode(arg)
     if active then
@@ -523,7 +539,7 @@ local function TryHandleUtilityCommands(ctx, cmd)
     local arg = nil
     local space = cmd:find("%s+")
     if space then
-      arg = strtrim(cmd:sub(space + 1))
+      arg = TrimWhitespace(cmd:sub(space + 1))
     end
     ctx.dumpNameplateState(arg)
     return true
@@ -535,7 +551,7 @@ end
 local function ExecuteSlashCommand(ctx, msg)
   local L = ctx.getL() or {}
   local state = ctx.getState() or {}
-  local cmd = string.lower(strtrim(msg or ""))
+  local cmd = string.lower(TrimWhitespace(msg))
   if ctx.logRuntimeTracef then
     ctx.logRuntimeTracef("[CMD] execute cmd=%s", tostring(cmd))
   end
