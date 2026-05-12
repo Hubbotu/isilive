@@ -5,13 +5,19 @@ local MobTooltip = {}
 addonTable.MobTooltip = MobTooltip
 
 local enabled = true
-local registered = false
+local tdpRegistered = false
+local clearHooked = false
 local getLocale = function()
   return {}
 end
 
 -- Prevents stacking the same line on tooltip rerenders (TooltipDataProcessor
--- fires on every refresh, including hover-over-self reflow).
+-- fires on every refresh, including hover-over-self reflow). Keyed by the
+-- tooltip frame reference; in production only GameTooltip ever shows up here
+-- (TooltipDataProcessor.Unit fires against the shared tooltip), and the
+-- OnTooltipCleared hook wires the cache reset for it. If a future caller
+-- routes a custom tooltip through AppendForcesLine, drop a matching cleanup
+-- there too.
 local lastAppendedKey = {}
 
 local function IsSecretValue(v)
@@ -35,11 +41,8 @@ local function GetActiveChallengeMapID()
   if type(api) ~= "table" or type(api.GetActiveChallengeMapID) ~= "function" then
     return nil
   end
-  local issecret = rawget(_G, "issecretvalue") or function()
-    return false
-  end
   local ok, mapID = pcall(api.GetActiveChallengeMapID)
-  if not ok or type(mapID) ~= "number" or mapID <= 0 or issecret(mapID) then
+  if not ok or type(mapID) ~= "number" or mapID <= 0 or IsSecretValue(mapID) then
     return nil
   end
   return mapID
@@ -122,12 +125,18 @@ local function AppendForcesLine(tooltip, data)
   -- current dungeon progress: "+5 Fortschritt (1.16% von 431)" reads as
   -- "this mob adds +5 to your progress counter, which is 1.16% of the 431-total".
   local L = getLocale()
+  if type(L) ~= "table" then
+    L = {}
+  end
   local fmt = type(L.TOOLTIP_MOB_PROGRESS_LINE) == "string" and L.TOOLTIP_MOB_PROGRESS_LINE
     or "+%d progress (%.2f%% of %d)"
   tooltip:AddLine(string.format(fmt, count, percent, total), 0.4, 0.8, 1)
 end
 
 local function HookTooltipClear()
+  if clearHooked then
+    return
+  end
   local gameTooltip = rawget(_G, "GameTooltip")
   if type(gameTooltip) ~= "table" or type(gameTooltip.HookScript) ~= "function" then
     return
@@ -135,6 +144,7 @@ local function HookTooltipClear()
   gameTooltip:HookScript("OnTooltipCleared", function(self)
     lastAppendedKey[self] = nil
   end)
+  clearHooked = true
 end
 
 function MobTooltip.SetEnabled(flag)
@@ -148,28 +158,30 @@ function MobTooltip.SetLocaleGetter(fn)
 end
 
 function MobTooltip.Register()
-  if registered then
-    return true
+  if not tdpRegistered then
+    local tdp = rawget(_G, "TooltipDataProcessor")
+    local enumRef = rawget(_G, "Enum")
+    local dataType = type(enumRef) == "table" and enumRef.TooltipDataType or nil
+    if
+      type(tdp) ~= "table"
+      or type(tdp.AddTooltipPostCall) ~= "function"
+      or type(dataType) ~= "table"
+      or dataType.Unit == nil
+    then
+      return false
+    end
+
+    tdp.AddTooltipPostCall(dataType.Unit, function(self, data)
+      AppendForcesLine(self, data)
+    end)
+    tdpRegistered = true
   end
 
-  local tdp = rawget(_G, "TooltipDataProcessor")
-  local enumRef = rawget(_G, "Enum")
-  local dataType = type(enumRef) == "table" and enumRef.TooltipDataType or nil
-  if
-    type(tdp) ~= "table"
-    or type(tdp.AddTooltipPostCall) ~= "function"
-    or type(dataType) ~= "table"
-    or dataType.Unit == nil
-  then
-    return false
-  end
-
-  tdp.AddTooltipPostCall(dataType.Unit, function(self, data)
-    AppendForcesLine(self, data)
-  end)
-
+  -- Retry the OnTooltipCleared hook every Register() call until it actually
+  -- attaches. In production GameTooltip is constructed by Blizzard before any
+  -- addon code runs so the very first attempt succeeds; this loop is just
+  -- defensive against a Register() that fires before GameTooltip is ready.
   HookTooltipClear()
-  registered = true
   return true
 end
 

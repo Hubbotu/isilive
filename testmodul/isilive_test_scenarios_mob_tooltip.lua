@@ -327,6 +327,57 @@ local function RegisterDedupeTests(test, Assert, WithGlobals, LoadAddonModules)
       Assert.Equal(#tooltipLines, 1, "forces line should render via UnitGUID fallback")
     end)
   end)
+
+  test("MobTooltip tolerates SetLocaleGetter returning a non-table", function()
+    local tooltipLines = {}
+    local tooltip = MakeGameTooltip(tooltipLines)
+    SetupTooltipEnv(WithGlobals, { GameTooltip = tooltip }, function(postCalls)
+      local addon = LoadAddonModules({ "isiLive_mob_tooltip.lua" }, { MPlusForces = NewMplusForcesDB() })
+      addon.MobTooltip.Register()
+      -- A buggy locale getter that returns nil instead of the expected table
+      -- must not crash AppendForcesLine; the English fallback format kicks in.
+      addon.MobTooltip.SetLocaleGetter(function()
+        return nil
+      end)
+      postCalls[1].callback(tooltip, { guid = "Creature-0-3889-161-12345-76132-0000ABCDEF" })
+      Assert.Equal(#tooltipLines, 1, "non-table locale must still produce a forces line via fallback format")
+      Assert.True(
+        tooltipLines[1]:find("+5", 1, true) ~= nil,
+        "fallback format must include the raw count: " .. tostring(tooltipLines[1])
+      )
+    end)
+  end)
+
+  test("MobTooltip.Register re-attempts OnTooltipCleared hook on later calls if GameTooltip was missing", function()
+    -- Models the (theoretical) ordering bug where Register fires before
+    -- GameTooltip is constructed. The first call registers the TDP callback
+    -- but cannot install the dedupe-clear hook; a follow-up Register() once
+    -- GameTooltip is available must wire the hook so re-hovering the same mob
+    -- doesn't silently lose the forces line.
+    local tooltipLines = {}
+    local tooltip = MakeGameTooltip(tooltipLines)
+    SetupTooltipEnv(WithGlobals, { GameTooltip = nil }, function(postCalls)
+      local addon = LoadAddonModules({ "isiLive_mob_tooltip.lua" }, { MPlusForces = NewMplusForcesDB() })
+
+      -- First Register: GameTooltip missing, TDP wired, but no hook.
+      Assert.True(addon.MobTooltip.Register(), "first Register call must succeed even without GameTooltip")
+      Assert.Equal(#postCalls, 1, "TDP callback should be installed on the first Register call")
+      Assert.Nil(tooltip.OnTooltipCleared, "GameTooltip was unavailable, so no clear hook attached yet")
+
+      -- Now GameTooltip becomes available (e.g. Blizzard finished UI init).
+      rawset(_G, "GameTooltip", tooltip)
+      Assert.True(addon.MobTooltip.Register(), "second Register call must remain idempotent and succeed")
+      Assert.Equal(#postCalls, 1, "second Register call must NOT install a duplicate TDP callback")
+      Assert.NotNil(tooltip.OnTooltipCleared, "second Register call must install the OnTooltipCleared hook")
+
+      -- Dedupe-clear should now work: render, clear, render again, expect two lines.
+      local data = { guid = "Creature-0-3889-161-12345-76132-0000ABCDEF" }
+      postCalls[1].callback(tooltip, data)
+      tooltip:OnTooltipCleared()
+      postCalls[1].callback(tooltip, data)
+      Assert.Equal(#tooltipLines, 2, "after the deferred hook attaches, re-hover must restore the forces line")
+    end)
+  end)
 end
 
 return function(test, ctx)
