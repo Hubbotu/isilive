@@ -35,6 +35,31 @@ timestamp. Net effect: the map size is bounded by the number of
 *currently active* casters within the last 3 s, not the cumulative
 history.
 
+### Test follow-up
+
+Two test-side hygiene fixes follow the 0.9.234 production changes (no
+production behaviour change):
+
+- The roster-panel coverage test for the shrink-cleanup branch in
+  `RenderRosterImpl` is renamed from "Roster render touchedRowSlots"
+  to "Roster render shrink cleanup". `touchedRowSlots` no longer
+  exists after the sequential-cleanup refactor; the test still pins
+  the same intent (5-member render → 3-member render must clear only
+  orphaned slots).
+- A new regression test in
+  [testmodul/isilive_test_scenarios_combat_events.lua](testmodul/isilive_test_scenarios_combat_events.lua)
+  covers the in-line expiry sweep: it drives five distinct
+  `caster|spell` entries into `recent`, jumps past the 3 s window,
+  and asserts that the next `ShouldDedup` miss reaps the expired
+  entries. Without this, a later refactor could silently restore the
+  unbounded-growth behaviour.
+- A tiny `_Test_GetRecentSize()` helper on the `CombatEvents`
+  controller exposes the live map size for the new test. The `_Test_`
+  prefix makes any accidental production-side caller immediately
+  visible in review; production paths never read it.
+
+Usecase count rises from 1666 to 1667.
+
 ## 2026-05-13 - Version 0.9.233 (patch)
 
 Stage A of the Notice / CombatEvents OnUpdate cleanup that followed
