@@ -128,11 +128,12 @@ function Teleport.ResolveMapIDByActivityID(activityID)
     return cached
   end
 
-  if not (C_LFGList and C_LFGList.GetActivityInfoTable) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetActivityInfoTable) ~= "function" then
     return nil
   end
 
-  local ok, activityInfo = pcall(C_LFGList.GetActivityInfoTable, numericActivityID)
+  local ok, activityInfo = pcall(lfgListApi.GetActivityInfoTable, numericActivityID)
   if not ok or type(activityInfo) ~= "table" then
     return nil
   end

@@ -34,11 +34,12 @@ local function TryGet(obj, key1, key2, key3)
 end
 
 local function GetNormalizedActiveEntryInfo()
-  if not (C_LFGList and C_LFGList.GetActiveEntryInfo) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetActiveEntryInfo) ~= "function" then
     return nil
   end
 
-  local ok, r1, r2, _, _, r5, r6, r7 = pcall(C_LFGList.GetActiveEntryInfo)
+  local ok, r1, r2, _, _, r5, r6, r7 = pcall(lfgListApi.GetActiveEntryInfo)
   if not ok then
     return nil
   end

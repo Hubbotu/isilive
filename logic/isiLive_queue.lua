@@ -4,7 +4,10 @@ addonTable = addonTable or {}
 
 local Queue = {}
 addonTable.Queue = Queue
-local unpack = unpack or rawget(table, "unpack")
+-- Lua 5.1 exposes unpack as a global; Lua 5.4 only via table.unpack. Pick
+-- whichever WoW's runtime publishes, defensively going through rawget so a
+-- sandboxed _G can't smuggle nil into the bare global lookup.
+local unpack = rawget(_G, "unpack") or rawget(table, "unpack")
 
 local function IsSecretValue(value)
   return _G.issecretvalue and _G.issecretvalue(value) == true
@@ -50,10 +53,14 @@ function Queue.SetDebugLogger(logger)
 end
 
 local function GetActivityInfoTable(activityID)
-  if not activityID or not (C_LFGList and C_LFGList.GetActivityInfoTable) then
+  if not activityID then
     return nil
   end
-  local ok, info = pcall(C_LFGList.GetActivityInfoTable, activityID)
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetActivityInfoTable) ~= "function" then
+    return nil
+  end
+  local ok, info = pcall(lfgListApi.GetActivityInfoTable, activityID)
   return (ok and type(info) == "table") and info or nil
 end
 
@@ -144,11 +151,12 @@ local function RegisterByMap(storage, keyCount, mapID, activityID)
 end
 
 local function GetActivityContext(activityID)
-  if not (C_LFGList and C_LFGList.GetActivityInfoTable) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetActivityInfoTable) ~= "function" then
     return nil, false
   end
 
-  local ok, activityInfo = pcall(C_LFGList.GetActivityInfoTable, activityID)
+  local ok, activityInfo = pcall(lfgListApi.GetActivityInfoTable, activityID)
   if not ok or type(activityInfo) ~= "table" then
     return nil, false
   end
@@ -272,14 +280,15 @@ local function IsLikelyStatusText(value)
 end
 
 local function GetSearchResultInfoSafe(searchResultID)
-  if not (C_LFGList and C_LFGList.GetSearchResultInfo) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetSearchResultInfo) ~= "function" then
     return nil
   end
   if IsSecretValue(searchResultID) or type(searchResultID) ~= "number" or searchResultID <= 0 then
     return nil
   end
 
-  local ok, info = pcall(C_LFGList.GetSearchResultInfo, searchResultID)
+  local ok, info = pcall(lfgListApi.GetSearchResultInfo, searchResultID)
   if not ok or type(info) ~= "table" then
     return nil
   end
@@ -287,10 +296,11 @@ local function GetSearchResultInfoSafe(searchResultID)
 end
 
 local function GetApplicationInfoSafe(appID)
-  if not (C_LFGList and C_LFGList.GetApplicationInfo) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if type(lfgListApi) ~= "table" or type(lfgListApi.GetApplicationInfo) ~= "function" then
     return
   end
-  local results = { pcall(C_LFGList.GetApplicationInfo, appID) }
+  local results = { pcall(lfgListApi.GetApplicationInfo, appID) }
   if not results[1] then
     return
   end
@@ -529,11 +539,16 @@ end
 -- Explicit helper for callers that deliberately want to rescan the application list.
 -- The automatic candidate path avoids this scan because third-party LFG addons can taint applicant tables.
 function Queue.CaptureQueueJoinFromApplications(updatePendingQueueJoin, resolveTeleportSpellIDByActivityID)
-  if not (C_LFGList and C_LFGList.GetApplications and C_LFGList.GetApplicationInfo) then
+  local lfgListApi = rawget(_G, "C_LFGList")
+  if
+    type(lfgListApi) ~= "table"
+    or type(lfgListApi.GetApplications) ~= "function"
+    or type(lfgListApi.GetApplicationInfo) ~= "function"
+  then
     return
   end
 
-  local ok, appIDs = pcall(C_LFGList.GetApplications)
+  local ok, appIDs = pcall(lfgListApi.GetApplications)
   if not ok then
     DebugLog("applications: pcall failed")
     return
