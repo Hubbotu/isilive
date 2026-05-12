@@ -442,7 +442,8 @@ local function FinalizeFactoryRuntime(ctx)
       -- impact on pulls, but keep dispatching during dungeon downtime so a
       -- /reload mid-key can populate ilvl/RIO/spec without waiting for the
       -- key to end.
-      if InCombatLockdown() then
+      local inCombatFn = rawget(_G, "InCombatLockdown")
+      if type(inCombatFn) == "function" and inCombatFn() then
         return
       end
       ctx.inspectController.OnUpdate()

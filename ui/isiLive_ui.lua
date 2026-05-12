@@ -1658,9 +1658,11 @@ function UI.CreateMainFrame(opts)
   opts = opts or {}
   local minHeight = tonumber(opts.minHeight) or 236
   local parent = opts.parent or UIParent
-  local isInCombat = opts.isInCombat or function()
-    return InCombatLockdown and InCombatLockdown()
-  end
+  local isInCombat = opts.isInCombat
+    or function()
+      local inCombatFn = rawget(_G, "InCombatLockdown")
+      return type(inCombatFn) == "function" and inCombatFn() == true
+    end
   local isRaidGroup = opts.isRaidGroup or function()
     return false
   end

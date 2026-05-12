@@ -385,7 +385,8 @@ local function InitializeFactoryFrameBridge(ctx)
   end
   ctx.ApplySecureSpellToButton = modules.teleport.ApplySecureSpellToButton
   ctx.IsInCombat = function()
-    return InCombatLockdown and InCombatLockdown()
+    local inCombatFn = rawget(_G, "InCombatLockdown")
+    return type(inCombatFn) == "function" and inCombatFn() == true
   end
 
   ctx.portalNavigatorNotice = modules.notice.CreatePortalNavigatorNotice({

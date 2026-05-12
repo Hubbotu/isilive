@@ -372,7 +372,8 @@ function TeleportUI.CreateController(opts)
       return nil
     end,
     isInCombat = opts.isInCombat or function()
-      return InCombatLockdown and InCombatLockdown()
+      local inCombatFn = rawget(_G, "InCombatLockdown")
+      return type(inCombatFn) == "function" and inCombatFn() == true
     end,
     logRuntimeTraceDeep = type(opts.logRuntimeTraceDeep) == "function" and opts.logRuntimeTraceDeep or nil,
     layoutMode = NormalizeLayoutMode(opts.layoutMode or LAYOUT_MODE_EXPANDED),

@@ -37,7 +37,8 @@ local function BuildCenterNoticeConfig(opts)
     buttonGap = tonumber(opts.buttonGap) or 8,
     fontDelta = tonumber(opts.fontDelta) or 10,
     isInCombat = opts.isInCombat or function()
-      return InCombatLockdown and InCombatLockdown()
+      local inCombatFn = rawget(_G, "InCombatLockdown")
+      return type(inCombatFn) == "function" and inCombatFn() == true
     end,
     resolveTeleportSpellID = opts.resolveTeleportSpellID or function(_activityID, _dungeonName)
       return nil
