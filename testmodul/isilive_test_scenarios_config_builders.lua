@@ -257,15 +257,46 @@ return function(test, ctx)
     end)
   end)
 
-  test("ConfigBuilders slash setMainFrameLocked seeds IsiLiveDB when missing", function()
+  test("ConfigBuilders slash setMainFrameLocked persists to existing IsiLiveDB", function()
     local builders = LoadBuilders()
-    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
+    local setLockedCalls = 0
+    local lastLocked = nil
+    local mainUI = {
+      SetDragLocked = function(value)
+        setLockedCalls = setLockedCalls + 1
+        lastLocked = value
+      end,
+    }
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx({ mainUI = mainUI }))
+    local WithGlobals = ctx.with_globals
+    local db = {}
+    WithGlobals({ IsiLiveDB = db }, function()
+      opts.setMainFrameLocked(true)
+    end)
+    Assert.Equal(db.lockMainFramePosition, true, "lock state must be written to the existing DB")
+    Assert.Equal(setLockedCalls, 1, "mainUI.SetDragLocked must still fire")
+    Assert.Equal(lastLocked, true, "SetDragLocked must receive the new locked state")
+  end)
+
+  test("ConfigBuilders slash setMainFrameLocked still updates in-memory lock when IsiLiveDB is missing", function()
+    local builders = LoadBuilders()
+    local setLockedCalls = 0
+    local mainUI = {
+      SetDragLocked = function()
+        setLockedCalls = setLockedCalls + 1
+      end,
+    }
+    local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx({ mainUI = mainUI }))
     local WithGlobals = ctx.with_globals
     WithGlobals({}, function()
       local previous = rawget(_G, "IsiLiveDB")
       rawset(_G, "IsiLiveDB", nil)
+      -- Production never hits this branch (slash commands run post-ADDON_LOADED
+      -- so IsiLiveDB is always restored), but the in-memory toggle must still
+      -- succeed without racing the SavedVariables restore by lazy-seeding _G.
       opts.setMainFrameLocked(true)
-      Assert.NotNil(rawget(_G, "IsiLiveDB"), "missing DB must be seeded lazily")
+      Assert.Nil(rawget(_G, "IsiLiveDB"), "missing DB must NOT be lazily allocated")
+      Assert.Equal(setLockedCalls, 1, "mainUI.SetDragLocked still fires even without DB")
       rawset(_G, "IsiLiveDB", previous)
     end)
   end)
@@ -320,7 +351,7 @@ return function(test, ctx)
   end)
 
   test(
-    "ConfigBuilders slash resetMainFramePosition seeds IsiLiveDB when missing and tolerates missing UI refs",
+    "ConfigBuilders slash resetMainFramePosition no-ops when IsiLiveDB is missing and tolerates missing UI refs",
     function()
       local builders = LoadBuilders()
       local opts = builders.BuildSlashCommandsOpts(BuildSlashCtx())
@@ -329,9 +360,12 @@ return function(test, ctx)
         local previous = rawget(_G, "IsiLiveDB")
         rawset(_G, "IsiLiveDB", nil)
         -- Must not raise even without mainUI / mainFrame / panelUI / settingsPanel.
+        -- Production never enters this branch (the /isilive resetui slash runs
+        -- post-ADDON_LOADED so IsiLiveDB is always present); lazy-seeding the
+        -- table here would race the SavedVariables restore and clobber other
+        -- settings, so the function must bail silently instead.
         opts.resetMainFramePosition()
-        Assert.NotNil(rawget(_G, "IsiLiveDB"))
-        Assert.Equal(rawget(_G, "IsiLiveDB").uiScale, 1.0)
+        Assert.Nil(rawget(_G, "IsiLiveDB"), "missing DB must NOT be lazily allocated")
         rawset(_G, "IsiLiveDB", previous)
       end)
     end

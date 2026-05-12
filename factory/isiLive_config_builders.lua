@@ -102,22 +102,25 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
     end,
     setMainFrameLocked = function(locked)
       local nextLocked = locked == true
+      -- IsiLiveDB is restored before ADDON_LOADED. Both /il lock and the
+      -- lock-button OnClick that target this callback run from post-load
+      -- contexts, so a missing DB here means we're in a (theoretical) pre-
+      -- load callsite where lazy-allocating would race the SavedVariables
+      -- restore. Mirror the in-memory lock state but skip persistence.
       local db = rawget(_G, "IsiLiveDB")
-      if not db then
-        db = {}
-        IsiLiveDB = db
+      if type(db) == "table" then
+        db.lockMainFramePosition = nextLocked
       end
-      db.lockMainFramePosition = nextLocked
       local mainUI = ctx.mainUI
       if mainUI and type(mainUI.SetDragLocked) == "function" then
         mainUI.SetDragLocked(nextLocked)
       end
     end,
     resetMainFramePosition = function()
+      -- See setMainFrameLocked above for the no-op-on-nil rationale.
       local db = rawget(_G, "IsiLiveDB")
-      if not db then
-        db = {}
-        IsiLiveDB = db
+      if type(db) ~= "table" then
+        return
       end
       db.uiScale = 1.0
       db.bgAlpha = defaultBgAlpha
