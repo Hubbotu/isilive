@@ -1051,7 +1051,8 @@ local function RegisterBlizzardUnitLanguageTooltip(opts)
   end
 
   local tooltipDataProcessor = rawget(_G, "TooltipDataProcessor")
-  local tooltipDataType = rawget(_G, "Enum") and Enum.TooltipDataType or nil
+  local enumRef = rawget(_G, "Enum")
+  local tooltipDataType = type(enumRef) == "table" and enumRef.TooltipDataType or nil
   local registeredTooltipDataProcessor = false
   if
     type(tooltipDataProcessor) == "table"

@@ -259,7 +259,7 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
     AssertContains(
       Assert,
       content,
-      "if not (C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID) then",
+      'local challengeMode = rawget(_G, "C_ChallengeMode")',
       "isiLive_factory_controllers.lua must guard Blizzard challenge API access in root helper"
     )
     AssertContains(

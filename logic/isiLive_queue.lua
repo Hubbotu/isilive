@@ -246,13 +246,17 @@ function Queue.ParseApplicationStatus(rawStatus)
     return isInviteLike, isAccepted
   end
 
-  if type(rawStatus) == "number" and Enum and Enum.LFGListApplicationStatus then
-    for key, value in pairs(Enum.LFGListApplicationStatus) do
-      if value == rawStatus then
-        local keyText = string.lower(tostring(key))
-        isAccepted = keyText:find("accepted") ~= nil
-        isInviteLike = keyText:find("invite") ~= nil or isAccepted
-        return isInviteLike, isAccepted
+  if type(rawStatus) == "number" then
+    local enumRef = rawget(_G, "Enum")
+    local statusEnum = type(enumRef) == "table" and enumRef.LFGListApplicationStatus or nil
+    if type(statusEnum) == "table" then
+      for key, value in pairs(statusEnum) do
+        if value == rawStatus then
+          local keyText = string.lower(tostring(key))
+          isAccepted = keyText:find("accepted") ~= nil
+          isInviteLike = keyText:find("invite") ~= nil or isAccepted
+          return isInviteLike, isAccepted
+        end
       end
     end
   end

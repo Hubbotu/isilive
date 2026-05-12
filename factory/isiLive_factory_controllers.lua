@@ -80,10 +80,11 @@ end
 -- Sub-function: Game API safe wrappers and instance helpers.
 local function InitializeGameAPIHelpers(ctx, runtimeState)
   ctx.GetActiveChallengeMapID = function()
-    if not (C_ChallengeMode and C_ChallengeMode.GetActiveChallengeMapID) then
+    local challengeMode = rawget(_G, "C_ChallengeMode")
+    if type(challengeMode) ~= "table" or type(challengeMode.GetActiveChallengeMapID) ~= "function" then
       return nil
     end
-    local ok, mapID = pcall(C_ChallengeMode.GetActiveChallengeMapID)
+    local ok, mapID = pcall(challengeMode.GetActiveChallengeMapID)
     if not ok then
       return nil
     end
