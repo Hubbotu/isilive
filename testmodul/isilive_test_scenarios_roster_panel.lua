@@ -1459,13 +1459,17 @@ RegisterRosterRenderReadyCheckReapplyTest = function(test, Assert, WithGlobals, 
     end)
   end)
 
-  -- Coverage + regression for the touchedRowSlots logic in RenderRosterImpl:
+  -- Coverage + regression for the selective slot-clear logic in RenderRosterImpl:
   -- (1) full 5-member render goes through the entire re-render path for every slot,
-  -- and (2) a follow-up render with fewer members must clear ONLY the now-untouched
+  -- and (2) a follow-up render with fewer members must clear ONLY the now-orphaned
   -- slots — not the slots that the new orderedRoster still occupies. This is what
   -- protects the readyCheck-hold background from being hidden by parent-Hide between
-  -- a RefreshReadyCheckStateImpl and a follow-up generic RenderRoster.
-  test("Roster render touchedRowSlots: 5-member roster fills all slots, group-shrink clears only orphans", function()
+  -- a RefreshReadyCheckStateImpl and a follow-up generic RenderRoster. (The original
+  -- implementation tracked the refilled slots in a `touchedRowSlots` set; the
+  -- sequential render loop now derives the same cleanup range from the final
+  -- `index` value, so the cleanup is `[index, #memberRows]`. Test name kept
+  -- intent-focused rather than implementation-anchored.)
+  test("Roster render shrink cleanup: 5-member roster fills all slots, group-shrink clears only orphans", function()
     local createdFrames = {}
     local createdFontStrings = {}
     local createdTextures = {}

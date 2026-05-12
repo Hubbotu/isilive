@@ -188,6 +188,72 @@ local function RegisterCombatEventsBRTests(test, ctx)
     Assert.Equal(#broadcasts, 2, "BR after dedup window elapses must fire again")
   end)
 
+  -- Regression for the in-line expiry sweep introduced in 0.9.234. Without
+  -- the sweep, each distinct `sourceName|spellID` pair stayed in `recent`
+  -- forever (or until CHALLENGE_MODE_* Reset), so a long session that
+  -- hopped raids without entering a key could grow the map unboundedly.
+  test("CombatEvents.ShouldDedup sweeps entries that fell out of the 3s window", function()
+    local addon = nil
+    WithGlobals(BuildCombatEventsEnv(), function()
+      addon = LoadAddonModules({ "isiLive_combat_events.lua" })
+    end)
+    local broadcasts = {}
+    local nowRef = { value = 100 }
+    local nameMap = {}
+    for i = 1, 5 do
+      nameMap["player" .. i] = "Caster" .. i .. "-Realm"
+    end
+    local controller = BuildController({
+      addon = addon,
+      broadcasts = broadcasts,
+      nowRef = nowRef,
+      nameMap = nameMap,
+    })
+    -- HandleUnitSpellcastSucceeded only fires on the literal "player" unit
+    -- (Secret-Value safety), so we drive the dedup map via direct controller
+    -- traffic at t=100..102 by reusing the player unit five times with the
+    -- caster name rebound each call.
+    nameMap.player = nameMap.player1
+    controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
+    nameMap.player = nameMap.player2
+    nowRef.value = 100.5
+    controller.HandleUnitSpellcastSucceeded("player", "cast-2", 20484)
+    nameMap.player = nameMap.player3
+    nowRef.value = 101
+    controller.HandleUnitSpellcastSucceeded("player", "cast-3", 20484)
+    nameMap.player = nameMap.player4
+    nowRef.value = 101.5
+    controller.HandleUnitSpellcastSucceeded("player", "cast-4", 20484)
+    nameMap.player = nameMap.player5
+    nowRef.value = 102
+    controller.HandleUnitSpellcastSucceeded("player", "cast-5", 20484)
+    Assert.Equal(controller._Test_GetRecentSize(), 5, "five distinct caster|spell entries are tracked")
+
+    -- Jump well past the 3s dedup window. The next cast triggers the
+    -- in-line sweep before writing its own timestamp, so the four prior
+    -- entries from t=100..101.5 must be reaped. The 102/fresh entries
+    -- remain — t=102 is still within 3s of t=104.5.
+    nameMap.player = nameMap.player1
+    nowRef.value = 104.5
+    controller.HandleUnitSpellcastSucceeded("player", "cast-6", 20484)
+    Assert.True(
+      controller._Test_GetRecentSize() <= 2,
+      "expired entries must be reaped on the next ShouldDedup miss; map size = "
+        .. tostring(controller._Test_GetRecentSize())
+    )
+
+    -- Long-term unbounded check: many more casts spread across an even
+    -- bigger time gap shrink the map back to a single fresh entry.
+    nowRef.value = 200
+    nameMap.player = nameMap.player2
+    controller.HandleUnitSpellcastSucceeded("player", "cast-7", 20484)
+    Assert.Equal(
+      controller._Test_GetRecentSize(),
+      1,
+      "after a 3s+ gap with one fresh cast, only the new entry survives the sweep"
+    )
+  end)
+
   test("CombatEvents ignores casts from units other than the player", function()
     local addon = nil
     WithGlobals(BuildCombatEventsEnv(), function()

@@ -176,6 +176,18 @@ function CombatEvents.CreateController(opts)
     cachedInKey = nil
   end
 
+  -- Test-only hook: exposes the live size of the dedup map so the unit
+  -- test for ShouldDedup's expiry sweep can verify the map stays bounded.
+  -- Production paths never read this; the name carries the `_Test_` prefix
+  -- so a stray production-side call is immediately visible in review.
+  function controller._Test_GetRecentSize()
+    local n = 0
+    for _ in pairs(recent) do
+      n = n + 1
+    end
+    return n
+  end
+
   return controller
 end
 
