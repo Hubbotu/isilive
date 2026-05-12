@@ -17,7 +17,12 @@ function QueueDebug.CreateController(opts)
   end
   local getTimestamp = opts.getTimestamp
     or function()
-      return date and date("%H:%M:%S") or tostring(GetTime and GetTime() or 0)
+      local dateFn = rawget(_G, "date")
+      if type(dateFn) == "function" then
+        return dateFn("%H:%M:%S")
+      end
+      local getTimeFn = rawget(_G, "GetTime")
+      return tostring(type(getTimeFn) == "function" and getTimeFn() or 0)
     end
 
   local maxEntries = tonumber(opts.maxEntries) or 400
@@ -48,12 +53,14 @@ function QueueDebug.CreateController(opts)
   function controller.SetEnabled(enabled)
     local normalized = enabled and true or false
     queueSetDebugEnabled(normalized)
+    -- SavedVariables are restored before ADDON_LOADED and SetEnabled only runs
+    -- from the /isilive qdebug slash command (post-load). Lazy-creating
+    -- IsiLiveDB pre-load would race the SavedVariables restore and clobber
+    -- other settings.
     local db = rawget(_G, "IsiLiveDB")
-    if not db then
-      db = {}
-      IsiLiveDB = db
+    if type(db) == "table" then
+      db.queueDebug = normalized
     end
-    db.queueDebug = normalized
   end
 
   function controller.IsEnabled()
@@ -66,7 +73,15 @@ function QueueDebug.CreateController(opts)
   end
 
   function controller.ClearLog()
-    wipe(EnsureStorage())
+    local wipeFn = rawget(_G, "wipe")
+    local storage = EnsureStorage()
+    if type(wipeFn) == "function" then
+      wipeFn(storage)
+    else
+      for key in pairs(storage) do
+        storage[key] = nil
+      end
+    end
   end
 
   function controller.GetLogCount()

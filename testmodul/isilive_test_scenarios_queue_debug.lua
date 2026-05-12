@@ -67,14 +67,17 @@ return function(test, ctx)
     end)
   end)
 
-  test("queue_debug: SetEnabled seeds IsiLiveDB when absent", function()
+  test("queue_debug: SetEnabled no-ops persistence when IsiLiveDB is absent", function()
     WithGlobals({}, function()
       local previous = rawget(_G, "IsiLiveDB")
       rawset(_G, "IsiLiveDB", nil)
       local addon = Load()
+      local moduleEnabled = nil
       local controller = addon.QueueDebug.CreateController({
         printFn = function() end,
-        queueSetDebugEnabled = function() end,
+        queueSetDebugEnabled = function(value)
+          moduleEnabled = value
+        end,
         queueIsDebugEnabled = function()
           return nil
         end,
@@ -82,8 +85,12 @@ return function(test, ctx)
           return "t"
         end,
       })
+      -- Production never enters this branch (qdebug slash runs post-ADDON_LOADED
+      -- so IsiLiveDB is always present); lazy-seeding pre-load would race the
+      -- SavedVariables restore and clobber other settings.
       controller.SetEnabled(true)
-      Assert.NotNil(rawget(_G, "IsiLiveDB"), "missing DB must be seeded lazily")
+      Assert.Nil(rawget(_G, "IsiLiveDB"), "missing DB must NOT be lazily allocated")
+      Assert.Equal(moduleEnabled, true, "queueSetDebugEnabled still fires regardless of DB state")
       rawset(_G, "IsiLiveDB", previous)
     end)
   end)
