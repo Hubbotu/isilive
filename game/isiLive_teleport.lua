@@ -20,14 +20,6 @@ local ACTIVITY_TO_TELEPORT_CACHE = {}
 local ACTIVITY_TO_MAP_CACHE = {}
 
 local pendingCombatUpdates = {}
-local function ClearTable(t)
-  if type(t) ~= "table" then
-    return
-  end
-  for key in pairs(t) do
-    t[key] = nil
-  end
-end
 
 local combatRetryFrame = CreateFrame("Frame")
 -- PLAYER_REGEN_ENABLED is registered statically at module load to avoid a
@@ -41,10 +33,18 @@ combatRetryFrame:SetScript("OnEvent", function(_, event)
   if next(pendingCombatUpdates) == nil then
     return
   end
+  -- Snapshot the queue so ApplySecureSpellToButton's own per-entry mutations
+  -- (clears successful entries, re-defers if it sees InCombatLockdown again)
+  -- don't race the pairs() traversal. No blanket ClearTable afterwards — the
+  -- per-entry state is the source of truth so a re-deferred apply survives to
+  -- the next regen tick.
+  local snapshot = {}
   for button, spellID in pairs(pendingCombatUpdates) do
+    snapshot[button] = spellID
+  end
+  for button, spellID in pairs(snapshot) do
     Teleport.ApplySecureSpellToButton(button, spellID)
   end
-  ClearTable(pendingCombatUpdates)
 end)
 
 local function ResolveMappedSpellID(mapID)
@@ -312,7 +312,8 @@ function Teleport.ApplySecureSpellToButton(button, spellID)
   end
 
   -- Protection: Cannot set attributes on secure frames while in combat.
-  if InCombatLockdown and InCombatLockdown() then
+  local inCombat = rawget(_G, "InCombatLockdown")
+  if type(inCombat) == "function" and inCombat() then
     pendingCombatUpdates[button] = spellID
     return false
   end
