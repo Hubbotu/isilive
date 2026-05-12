@@ -527,8 +527,9 @@ local function ConstructPanelUI(mainFrame, uiDeps)
   }
   for _, def in ipairs(modeButtonDefs) do
     local target = def.target
+    local raidLockedTarget = target ~= LAYOUT_MODE_COMPACT_HORIZONTAL
     local function ApplyRequestedLayoutMode()
-      if isRaidGroupFn() and target ~= LAYOUT_MODE_COMPACT_HORIZONTAL then
+      if raidLockedTarget and isRaidGroupFn() then
         return
       end
       Trace(string.format("layout mode changed to %s", tostring(target)))
@@ -544,6 +545,18 @@ local function ConstructPanelUI(mainFrame, uiDeps)
     local btn = CreateModeButton(mainFrame, def.xOffset, def.label, target, function()
       ApplyRequestedLayoutMode()
     end, def.width)
+    -- Mode buttons that are not COMPACT_HORIZONTAL silently no-op while the
+    -- player is in a raid (ApplyRequestedLayoutMode early-returns). Surface the
+    -- reason in the hover tooltip so the click-does-nothing case is obvious.
+    local getLockReason = raidLockedTarget
+        and function()
+          if not isRaidGroupFn() then
+            return nil
+          end
+          local locales = type(getL) == "function" and getL() or {}
+          return locales.TOOLTIP_LAYOUT_RAID_LOCK or "Not available in raids."
+        end
+      or nil
     AttachModeButtonTooltip(
       panelTooltip,
       btn,
@@ -552,7 +565,8 @@ local function ConstructPanelUI(mainFrame, uiDeps)
       def.descriptionKey,
       def.descriptionFallback,
       "TOOLTIP_LAYOUT_SWITCH",
-      L.TOOLTIP_LAYOUT_SWITCH or "Click to switch layout."
+      L.TOOLTIP_LAYOUT_SWITCH or "Click to switch layout.",
+      getLockReason
     )
     table.insert(ui.modeButtons, btn)
   end

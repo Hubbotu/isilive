@@ -386,6 +386,84 @@ return function(test, ctx)
     end)
   end)
 
+  test("AttachModeButtonTooltip OnEnter renders an optional lock-reason line between description and hint", function()
+    WithGlobals(MinimalGlobals(), function()
+      local tooltip = {
+        _lines = {},
+        SetText = function() end,
+        AddLine = function(self, line)
+          table.insert(self._lines, line)
+        end,
+        Show = function() end,
+      }
+      local addon = LoadChromeWithTooltipStubs({
+        anchor = function()
+          return tooltip
+        end,
+        hide = function() end,
+      })
+      local btn = NewBackdropFrame()
+      addon._RosterInternal.AttachModeButtonTooltip(
+        nil,
+        btn,
+        function()
+          return {}
+        end,
+        "T",
+        "D",
+        "desc",
+        "C",
+        "hint",
+        function()
+          return "raid lock notice"
+        end
+      )
+      btn:Trigger("OnEnter")
+      Assert.Equal(tooltip._lines[1], "desc", "description line stays first")
+      Assert.Equal(tooltip._lines[2], "raid lock notice", "lock reason line sits between description and click hint")
+      Assert.Equal(tooltip._lines[3], "hint", "click hint stays last")
+    end)
+  end)
+
+  test("AttachModeButtonTooltip OnEnter skips lock-reason line when callback returns nil", function()
+    WithGlobals(MinimalGlobals(), function()
+      local tooltip = {
+        _lines = {},
+        SetText = function() end,
+        AddLine = function(self, line)
+          table.insert(self._lines, line)
+        end,
+        Show = function() end,
+      }
+      local addon = LoadChromeWithTooltipStubs({
+        anchor = function()
+          return tooltip
+        end,
+        hide = function() end,
+      })
+      local btn = NewBackdropFrame()
+      addon._RosterInternal.AttachModeButtonTooltip(
+        nil,
+        btn,
+        function()
+          return {}
+        end,
+        "T",
+        "D",
+        "desc",
+        "C",
+        "hint",
+        function()
+          return nil
+        end
+      )
+      btn:Trigger("OnEnter")
+      Assert.Equal(#tooltip._lines, 2, "no lock-reason line should be emitted when the callback returns nil")
+      Assert.Equal(tooltip._lines[1], "desc", "description line still emitted")
+      Assert.Equal(tooltip._lines[2], "hint", "click hint still emitted")
+    end)
+  end)
+
   -- CreateTankHelperButtons OnEnter / OnLeave for one of the marker buttons ---
 
   test("CreateTankHelperButtons attaches hover tooltips that render marker name and click hints", function()

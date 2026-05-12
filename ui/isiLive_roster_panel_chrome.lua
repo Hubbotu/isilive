@@ -331,7 +331,8 @@ local function AttachModeButtonTooltip(
   descriptionKey,
   descriptionFallback,
   clickHintKey,
-  clickHintFallback
+  clickHintFallback,
+  getLockReason
 )
   button:SetScript("OnEnter", function(self)
     local tooltip = AnchorRosterHoverTooltip(tooltipFrame, self)
@@ -348,6 +349,9 @@ local function AttachModeButtonTooltip(
     if type(clickHintText) ~= "string" or clickHintText == "" then
       clickHintText = clickHintFallback
     end
+    -- Optional runtime-evaluated lock notice (used to explain why a layout
+    -- button silently no-ops, e.g. M+ / V while the player is in a raid).
+    local lockReason = type(getLockReason) == "function" and getLockReason() or nil
 
     if type(tooltip.SetText) == "function" then
       tooltip:SetText(titleText, 1, 1, 1)
@@ -355,6 +359,9 @@ local function AttachModeButtonTooltip(
     if type(tooltip.AddLine) == "function" then
       if type(descriptionText) == "string" and descriptionText ~= "" then
         tooltip:AddLine(descriptionText, 1, 1, 1, true)
+      end
+      if type(lockReason) == "string" and lockReason ~= "" then
+        tooltip:AddLine(lockReason, 1, 0.5, 0.3, true)
       end
       if type(clickHintText) == "string" and clickHintText ~= "" then
         tooltip:AddLine(clickHintText, 0.8, 0.8, 0.8, true)
