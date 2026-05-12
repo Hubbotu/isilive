@@ -133,7 +133,10 @@ function Roster.BuildDisplayData(info, opts)
   if info.isGhost or isOffline then
     colorHex = "ff808080" -- Grey
   else
-    local classColors = type(rawget(_G, "RAID_CLASS_COLORS")) == "table" and rawget(_G, "RAID_CLASS_COLORS") or nil
+    local classColors = rawget(_G, "RAID_CLASS_COLORS")
+    if type(classColors) ~= "table" then
+      classColors = nil
+    end
     local classColor = (classColors and classColors[info.class]) or { r = 1, g = 1, b = 1 }
     colorHex = BuildColorHexSafe(classColor.r, classColor.g, classColor.b)
   end
