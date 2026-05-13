@@ -1441,6 +1441,14 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
   -- levelAnnouncedTargetDungeonName lock-in is set as a side effect of
   -- EmitTargetDungeonAnnouncement, so the subsequent
   -- UpdateStatusLine-driven re-evaluation stays silent.
+  --
+  -- No IsInGroup gate: the LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted
+  -- event fires before the matching GROUP_ROSTER_UPDATE, so IsInGroup() can
+  -- transiently return false in this window (see isiLive_lfg_detect.lua's
+  -- "ClearDetectedState" guard which explicitly documents the same race).
+  -- The Center Notice path has no such gate and surfaces correctly; the
+  -- chat line is a local print() (not SendChatMessage), so there is no
+  -- protocol-level reason to require group membership for the announce.
   local lfgDetectForChat = addonTable.LFGDetect
   if type(lfgDetectForChat) == "table" and type(lfgDetectForChat.SetTargetDungeonChatCallback) == "function" then
     lfgDetectForChat.SetTargetDungeonChatCallback(function(payload)
@@ -1460,11 +1468,6 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
         level = payload.level,
       })
     end)
-    if type(lfgDetectForChat.SetTargetDungeonChatEnabledFn) == "function" then
-      lfgDetectForChat.SetTargetDungeonChatEnabledFn(function()
-        return IsInGroup() == true
-      end)
-    end
   end
 
   local function QueueForceRefreshData()

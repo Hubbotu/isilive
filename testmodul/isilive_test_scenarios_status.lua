@@ -1128,6 +1128,14 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
   end)
 
   test("Status target dungeon chat lock-in resets when group leaves so a fresh key can announce again", function()
+    -- Real group-leave path: GetStatusTargetDungeonInfo collapses to nil
+    -- once no roster / queue / synced target survives. Reset is driven by
+    -- the info=nil branch — NOT by a transient IsInGroup=false alone,
+    -- because IsInGroup() is known to flicker false between
+    -- LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted and the delayed
+    -- GROUP_ROSTER_UPDATE, and resetting on every transient flicker would
+    -- erase the direct-push lock-in. See MaybeAnnounceTargetDungeonChat's
+    -- lock-in protection guard.
     local current = {
       inGroup = true,
       targetInfo = { name = "Nexus-Point Xenas", level = 14 },
@@ -1161,8 +1169,11 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       controller.MaybeAnnounceTargetDungeonChat()
       Assert.Equal(#prints, 1, "setup: locked-in announce printed once")
 
+      -- Group leave: the roster collapses, GetStatusTargetDungeonInfo
+      -- returns nil. That is the real-life signal — not IsInGroup alone.
       current.inGroup = false
-      controller.MaybeAnnounceTargetDungeonChat() -- triggers ResetTargetDungeonChatState
+      current.targetInfo = nil
+      controller.MaybeAnnounceTargetDungeonChat() -- info=nil branch resets the state
 
       current.inGroup = true
       current.targetInfo = { name = "Nexus-Point Xenas", level = 14 }
@@ -1172,6 +1183,66 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         2,
         "leaving the group resets the lock-in; the next key for the same dungeon must announce again"
       )
+    end)
+  end)
+
+  test("Status target dungeon chat preserves the lock-in during transient IsInGroup=false", function()
+    -- Reproduces the LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted
+    -- race: the direct-push lock-in is set before GROUP_ROSTER_UPDATE
+    -- flips IsInGroup() to true. The queue handler runs updateStatusLine
+    -- synchronously right after the accept event, so MaybeAnnounceTarget-
+    -- DungeonChat hits with IsInGroup()=false. Without the lock-in guard
+    -- the next resolver pass would re-announce — often without "+N" once
+    -- the LFG-title hint ages out.
+    local current = {
+      inGroup = true,
+      targetInfo = { name = "Die Himmelsnadel", level = 13 },
+    }
+    local prints = {}
+
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Outside", "none", 0, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      -- Direct-push (simulated): emits the announce + sets the lock-in.
+      controller.AnnounceTargetDungeonFromPayload({ name = "Die Himmelsnadel", level = 13 })
+      Assert.Equal(#prints, 1, "direct push emits the first announce with +13")
+
+      -- Race window: queue handler's synchronous updateStatusLine fires
+      -- while IsInGroup() is still transient-false. The target info still
+      -- carries the listing (pendingAcceptedInviteMapID feeds the resolver).
+      current.inGroup = false
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "transient IsInGroup=false must not erase the lock-in or re-announce")
+
+      -- GROUP_ROSTER_UPDATE: IsInGroup flips to true. Even if the resolver
+      -- can no longer produce a level (LFG-title hint aged out), the
+      -- lock-in must keep the chat line quiet.
+      current.inGroup = true
+      current.targetInfo = { name = "Die Himmelsnadel" }
+      controller.MaybeAnnounceTargetDungeonChat()
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "lock-in survives the IsInGroup flicker — no level-less duplicate")
     end)
   end)
 

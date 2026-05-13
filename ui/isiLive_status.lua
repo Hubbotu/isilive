@@ -347,14 +347,37 @@ end
 -- level it received via the LFG payload, so the user still sees "+N" at
 -- the moment of acceptance even when the chat waits.
 local function MaybeAnnounceTargetDungeonChat(state, deps)
-  if type(deps.isInGroup) == "function" and deps.isInGroup() ~= true then
+  -- info-first ordering: a real group-leave collapses GetStatusTarget-
+  -- DungeonInfo to nil (no roster / queue / synced target left), which
+  -- ResetTargetDungeonChatState handles below. Resolving info before
+  -- the IsInGroup guard ensures that real leave-paths still reset the
+  -- lock-in even when the IsInGroup guard would otherwise short-circuit
+  -- the function.
+  local info = ResolveConcreteTargetDungeonInfo(deps)
+  if type(info) ~= "table" then
     ResetTargetDungeonChatState(state)
     return
   end
 
-  local info = ResolveConcreteTargetDungeonInfo(deps)
-  if type(info) ~= "table" then
-    ResetTargetDungeonChatState(state)
+  if type(deps.isInGroup) == "function" and deps.isInGroup() ~= true then
+    -- Lock-in protection: the LFG-accept direct push
+    -- (AnnounceTargetDungeonFromPayload) fires *before*
+    -- GROUP_ROSTER_UPDATE flips IsInGroup() to true. The queue
+    -- handler runs ctx.updateStatusLine() synchronously right after
+    -- the accept event, so an unconditional reset here would erase
+    -- the lock-in that the direct push just set — a subsequent
+    -- GROUP_ROSTER_UPDATE pass would then re-fire the announce, often
+    -- without the "+N" because the LFG-title hint may have aged out.
+    -- When the lock-in is set, only the deferred-announce bookkeeping
+    -- gets cleared; the lock-in itself survives the transient flicker.
+    -- True group-leave is handled above (info=nil) — the lock-in
+    -- clears via ResetTargetDungeonChatState there.
+    if state.levelAnnouncedTargetDungeonName == nil then
+      ResetTargetDungeonChatState(state)
+    else
+      state.pendingTargetDungeonAnnouncementName = nil
+      state.pendingTargetDungeonAnnouncementAt = nil
+    end
     return
   end
 

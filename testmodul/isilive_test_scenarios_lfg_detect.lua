@@ -1210,6 +1210,45 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect direct-push fires even while IsInGroup() is transient false", function()
+    -- Reproduces the LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted
+    -- race: Blizzard sends the accept event before the matching
+    -- GROUP_ROSTER_UPDATE, so IsInGroup() can still return false in this
+    -- window (see the ClearDetectedState guard's comment in
+    -- isiLive_lfg_detect.lua). The production factory wiring deliberately
+    -- installs the callback WITHOUT SetTargetDungeonChatEnabledFn — the
+    -- chat line is a local print and the Center Notice path has no
+    -- IsInGroup gate either, so the direct push must mirror that
+    -- contract. This test mirrors the production setup (no enabled fn)
+    -- and asserts the callback fires.
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return false
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [604] = { activityID = 1768, name = "+13 quick", leaderName = "L-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      -- No SetTargetDungeonChatEnabledFn: matches the production wiring
+      -- after the IsInGroup gate was removed.
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 604, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 604, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "direct-push fires regardless of IsInGroup state")
+      Assert.Equal(payloads[1].level, 13, "payload still carries entry.titleLevel from the listing")
+    end)
+  end)
+
   test("LFGDetect PARTY_LEADER_CHANGED is a no-op when no listing identity was captured", function()
     -- Pre-formed-group case: never went through an LFG accept, so the
     -- accepted-invite identity slots are nil to begin with. The event must

@@ -67,9 +67,12 @@ the chat shows `+N` — they share the payload now.
   via the existing `ResolveAcceptedInviteDungeonName` helper (same
   source the post-accept notice uses) and then forwards
   `{name, level}` to `statusController.AnnounceTargetDungeonFromPayload`.
-- The enabled gate is `IsInGroup() == true`. After invite-accept the
-  player is in (or instantly joining) the group; the gate prevents
-  the announce from firing during transient pre-group states.
+- No `IsInGroup` gate (corrected by the follow-up below). The direct
+  push fires deterministically on every accept event; the Center
+  Notice path has no IsInGroup gate either, and the chat line is a
+  local `print()` (not `SendChatMessage`), so requiring group
+  membership at the moment of accept has no protocol-level
+  justification.
 
 ### Why the resolver chain stays
 
@@ -112,6 +115,80 @@ one path where the listing payload carries the authoritative level.
   silences the callback.
 - `direct-push surfaces level=nil when the listing has no +N
   marker` — propagates absence cleanly.
+
+### Follow-up 2026-05-14 — IsInGroup race after invite-accept
+
+In-game report after the initial 0.9.240 push: `Die Himmelsnadel +13`
+in the Center Notice but `Ziel-Dungeon: Die Himmelsnadel` (no `+13`)
+in the chat. The direct-push hook was wired, the resolver chain was
+bypassed, yet the level still went missing.
+
+Root cause: two coupled IsInGroup misuses formed a race.
+
+1. **Factory gate fired too early.** The initial wiring guarded
+   the direct push with `IsInGroup() == true`. Blizzard sends
+   `LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted` *before* the
+   matching `GROUP_ROSTER_UPDATE`, so `IsInGroup()` is still false in
+   that window (the `ClearDetectedState` guard in
+   [game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua) already
+   documents the same race). The gate silenced the callback on every
+   accept where the roster signal lagged behind the accept event.
+2. **Resolver-side reset erased the lock-in.**
+   [logic/isiLive_event_handlers_queue.lua](logic/isiLive_event_handlers_queue.lua)
+   runs `RefreshTargetStatusAfterInviteAccepted` *synchronously* right
+   after the LFG-detect handler returns. That calls
+   `ctx.updateStatusLine()` → `MaybeAnnounceTargetDungeonChat` while
+   `IsInGroup()` is still false, and the old `isInGroup() ~= true`
+   branch hit `ResetTargetDungeonChatState` and wiped the
+   `levelAnnouncedTargetDungeonName` that the direct push had just
+   set. The subsequent `GROUP_ROSTER_UPDATE`-driven pass then re-fired
+   the announce through the resolver chain — usually without `+N`
+   because the LFG-title hint had aged out by then.
+
+The combination meant the direct push either never fired (gate
+silenced it) or fired but was immediately undone (lock-in wiped). The
+Center Notice reads `entry.titleLevel` synchronously and has no such
+gate, so it always rendered correctly — that is why the two surfaces
+disagreed.
+
+Fix:
+
+- [factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+  the `SetTargetDungeonChatEnabledFn(function() return IsInGroup() ==
+  true end)` setter is removed from the production wiring. The
+  `LFGDetect.SetTargetDungeonChatEnabledFn` API itself stays
+  (tests still cover the gate semantics) but the production wiring
+  installs the callback without it. The earlier "Factory wiring"
+  block above is now accurate.
+- [ui/isiLive_status.lua](ui/isiLive_status.lua):
+  `MaybeAnnounceTargetDungeonChat` is reordered to resolve
+  `ResolveConcreteTargetDungeonInfo` *before* the IsInGroup guard.
+  Real group-leave still resets through the `info=nil` branch (no
+  roster / queue / synced target ⇒ no target info). The IsInGroup
+  branch now protects the lock-in: when
+  `state.levelAnnouncedTargetDungeonName` is already set (direct push
+  has fired), only the deferred-announce bookkeeping clears; the
+  lock-in itself survives the transient flicker.
+
+Test changes; usecase count rises from 1702 to 1704.
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- "lock-in resets when group leaves" rewritten on the real `info=nil`
+  reset path (the mocked `targetInfo` is now cleared alongside
+  `inGroup=false`, matching how the live resolver collapses to nil
+  when the roster is empty).
+- New `preserves the lock-in during transient IsInGroup=false` pins
+  the LFG-accept race window: direct push fires, `IsInGroup` flips
+  false, the synchronous status refresh runs — the chat line stays
+  quiet, the next `GROUP_ROSTER_UPDATE` pass stays quiet too.
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- New `direct-push fires even while IsInGroup() is transient false`
+  pins the production wiring: callback set, no `SetTargetDungeonChat-
+  EnabledFn`, `IsInGroup()=false` — the callback must still fire and
+  carry the listing's `+N`.
 
 ## 2026-05-13 - Version 0.9.239 (patch)
 
