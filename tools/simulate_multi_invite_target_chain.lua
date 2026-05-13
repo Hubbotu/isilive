@@ -432,17 +432,31 @@ local function Run()
     -- ------------------------------------------------------------------
     -- Phase 5: end-of-cycle reset. After the player leaves the group, the
     -- next +N for the SAME dungeon must be free to announce again.
+    --
+    -- Real group-leave sequence: ClearAllState clears the LFG-detect
+    -- identity slots (detectedMapID / pendingAcceptedInviteMapID /
+    -- activeInviteTitleLevel / ...) and the roster empties.
+    -- ctx.GetStatusTargetDungeonInfo then returns nil — that is the
+    -- signal MaybeAnnounceTargetDungeonChat resets on, not IsInGroup
+    -- alone (a transient IsInGroup=false is expected during the
+    -- LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted -> GROUP_ROSTER_-
+    -- UPDATE window, and must NOT wipe the lock-in).
     -- ------------------------------------------------------------------
     print("\n---- Phase 5: leave + rejoin must allow a fresh announce ----")
+    addon.LFGDetect.ClearAllState()
+    isInGroup[1] = false
+    numMembers[1] = 0
     statusModel.inGroup = false
-    statusController.MaybeAnnounceTargetDungeonChat() -- triggers ResetTargetDungeonChatState
+    statusController.MaybeAnnounceTargetDungeonChat() -- info=nil branch resets the state
 
     -- Re-establish the LFG-title hint via a fresh accept event, then enter
     -- group again. The resolver should produce the +14 target and the
     -- post-leave reset should permit a fresh announce.
-    addon.LFGDetect.ClearAllState()
     fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 3, "invited")
     fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 3, "inviteaccepted")
+    isInGroup[1] = true
+    numMembers[1] = 2
+    fire("GROUP_ROSTER_UPDATE")
     statusModel.inGroup = true
     statusController.MaybeAnnounceTargetDungeonChat()
     Check(
