@@ -5,7 +5,13 @@ local function BuildLocale()
     DUNGEON_DIFF_NORMAL = "Normal",
     DUNGEON_DIFF_HEROIC = "Heroic",
     DUNGEON_DIFF_MYTHIC = "Mythic",
+    DUNGEON_DIFF_RAID_LFR = "LFR",
+    DUNGEON_DIFF_RAID_NORMAL = "Normal Raid",
+    DUNGEON_DIFF_RAID_HEROIC = "Heroic Raid",
+    DUNGEON_DIFF_RAID_MYTHIC = "Mythic Raid",
+    DUNGEON_DIFF_RAID_UNKNOWN = "Raid",
     NON_MYTHIC_ENTERED = "Warning: Entered non-Mythic dungeon (%s).",
+    RAID_ENTERED = "Entered raid: %s",
     PORTAL_NAVIGATOR_TITLE = "Portal Navigator",
     PORTAL_NAVIGATOR_HALF_LEFT = "Half left",
     PORTAL_NAVIGATOR_LEFT = "Left",
@@ -222,6 +228,218 @@ local function RegisterDungeonDifficultyTests(test, Assert, WithGlobals, LoadAdd
       -- Further leave-state ticks must be no-ops (flag was reset).
       controller.MaybeShowNonMythicDungeonEntryNotice()
       Assert.Equal(hideCallCount, 1, "subsequent ticks outside the dungeon must not re-fire hide")
+    end)
+  end)
+
+  -- Raid Center Notice support (0.9.237). GetDungeonDifficultyLabel must
+  -- recognise the four current Blizzard raid difficulties (LFR 17, Normal 14,
+  -- Heroic 15, Mythic 16) and return inDungeon=true so the entry-notice flow
+  -- treats raid like a dungeon for enter/leave bookkeeping. isMythic stays
+  -- false for all four because the suppress rule in MaybeShowNonMythic-
+  -- DungeonEntryNotice is "M+ keystone in party dungeon" only — every raid
+  -- difficulty INCLUDING Mythic Raid must surface its label.
+  test("Status GetDungeonDifficultyLabel returns localized raid labels for difficulties 14/15/16/17", function()
+    local raidCases = {
+      { difficultyID = 14, expected = "Normal Raid" },
+      { difficultyID = 15, expected = "Heroic Raid" },
+      { difficultyID = 16, expected = "Mythic Raid" },
+      { difficultyID = 17, expected = "LFR" },
+    }
+
+    for _, case in ipairs(raidCases) do
+      WithGlobals({
+        GetInstanceInfo = function()
+          return "Manaforge Omega", "raid", case.difficultyID, "Heroic"
+        end,
+        C_ChallengeMode = {
+          GetActiveChallengeMapID = function()
+            return nil
+          end,
+        },
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_status.lua" })
+        local controller = addon.Status.CreateController({
+          getL = BuildLocale,
+        })
+        local label, isMythic, inDungeon, instanceType = controller.GetDungeonDifficultyLabel()
+        Assert.Equal(label, case.expected, "raid difficulty " .. case.difficultyID .. " must map to " .. case.expected)
+        Assert.False(isMythic, "raid difficulties must report isMythic=false so the suppress rule does not kick in")
+        Assert.True(inDungeon, "raid must report inDungeon=true so enter/leave bookkeeping fires")
+        Assert.Equal(instanceType, "raid", "instanceType must be propagated as 'raid'")
+      end)
+    end
+  end)
+
+  test("Status GetDungeonDifficultyLabel falls back to DUNGEON_DIFF_RAID_UNKNOWN for unmapped raid IDs", function()
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Legacy Raid", "raid", 9, "40-Player"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+      })
+      local label, isMythic, inDungeon = controller.GetDungeonDifficultyLabel()
+      Assert.Equal(label, "Raid", "unmapped raid difficulty must fall back to DUNGEON_DIFF_RAID_UNKNOWN")
+      Assert.False(isMythic, "unmapped raid still reports isMythic=false")
+      Assert.True(inDungeon, "unmapped raid still reports inDungeon=true so leave-bookkeeping works")
+    end)
+  end)
+
+  test("Status MaybeShowNonMythicDungeonEntryNotice fires for every raid difficulty with the raid template", function()
+    local raidCases = {
+      { difficultyID = 17, expectedDifficulty = "LFR" },
+      { difficultyID = 14, expectedDifficulty = "Normal Raid" },
+      { difficultyID = 15, expectedDifficulty = "Heroic Raid" },
+      { difficultyID = 16, expectedDifficulty = "Mythic Raid" },
+    }
+
+    for _, case in ipairs(raidCases) do
+      local notices = {}
+      local current = {
+        instanceName = "Manaforge Omega",
+        instanceType = "none",
+        difficultyID = 0,
+      }
+      WithGlobals({
+        GetInstanceInfo = function()
+          return current.instanceName, current.instanceType, current.difficultyID, "Outside"
+        end,
+        C_ChallengeMode = {
+          GetActiveChallengeMapID = function()
+            return nil
+          end,
+        },
+        C_Timer = {
+          After = function(_delay, fn)
+            fn()
+          end,
+        },
+      }, function()
+        local addon = LoadAddonModules({ "isiLive_status.lua" })
+        local controller = addon.Status.CreateController({
+          getL = BuildLocale,
+          showCenterNotice = function(message, duration, _dungeonName, _activityID, showOptions)
+            table.insert(notices, { message = message, duration = duration, showOptions = showOptions })
+          end,
+          hideCenterNotice = function() end,
+        })
+
+        -- Seed wasInDungeon=false on the first sample so the second call
+        -- represents an actual transition into the raid.
+        controller.MaybeShowNonMythicDungeonEntryNotice()
+        current.instanceType = "raid"
+        current.difficultyID = case.difficultyID
+        controller.MaybeShowNonMythicDungeonEntryNotice()
+
+        Assert.Equal(#notices, 1, "raid entry must produce exactly one notice for difficulty " .. case.difficultyID)
+        Assert.Equal(
+          notices[1].message,
+          "Entered raid: " .. case.expectedDifficulty,
+          "raid notice must use the RAID_ENTERED template with the localized difficulty label"
+        )
+        Assert.Nil(
+          notices[1].showOptions and notices[1].showOptions.textColor,
+          "raid entry notice must NOT apply the red warning color used for non-mythic dungeons"
+        )
+      end)
+    end
+  end)
+
+  test("Status MaybeShowNonMythicDungeonEntryNotice still suppresses M+ keystone entries", function()
+    local notices = {}
+    local current = {
+      instanceName = "Manaforge Omega",
+      instanceType = "none",
+      difficultyID = 0,
+      challengeMapID = nil,
+    }
+    WithGlobals({
+      GetInstanceInfo = function()
+        return current.instanceName, current.instanceType, current.difficultyID, "Outside"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return current.challengeMapID
+        end,
+      },
+      C_Timer = {
+        After = function(_delay, fn)
+          fn()
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        showCenterNotice = function(message)
+          table.insert(notices, message)
+        end,
+        hideCenterNotice = function() end,
+      })
+
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      -- Enter an active M+ keystone: party + ChallengeMode reports a mapID.
+      current.instanceType = "party"
+      current.difficultyID = 8
+      current.challengeMapID = 402
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+
+      Assert.Equal(#notices, 0, "M+ keystone entries must stay silent — the addon's main UI already surfaces them")
+    end)
+  end)
+
+  test("Status MaybeShowNonMythicDungeonEntryNotice still warns on non-mythic party dungeon (unchanged)", function()
+    local notices = {}
+    local current = {
+      instanceName = "Priory of the Sacred Flame",
+      instanceType = "none",
+      difficultyID = 0,
+    }
+    WithGlobals({
+      GetInstanceInfo = function()
+        return current.instanceName, current.instanceType, current.difficultyID, "Outside"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+      C_Timer = {
+        After = function(_delay, fn)
+          fn()
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        showCenterNotice = function(message, _duration, _dungeon, _activity, showOptions)
+          table.insert(notices, { message = message, showOptions = showOptions })
+        end,
+        hideCenterNotice = function() end,
+      })
+
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+      current.instanceType = "party"
+      current.difficultyID = 1
+      controller.MaybeShowNonMythicDungeonEntryNotice()
+
+      Assert.Equal(#notices, 1, "non-mythic party dungeon entry still produces the warning notice")
+      Assert.True(
+        string.find(notices[1].message, "Warning", 1, true) ~= nil,
+        "non-mythic dungeon notice must keep the warning prefix"
+      )
+      Assert.NotNil(
+        notices[1].showOptions and notices[1].showOptions.textColor,
+        "non-mythic dungeon notice must keep the red warning accent"
+      )
     end)
   end)
 end

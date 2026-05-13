@@ -695,6 +695,7 @@ return function(test, ctx)
           INVITE_ACCEPTED_NOTICE_LABEL_DESCRIPTION = "Beschr-DE:",
           INVITE_ACCEPTED_NOTICE_LABEL_ROLE = "Rolle-DE:",
           INVITE_ACCEPTED_NOTICE_TITLE = "isiLive - Invite-DE",
+          INVITE_ACCEPTED_RAID_NOTICE_TITLE = "isiLive - Raid-Invite-DE",
           INVITE_ACCEPTED_NOTICE_TELEPORT_HEADER = "TP-DE:",
         }
       end,
@@ -965,4 +966,132 @@ return function(test, ctx)
     Assert.Equal(captured.opts.fields[1].value, "Halls +12", "dungeon row must carry the resolved mapName + level")
     Assert.Equal(captured.opts.fields[4].value, "Heal-DE", "role row must reflect HEALER -> ROLE_NAME_HEALER")
   end)
+
+  -- =====================================================
+  -- Raid invite-accept notice (0.9.237). Mirrors the M+ tests above but pins
+  -- the Raid-specific surface: no "+N" headline, no teleport-button wiring,
+  -- separate title key, otherwise identical Center Notice layout.
+  -- =====================================================
+
+  test("factory_controllers: BuildAcceptedRaidInviteFields renders dungeon row WITHOUT level suffix", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedRaidInviteFields
+    local c = BuildAcceptedInviteCtx({
+      GetUnitRole = function(unit)
+        Assert.Equal(unit, "player", "unit must always be 'player' for the local role lookup")
+        return "HEALER"
+      end,
+    })
+    -- Raid payload deliberately has no level / activityID; the build helper
+    -- must not synthesise a "+N" even if the payload tried to inject one.
+    local fields = build(c, "Manaforge Omega", { groupName = "AOTC", comment = "exp only" })
+    Assert.Equal(#fields, 4, "must render dungeon + group + description + role rows")
+    Assert.Equal(fields[1].label, "Dungeon-DE:", "row 1 must be the dungeon label")
+    Assert.Equal(fields[1].value, "Manaforge Omega", "row 1 must render the raid name without +N suffix")
+    Assert.Equal(fields[2].label, "Gruppe-DE:", "row 2 must be the group label")
+    Assert.Equal(fields[2].value, "AOTC", "row 2 must echo the group name")
+    Assert.Equal(fields[3].label, "Beschr-DE:", "row 3 must be the description label")
+    Assert.Equal(fields[3].value, "exp only", "row 3 must echo the comment")
+    Assert.Equal(fields[4].label, "Rolle-DE:", "row 4 must be the role label")
+    Assert.Equal(fields[4].value, "Heal-DE", "row 4 must render the resolved role name")
+  end)
+
+  test("factory_controllers: BuildAcceptedRaidInviteFields ignores a stray level on the payload", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedRaidInviteFields
+    local c = BuildAcceptedInviteCtx()
+    -- Defensive: even if a future resolver leaks a level onto the Raid
+    -- payload, the renderer must keep the dungeon row level-less.
+    local fields = build(c, "Manaforge Omega", { level = 99 })
+    Assert.Equal(fields[1].value, "Manaforge Omega", "stray payload.level must be ignored")
+  end)
+
+  test("factory_controllers: BuildAcceptedRaidInviteFields drops optional rows when sources are missing", function()
+    local addon = Load()
+    local build = addon._FactoryInternal.BuildAcceptedRaidInviteFields
+    local c = BuildAcceptedInviteCtx({
+      GetUnitRole = function()
+        return "NONE"
+      end,
+    })
+
+    local fields = build(c, "Manaforge Omega", {})
+    Assert.Equal(#fields, 1, "no group + no comment + NONE role must leave only the dungeon row")
+    Assert.Equal(fields[1].label, "Dungeon-DE:", "the dungeon row must always be present")
+
+    local fieldsEmpty = build(c, "Manaforge Omega", { groupName = "", comment = "" })
+    Assert.Equal(#fieldsEmpty, 1, "blank optional strings must be treated as missing")
+  end)
+
+  test("factory_controllers: RenderAcceptedRaidInviteNotice is a no-op for non-table payload", function()
+    local addon = Load()
+    local render = addon._FactoryInternal.RenderAcceptedRaidInviteNotice
+    local called = false
+    local c = BuildAcceptedInviteCtx({
+      ShowCenterNotice = function()
+        called = true
+      end,
+    })
+    render(c, {}, nil)
+    render(c, {}, "string-payload")
+    render(c, {}, 42)
+    Assert.Equal(called, false, "ShowCenterNotice must not fire for invalid Raid payloads")
+  end)
+
+  test("factory_controllers: RenderAcceptedRaidInviteNotice is a no-op when ShowCenterNotice is missing", function()
+    local addon = Load()
+    local render = addon._FactoryInternal.RenderAcceptedRaidInviteNotice
+    local c = BuildAcceptedInviteCtx()
+    -- ctx without ShowCenterNotice must not crash.
+    render(c, {}, { mapID = 2657 })
+  end)
+
+  test(
+    "factory_controllers: RenderAcceptedRaidInviteNotice forwards payload + raid title to ShowCenterNotice",
+    function()
+      local addon = Load()
+      local render = addon._FactoryInternal.RenderAcceptedRaidInviteNotice
+      local captured
+      local c = BuildAcceptedInviteCtx({
+        GetUnitRole = function()
+          return "TANK"
+        end,
+        ShowCenterNotice = function(unit, holdTime, mapName, activityID, opts)
+          captured = {
+            unit = unit,
+            holdTime = holdTime,
+            mapName = mapName,
+            activityID = activityID,
+            opts = opts,
+          }
+        end,
+      })
+      local modules = {
+        teleport = {
+          GetTeleportInfoByMapID = function(mapID)
+            Assert.Equal(mapID, 2657, "mapID must be forwarded to the teleport lookup")
+            return { mapName = "Manaforge Omega" }
+          end,
+        },
+      }
+      render(c, modules, {
+        mapID = 2657,
+        leaderName = "RaidLead",
+        groupName = "AOTC Manaforge",
+        comment = "exp only",
+        searchResultID = 801,
+      })
+      Assert.NotNil(captured, "ShowCenterNotice must be invoked once")
+      Assert.Nil(captured.unit, "first arg must be nil (Raid notice has no chat message)")
+      Assert.Nil(captured.holdTime, "hold time must be nil (persistent until close)")
+      Assert.Nil(captured.mapName, "mapName arg must be nil so no teleport button renders")
+      Assert.Nil(captured.activityID, "activityID arg must be nil so no teleport button renders")
+      Assert.Equal(captured.opts.title, "isiLive - Raid-Invite-DE", "opts.title must use the Raid-specific locale key")
+      Assert.Equal(captured.opts.persistent, true, "opts.persistent must be true (no auto-hide)")
+      Assert.Equal(captured.opts.frameWidth, 540, "opts.frameWidth must match the compact 540px card width")
+      Assert.Equal(#captured.opts.fields, 4, "opts.fields must contain dungeon + group + comment + role rows")
+      Assert.Equal(captured.opts.fields[1].value, "Manaforge Omega", "dungeon row must NOT carry a +N suffix")
+      Assert.Equal(captured.opts.fields[4].value, "Tank-DE", "role row must reflect TANK -> ROLE_NAME_TANK")
+    end
+  )
 end

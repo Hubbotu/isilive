@@ -96,6 +96,73 @@ enabled) are extracted into `WireAcceptedInviteNoticeCallbacks` so
 the calling function stays under the gate; behaviour is identical to
 inline wiring.
 
+### Test follow-up
+
+15 new test cases pinning the Raid pipeline isolation and the Raid
+Center Notice rendering. No production behaviour change. Usecase count
+rises from 1668 to 1683.
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- `AcceptedRaidInviteNotice fires for a Raid LFG listing with categoryID=3`
+  — asserts the Raid callback fires, the M+ callback does not, the
+  payload carries mapID / leaderName / groupName / comment / searchResultID,
+  carries neither level nor activityID, and crucially that
+  `detectedMapID`, `activeInviteLeader`, `activeInviteTitleLevel` stay
+  nil and the highlight callback is not invoked.
+- `AcceptedRaidInviteNotice ignores non-Raid categories even when isMythicPlusActivity is false`
+  — categoryID 4 (PvP-style) listing with `isMythicPlusActivity=false`
+  must not slip through either pipeline.
+- `AcceptedRaidInviteNotice is suppressed when the enabled gate returns false`
+  — Raid notice respects the
+  `IsiLiveDB.acceptedInviteNoticeEnabled` toggle through its own
+  `SetAcceptedRaidInviteNoticeEnabledFn`.
+- `AcceptedRaidInviteNotice stays silent when the callback was never registered`
+  — the Raid path does not raise when the factory has not wired its
+  callback yet (early-load safety).
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- `Status GetDungeonDifficultyLabel returns localized raid labels for difficulties 14/15/16/17`
+  — pins the four current Blizzard raid difficulty mappings plus the
+  contract `isMythic=false`, `inDungeon=true`, `instanceType="raid"`.
+- `Status GetDungeonDifficultyLabel falls back to DUNGEON_DIFF_RAID_UNKNOWN for unmapped raid IDs`
+  — legacy 40-man / 10-man / 25-man IDs fall through to the generic
+  "Raid" label and keep `inDungeon=true` so leave-bookkeeping fires.
+- `Status MaybeShowNonMythicDungeonEntryNotice fires for every raid difficulty with the raid template`
+  — drives the four-difficulty enter sequence and asserts the
+  `RAID_ENTERED` template + the absence of the red warning accent
+  (raid entry is informational, not a warning).
+- `Status MaybeShowNonMythicDungeonEntryNotice still suppresses M+ keystone entries`
+  — regression pin: party + active ChallengeMode mapID still produces
+  zero notices (the addon's main UI already surfaces M+ context).
+- `Status MaybeShowNonMythicDungeonEntryNotice still warns on non-mythic party dungeon (unchanged)`
+  — backward-compat pin: non-mythic party dungeon entry keeps the
+  warning prefix and the red text accent.
+
+[testmodul/isilive_test_scenarios_factory_controllers_helpers.lua](testmodul/isilive_test_scenarios_factory_controllers_helpers.lua):
+
+- `BuildAcceptedRaidInviteFields renders dungeon row WITHOUT level suffix`
+  — Raid payload renders dungeon + group + description + role rows,
+  the dungeon row carries no "+N".
+- `BuildAcceptedRaidInviteFields ignores a stray level on the payload`
+  — defensive: even a leaked `payload.level` does not produce a "+N".
+- `BuildAcceptedRaidInviteFields drops optional rows when sources are missing`
+  — no group + no comment + NONE role leaves only the dungeon row.
+- `RenderAcceptedRaidInviteNotice is a no-op for non-table payload` /
+  `is a no-op when ShowCenterNotice is missing` — safety guards.
+- `RenderAcceptedRaidInviteNotice forwards payload + raid title to ShowCenterNotice`
+  — asserts the Raid title key, no teleport-button wiring (mapName /
+  activityID args nil), `frameWidth=540`, `persistent=true`, the
+  resolved dungeon name without "+N", and the role row matches the
+  player's role.
+
+The test-side locale tables in both
+`isilive_test_scenarios_status.lua` and
+`isilive_test_scenarios_factory_controllers_helpers.lua` were
+extended with the new Raid keys so the controller can resolve them
+during the assertions.
+
 ## 2026-05-13 - Version 0.9.236 (patch)
 
 Bug fix: when the user accepted an LFG invite, the Center Notice showed

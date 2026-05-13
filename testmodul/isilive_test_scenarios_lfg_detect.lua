@@ -1852,6 +1852,210 @@ local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
     end)
   end)
 
+  -- 0.9.237: raid invites get their OWN notice via a separate callback so the
+  -- M+ pipeline (detectedMapID / activeInviteLeader / activeInviteTitleLevel /
+  -- TriggerHighlightUpdate / chat announce) stays untouched. The Raid resolver
+  -- accepts only listings where categoryID == 3 AND isMythicPlusActivity ~= true.
+
+  test("AcceptedRaidInviteNotice fires for a Raid LFG listing with categoryID=3", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 801 then
+              return {
+                activityID = 9999,
+                name = "AOTC Manaforge",
+                leaderName = "RaidLead",
+                comment = "exp only",
+              }
+            end
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            if activityID == 9999 then
+              return { mapID = 2657, isMythicPlusActivity = false, categoryID = 3 }
+            end
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local mplusPayloads = {}
+      local raidPayloads = {}
+      local highlightCalls = 0
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        mplusPayloads[#mplusPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeCallback(function(payload)
+        raidPayloads[#raidPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetHighlightCallback(function()
+        highlightCalls = highlightCalls + 1
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 801, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 801, "inviteaccepted")
+
+      Assert.Equal(#mplusPayloads, 0, "Raid invite must not trigger the M+ accepted-invite callback")
+      Assert.Equal(#raidPayloads, 1, "Raid invite must trigger the Raid accepted-invite callback exactly once")
+      Assert.Equal(raidPayloads[1].mapID, 2657, "Raid payload must carry the resolved mapID")
+      Assert.Equal(raidPayloads[1].leaderName, "RaidLead", "Raid payload must carry the leader name")
+      Assert.Equal(raidPayloads[1].groupName, "AOTC Manaforge", "Raid payload must carry the LFG group title")
+      Assert.Equal(raidPayloads[1].comment, "exp only", "Raid payload must carry the LFG comment")
+      Assert.Equal(raidPayloads[1].searchResultID, 801, "Raid payload must carry the originating searchResultID")
+      Assert.Nil(raidPayloads[1].level, "Raid payload must NOT carry a keystone level")
+      Assert.Nil(raidPayloads[1].activityID, "Raid payload must NOT carry an activityID")
+
+      -- The whole point of the separate pipeline: the M+ state must stay clean.
+      Assert.Nil(addon.LFGDetect.GetDetectedMapID(), "Raid accept must NOT set detectedMapID")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "Raid accept must NOT set activeInviteLeader")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteTitleLevel(), "Raid accept must NOT set activeInviteTitleLevel")
+      Assert.Equal(highlightCalls, 0, "Raid accept must NOT trigger the highlight callback")
+    end)
+  end)
+
+  test("AcceptedRaidInviteNotice ignores non-Raid categories even when isMythicPlusActivity is false", function()
+    -- categoryID 4 (PvP), 6 (Scenarios) etc must fall through both pipelines.
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 802 then
+              return { activityID = 9998, name = "PvP brawl", leaderName = "PvPLead" }
+            end
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            if activityID == 9998 then
+              -- PvP-style activity: non-M+ AND non-Raid (categoryID 4).
+              return { mapID = 1234, isMythicPlusActivity = false, categoryID = 4 }
+            end
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local mplusPayloads = {}
+      local raidPayloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        mplusPayloads[#mplusPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeCallback(function(payload)
+        raidPayloads[#raidPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 802, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 802, "inviteaccepted")
+
+      Assert.Equal(#mplusPayloads, 0, "non-M+/non-Raid invite must not trigger the M+ notice")
+      Assert.Equal(#raidPayloads, 0, "non-Raid category must not trigger the Raid notice")
+    end)
+  end)
+
+  test("AcceptedRaidInviteNotice is suppressed when the enabled gate returns false", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 803 then
+              return { activityID = 9997, name = "Heroic Manaforge", leaderName = "HRaidLead" }
+            end
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            if activityID == 9997 then
+              return { mapID = 2657, isMythicPlusActivity = false, categoryID = 3 }
+            end
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local raidPayloads = {}
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeCallback(function(payload)
+        raidPayloads[#raidPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedRaidInviteNoticeEnabledFn(function()
+        return false
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 803, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 803, "inviteaccepted")
+
+      Assert.Equal(#raidPayloads, 0, "Raid notice must respect its enabled gate")
+    end)
+  end)
+
+  test("AcceptedRaidInviteNotice stays silent when the callback was never registered", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id == 804 then
+              return { activityID = 9996, name = "LFR run", leaderName = "LFRLead" }
+            end
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function()
+            return nil
+          end,
+          GetActivityInfoTable = function(activityID)
+            if activityID == 9996 then
+              return { mapID = 2657, isMythicPlusActivity = false, categoryID = 3 }
+            end
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      -- Intentionally do NOT call SetAcceptedRaidInviteNoticeCallback.
+      -- Must not raise even though the resolver finds a valid Raid entry.
+      local ok, err = pcall(function()
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 804, "invited")
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 804, "inviteaccepted")
+      end)
+      Assert.True(ok, "unregistered Raid callback must not raise: " .. tostring(err))
+    end)
+  end)
+
   -- Test H (BUG-RAID-LEAVE-M+): real-world sequence — Raid invite accepted,
   -- joined, then left; a parallel M+ application gets its invite afterwards.
   -- Previously ClearAllStateImpl on raid-leave swept all pendingInvites into
