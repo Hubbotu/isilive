@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.236 (patch)
+
+Bug fix: when the user accepted an LFG invite, the Center Notice showed
+"Dungeon + N" immediately (the level comes directly from the LFG listing
+payload) but the chat line "isiLive: Ziel-Dungeon: …" was emitted without
+the "+N" suffix, because the resolver-driven sources for the level
+(LFG-title hint, roster owner, peer sync) had not landed yet at the
+moment the first status-line update fired.
+
+### `MaybeAnnounceTargetDungeonChat` waits up to 3 s for the level
+
+`MaybeAnnounceTargetDungeonChat` in
+[ui/isiLive_status.lua](ui/isiLive_status.lua)
+used a two-sighting-then-announce-level-less rule which guaranteed exactly
+one chat line per accept but locked the dungeon name in even before the
+level could resolve. Once locked, a follow-up status update carrying
+"+N" was suppressed — the Notice and the chat ended up disagreeing.
+
+The flow is now deferred:
+
+1. First sighting WITH level → announce immediately with "+N", set the
+   lock-in, done.
+2. First sighting WITHOUT level → record the time, schedule a forced
+   re-evaluation `TARGET_DUNGEON_LEVEL_WAIT_SECONDS` later (3.0 s), stay
+   silent.
+3. A later status update during the wait carrying the level → falls into
+   path 1, the deferred fallback never fires because the lock-in is set.
+4. The scheduled re-evaluation runs after the timeout with the level
+   still unresolved → announce level-less as the fallback.
+
+3 s comfortably covers the typical 100–500 ms LFG payload plus the peer-
+sync roundtrip on slow connections, and stays well below 5 s so the user
+never perceives the announce as "missing". The `levelAnnouncedTargetDungeonName`
+lock continues to suppress downstream level flickers (downgrade / nil)
+exactly as before.
+
+State that survives across the wait:
+
+- `pendingTargetDungeonAnnouncementName` and
+  `pendingTargetDungeonAnnouncementAt` replace the old
+  `pendingLevelLessTargetDungeonName` / `levelLessTargetDungeonAnnounced`
+  two-sighting bookkeeping.
+- `levelAnnouncedTargetDungeonName` continues as the single lock-in flag,
+  set by both the "+N" and the level-less fallback so neither path can
+  trigger a duplicate.
+- `ResetTargetDungeonChatState` (group-leave / no-target) wipes all three
+  so the next key for the same dungeon name announces afresh.
+
+A `getTime` dependency was added to the Status controller defaults so the
+timeout comparison has a clean unit-test surface; production reads it
+from the global `GetTime()`.
+
+### Test updates
+
+- `"Status target dungeon chat defers the level-less announce and fires once the level resolves"`
+  replaces the old "announces grouped key once and resets after target
+  clears" test. It drives the deferred path with explicit `getTime` and
+  `timerAfter` mocks: no print on a level-less sighting, exactly one
+  print with "+14" once the level resolves, no duplicate when the
+  deferred timer fires late.
+- `"Status target dungeon chat falls back to a level-less announce once the deferred wait elapses"`
+  is new: it pins the timeout fallback by advancing the mocked clock past
+  the wait window and then firing the captured timer callback.
+- `RULE-TARGET-DUNGEON-CHAT-DEDUP` in
+  [docs/RULES_LOGIC.md](docs/RULES_LOGIC.md)
+  was updated to reference the two new tests and notes the 3-second
+  deferred-wait window.
+
 ## 2026-05-13 - Version 0.9.235 (patch)
 
 Bug fix: the READY_CHECK row background bled through the H and V

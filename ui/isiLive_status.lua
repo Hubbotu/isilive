@@ -282,14 +282,56 @@ local function BuildTargetDungeonAnnouncementText(deps, info)
   return string.format(template, highlighted)
 end
 
+-- Deferred-announce window: how long the chat announce waits for the LFG
+-- title hint / roster owner / peer sync to resolve a key level before
+-- falling back to a level-less line. 3 s covers the typical 100–500 ms LFG
+-- payload, plus enough headroom for the peer-sync roundtrip on slow
+-- connections. Out of an abundance of caution capped well below 5 s so the
+-- user never perceives the announce as "missing".
+local TARGET_DUNGEON_LEVEL_WAIT_SECONDS = 3.0
+
 local function ResetTargetDungeonChatState(state)
   state.lastObservedTargetDungeonName = nil
   state.lastTargetDungeonChatSignature = nil
-  state.pendingLevelLessTargetDungeonName = nil
-  state.levelLessTargetDungeonAnnounced = nil
+  state.pendingTargetDungeonAnnouncementName = nil
+  state.pendingTargetDungeonAnnouncementAt = nil
   state.levelAnnouncedTargetDungeonName = nil
 end
 
+local function EmitTargetDungeonAnnouncement(state, deps, info)
+  local announcementText = BuildTargetDungeonAnnouncementText(deps, info)
+  if type(announcementText) ~= "string" or announcementText == "" then
+    return false
+  end
+  local signature = table.concat({ info.name, tostring(info.level) }, "|")
+  if state.lastTargetDungeonChatSignature == signature then
+    return false
+  end
+  state.lastObservedTargetDungeonName = info.name
+  state.lastTargetDungeonChatSignature = signature
+  -- Single lock-in for BOTH level-with and level-less branches: once we
+  -- announce a name, no further announces for the same name until
+  -- ResetTargetDungeonChatState (group-leave / no-target) clears it.
+  state.levelAnnouncedTargetDungeonName = info.name
+  state.pendingTargetDungeonAnnouncementName = nil
+  state.pendingTargetDungeonAnnouncementAt = nil
+  local sink = deps.printHighlighted or deps.printFn
+  sink(announcementText)
+  return true
+end
+
+-- Defer-then-announce flow:
+--   1. First sighting WITH level    -> announce immediately with "+N".
+--   2. First sighting WITHOUT level -> record the time, schedule a forced
+--      re-evaluation TARGET_DUNGEON_LEVEL_WAIT_SECONDS in the future, stay
+--      silent. If a later status update arrives WITH the level before that
+--      timer fires, path 1 takes over and the deferred fallback is skipped
+--      because the lock-in flag is set.
+--   3. Re-entry without level and the deferred wait has elapsed -> announce
+--      level-less as the fallback.
+-- The Center Notice for the invite is independent: it always renders the
+-- level it received via the LFG payload, so the user still sees "+N" at
+-- the moment of acceptance even when the chat waits.
 local function MaybeAnnounceTargetDungeonChat(state, deps)
   if type(deps.isInGroup) == "function" and deps.isInGroup() ~= true then
     ResetTargetDungeonChatState(state)
@@ -302,60 +344,35 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
     return
   end
 
-  -- Lock-in: once we've announced this dungeon WITH a level, suppress every
-  -- further announce for the same dungeon name — even when the level later
-  -- flickers (LFG-title hint cleared after CHALLENGE_MODE_START, owner-key
-  -- sync roundtrip, etc.). Without this guard, the announce signature flips
-  -- between "Name|14" → "Name|13" → "Name|nil" as the level source degrades,
-  -- producing two or three near-identical chat lines for the same key.
-  -- Resets when ResetTargetDungeonChatState fires (group-leave or no-target).
   if state.levelAnnouncedTargetDungeonName == info.name then
     return
   end
 
-  if info.level and state.levelLessTargetDungeonAnnounced == info.name then
-    return
-  end
-
-  if not info.level then
-    if state.levelLessTargetDungeonAnnounced == info.name then
-      return
-    end
-    if state.pendingLevelLessTargetDungeonName ~= info.name then
-      state.pendingLevelLessTargetDungeonName = info.name
-      return
-    end
-    state.levelLessTargetDungeonAnnounced = info.name
-  else
-    state.pendingLevelLessTargetDungeonName = nil
-    state.levelLessTargetDungeonAnnounced = nil
-  end
-
-  if not info.level and state.lastTargetDungeonChatSignature == table.concat({ info.name, "nil" }, "|") then
-    return
-  end
-
-  if state.lastObservedTargetDungeonName ~= info.name then
-    state.lastObservedTargetDungeonName = info.name
-    state.lastTargetDungeonChatSignature = nil
-  end
-
-  local announcementText = BuildTargetDungeonAnnouncementText(deps, info)
-  if type(announcementText) ~= "string" or announcementText == "" then
-    return
-  end
-
-  local signature = table.concat({ info.name, tostring(info.level) }, "|")
-  if state.lastTargetDungeonChatSignature == signature then
-    return
-  end
-
-  state.lastTargetDungeonChatSignature = signature
   if info.level then
-    state.levelAnnouncedTargetDungeonName = info.name
+    EmitTargetDungeonAnnouncement(state, deps, info)
+    return
   end
-  local sink = deps.printHighlighted or deps.printFn
-  sink(announcementText)
+
+  local now = type(deps.getTime) == "function" and tonumber(deps.getTime()) or nil
+  local pendingName = state.pendingTargetDungeonAnnouncementName
+  local pendingAt = tonumber(state.pendingTargetDungeonAnnouncementAt)
+
+  if pendingName ~= info.name then
+    state.pendingTargetDungeonAnnouncementName = info.name
+    state.pendingTargetDungeonAnnouncementAt = now
+    if type(deps.timerAfter) == "function" then
+      deps.timerAfter(TARGET_DUNGEON_LEVEL_WAIT_SECONDS, function()
+        MaybeAnnounceTargetDungeonChat(state, deps)
+      end)
+    end
+    return
+  end
+
+  if not now or not pendingAt or (now - pendingAt) < TARGET_DUNGEON_LEVEL_WAIT_SECONDS then
+    return
+  end
+
+  EmitTargetDungeonAnnouncement(state, deps, info)
 end
 
 local function GetDungeonDifficultyLabel(getL)
@@ -553,6 +570,17 @@ function Status.CreateController(opts)
   local deps = {
     getL = opts.getL or function()
       return {}
+    end,
+    getTime = opts.getTime or function()
+      local getTimeFn = rawget(_G, "GetTime")
+      if type(getTimeFn) ~= "function" then
+        return nil
+      end
+      local ok, t = pcall(getTimeFn)
+      if not ok then
+        return nil
+      end
+      return t
     end,
     getSubZoneText = opts.getSubZoneText or function()
       local getSubZoneText = rawget(_G, "GetSubZoneText")

@@ -575,7 +575,7 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
     end)
   end)
 
-  test("Status target dungeon chat announces grouped key once and resets after target clears", function()
+  test("Status target dungeon chat defers the level-less announce and fires once the level resolves", function()
     local current = {
       inGroup = false,
       targetInfo = {
@@ -584,6 +584,8 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       },
     }
     local prints = {}
+    local now = 100
+    local scheduled = {}
 
     WithGlobals({
       GetInstanceInfo = function()
@@ -604,6 +606,12 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         getTargetDungeonInfo = function()
           return current.targetInfo
         end,
+        getTime = function()
+          return now
+        end,
+        timerAfter = function(seconds, callback)
+          table.insert(scheduled, { at = now + seconds, callback = callback })
+        end,
         printFn = function(message)
           table.insert(prints, tostring(message))
         end,
@@ -618,24 +626,36 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       }
       controller.MaybeAnnounceTargetDungeonChat()
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 1, "post-invite target without level must announce once after one settle recheck")
       Assert.Equal(
-        prints[1],
-        "Target Dungeon: |cffffd200Ara-Kara|r",
-        "settled level-less target announce should highlight just the dungeon name in yellow"
+        #prints,
+        0,
+        "level-less target must defer the announce until the level resolves or the timeout elapses"
       )
 
+      -- Level resolves before the deferred timer fires -> announce once, with +N.
       current.targetInfo = {
         name = "Ara-Kara",
         level = 14,
       }
       controller.MaybeAnnounceTargetDungeonChat()
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 1, "level arriving after a level-less fallback must not produce duplicate chat")
+      Assert.Equal(#prints, 1, "resolved level before fallback must produce one +N announce")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Ara-Kara +14|r",
+        "deferred announce carries the resolved +14 level"
+      )
 
+      -- Late firing of the scheduled timer hits the lock-in and stays silent.
+      now = now + 5
+      for _, entry in ipairs(scheduled) do
+        entry.callback()
+      end
+      Assert.Equal(#prints, 1, "deferred timer firing after the +N announce must stay silent (lock-in)")
+
+      -- Clearing the target resets the lock; a fresh +N for the same name announces again.
       current.targetInfo = nil
       controller.MaybeAnnounceTargetDungeonChat()
-
       current.targetInfo = {
         name = "Ara-Kara",
         level = 14,
@@ -646,6 +666,66 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
         prints[2],
         "Target Dungeon: |cffffd200Ara-Kara +14|r",
         "fresh grouped key chat should highlight the dungeon + key level in yellow"
+      )
+    end)
+  end)
+
+  test("Status target dungeon chat falls back to a level-less announce once the deferred wait elapses", function()
+    local current = {
+      inGroup = true,
+      targetInfo = { name = "Ara-Kara" },
+    }
+    local prints = {}
+    local now = 1000
+    local scheduled = {}
+
+    WithGlobals({
+      GetInstanceInfo = function()
+        return "Outside", "none", 0, "Unknown"
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        getTime = function()
+          return now
+        end,
+        timerAfter = function(seconds, callback)
+          table.insert(scheduled, { at = now + seconds, callback = callback })
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 0, "first level-less sighting must stay silent and arm the deferred timer")
+      Assert.Equal(#scheduled, 1, "deferred timer must be scheduled exactly once on the first sighting")
+
+      -- Re-evaluation inside the wait window still suppresses.
+      now = now + 1.5
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 0, "re-evaluation within the deferred wait must remain silent")
+
+      -- Deferred timer fires after the wait window: level still unresolved -> fallback.
+      now = scheduled[1].at + 0.1
+      scheduled[1].callback()
+      Assert.Equal(#prints, 1, "deferred timer firing after timeout must emit the level-less fallback")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Ara-Kara|r",
+        "fallback announce keeps the level off when no key info ever surfaced"
       )
     end)
   end)
@@ -796,14 +876,14 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
       })
 
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 0, "first level-less sighting must wait for a settle recheck")
+      Assert.Equal(#prints, 0, "first level-less sighting must defer the announce")
 
       current.targetInfo = {
         name = "Ara-Kara",
         level = 14,
       }
       controller.MaybeAnnounceTargetDungeonChat()
-      Assert.Equal(#prints, 1, "resolved level before fallback must announce the level form")
+      Assert.Equal(#prints, 1, "resolved level before the deferred timeout must announce the level form")
       Assert.Equal(prints[1], "Target Dungeon: |cffffd200Ara-Kara +14|r", "level form must be printed")
     end)
   end)

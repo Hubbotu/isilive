@@ -290,9 +290,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-TARGET-DUNGEON-CHAT-DEDUP
 - Regelnummer: 22
 - Status: aktiv
-- Zusammenfassung: Es gibt keinen wiederholten Target-Dungeon-Chatspam; bei identischem erkanntem Ziel reicht eine einmalige Ausgabe.
+- Zusammenfassung: Es gibt keinen wiederholten Target-Dungeon-Chatspam; bei identischem erkanntem Ziel reicht eine einmalige Ausgabe. Der Announce wartet bis zu drei Sekunden auf die aufgeloeste Keystufe und faellt erst danach auf eine stufenlose Zeile zurueck.
 - Erforderliche Tests:
-  - Status target dungeon chat announces grouped key once and resets after target clears
+  - Status target dungeon chat defers the level-less announce and fires once the level resolves
+  - Status target dungeon chat falls back to a level-less announce once the deferred wait elapses
 
 ### RULE-UI-STRG-F9-JEDERZEIT
 - Regelnummer: 26
