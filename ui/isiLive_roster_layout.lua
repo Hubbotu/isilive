@@ -641,8 +641,18 @@ local function UpdateCollapseState(ui, layoutMode, mainFrame)
       if row.roleButton and not IsCombatLockdownActive() then
         SetVisible(row.roleButton, show and row.unit ~= nil)
       end
-      if row.hoverFrame and row.hoverFrame.EnableMouse then
-        row.hoverFrame:EnableMouse(show)
+      if row.hoverFrame then
+        if row.hoverFrame.EnableMouse then
+          row.hoverFrame:EnableMouse(show)
+        end
+        -- The hoverFrame hosts the readyCheckBackground texture plus the
+        -- alternating-row tint and the hover highlight. In H / V layout the
+        -- FontStrings above are already hidden, but the hoverFrame subtree was
+        -- previously left visible — so a READY_CHECK hold during or right
+        -- after a check rendered its colored background through what should
+        -- be an empty toolbar-only surface. Toggle visibility here so the
+        -- background subtree follows the row visibility.
+        SetVisible(row.hoverFrame, show)
       end
     end
   end

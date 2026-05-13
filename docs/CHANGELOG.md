@@ -1,5 +1,36 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.235 (patch)
+
+Bug fix: the READY_CHECK row background bled through the H and V
+compact layouts.
+
+### `readyCheckBackground` rendered behind the toolbar in H / V
+
+In the expanded layout each roster row carries a `hoverFrame` that
+hosts three textures: the alternating-row tint, the hover highlight,
+and `readyCheckBackground` (the colored ready / declined / hold tint
+applied by `ApplyRowReadyCheckDisplay`). In H and V layouts the row
+content itself is gone — only the management / tool buttons render —
+and the FontStrings (`row.spec`, `row.name`, …) are hidden individually
+by `UpdateCollapseState` in
+[ui/isiLive_roster_layout.lua](ui/isiLive_roster_layout.lua).
+
+`row.hoverFrame` itself was left visible by `UpdateCollapseState`,
+only its mouse handling was disabled (`EnableMouse(show)`). The
+`readyCheckBackground` child is shown by `RefreshReadyCheckStateImpl`
+in
+[ui/isiLive_roster_panel_render.lua](ui/isiLive_roster_panel_render.lua)
+whenever a READY_CHECK fires, with no layoutMode gating. So during —
+and during the hold phase after — a check, the colored background
+rendered through what should have been an empty toolbar surface.
+
+`UpdateCollapseState` now also drives `SetVisible(row.hoverFrame,
+show)`, so the whole subtree (background + altBg + highlight) follows
+the row's overall visibility. The `RenderRosterImpl` path was already
+doing the same explicit hoverFrame Hide on `isCollapsed` — the two
+paths are now consistent.
+
 ## 2026-05-13 - Version 0.9.234 (patch)
 
 Stage B of the performance audit: two micro-wins on top of 0.9.233.
