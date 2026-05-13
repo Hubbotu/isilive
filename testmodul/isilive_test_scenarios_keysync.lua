@@ -182,16 +182,28 @@ local function RegisterKeySyncPresenceTests(test, Assert, LoadAddonModules)
     Assert.True(found, "must call RegisterPrefix")
   end)
 
-  test("KeySync ResolveActiveKeyOwnerUnit returns unique key owner", function()
-    local sync = BuildMockSync()
-    local ctrl = BuildController(LoadAddonModules, sync)
-    local roster = {
-      player = { name = "Me", realm = "R", keyMapID = 100, keyLevel = 10 },
-      party1 = { name = "P1", realm = "R", keyMapID = 200, keyLevel = 12 },
-      party2 = { name = "P2", realm = "R", keyMapID = 300, keyLevel = 8 },
-    }
-    Assert.Equal(ctrl.ResolveActiveKeyOwnerUnit(roster, 200), "party1", "must return unique owner unit")
-  end)
+  test(
+    "KeySync ResolveActiveKeyOwnerUnit refuses unique-owner fallback in a multi-member group without a hint",
+    function()
+      -- 0.9.238 (extended): without a preferredOwnerName, a sole match in a
+      -- multi-member roster is treated as a sync-race symptom (the listing
+      -- owner's key has not propagated yet; only some member's locally
+      -- cached key happens to match). Return nil so the deferred consumer
+      -- waits for a real source instead of locking onto a random member.
+      local sync = BuildMockSync()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local roster = {
+        player = { name = "Me", realm = "R", keyMapID = 100, keyLevel = 10 },
+        party1 = { name = "P1", realm = "R", keyMapID = 200, keyLevel = 12 },
+        party2 = { name = "P2", realm = "R", keyMapID = 300, keyLevel = 8 },
+      }
+      Assert.Equal(
+        ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
+        nil,
+        "unique match without a hint in a multi-member group must stay nil (race-safety)"
+      )
+    end
+  )
 
   test("KeySync ResolveActiveKeyOwnerUnit returns nil for duplicate mapID", function()
     local sync = BuildMockSync()
@@ -291,33 +303,52 @@ local function RegisterKeySyncPresenceTests(test, Assert, LoadAddonModules)
     )
   end)
 
-  -- 0.9.238: race guard. In the seconds after GROUP_ROSTER_UPDATE, only the
-  -- player's own key is locally cached (the other members' keys arrive via
-  -- the sync roundtrip). Without this guard, ResolveActiveKeyOwnerUnit
-  -- happily returned "player" as the unique owner, which surfaced the
-  -- player's own +N as the "joined key" — confidently wrong when the
-  -- accepted listing's leader holds a different +N for the same dungeon
-  -- (e.g. "+12 Relaxed" listing while the player's own SOT key is +15).
-  test(
-    "KeySync ResolveActiveKeyOwnerUnit refuses to return 'player' as unique owner in a multi-member group",
-    function()
-      local sync = BuildMockSync()
-      local ctrl = BuildController(LoadAddonModules, sync)
-      local roster = {
-        player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 15 },
-        -- Other members are in the roster but their keys have not synced yet
-        -- (transient state right after GROUP_ROSTER_UPDATE).
-        party1 = { name = "Leader", realm = "R", keyMapID = nil, keyLevel = nil },
-        party2 = { name = "P2", realm = "R", keyMapID = nil, keyLevel = nil },
-        party3 = { name = "P3", realm = "R", keyMapID = nil, keyLevel = nil },
-      }
-      Assert.Equal(
-        ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
-        nil,
-        "must not promote 'player' to owner when other members exist — that is the GROUP_ROSTER_UPDATE race"
-      )
-    end
-  )
+  -- 0.9.238: race guard. In the seconds after GROUP_ROSTER_UPDATE only the
+  -- player's own key (and whatever LibKeystone-style cross-addon mirroring
+  -- happens to surface locally) is in the roster; the listing owner's key
+  -- arrives over the sync roundtrip. Without this guard,
+  -- ResolveActiveKeyOwnerUnit happily returned whichever member matched
+  -- alone — confidently wrong when that lone match is not the listing
+  -- owner.
+
+  test("KeySync ResolveActiveKeyOwnerUnit refuses 'player' as the lone match in a multi-member group", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 15 },
+      party1 = { name = "Leader", realm = "R", keyMapID = nil, keyLevel = nil },
+      party2 = { name = "P2", realm = "R", keyMapID = nil, keyLevel = nil },
+      party3 = { name = "P3", realm = "R", keyMapID = nil, keyLevel = nil },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
+      nil,
+      "the 'player'-as-sole-match case is the canonical race symptom — must stay nil"
+    )
+  end)
+
+  test("KeySync ResolveActiveKeyOwnerUnit refuses a non-player lone match in a multi-member group", function()
+    -- Real-world case: Pinto accepts "+13 Relaxed Grube von Saron" (POS).
+    -- Listing owner Larilan holds POS +13 but his key has not synced yet.
+    -- Vladax (another member) happens to have his own POS +14 key, which
+    -- LibKeystone-style cross-addon mirroring makes locally visible. Without
+    -- a preferred-owner hint, Vladax would have surfaced as the unique
+    -- owner and the chat would have said "+14" — the actual Grube-von-Saron
+    -- screenshot bug.
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    local roster = {
+      player = { name = "Pinto", realm = "R", keyMapID = 247, keyLevel = 15 },
+      party1 = { name = "Larilan", realm = "R", keyMapID = nil, keyLevel = nil },
+      party2 = { name = "Vladax", realm = "R", keyMapID = 200, keyLevel = 14 },
+      party3 = { name = "P3", realm = "R", keyMapID = nil, keyLevel = nil },
+    }
+    Assert.Equal(
+      ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
+      nil,
+      "a non-player lone match without a hint in a multi-member group is also a race symptom"
+    )
+  end)
 
   test("KeySync ResolveActiveKeyOwnerUnit returns 'player' as unique owner when the roster is solo", function()
     local sync = BuildMockSync()
@@ -332,39 +363,19 @@ local function RegisterKeySyncPresenceTests(test, Assert, LoadAddonModules)
     )
   end)
 
-  test(
-    "KeySync ResolveActiveKeyOwnerUnit refuses 'player' as unique owner even when other members are isGhost",
-    function()
-      local sync = BuildMockSync()
-      local ctrl = BuildController(LoadAddonModules, sync)
-      local roster = {
-        player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 15 },
-        party1 = { name = "Ghost", realm = "R", keyMapID = nil, keyLevel = nil, isGhost = true },
-      }
-      -- Ghosts do not contribute to the headcount; the only non-ghost roster
-      -- member is the player, so this is functionally a solo roster.
-      Assert.Equal(
-        ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
-        "player",
-        "ghost-only siblings must not block the legitimate solo-roster fallback"
-      )
-    end
-  )
-
-  test("KeySync ResolveActiveKeyOwnerUnit picks a non-player unique owner normally", function()
+  test("KeySync ResolveActiveKeyOwnerUnit returns 'player' as unique owner when other members are isGhost", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)
     local roster = {
-      player = { name = "Me", realm = "R", keyMapID = 100, keyLevel = 10 },
-      party1 = { name = "Leader", realm = "R", keyMapID = 200, keyLevel = 12 },
-      party2 = { name = "P2", realm = "R", keyMapID = nil, keyLevel = nil },
+      player = { name = "Me", realm = "R", keyMapID = 200, keyLevel = 15 },
+      party1 = { name = "Ghost", realm = "R", keyMapID = nil, keyLevel = nil, isGhost = true },
     }
-    -- The unique match is party1 (player has a different keyMapID), so the
-    -- player-guard above must not interfere — party1 wins.
+    -- Ghosts do not contribute to the headcount; the only non-ghost roster
+    -- member is the player, so this is functionally a solo roster.
     Assert.Equal(
       ctrl.ResolveActiveKeyOwnerUnit(roster, 200),
-      "party1",
-      "non-player unique owner is the normal case and must still resolve"
+      "player",
+      "ghost-only siblings must not block the legitimate solo-roster fallback"
     )
   end)
 end

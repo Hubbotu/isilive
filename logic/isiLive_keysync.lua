@@ -655,17 +655,28 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
     return nil
   end
 
-  -- Unique-owner fallback: only one roster member carries a key for the
-  -- target dungeon. This used to return that single match unconditionally,
-  -- but during the race "player joins LFG group → GROUP_ROSTER_UPDATE fires
-  -- before the leader's key has synced", the only locally known key is the
-  -- player's own one. Returning "player" there caused the chat
-  -- "Target Dungeon" announce to surface the wrong "+N" (e.g. the player's
-  -- own SOT +15 instead of the group's SOT +12) when the hint fallback
-  -- (UnitIsGroupLeader sweep) could not nail down a preferred owner. Guard:
-  -- when "player" is the sole match in a group of 2+, treat the owner as
-  -- "not yet known" so the deferred chat announce waits for a real source.
-  -- Solo / 1-man scenarios still resolve to "player" correctly.
+  -- Unique-owner fallback. Behaviour split by whether the caller supplied
+  -- a hint:
+  --
+  --   * Hint present + hint not found in roster (boost case): the listing
+  --     owner is not in the roster at all (the applicant got accepted onto
+  --     a leader who is no longer the group leader, weird relistings, etc.).
+  --     Falling through to a single-match search is the correct best-effort
+  --     answer here.
+  --
+  --   * Hint absent (preferredOwnerName == nil): both the LFG-leader source
+  --     and the group-leader-via-UnitIsGroupLeader fallback returned
+  --     nothing. In a multi-member group that is the GROUP_ROSTER_UPDATE
+  --     race window — sync has only published the locally instant data
+  --     (the player's own key and whatever another addon already mirrored,
+  --     e.g. LibKeystone) while the actual listing-owner's key has not
+  --     made the roundtrip yet. Returning the lone match would surface
+  --     whichever member happens to carry a matching key (the player's own
+  --     SOT +15, or another member's POS +14 instead of the listing's
+  --     POS +13). Stay nil and let the deferred consumer wait for a real
+  --     source. Solo / 1-man rosters still resolve normally.
+  local hintWasProvided = type(preferredOwnerName) == "string" and preferredOwnerName ~= ""
+
   local ownerUnit = nil
   local rosterSize = 0
   local matches = 0
@@ -683,7 +694,7 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
   end
 
   if matches == 1 then
-    if ownerUnit == "player" and rosterSize > 1 then
+    if rosterSize > 1 and not hintWasProvided then
       return nil
     end
     return ownerUnit

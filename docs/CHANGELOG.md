@@ -31,16 +31,24 @@ the accepted search-result ID are now ignored; state only clears via
 **Cause B**: in
 [logic/isiLive_keysync.lua](logic/isiLive_keysync.lua),
 `ResolveActiveKeyOwnerUnit`'s unique-owner fallback happily returned
-`"player"` when only the player's own key matched the target dungeon
-in the roster. Right after `GROUP_ROSTER_UPDATE` only the player's own
-key is locally cached; the leader's key arrives a roundtrip later via
-sync. If the `UnitIsGroupLeader` hint fallback also did not nail down
-a preferred owner during that window, the unique-owner search picked
-`"player"` and downstream consumers surfaced the player's own +N. The
-fallback now treats a sole "player" match in a group of 2+ non-ghost
-members as a race symptom and returns nil so the deferred announce
-waits for a real source. Solo / 1-man scenarios keep resolving to
-"player" correctly.
+whichever roster member matched the target dungeon alone. Right after
+`GROUP_ROSTER_UPDATE`, only the player's own key (and whatever
+LibKeystone-style cross-addon mirroring surfaces locally) is in the
+roster; the listing owner's key arrives a roundtrip later via sync.
+If the `UnitIsGroupLeader` hint fallback also did not nail down a
+preferred owner during that window, the unique-owner search picked
+whoever happened to match — at first that meant the player's own +N
+(SOT +15 instead of the listing's +12). After the initial "refuses
+'player' as sole match" guard, a second in-game report (Grube von
+Saron, screenshot uploaded between the two patches) showed the same
+class of bug with a **party member** as the lone match: Vladax's own
+POS +14 surfaced for a listing whose owner had POS +13. The guard is
+therefore generalised: when the caller did **not** supply a preferred-
+owner hint AND the roster has ≥2 non-ghost members AND the
+unique-owner search found exactly one match, return nil regardless of
+who the match was. Solo / 1-man rosters and the boost-applicant case
+(hint provided but not present in the roster) keep their existing
+best-effort resolution.
 
 Both causes are pinned by new regression tests:
 
@@ -51,11 +59,22 @@ Both causes are pinned by new regression tests:
   - `declined_delisted` for an invite that was never accepted still
     clears state (regression pin for the existing path).
 - [testmodul/isilive_test_scenarios_keysync.lua](testmodul/isilive_test_scenarios_keysync.lua):
-  - Multi-member group with "player" as sole key match → `nil`.
-  - Solo roster with "player" as sole key match → `"player"`.
-  - Ghost-only siblings don't count toward headcount, solo fallback
-    still resolves.
-  - Non-player unique owner resolves normally.
+  - "Refuses unique-owner fallback in a multi-member group without a
+    hint" — replaces the old "returns unique key owner" pin: a single
+    match without a preferred-name hint is treated as a race symptom.
+  - "Refuses 'player' as the lone match in a multi-member group" — the
+    canonical race symptom (player's own key surfaces first).
+  - "Refuses a non-player lone match in a multi-member group" — the
+    Grube-von-Saron screenshot scenario (a party member's own +N
+    surfaces via LibKeystone mirroring before the listing owner's key
+    has synced).
+  - "Returns 'player' as unique owner when the roster is solo" — solo
+    fallback still resolves.
+  - "Returns 'player' as unique owner when other members are isGhost" —
+    ghost-only siblings do not contribute to the headcount.
+  - Existing "hint with unknown leader falls back to unique owner" stays
+    grün: a provided hint means the boost-applicant path is allowed to
+    surface a lone non-hint owner.
 
 ### Fix 2 — `autoCloseOnKeyStart` default-ON
 
