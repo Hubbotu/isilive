@@ -1,5 +1,101 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.237 (patch)
+
+Raid Center Notice support: invite accept + raid entry both surface in
+the same UI the M+ flow already uses, on a separate, isolated pipeline
+so the M+ logic stays untouched.
+
+### Why a separate pipeline (Option 2)
+
+The M+ detection path
+([game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua))
+filters every LFG activity through
+`MapIDFromActivityID` with `isMythicPlusActivity == true`. That filter
+exists deliberately: without it, a Raid LFG invite would mutate
+`pendingInvites`, `detectedMapID`, `activeInviteLeader`,
+`activeInviteTitleLevel`, fire `TriggerHighlightUpdate`, and feed the
+chat "Target Dungeon" announce — none of which apply to Raid content.
+
+The Raid invite notice the user noticed was missing was the visible
+symptom of that filter: Raid listings never reached
+`MaybeShowAcceptedInviteNotice` because their resolver path bailed
+out at `MapIDFromActivityID`.
+
+A direct lift of the filter would re-introduce all the M+-only side
+effects for Raid. The clean fix is a separate, parallel resolver that
+the M+ pipeline never sees:
+
+### Raid invite-accept Center Notice
+
+`MapIDFromRaidActivityID` is a new file-local resolver that mirrors
+the M+ resolver but inverts the activity filter: it accepts only
+`isMythicPlusActivity ~= true` listings with `categoryID == 3`
+(Blizzard's Raid category). `ResolveRaidInviteEntry` builds a payload
+(mapID, leaderName, groupName, comment) — no `titleLevel`, no
+`activityID`, because the Raid notice has no use for either.
+
+`OnInviteAccepted` now falls through to the Raid resolver only when
+the M+ resolver returned nothing. On a Raid hit it fires a new
+`acceptedRaidInviteNoticeCallback` and stops — `detectedMapID`,
+`activeInviteLeader`, `activeInviteTitleLevel`,
+`acceptedInviteSearchResultID`, `pendingAcceptedInviteMapID` are not
+touched, and `TriggerHighlightUpdate` is not called. The only
+side effect is the notice render.
+
+The factory wires `RenderAcceptedRaidInviteNotice` in
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua)
+to the new callback. It uses the same Center Notice frame and layout
+as the M+ notice, with a separate title key
+(`INVITE_ACCEPTED_RAID_NOTICE_TITLE`) so the user can tell the two
+apart, no teleport-button section (no Raid teleport spells), and no
+"+N" headline (Raid listings have no keystone level). The
+`acceptedInviteNoticeEnabled` toggle in `IsiLiveDB` controls both
+notices through a single user-facing switch.
+
+### Raid entry Center Notice with difficulty label
+
+`GetDungeonDifficultyLabel` in
+[ui/isiLive_status.lua](ui/isiLive_status.lua)
+gained a `raid` branch that maps the four current Blizzard raid
+difficulties (LFR 17, Normal 14, Heroic 15, Mythic 16) to localized
+label strings. Legacy 10-man / 25-man / original LFR IDs are not
+mapped — those raids are no longer reachable through the current
+group finder.
+
+`MaybeShowNonMythicDungeonEntryNotice` was extended to feuern für
+every raid difficulty including Mythic Raid: the suppress rule is
+now "M+ keystone in a party dungeon" only, not "any Mythic". For
+raids the notice uses the new `RAID_ENTERED` template ("Raid
+betreten: …") and keeps the default brand color rather than the
+red accent the non-Mythic-dungeon warning uses — raid entry is
+informational, not a warning.
+
+`BuildDungeonContextSignature` now generates signatures for both
+`party` and `raid` instances so the existing enter/leave bookkeeping
+applies unchanged.
+
+### Locale additions (all 8 languages)
+
+- `INVITE_ACCEPTED_RAID_NOTICE_TITLE` — title for the Raid invite
+  notice ("isiLive – Raid-Einladung angenommen" / "Raid invite
+  accepted" / …).
+- `DUNGEON_DIFF_RAID_LFR / _NORMAL / _HEROIC / _MYTHIC` — difficulty
+  labels.
+- `DUNGEON_DIFF_RAID_UNKNOWN` — fallback when the raid difficulty ID
+  is not in the map.
+- `RAID_ENTERED` — entry-notice template ("Raid betreten: %s" /
+  "Entered raid: %s" / …).
+
+### Factory metric guard
+
+`InitializeFactoryPrimaryControllers` would have crossed the 420-line
+hard limit with the new Raid wiring inline. The four
+accepted-invite callbacks (M+ render + enabled, Raid render +
+enabled) are extracted into `WireAcceptedInviteNoticeCallbacks` so
+the calling function stays under the gate; behaviour is identical to
+inline wiring.
+
 ## 2026-05-13 - Version 0.9.236 (patch)
 
 Bug fix: when the user accepted an LFG invite, the Center Notice showed

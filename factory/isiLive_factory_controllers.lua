@@ -791,6 +791,51 @@ local function RenderAcceptedInviteNotice(ctx, modules, payload)
   })
 end
 
+-- Raid mirror of BuildAcceptedInviteFields. No level field (Raid listings have
+-- no keystone level), no teleport button (no Raid teleport spells), but the
+-- group title / description / player role rows stay so the player sees the
+-- same context they signed up for.
+local function BuildAcceptedRaidInviteFields(ctx, mapName, payload)
+  local L = ctx.GetL and ctx.GetL() or {}
+  local fields = {}
+  fields[#fields + 1] = {
+    label = L.INVITE_ACCEPTED_NOTICE_LABEL_DUNGEON or "Dungeon:",
+    value = mapName,
+  }
+  if type(payload.groupName) == "string" and payload.groupName ~= "" then
+    fields[#fields + 1] = { label = L.INVITE_ACCEPTED_NOTICE_LABEL_GROUP or "Group:", value = payload.groupName }
+  end
+  if type(payload.comment) == "string" and payload.comment ~= "" then
+    fields[#fields + 1] =
+      { label = L.INVITE_ACCEPTED_NOTICE_LABEL_DESCRIPTION or "Description:", value = payload.comment }
+  end
+  local role = type(ctx.GetUnitRole) == "function" and ctx.GetUnitRole("player") or nil
+  local roleName = ResolveAcceptedInviteRoleName(ctx, role)
+  if roleName then
+    fields[#fields + 1] = { label = L.INVITE_ACCEPTED_NOTICE_LABEL_ROLE or "Role:", value = roleName }
+  end
+  return fields
+end
+
+-- Raid mirror of RenderAcceptedInviteNotice. Same Center Notice surface and
+-- layout, no teleport-button configuration (dungeonName / activityID stay nil
+-- so ConfigureCenterNoticeTeleportButton early-returns), separate title key
+-- so the user can tell Raid and M+ invites apart at a glance.
+local function RenderAcceptedRaidInviteNotice(ctx, modules, payload)
+  if type(payload) ~= "table" or type(ctx.ShowCenterNotice) ~= "function" then
+    return
+  end
+  local L = ctx.GetL and ctx.GetL() or {}
+  local mapName = ResolveAcceptedInviteDungeonName(ctx, modules, payload.mapID)
+  local fields = BuildAcceptedRaidInviteFields(ctx, mapName, payload)
+  ctx.ShowCenterNotice(nil, nil, nil, nil, {
+    title = L.INVITE_ACCEPTED_RAID_NOTICE_TITLE or "isiLive - Raid invite accepted",
+    fields = fields,
+    frameWidth = 540,
+    persistent = true,
+  })
+end
+
 -- Internal test surface: the four helpers above are wired together inside
 -- InitializeFactoryPrimaryControllers via a single closure, so the only
 -- realistic way to cover their branches in isolation is to expose them on
@@ -800,6 +845,43 @@ FI.ResolveAcceptedInviteRoleName = ResolveAcceptedInviteRoleName
 FI.ResolveAcceptedInviteDungeonName = ResolveAcceptedInviteDungeonName
 FI.BuildAcceptedInviteFields = BuildAcceptedInviteFields
 FI.RenderAcceptedInviteNotice = RenderAcceptedInviteNotice
+FI.BuildAcceptedRaidInviteFields = BuildAcceptedRaidInviteFields
+FI.RenderAcceptedRaidInviteNotice = RenderAcceptedRaidInviteNotice
+
+-- Wires the four accepted-invite callbacks on lfgDetect (M+ render + enabled
+-- gate, Raid render + enabled gate). Extracted from InitializeFactoryPrimary-
+-- Controllers so that function stays under the metrics gate; behaviour is
+-- identical to inline wiring.
+local function WireAcceptedInviteNoticeCallbacks(ctx, modules, lfgDetect)
+  local function noticeEnabled()
+    local db = rawget(_G, "IsiLiveDB")
+    if type(db) ~= "table" then
+      return true
+    end
+    return db.acceptedInviteNoticeEnabled ~= false
+  end
+  if type(lfgDetect.SetAcceptedInviteNoticeCallback) == "function" then
+    lfgDetect.SetAcceptedInviteNoticeCallback(function(payload)
+      RenderAcceptedInviteNotice(ctx, modules, payload)
+    end)
+  end
+  if type(lfgDetect.SetAcceptedInviteNoticeEnabledFn) == "function" then
+    lfgDetect.SetAcceptedInviteNoticeEnabledFn(noticeEnabled)
+  end
+  -- Raid-only mirror: separate callback so the Raid notice never traverses
+  -- the M+ pipeline (no detectedMapID, no chat announce, no teleport
+  -- highlight). Shares the IsiLiveDB.acceptedInviteNoticeEnabled gate so a
+  -- single user-facing toggle controls both notices.
+  if type(lfgDetect.SetAcceptedRaidInviteNoticeCallback) == "function" then
+    lfgDetect.SetAcceptedRaidInviteNoticeCallback(function(payload)
+      RenderAcceptedRaidInviteNotice(ctx, modules, payload)
+    end)
+  end
+  if type(lfgDetect.SetAcceptedRaidInviteNoticeEnabledFn) == "function" then
+    lfgDetect.SetAcceptedRaidInviteNoticeEnabledFn(noticeEnabled)
+  end
+end
+FI.WireAcceptedInviteNoticeCallbacks = WireAcceptedInviteNoticeCallbacks
 
 local function InitializeFactoryPrimaryControllers(ctx)
   local modules = ctx.modules
@@ -1130,20 +1212,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
     -- influence the rendered content. Level is taken straight from
     -- entry.titleLevel — when nil (group title without "+N"), the headline is
     -- rendered without a level suffix; never inferred from roster/sync data.
-    if type(lfgDetect.SetAcceptedInviteNoticeCallback) == "function" then
-      lfgDetect.SetAcceptedInviteNoticeCallback(function(payload)
-        RenderAcceptedInviteNotice(ctx, modules, payload)
-      end)
-    end
-    if type(lfgDetect.SetAcceptedInviteNoticeEnabledFn) == "function" then
-      lfgDetect.SetAcceptedInviteNoticeEnabledFn(function()
-        local db = rawget(_G, "IsiLiveDB")
-        if type(db) ~= "table" then
-          return true
-        end
-        return db.acceptedInviteNoticeEnabled ~= false
-      end)
-    end
+    -- Raid-only mirror is wired in the same helper so the M+ pipeline stays
+    -- untouched for Raid invites.
+    WireAcceptedInviteNoticeCallbacks(ctx, modules, lfgDetect)
   end
 
   -- Strips the "-Realm" suffix from a player name so the chat output reads

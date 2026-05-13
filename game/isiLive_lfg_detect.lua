@@ -72,6 +72,41 @@ local function MapIDFromActivityID(activityID)
   return nil
 end
 
+-- Resolve mapID for a Raid LFG activity. Separate from MapIDFromActivityID so
+-- the M+ pipeline (pendingInvites, detectedMapID, activeInviteTitleLevel,
+-- TriggerHighlightUpdate, the chat "Target Dungeon" announce) never sees Raid
+-- data. The only consumer is the Raid-only post-accept Center Notice path.
+--   * Filters out anything that the M+ pipeline already handles
+--     (`isMythicPlusActivity == true`).
+--   * Requires `categoryID == 3` which is the Raids category in Blizzard's
+--     LFG taxonomy. This is the same flag the Blizzard LFG UI itself uses
+--     to route raid listings to the "Raids" tab.
+local function MapIDFromRaidActivityID(activityID)
+  local numID = tonumber(activityID)
+  if not numID or numID <= 0 then
+    return nil
+  end
+  local lfgList = rawget(_G, "C_LFGList")
+  if type(lfgList) ~= "table" or type(lfgList.GetActivityInfoTable) ~= "function" then
+    return nil
+  end
+  local ok, info = pcall(lfgList.GetActivityInfoTable, numID)
+  if not ok or type(info) ~= "table" then
+    return nil
+  end
+  if rawget(info, "isMythicPlusActivity") == true then
+    return nil
+  end
+  if tonumber(rawget(info, "categoryID")) ~= 3 then
+    return nil
+  end
+  local mapID = tonumber(rawget(info, "mapID") or rawget(info, "mapId"))
+  if mapID and mapID > 0 then
+    return mapID
+  end
+  return nil
+end
+
 -- Resolve mapID from a table of activityIDs.
 local function MapIDFromActivityIDs(activityIDs)
   if type(activityIDs) ~= "table" then
@@ -160,6 +195,14 @@ local inviteHintLocaleFn = nil
 local acceptedInviteNoticeCallback = nil
 local acceptedInviteNoticeEnabledFn = nil
 
+-- Raid-only mirror of the M+ accepted-invite notice plumbing. Lives on its
+-- own callback so the M+ pipeline (pendingInvites, detectedMapID,
+-- activeInviteTitleLevel, TriggerHighlightUpdate, the chat "Target Dungeon"
+-- announce) is never reached for Raid listings — the only side effect of a
+-- Raid invite-accept is the notice render.
+local acceptedRaidInviteNoticeCallback = nil
+local acceptedRaidInviteNoticeEnabledFn = nil
+
 local debugLog = nil
 local debugTrace = nil
 local debugTraceDeep = nil
@@ -222,6 +265,14 @@ end
 
 function LFGDetect.SetAcceptedInviteNoticeEnabledFn(fn)
   acceptedInviteNoticeEnabledFn = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetAcceptedRaidInviteNoticeCallback(fn)
+  acceptedRaidInviteNoticeCallback = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetAcceptedRaidInviteNoticeEnabledFn(fn)
+  acceptedRaidInviteNoticeEnabledFn = type(fn) == "function" and fn or nil
 end
 
 function LFGDetect.SetLogger(fn)
@@ -410,6 +461,77 @@ local function ResolveInviteEntry(searchResultID)
   }
 end
 
+-- Raid-only mirror of ResolveInviteEntry. Reads the same search-result-info
+-- structure but routes through MapIDFromRaidActivityID so the M+ activity
+-- filter cannot swallow a Raid listing. Never returns titleLevel /
+-- activityID: the Raid notice has no use for either, and not capturing them
+-- keeps the payload trivially distinguishable from an M+ entry.
+local function ResolveRaidInviteEntry(searchResultID)
+  local C_LFGList_ref = rawget(_G, "C_LFGList")
+  if type(C_LFGList_ref) ~= "table" or type(C_LFGList_ref.GetSearchResultInfo) ~= "function" then
+    return nil
+  end
+  if type(searchResultID) ~= "number" or searchResultID <= 0 then
+    return nil
+  end
+  local ok, info = pcall(C_LFGList_ref.GetSearchResultInfo, searchResultID)
+  if not ok or type(info) ~= "table" then
+    return nil
+  end
+  local mapID = nil
+  if type(info.activityIDs) == "table" then
+    for _, actID in ipairs(info.activityIDs) do
+      local numericActID = tonumber(actID)
+      if numericActID and numericActID > 0 then
+        local resolved = MapIDFromRaidActivityID(numericActID)
+        if resolved then
+          mapID = resolved
+          break
+        end
+      end
+    end
+  end
+  if not mapID and info.activityID then
+    mapID = MapIDFromRaidActivityID(info.activityID)
+  end
+  if not mapID then
+    return nil
+  end
+  local leaderName = type(info.leaderName) == "string" and info.leaderName ~= "" and info.leaderName or nil
+  local groupName = type(info.name) == "string" and info.name ~= "" and info.name or nil
+  local comment = type(info.comment) == "string" and info.comment ~= "" and info.comment or nil
+  return {
+    mapID = mapID,
+    leaderName = leaderName,
+    groupName = groupName,
+    comment = comment,
+  }
+end
+
+-- Renders the Raid post-accept Center Notice. The callback receives the same
+-- shape of payload as the M+ notice (minus level / activityID — Raid listings
+-- have no keystone level and there is no teleport-button wiring on the Raid
+-- notice). All data comes from the resolved Raid entry; no roster lookup, no
+-- sync state, no M+ pipeline state mutation.
+local function MaybeShowAcceptedRaidInviteNotice(entry, searchResultID)
+  if type(acceptedRaidInviteNoticeCallback) ~= "function" then
+    return
+  end
+  if type(entry) ~= "table" or not entry.mapID then
+    return
+  end
+  if type(acceptedRaidInviteNoticeEnabledFn) == "function" and acceptedRaidInviteNoticeEnabledFn() == false then
+    return
+  end
+  acceptedRaidInviteNoticeCallback({
+    mapID = entry.mapID,
+    leaderName = entry.leaderName,
+    groupName = entry.groupName,
+    comment = entry.comment,
+    searchResultID = searchResultID,
+  })
+end
+
 -- Renders the floating yellow LFG invite hint above LFGListInviteDialog when
 -- an invite arrives. Reads its dungeon name from the same Teleport.GetTeleportInfoByMapID
 -- source as the post-accept status-line chat announce, so both stay in lockstep.
@@ -551,6 +673,24 @@ local function OnInviteAccepted(searchResultID)
     Log("state_set", "var=acceptedInviteSearchResultID val=%s", tostring(searchResultID))
     TriggerHighlightUpdate("invite")
     MaybeShowAcceptedInviteNotice(entry, searchResultID)
+    return
+  end
+
+  -- Raid fallback: the M+ resolver dropped the listing (Raid filter), so the
+  -- M+ side never sees it. Try the Raid-only resolver. On a hit, render the
+  -- Raid notice and stop — no detectedMapID / activeInviteLeader / highlight
+  -- update / chat announce is touched for Raid.
+  local raidEntry = ResolveRaidInviteEntry(searchResultID)
+  if type(raidEntry) == "table" and raidEntry.mapID then
+    Log(
+      "raid_invite_accepted",
+      "searchResultID=%s mapID=%s leader=%s",
+      tostring(searchResultID),
+      tostring(raidEntry.mapID),
+      tostring(raidEntry.leaderName)
+    )
+    pendingInvites[searchResultID] = nil
+    MaybeShowAcceptedRaidInviteNotice(raidEntry, searchResultID)
   end
 end
 

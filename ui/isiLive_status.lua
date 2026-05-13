@@ -18,12 +18,26 @@ local HEROIC_DIFFICULTY_IDS = {
   [174] = true,
 }
 
+-- Raid difficulty IDs -> localized label key. Covers the four current Blizzard
+-- raid difficulties (LFR / Normal / Heroic / Mythic) which all carry their
+-- own difficulty ID in `select(3, GetInstanceInfo())`. Legacy IDs (10-man /
+-- 25-man split, original LFR=7) are intentionally not mapped: those raids
+-- are no longer reachable through the current group finder, and adding them
+-- would dilute the label table without a real user-visible benefit.
+local RAID_DIFFICULTY_LABEL_KEYS = {
+  [14] = "DUNGEON_DIFF_RAID_NORMAL",
+  [15] = "DUNGEON_DIFF_RAID_HEROIC",
+  [16] = "DUNGEON_DIFF_RAID_MYTHIC",
+  [17] = "DUNGEON_DIFF_RAID_LFR",
+}
+
 local function BuildDungeonContextSignature(instanceType, difficultyID, instanceName, isMythic)
-  if instanceType ~= "party" then
+  if instanceType ~= "party" and instanceType ~= "raid" then
     return nil
   end
 
   return table.concat({
+    tostring(instanceType or ""),
     tostring(instanceName or ""),
     tostring(difficultyID or ""),
     tostring(isMythic and 1 or 0),
@@ -381,6 +395,18 @@ local function GetDungeonDifficultyLabel(getL)
   if not okInstance then
     return L.DUNGEON_DIFF_UNKNOWN, false, false, nil, nil, nil
   end
+  -- Raid branch: independent from the party / Mythic+ flow. Reports a raid
+  -- label for the four current difficulties; `isMythic` stays false so the
+  -- non-mythic-entry notice path (which gates on `not cMythic`) fires for
+  -- every raid difficulty including Mythic Raid — the user expectation here
+  -- is "show me which raid difficulty I just walked into" rather than the
+  -- M+-specific "non-mythic warning". `inDungeon` is true so the same
+  -- enter/leave bookkeeping the dungeon path uses applies to raids too.
+  if instanceType == "raid" then
+    local labelKey = difficultyID and RAID_DIFFICULTY_LABEL_KEYS[difficultyID]
+    local text = (labelKey and L[labelKey]) or L.DUNGEON_DIFF_RAID_UNKNOWN or L.DUNGEON_DIFF_UNKNOWN
+    return text, false, true, instanceType, difficultyID, instanceName
+  end
   if instanceType ~= "party" then
     return L.DUNGEON_DIFF_OUTSIDE, false, false, instanceType, difficultyID, instanceName
   end
@@ -443,10 +469,18 @@ local function MaybeShowNonMythicDungeonEntryNotice(state, deps)
       -- Call GetDungeonDifficultyLabel once and unpack all 6 return values.
       local cText, cMythic, cInDungeon, cInstanceType, cDifficultyID, cInstanceName =
         GetDungeonDifficultyLabel(deps.getL)
-      if not cInDungeon or cMythic then
+      if not cInDungeon then
         return
       end
-      if cText == L.DUNGEON_DIFF_UNKNOWN then
+      -- M+ keystone in a party dungeon already has its own UI surfaces
+      -- (timer, kill track, roster) — suppress the entry notice for that
+      -- one case only. Every other in-dungeon difficulty (party normal /
+      -- heroic, every raid difficulty including Mythic Raid) shows the
+      -- notice so the player can confirm the instance they just entered.
+      if cInstanceType == "party" and cMythic then
+        return
+      end
+      if cText == L.DUNGEON_DIFF_UNKNOWN or cText == L.DUNGEON_DIFF_RAID_UNKNOWN then
         return
       end
       local confirmedSignature = BuildDungeonContextSignature(cInstanceType, cDifficultyID, cInstanceName, cMythic)
@@ -454,11 +488,26 @@ local function MaybeShowNonMythicDungeonEntryNotice(state, deps)
         return
       end
       state.lastAnnouncedNonMythicSignature = confirmedSignature
-      deps.showCenterNotice(string.format(L.NON_MYTHIC_ENTERED, cText), 120, nil, nil, {
+      local template
+      local textColor
+      if cInstanceType == "raid" then
+        template = L.RAID_ENTERED or "Raid: %s"
+        -- Raid notice is informational (which difficulty did I just enter),
+        -- not a warning — keep the default brand color rather than the red
+        -- accent used by the non-mythic-dungeon warning.
+        textColor = nil
+      else
+        template = L.NON_MYTHIC_ENTERED or "Non-Mythic: %s"
+        textColor = { 1, 0.2, 0.2 }
+      end
+      local showOpts = {
         blink = true,
         fontScale = 1.35,
-        textColor = { 1, 0.2, 0.2 },
-      })
+      }
+      if textColor then
+        showOpts.textColor = textColor
+      end
+      deps.showCenterNotice(string.format(template, cText), 120, nil, nil, showOpts)
       -- Mark ownership so the leave-dungeon path knows it may hide this
       -- specific notice. Cleared on dungeon-leave / token-bumped pending
       -- show.
