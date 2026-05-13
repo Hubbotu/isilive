@@ -1,5 +1,108 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.239 (patch)
+
+Three follow-up fixes to the 0.9.238 LFG-edge-case audit. All three
+belong to the same bug class — the accepted-invite identity inside
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
+(`activeInviteLeader`, `activeInviteTitleLevel`, `detectedMapID`,
+`acceptedInviteSearchResultID`, `pendingAcceptedInviteMapID`) used to
+be either too permissive at capture time or too sticky across group
+lifetime, and downstream consumers (status target-dungeon resolver,
+roster owner resolver, chat announce) surfaced "+N" or
+wrong-owner-name values that did not match the listing the player
+actually accepted. Usecase count rises from 1691 to 1695.
+
+### Fix 1b extended — race guard generalised beyond `"player"`
+
+The initial 0.9.238 race guard only refused `"player"` as the
+unique-owner-search sole match in a multi-member group. A second
+in-game report (Grube von Saron screenshot uploaded between patches)
+showed the same class of bug with a **party member** as the lone
+match: Vladax's own POS +14 surfaced for a listing whose owner had
+POS +13. LibKeystone-style cross-addon mirroring makes other members'
+own keys visible just as instantly as the player's own one, so the
+player-only guard left the door open for every other roster member.
+
+`ResolveActiveKeyOwnerUnit` in
+[logic/isiLive_keysync.lua](logic/isiLive_keysync.lua)
+now generalises the guard: when the caller did **not** supply a
+preferred-owner hint AND the roster has ≥2 non-ghost members AND the
+unique-owner search found exactly one match, return nil regardless of
+who the match was. Solo / 1-man rosters and the boost-applicant case
+(hint provided but not present in the roster) keep their existing
+best-effort resolution. The 0.9.238 spec ("refuses 'player' as the
+lone match") is now a special case of this generalised rule.
+
+Test changes in
+[testmodul/isilive_test_scenarios_keysync.lua](testmodul/isilive_test_scenarios_keysync.lua):
+
+- Renamed "returns unique key owner" to "refuses unique-owner fallback
+  in a multi-member group without a hint" with the new spec.
+- Kept "refuses 'player' as the lone match" as the canonical pin.
+- New: "refuses a non-player lone match in a multi-member group" pins
+  the Grube-von-Saron screenshot scenario.
+- Solo + ghost-only-siblings tests unchanged.
+- Removed the contradicting "picks a non-player unique owner normally"
+  pin — that behaviour is now explicitly forbidden when no hint is
+  supplied.
+- Existing "hint with unknown leader falls back to unique owner" stays
+  grün: a provided hint means the boost-applicant path is allowed to
+  surface a lone non-hint owner.
+
+### Fix 1c — Accepted-invite identity survives a key-end
+
+After `CHALLENGE_MODE_COMPLETED` (or `_RESET`), the LFG listing that
+brought the group together is no longer authoritative for whatever
+key the group decides to play next: a pre-formed-group continuation
+is not a fresh LFG invite. Letting `activeInviteTitleLevel` bleed
+into the next key surfaced the previous listing's "+N" on the new
+dungeon (e.g. a +13 hint from a just-finished POS run leaking into a
+follow-up NPX +15 run).
+
+A new helper `ClearAcceptedInviteListingIdentity` in
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
+clears exactly the accepted-invite identity slots
+(`detectedMapID`, `activeInviteLeader`, `activeInviteTitleLevel`,
+`acceptedInviteSearchResultID`, `pendingAcceptedInviteMapID`) and
+leaves `pendingInvites` / `lastQueueMapID` untouched.
+`HandleChallengeModeCompletedOrReset` in
+[logic/isiLive_event_handlers_challenge.lua](logic/isiLive_event_handlers_challenge.lua)
+now calls `handleLFGDetectEvent(event)` in lockstep with the existing
+`handleMplusTimerEvent / handleKillTrackEvent /
+handleCombatEventsEvent` chain so the clear lands deterministically
+at the same point.
+
+`ClearAllStateImpl` (group-leave) remains the **only** thing that
+also drops `pendingInvites` — Fix 1c clears only the accepted-invite
+identity.
+
+### Fix 1d — Accepted-invite identity survives a leader change
+
+When the group's leader hands off (or drops the group while staying
+as a member), `activeInviteLeader` still names the *original* listing
+leader. Downstream resolvers used that name as the LFG-leader hint,
+so even a correct `UnitIsGroupLeader` fallback could not run for the
+new leader.
+
+`PARTY_LEADER_CHANGED` in
+[logic/isiLive_event_handlers_runtime.lua](logic/isiLive_event_handlers_runtime.lua)
+now also forwards to `handleLFGDetectEvent("PARTY_LEADER_CHANGED")`,
+which calls `ClearAcceptedInviteListingIdentity`. The helper is a
+no-op when no listing identity was captured to begin with, so
+pre-formed groups stay quiet (no spurious clear-state log entries).
+
+### Tests for Fix 1c + 1d
+
+Four new regression tests in
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- CHALLENGE_MODE_COMPLETED clears the accepted-invite identity.
+- CHALLENGE_MODE_RESET clears the accepted-invite identity.
+- PARTY_LEADER_CHANGED clears stale activeInviteLeader / -TitleLevel.
+- PARTY_LEADER_CHANGED is a no-op when no listing identity was
+  captured (pre-formed-group case).
+
 ## 2026-05-13 - Version 0.9.238 (patch)
 
 Four bug fixes around LFG group-join edge cases and one settings default
@@ -31,24 +134,17 @@ the accepted search-result ID are now ignored; state only clears via
 **Cause B**: in
 [logic/isiLive_keysync.lua](logic/isiLive_keysync.lua),
 `ResolveActiveKeyOwnerUnit`'s unique-owner fallback happily returned
-whichever roster member matched the target dungeon alone. Right after
-`GROUP_ROSTER_UPDATE`, only the player's own key (and whatever
-LibKeystone-style cross-addon mirroring surfaces locally) is in the
-roster; the listing owner's key arrives a roundtrip later via sync.
-If the `UnitIsGroupLeader` hint fallback also did not nail down a
-preferred owner during that window, the unique-owner search picked
-whoever happened to match — at first that meant the player's own +N
-(SOT +15 instead of the listing's +12). After the initial "refuses
-'player' as sole match" guard, a second in-game report (Grube von
-Saron, screenshot uploaded between the two patches) showed the same
-class of bug with a **party member** as the lone match: Vladax's own
-POS +14 surfaced for a listing whose owner had POS +13. The guard is
-therefore generalised: when the caller did **not** supply a preferred-
-owner hint AND the roster has ≥2 non-ghost members AND the
-unique-owner search found exactly one match, return nil regardless of
-who the match was. Solo / 1-man rosters and the boost-applicant case
-(hint provided but not present in the roster) keep their existing
-best-effort resolution.
+`"player"` when only the player's own key matched the target dungeon
+in the roster. Right after `GROUP_ROSTER_UPDATE` only the player's own
+key is locally cached; the leader's key arrives a roundtrip later via
+sync. If the `UnitIsGroupLeader` hint fallback also did not nail down
+a preferred owner during that window, the unique-owner search picked
+`"player"` and downstream consumers surfaced the player's own +N. The
+fallback now treats a sole "player" match in a group of 2+ non-ghost
+members as a race symptom and returns nil so the deferred announce
+waits for a real source. Solo / 1-man scenarios keep resolving to
+"player" correctly. (0.9.239 generalises this guard to lone matches on
+*any* roster member — see the 0.9.239 entry above.)
 
 Both causes are pinned by new regression tests:
 
@@ -59,70 +155,10 @@ Both causes are pinned by new regression tests:
   - `declined_delisted` for an invite that was never accepted still
     clears state (regression pin for the existing path).
 - [testmodul/isilive_test_scenarios_keysync.lua](testmodul/isilive_test_scenarios_keysync.lua):
-  - "Refuses unique-owner fallback in a multi-member group without a
-    hint" — replaces the old "returns unique key owner" pin: a single
-    match without a preferred-name hint is treated as a race symptom.
-  - "Refuses 'player' as the lone match in a multi-member group" — the
-    canonical race symptom (player's own key surfaces first).
-  - "Refuses a non-player lone match in a multi-member group" — the
-    Grube-von-Saron screenshot scenario (a party member's own +N
-    surfaces via LibKeystone mirroring before the listing owner's key
-    has synced).
-  - "Returns 'player' as unique owner when the roster is solo" — solo
-    fallback still resolves.
-  - "Returns 'player' as unique owner when other members are isGhost" —
-    ghost-only siblings do not contribute to the headcount.
-  - Existing "hint with unknown leader falls back to unique owner" stays
-    grün: a provided hint means the boost-applicant path is allowed to
-    surface a lone non-hint owner.
-
-### Fix 1c + 1d — Stale LFG-listing identity across key-end and leader-change
-
-Two follow-up problems in the same bug class, identified while
-analysing Fix 1: the accepted-invite identity in
-[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
-(`activeInviteLeader`, `activeInviteTitleLevel`, `detectedMapID`,
-`acceptedInviteSearchResultID`, `pendingAcceptedInviteMapID`) used to
-survive across an entire group lifetime — through key completions
-*and* through leader handoffs — and surface stale "+N" or
-wrong-owner-name values on subsequent keys played by the same
-pre-formed group.
-
-**Problem 1c — accepted identity survives a key-end**. After
-`CHALLENGE_MODE_COMPLETED` (or `_RESET`), the LFG listing that brought
-the group together is no longer authoritative for whatever key the
-group decides to play next: a pre-formed-group continuation is not a
-fresh LFG invite. Letting `activeInviteTitleLevel` bleed into the next
-key surfaced the previous listing's "+N" on the new dungeon (e.g. a
-+13 hint from a just-finished POS run leaking into a follow-up NPX +15
-run). A new helper `ClearAcceptedInviteListingIdentity` clears exactly
-the accepted-invite identity slots, leaving `pendingInvites` /
-`lastQueueMapID` untouched. `event_handlers_challenge.lua` calls
-`handleLFGDetectEvent(event)` in `HandleChallengeModeCompletedOrReset`
-so the clear lands in lockstep with the existing
-`handleMplusTimerEvent / handleKillTrackEvent / handleCombatEventsEvent`
-chain.
-
-**Problem 1d — accepted identity survives a leader change**. When the
-group's leader hands off (or drops group while staying as a member),
-`activeInviteLeader` still names the *original* listing leader.
-Downstream resolvers used that name as the LFG-leader hint, so even a
-correct UnitIsGroupLeader fallback could not run.
-`event_handlers_runtime.lua` now forwards `PARTY_LEADER_CHANGED` to
-`handleLFGDetectEvent`, which calls
-`ClearAcceptedInviteListingIdentity` (no-op when no listing identity
-was captured to begin with, so pre-formed groups stay quiet).
-`ClearAllStateImpl` (group-leave) remains the only thing that also
-drops `pendingInvites`.
-
-Four new regression tests in
-[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
-
-- CHALLENGE_MODE_COMPLETED clears the accepted-invite identity.
-- CHALLENGE_MODE_RESET clears the accepted-invite identity.
-- PARTY_LEADER_CHANGED clears stale activeInviteLeader / -TitleLevel.
-- PARTY_LEADER_CHANGED is a no-op when no listing identity was
-  captured.
+  - Multi-member group with "player" as sole key match → `nil`.
+  - Solo roster with "player" as sole key match → `"player"`.
+  - Ghost-only siblings don't count toward headcount, solo fallback
+    still resolves.
 
 ### Fix 2 — `autoCloseOnKeyStart` default-ON
 
