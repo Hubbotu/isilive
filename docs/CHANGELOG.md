@@ -68,6 +68,40 @@ from the global `GetTime()`.
   was updated to reference the two new tests and notes the 3-second
   deferred-wait window.
 
+### Why the defer and not a direct push from `OnInviteAccepted`?
+
+The Center Notice and the chat announce live on two separate trigger
+chains, and the WoW event order is what produces the visible "Notice
+has +N, chat does not":
+
+- The **Notice** is rendered synchronously inside the LFG handler.
+  `OnInviteAccepted` in
+  [game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
+  sets `activeInviteTitleLevel = entry.titleLevel` and then calls
+  `MaybeShowAcceptedInviteNotice(entry, ...)` in the same call frame.
+  The Notice reads the level directly from the LFG payload — it never
+  goes through the resolver.
+- The **chat** announce is driven by `UpdateStatusLine`, which hangs off
+  unrelated events (GROUP_ROSTER_UPDATE, ZONE_CHANGED,
+  INSTANCE_CONTEXT_CHANGED …). Internally it queries
+  `lfgDetect.GetActiveInviteTitleLevel()` via the resolver chain in
+  `GetStatusTargetDungeonInfo`.
+
+In the failing in-game trace, `GROUP_ROSTER_UPDATE` fired **before**
+`LFG_LIST_APPLICATION_STATUS_UPDATED` (`inviteaccepted`). At that point
+`activeInviteTitleLevel` was still `nil`, so the resolver returned
+`info.level = nil` and the chat went out level-less. The LFG event
+followed and set the level — but the chat had already been emitted.
+
+A direct push from `OnInviteAccepted` (calling `UpdateStatusLine`
+right after the level is set) would close this race for the LFG path
+specifically. It is deliberately not done here: the 3 s defer covers
+all other "level resolves a bit late" cases (peer-sync roundtrip,
+manual `/invite` with no LFG context, roster-owner inspect delay)
+with one mechanism, and the user-visible cost — chat appears up to
+3 s after the Notice — is acceptable. A future push-on-accept can be
+layered on top without changing the defer contract.
+
 ## 2026-05-13 - Version 0.9.235 (patch)
 
 Bug fix: the READY_CHECK row background bled through the H and V
