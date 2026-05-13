@@ -1002,6 +1002,38 @@ local function ResolveAcceptedPendingInvite()
   return nil, nil
 end
 
+-- Clears the LFG-listing identity (leader / title level / accepted search-
+-- result-ID + detectedMapID) but does NOT touch pendingInvites / queue
+-- state. Used by post-challenge cleanup and by the leader-change path: in
+-- both cases the previous listing identity has stopped being authoritative,
+-- so downstream consumers (status target-dungeon resolver, owner resolver)
+-- should fall back to UnitIsGroupLeader / roster heuristics instead.
+local function ClearAcceptedInviteListingIdentity(reason)
+  if
+    detectedMapID == nil
+    and activeInviteLeader == nil
+    and activeInviteTitleLevel == nil
+    and acceptedInviteSearchResultID == nil
+    and pendingAcceptedInviteMapID == nil
+  then
+    return
+  end
+  Log(
+    "clear_accepted_invite_identity",
+    "reason=%s detectedMapID=%s activeInviteLeader=%s activeInviteTitleLevel=%s",
+    tostring(reason),
+    tostring(detectedMapID),
+    tostring(activeInviteLeader),
+    tostring(activeInviteTitleLevel)
+  )
+  detectedMapID = nil
+  activeInviteLeader = nil
+  activeInviteTitleLevel = nil
+  acceptedInviteSearchResultID = nil
+  pendingAcceptedInviteMapID = nil
+  TriggerHighlightUpdate("queue")
+end
+
 function LFGDetect.HandleEvent(event, ...)
   if event == "PLAYER_LOGIN" then
     CheckActiveGroup()
@@ -1010,6 +1042,25 @@ function LFGDetect.HandleEvent(event, ...)
     HandleApplicationStatus(searchResultID, newStatus)
   elseif event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" then
     CheckActiveGroup()
+  elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
+    -- The run ended (completed or aborted). The LFG-listing identity that
+    -- brought the group together is no longer authoritative for whatever
+    -- key the group decides to play next — a pre-formed-group continuation
+    -- is not a fresh LFG invite. Letting activeInviteTitleLevel /
+    -- activeInviteLeader bleed into the next key surfaces the previous
+    -- listing's "+N" on the new dungeon. ClearAllStateImpl (group-leave)
+    -- stays the only thing that drops pendingInvites; this clears only the
+    -- accepted-invite identity slots.
+    ClearAcceptedInviteListingIdentity(event)
+  elseif event == "PARTY_LEADER_CHANGED" then
+    -- Leader changed: the active-invite identity belongs to the previous
+    -- leader's listing. Whoever is now leader holds a fresh authority and
+    -- should be resolved via UnitIsGroupLeader instead of the stale name.
+    -- Skip when no listing identity was captured to begin with so the
+    -- log stays quiet for solo / pre-formed groups.
+    if activeInviteLeader ~= nil or acceptedInviteSearchResultID ~= nil then
+      ClearAcceptedInviteListingIdentity("PARTY_LEADER_CHANGED")
+    end
   elseif event == "GROUP_ROSTER_UPDATE" then
     local detectedBefore = detectedMapID
     local isInGroup = rawget(_G, "IsInGroup")

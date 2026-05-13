@@ -883,6 +883,11 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     PARTY_LEADER_CHANGED = function(_self, ...)
       if not IsRaidModeActive(ctx) then
         ctx.handleLeaderWatchEvent("PARTY_LEADER_CHANGED", ...)
+        -- Forward to LFGDetect so the stale activeInviteLeader / -TitleLevel
+        -- (captured when the previous leader's listing was accepted) is
+        -- dropped — the new leader is its own authority and must be
+        -- resolved via UnitIsGroupLeader by downstream consumers.
+        ctx.handleLFGDetectEvent("PARTY_LEADER_CHANGED")
       end
     end,
   }

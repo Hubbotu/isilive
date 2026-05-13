@@ -76,6 +76,54 @@ Both causes are pinned by new regression tests:
     grün: a provided hint means the boost-applicant path is allowed to
     surface a lone non-hint owner.
 
+### Fix 1c + 1d — Stale LFG-listing identity across key-end and leader-change
+
+Two follow-up problems in the same bug class, identified while
+analysing Fix 1: the accepted-invite identity in
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua)
+(`activeInviteLeader`, `activeInviteTitleLevel`, `detectedMapID`,
+`acceptedInviteSearchResultID`, `pendingAcceptedInviteMapID`) used to
+survive across an entire group lifetime — through key completions
+*and* through leader handoffs — and surface stale "+N" or
+wrong-owner-name values on subsequent keys played by the same
+pre-formed group.
+
+**Problem 1c — accepted identity survives a key-end**. After
+`CHALLENGE_MODE_COMPLETED` (or `_RESET`), the LFG listing that brought
+the group together is no longer authoritative for whatever key the
+group decides to play next: a pre-formed-group continuation is not a
+fresh LFG invite. Letting `activeInviteTitleLevel` bleed into the next
+key surfaced the previous listing's "+N" on the new dungeon (e.g. a
++13 hint from a just-finished POS run leaking into a follow-up NPX +15
+run). A new helper `ClearAcceptedInviteListingIdentity` clears exactly
+the accepted-invite identity slots, leaving `pendingInvites` /
+`lastQueueMapID` untouched. `event_handlers_challenge.lua` calls
+`handleLFGDetectEvent(event)` in `HandleChallengeModeCompletedOrReset`
+so the clear lands in lockstep with the existing
+`handleMplusTimerEvent / handleKillTrackEvent / handleCombatEventsEvent`
+chain.
+
+**Problem 1d — accepted identity survives a leader change**. When the
+group's leader hands off (or drops group while staying as a member),
+`activeInviteLeader` still names the *original* listing leader.
+Downstream resolvers used that name as the LFG-leader hint, so even a
+correct UnitIsGroupLeader fallback could not run.
+`event_handlers_runtime.lua` now forwards `PARTY_LEADER_CHANGED` to
+`handleLFGDetectEvent`, which calls
+`ClearAcceptedInviteListingIdentity` (no-op when no listing identity
+was captured to begin with, so pre-formed groups stay quiet).
+`ClearAllStateImpl` (group-leave) remains the only thing that also
+drops `pendingInvites`.
+
+Four new regression tests in
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- CHALLENGE_MODE_COMPLETED clears the accepted-invite identity.
+- CHALLENGE_MODE_RESET clears the accepted-invite identity.
+- PARTY_LEADER_CHANGED clears stale activeInviteLeader / -TitleLevel.
+- PARTY_LEADER_CHANGED is a no-op when no listing identity was
+  captured.
+
 ### Fix 2 — `autoCloseOnKeyStart` default-ON
 
 The "auto-close the addon UI when the M+ keystone starts" toggle

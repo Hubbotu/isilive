@@ -553,6 +553,13 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.handleMplusTimerEvent(event)
     ctx.handleKillTrackEvent(event)
     ctx.handleCombatEventsEvent(event)
+    -- Clear the accepted-invite listing identity inside LFGDetect (leader /
+    -- title-level / detectedMapID / acceptedInviteSearchResultID). The next
+    -- key the group plays is a pre-formed-group continuation, not a fresh
+    -- LFG invite — leaking the previous listing's identity would surface
+    -- the wrong "+N" on the new dungeon (e.g. a +13 hint from the just-
+    -- finished POS run leaking into a subsequent NPX +15 run).
+    ctx.handleLFGDetectEvent(event)
     local runInfo = ResolveCompletedRunInfo()
     if type(ctx.logRuntimeTracef) == "function" then
       ctx.logRuntimeTracef(

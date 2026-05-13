@@ -990,6 +990,148 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
+  -- 0.9.238 follow-up: the accepted-invite identity (leader / title-level /
+  -- detectedMapID / acceptedInviteSearchResultID) used to survive across an
+  -- entire group lifetime — through key completions and through leader
+  -- handoffs — and surface stale "+N" values on subsequent keys. CHALLENGE_-
+  -- MODE_COMPLETED / CHALLENGE_MODE_RESET and PARTY_LEADER_CHANGED now drop
+  -- the accepted-invite identity (but keep pendingInvites so a separately
+  -- queued application can still resolve).
+
+  test("LFGDetect CHALLENGE_MODE_COMPLETED clears the accepted-invite identity", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [501] = { activityID = 1768, name = "+13 POS", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 501, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 501, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 13, "setup: accept captures the +13 listing")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteLeader(), "Leader-Realm", "setup: accept captures the leader")
+      Assert.Equal(addon.LFGDetect.GetAcceptedInviteSearchResultID(), 501, "setup: accept captures the searchResultID")
+
+      fire("CHALLENGE_MODE_COMPLETED")
+
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        "CHALLENGE_MODE_COMPLETED must drop activeInviteTitleLevel so the next key's +N is not stale"
+      )
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "CHALLENGE_MODE_COMPLETED must drop activeInviteLeader")
+      Assert.Nil(
+        addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+        "CHALLENGE_MODE_COMPLETED must drop acceptedInviteSearchResultID"
+      )
+      Assert.Nil(
+        addon.LFGDetect.GetDetectedMapID(),
+        "CHALLENGE_MODE_COMPLETED must drop detectedMapID so the next key drives its own highlight"
+      )
+    end)
+  end)
+
+  test("LFGDetect CHALLENGE_MODE_RESET clears the accepted-invite identity", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [502] = { activityID = 1768, name = "+15 push", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 502, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 502, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 15, "setup: accept captures the +15 listing")
+
+      -- Aborted run (CHALLENGE_MODE_RESET) must clear the same slots as
+      -- CHALLENGE_MODE_COMPLETED — the listing identity is gone either way.
+      fire("CHALLENGE_MODE_RESET")
+
+      Assert.Nil(addon.LFGDetect.GetActiveInviteTitleLevel(), "CHALLENGE_MODE_RESET drops activeInviteTitleLevel")
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "CHALLENGE_MODE_RESET drops activeInviteLeader")
+    end)
+  end)
+
+  test("LFGDetect PARTY_LEADER_CHANGED clears the stale activeInviteLeader / -TitleLevel", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [503] = { activityID = 1768, name = "+12 chill", leaderName = "OldLeader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 503, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 503, "inviteaccepted")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "OldLeader-Realm",
+        "setup: accept captures the original listing leader"
+      )
+
+      -- The original leader hands off / drops group; PARTY_LEADER_CHANGED
+      -- fires. The captured listing identity belongs to the previous leader,
+      -- so it must be dropped — the new leader is its own authority.
+      fire("PARTY_LEADER_CHANGED")
+
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "PARTY_LEADER_CHANGED must drop the stale activeInviteLeader hint"
+      )
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        "PARTY_LEADER_CHANGED must drop the stale activeInviteTitleLevel hint"
+      )
+      Assert.Nil(
+        addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+        "PARTY_LEADER_CHANGED must drop the stale acceptedInviteSearchResultID"
+      )
+    end)
+  end)
+
+  test("LFGDetect PARTY_LEADER_CHANGED is a no-op when no listing identity was captured", function()
+    -- Pre-formed-group case: never went through an LFG accept, so the
+    -- accepted-invite identity slots are nil to begin with. The event must
+    -- not raise and must not produce spurious clear-state log entries.
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({}, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      local ok, err = pcall(function()
+        fire("PARTY_LEADER_CHANGED")
+      end)
+      Assert.True(ok, "PARTY_LEADER_CHANGED without prior accept must not raise: " .. tostring(err))
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "still nil after the no-op")
+    end)
+  end)
+
   test("LFGDetect OnInvited passes the searchResultID through to the invite-hint callback", function()
     local globals, fire = BuildLFGDetectEnv({
       globals = {
