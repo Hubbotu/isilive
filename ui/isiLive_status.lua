@@ -771,5 +771,36 @@ function Status.CreateController(opts)
     return MaybeAnnounceTargetDungeonChat(state, deps)
   end
 
+  -- Direct-push entry point for the LFG-accept trigger. Bypasses the
+  -- resolver chain inside MaybeAnnounceTargetDungeonChat — the payload here
+  -- comes straight from the listing the player just accepted (the same
+  -- payload the Center Notice already rendered), so name + level are
+  -- authoritative without needing the LFG-title-hint / roster-owner /
+  -- synced-target fallbacks. Sets the levelAnnouncedTargetDungeonName
+  -- lock-in so a subsequent resolver-driven re-evaluation (triggered by
+  -- the next UpdateStatusLine event) does not re-emit the line.
+  --
+  -- Group-presence check intentionally omitted: by the time the LFG-accept
+  -- callback fires we are joining or already in the group, but IsInGroup()
+  -- can transiently return false right after the accept event. The notice
+  -- shows regardless, and the chat line should follow.
+  function controller.AnnounceTargetDungeonFromPayload(payload)
+    if type(payload) ~= "table" then
+      return
+    end
+    local name = type(payload.name) == "string" and StringUtils.Trim(payload.name) or nil
+    if not name or name == "" then
+      return
+    end
+    local level = tonumber(payload.level)
+    if level and level <= 0 then
+      level = nil
+    end
+    if state.levelAnnouncedTargetDungeonName == name then
+      return
+    end
+    EmitTargetDungeonAnnouncement(state, deps, { name = name, level = level })
+  end
+
   return controller
 end

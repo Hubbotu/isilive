@@ -1108,6 +1108,108 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
+  -- 0.9.240: direct-push hook fires with the listing's entry.titleLevel so
+  -- the chat Target-Dungeon line surfaces the exact same "+N" the Center
+  -- Notice rendered, without going through the status resolver chain.
+  test("LFGDetect OnInviteAccepted fires the target-dungeon-chat callback with the listing payload", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [601] = { activityID = 1768, name = "+13 Relaxed", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetTargetDungeonChatEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 601, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 601, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "target-dungeon-chat callback fires exactly once on accept")
+      Assert.Equal(
+        payloads[1].level,
+        13,
+        "callback payload carries entry.titleLevel — same field as the Center Notice"
+      )
+      Assert.Equal(payloads[1].leaderName, "Leader-Realm", "callback payload carries the leader name")
+      Assert.Equal(payloads[1].groupName, "+13 Relaxed", "callback payload carries the listing title")
+      Assert.Equal(payloads[1].searchResultID, 601, "callback payload carries the accepted searchResultID")
+    end)
+  end)
+
+  test("LFGDetect direct-push respects the enabled gate", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [602] = { activityID = 1768, name = "+14 chill", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetTargetDungeonChatEnabledFn(function()
+        return false
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 602, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 602, "inviteaccepted")
+
+      Assert.Equal(#payloads, 0, "callback must not fire when the enabled gate returns false")
+    end)
+  end)
+
+  test("LFGDetect direct-push surfaces level=nil when the listing has no +N marker", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [603] = { activityID = 1768, name = "casual run", leaderName = "Z-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetTargetDungeonChatEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 603, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 603, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "callback still fires even when titleLevel is nil")
+      Assert.Nil(
+        payloads[1].level,
+        "missing +N in the listing title surfaces as nil — the chat line renders level-less"
+      )
+    end)
+  end)
+
   test("LFGDetect PARTY_LEADER_CHANGED is a no-op when no listing identity was captured", function()
     -- Pre-formed-group case: never went through an LFG accept, so the
     -- accepted-invite identity slots are nil to begin with. The event must

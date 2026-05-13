@@ -203,6 +203,23 @@ local acceptedInviteNoticeEnabledFn = nil
 local acceptedRaidInviteNoticeCallback = nil
 local acceptedRaidInviteNoticeEnabledFn = nil
 
+-- Direct-push hook for the target-dungeon chat announce. The Center Notice
+-- already renders the listing's "+N" synchronously from entry.titleLevel —
+-- this hook feeds the **same** payload to the status controller so the chat
+-- line is guaranteed to match the notice. Replaces the previous resolver-
+-- driven path for the LFG-accept trigger, which had to fight a 3-source
+-- chain (LFG-title hint -> roster owner -> synced target) + a 3-second
+-- defer + race guards just to recover what was already in entry.titleLevel
+-- at the moment of accept.
+--
+-- The resolver-driven MaybeAnnounceTargetDungeonChat path stays for other
+-- triggers (manual /invite without LFG context, peer-sync target updates,
+-- pre-formed groups), so this hook is purely additive — it short-circuits
+-- the LFG-accept case and locks the lock-in flag so the resolver does not
+-- announce a second time.
+local targetDungeonChatCallback = nil
+local targetDungeonChatEnabledFn = nil
+
 local debugLog = nil
 local debugTrace = nil
 local debugTraceDeep = nil
@@ -273,6 +290,14 @@ end
 
 function LFGDetect.SetAcceptedRaidInviteNoticeEnabledFn(fn)
   acceptedRaidInviteNoticeEnabledFn = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetTargetDungeonChatCallback(fn)
+  targetDungeonChatCallback = type(fn) == "function" and fn or nil
+end
+
+function LFGDetect.SetTargetDungeonChatEnabledFn(fn)
+  targetDungeonChatEnabledFn = type(fn) == "function" and fn or nil
 end
 
 function LFGDetect.SetLogger(fn)
@@ -587,6 +612,30 @@ local function MaybeShowInviteHint(entry, searchResultID)
   inviteHintCallback(headline .. "\n" .. subline, 8, searchResultID)
 end
 
+-- Fires the direct-push target-dungeon chat hook with the listing payload.
+-- The listing's titleLevel is the same field the Center Notice uses, so the
+-- chat line and the notice surface identical "+N" without going through the
+-- resolver chain (LFG-title hint, roster owner, synced target). Silently
+-- no-ops when the callback is unwired (early-load races, tests).
+local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
+  if type(targetDungeonChatCallback) ~= "function" then
+    return
+  end
+  if type(entry) ~= "table" or not entry.mapID then
+    return
+  end
+  if type(targetDungeonChatEnabledFn) == "function" and targetDungeonChatEnabledFn() == false then
+    return
+  end
+  targetDungeonChatCallback({
+    mapID = entry.mapID,
+    level = entry.titleLevel,
+    leaderName = entry.leaderName,
+    groupName = entry.groupName,
+    searchResultID = searchResultID,
+  })
+end
+
 -- Renders the post-accept Center Notice. Pulls ALL data from the supplied
 -- entry — the pendingInvites snapshot of the searchResultID the player just
 -- accepted. Sibling listings (other searchResultIDs in pendingInvites) cannot
@@ -673,6 +722,11 @@ local function OnInviteAccepted(searchResultID)
     Log("state_set", "var=acceptedInviteSearchResultID val=%s", tostring(searchResultID))
     TriggerHighlightUpdate("invite")
     MaybeShowAcceptedInviteNotice(entry, searchResultID)
+    -- Direct-push the chat announce with the SAME entry the notice just
+    -- rendered. The status controller bypasses its resolver chain for this
+    -- payload and emits the Target-Dungeon line immediately with the
+    -- listing's "+N", so chat and notice are guaranteed to agree.
+    MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
     return
   end
 

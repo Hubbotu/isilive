@@ -1431,6 +1431,42 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     statusController.MaybeAnnounceTargetDungeonChat()
   end
 
+  -- Direct-push: route the LFG-accept payload (mapID + listing titleLevel)
+  -- straight to the status controller's AnnounceTargetDungeonFromPayload
+  -- entry point. The chat line then renders with exactly the same "+N"
+  -- the Center Notice already drew from entry.titleLevel; the resolver
+  -- chain inside MaybeAnnounceTargetDungeonChat is skipped for this path
+  -- so race conditions on the LFG-title hint / roster-owner / synced-
+  -- target sources cannot surface a wrong "+N" anymore. The
+  -- levelAnnouncedTargetDungeonName lock-in is set as a side effect of
+  -- EmitTargetDungeonAnnouncement, so the subsequent
+  -- UpdateStatusLine-driven re-evaluation stays silent.
+  local lfgDetectForChat = addonTable.LFGDetect
+  if type(lfgDetectForChat) == "table" and type(lfgDetectForChat.SetTargetDungeonChatCallback) == "function" then
+    lfgDetectForChat.SetTargetDungeonChatCallback(function(payload)
+      if type(payload) ~= "table" then
+        return
+      end
+      local mapID = tonumber(payload.mapID)
+      if not mapID or mapID <= 0 then
+        return
+      end
+      local resolvedName = ResolveAcceptedInviteDungeonName(ctx, modules, mapID)
+      if type(resolvedName) ~= "string" or resolvedName == "" then
+        return
+      end
+      statusController.AnnounceTargetDungeonFromPayload({
+        name = resolvedName,
+        level = payload.level,
+      })
+    end)
+    if type(lfgDetectForChat.SetTargetDungeonChatEnabledFn) == "function" then
+      lfgDetectForChat.SetTargetDungeonChatEnabledFn(function()
+        return IsInGroup() == true
+      end)
+    end
+  end
+
   local function QueueForceRefreshData()
     ctx.inspectController.QueueForceRefreshData(ctx.GetRoster())
   end

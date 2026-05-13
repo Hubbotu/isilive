@@ -1,5 +1,118 @@
 # Changelog
 
+## 2026-05-14 - Version 0.9.240 (patch)
+
+Architectural fix for the recurring "chat target-dungeon line surfaces
+the wrong / no +N" class of bugs. After 0.9.236 (3 s defer), 0.9.238
+(declined_delisted post-accept guard + sole-`"player"` race guard),
+0.9.239 (generalised sole-match race guard + identity drops on
+key-end / leader-change), yet another in-game report (`Terrasse der
+Magister +13` invite, no member in the roster held that key at all)
+made it clear that piling more guards onto the resolver chain was
+treating symptoms, not the cause.
+
+The Center Notice has always been right: it reads
+`entry.titleLevel` directly from the LFG search-result payload
+synchronously inside `OnInviteAccepted`. The chat path was going the
+long way around — `GetStatusTargetDungeonInfo` -> LFG-title hint ->
+roster owner -> synced target, plus a 3 s deferred re-evaluation —
+and every one of those sources had its own way of either being not
+populated yet at announce time or being stained later by an
+unrelated event.
+
+This release adds a direct-push hook that feeds the chat the same
+`entry.titleLevel` the notice already drew, with no resolver chain
+between accept and announce. Guarantee: when the notice shows `+N`,
+the chat shows `+N` — they share the payload now.
+
+### New direct-push hook in lfg_detect
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- New `targetDungeonChatCallback` / `targetDungeonChatEnabledFn`
+  module-local slots plus their `SetTargetDungeonChatCallback` /
+  `SetTargetDungeonChatEnabledFn` setters.
+- New helper `MaybeFireTargetDungeonChatFromAccept(entry,
+  searchResultID)` that forwards `{mapID, level=entry.titleLevel,
+  leaderName, groupName, searchResultID}` to the callback. Silent
+  no-op when the callback is unwired (early-load races, tests) or
+  the enabled gate returns false.
+- `OnInviteAccepted` calls the helper right after the existing
+  `MaybeShowAcceptedInviteNotice` call — same payload, same call
+  frame.
+
+### New direct-push entry point on the status controller
+
+[ui/isiLive_status.lua](ui/isiLive_status.lua):
+
+- New `controller.AnnounceTargetDungeonFromPayload(payload)` method.
+  Takes `{name, level}` directly (the factory pre-resolves
+  `mapID -> name` via `ResolveAcceptedInviteDungeonName` so the
+  status controller does not need its own teleport lookup) and emits
+  the announce through the existing `EmitTargetDungeonAnnouncement`
+  helper. That helper sets the `levelAnnouncedTargetDungeonName`
+  lock-in flag as a side effect, so the subsequent
+  `UpdateStatusLine`-driven `MaybeAnnounceTargetDungeonChat` call
+  finds the dungeon already announced and stays silent.
+- Guards against non-table payloads, missing / blank `name`,
+  zero / negative `level` (treated as level-less), and the lock-in
+  already being set for the same name.
+
+### Factory wiring
+
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+
+- After `statusController` is created, the factory wires the LFG-
+  detect callback to a closure that pre-resolves the dungeon name
+  via the existing `ResolveAcceptedInviteDungeonName` helper (same
+  source the post-accept notice uses) and then forwards
+  `{name, level}` to `statusController.AnnounceTargetDungeonFromPayload`.
+- The enabled gate is `IsInGroup() == true`. After invite-accept the
+  player is in (or instantly joining) the group; the gate prevents
+  the announce from firing during transient pre-group states.
+
+### Why the resolver chain stays
+
+The resolver-driven `MaybeAnnounceTargetDungeonChat` path is **not**
+removed — it still serves three trigger sources the direct push
+cannot cover:
+
+- Manual `/invite` groups (no LFG context).
+- Peer-sync target updates (a peer's announced target dungeon
+  changes, no local invite event).
+- Pre-formed groups starting a different key with no fresh accept.
+
+For those paths the 3 s defer + sole-match race guard + identity-
+clears on key-end / leader-change continue to apply. The direct-push
+hook short-circuits **only** the LFG-accept trigger, which is the
+one path where the listing payload carries the authoritative level.
+
+### Tests
+
+7 new regression tests; usecase count rises from 1695 to 1702.
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- `AnnounceTargetDungeonFromPayload emits the +N line and sets the
+  lock-in` — pins the happy path and the no-second-fire.
+- `... renders without +N when level is nil` — listing without a
+  `"+N"` marker.
+- `... is a no-op for invalid payloads` — nil / non-table / blank
+  name / whitespace-only name.
+- `... locks out the resolver-driven path` — direct push first, then
+  a subsequent resolver-driven `MaybeAnnounceTargetDungeonChat` must
+  stay silent because the lock-in is set.
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- `OnInviteAccepted fires the target-dungeon-chat callback with the
+  listing payload` — `level == entry.titleLevel`,
+  `leaderName / groupName / searchResultID` propagated.
+- `direct-push respects the enabled gate` — `enabledFn=false`
+  silences the callback.
+- `direct-push surfaces level=nil when the listing has no +N
+  marker` — propagates absence cleanly.
+
 ## 2026-05-13 - Version 0.9.239 (patch)
 
 Three follow-up fixes to the 0.9.238 LFG-edge-case audit. All three

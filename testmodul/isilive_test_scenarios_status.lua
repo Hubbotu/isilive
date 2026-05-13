@@ -760,6 +760,121 @@ local function RegisterPortalNavigatorTests(test, Assert, WithGlobals, LoadAddon
       Assert.Equal(hides, 1, "disabling the portal navigator should hide the visible notice")
     end)
   end)
+
+  -- 0.9.240: direct-push entry point for the LFG-accept trigger. Bypasses
+  -- the resolver chain inside MaybeAnnounceTargetDungeonChat — name + level
+  -- come straight from the listing payload (the same one the Center Notice
+  -- rendered), so chat and notice always agree and no race-condition guard
+  -- is needed. Sets the lock-in flag so the resolver-driven
+  -- MaybeAnnounceTargetDungeonChat does not re-fire later.
+
+  test("Status AnnounceTargetDungeonFromPayload emits the +N line and sets the lock-in", function()
+    local prints = {}
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return true
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.AnnounceTargetDungeonFromPayload({ name = "Grube von Saron", level = 13 })
+      Assert.Equal(#prints, 1, "direct-push payload emits exactly one announce")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Grube von Saron +13|r",
+        "direct-push announce carries the listing's +N exactly as supplied"
+      )
+
+      -- Lock-in: a subsequent resolver-driven MaybeAnnounceTargetDungeonChat
+      -- with the same dungeon name must stay silent.
+      controller.AnnounceTargetDungeonFromPayload({ name = "Grube von Saron", level = 13 })
+      Assert.Equal(#prints, 1, "repeated direct-push for the same dungeon must stay silent (lock-in)")
+    end)
+  end)
+
+  test("Status AnnounceTargetDungeonFromPayload renders without +N when level is nil", function()
+    local prints = {}
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return true
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.AnnounceTargetDungeonFromPayload({ name = "Ara-Kara" })
+      Assert.Equal(#prints, 1, "missing level still emits an announce (just without +N)")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Ara-Kara|r",
+        "missing level renders the dungeon name on its own — same shape the resolver would emit"
+      )
+    end)
+  end)
+
+  test("Status AnnounceTargetDungeonFromPayload is a no-op for invalid payloads", function()
+    local prints = {}
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return true
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.AnnounceTargetDungeonFromPayload(nil)
+      controller.AnnounceTargetDungeonFromPayload("not-a-table")
+      controller.AnnounceTargetDungeonFromPayload(42)
+      controller.AnnounceTargetDungeonFromPayload({ level = 14 })
+      controller.AnnounceTargetDungeonFromPayload({ name = "" })
+      controller.AnnounceTargetDungeonFromPayload({ name = "  " })
+      Assert.Equal(#prints, 0, "invalid / missing-name payloads must not emit any announce")
+    end)
+  end)
+
+  test("Status AnnounceTargetDungeonFromPayload locks out the resolver-driven path", function()
+    local prints = {}
+    local current = { targetInfo = { name = "Grube von Saron", level = 13 } }
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return true
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      -- Direct push from the LFG-accept callback lands first.
+      controller.AnnounceTargetDungeonFromPayload({ name = "Grube von Saron", level = 13 })
+      Assert.Equal(#prints, 1, "direct push emits the announce")
+
+      -- A subsequent UpdateStatusLine-driven re-evaluation (e.g. the
+      -- GROUP_ROSTER_UPDATE-triggered status refresh) must stay silent
+      -- because the lock-in is already set.
+      controller.MaybeAnnounceTargetDungeonChat()
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "resolver-driven path respects the direct-push lock-in")
+    end)
+  end)
 end
 
 local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModules)
