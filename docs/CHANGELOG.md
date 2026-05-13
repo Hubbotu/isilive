@@ -1,5 +1,134 @@
 # Changelog
 
+## 2026-05-13 - Version 0.9.238 (patch)
+
+Four bug fixes around LFG group-join edge cases and one settings default
+change. All four were observed in-game, each one falsifying an
+assumption the addon used to make. Local usecase count rises from 1683
+to 1691.
+
+### Fix 1 — Target-dungeon chat surfaces the player's own +N after group fills
+
+After accepting an LFG invite, the chat target-dungeon announce
+sometimes rendered "+15" instead of the listing's "+12" — visibly
+inconsistent with the Center Notice (which carries the listing's level
+directly from the LFG payload). Two independent root causes converged:
+
+**Cause A**: in
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua),
+`OnInviteDeclined` nulled `activeInviteLeader` /
+`activeInviteTitleLevel` / `detectedMapID` /
+`acceptedInviteSearchResultID` for the **accepted** search-result ID as
+soon as Blizzard fired `declined_delisted` / `declined_full` for it.
+Blizzard fires exactly that the moment the LFG group fills and the
+listing is removed from search — post-accept cleanup, not a real
+decline. With the state cleared, `GetStatusTargetDungeonInfo` lost its
+authoritative level source (the LFG-title hint) and degraded to the
+resolver's fallback chain. The post-accept negative-status events for
+the accepted search-result ID are now ignored; state only clears via
+`ClearAllStateImpl` (group-leave / explicit reset).
+
+**Cause B**: in
+[logic/isiLive_keysync.lua](logic/isiLive_keysync.lua),
+`ResolveActiveKeyOwnerUnit`'s unique-owner fallback happily returned
+`"player"` when only the player's own key matched the target dungeon
+in the roster. Right after `GROUP_ROSTER_UPDATE` only the player's own
+key is locally cached; the leader's key arrives a roundtrip later via
+sync. If the `UnitIsGroupLeader` hint fallback also did not nail down
+a preferred owner during that window, the unique-owner search picked
+`"player"` and downstream consumers surfaced the player's own +N. The
+fallback now treats a sole "player" match in a group of 2+ non-ghost
+members as a race symptom and returns nil so the deferred announce
+waits for a real source. Solo / 1-man scenarios keep resolving to
+"player" correctly.
+
+Both causes are pinned by new regression tests:
+
+- [testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+  - `declined_delisted` on the accepted searchResultID keeps the state,
+    `ClearAllState` is the only thing that drops it.
+  - `declined_full` on the accepted searchResultID keeps the state.
+  - `declined_delisted` for an invite that was never accepted still
+    clears state (regression pin for the existing path).
+- [testmodul/isilive_test_scenarios_keysync.lua](testmodul/isilive_test_scenarios_keysync.lua):
+  - Multi-member group with "player" as sole key match → `nil`.
+  - Solo roster with "player" as sole key match → `"player"`.
+  - Ghost-only siblings don't count toward headcount, solo fallback
+    still resolves.
+  - Non-player unique owner resolves normally.
+
+### Fix 2 — `autoCloseOnKeyStart` default-ON
+
+The "auto-close the addon UI when the M+ keystone starts" toggle
+flipped from default-OFF to default-ON, so the addon UI gets out of the
+way during a pull unless the user explicitly opts out in Settings.
+
+Touch points:
+
+- [core/isiLive_db_schema.lua](core/isiLive_db_schema.lua) — schema
+  default flipped to `true`.
+- [factory/isiLive_factory.lua](factory/isiLive_factory.lua) —
+  `ResolveAutoCloseOnKeyStartEnabled` rewritten as
+  `not (... == false)` (Pattern A in the codebase, same shape as
+  `ResolveAutoShowMainFrameOnStartupEnabled`). The legacy migration
+  condition was rewritten from `~= true` to `== nil` so the migration
+  detects exactly the pre-split persisted state and the
+  `check_settings_default_pattern` gate doesn't see it as a default-OFF
+  read.
+- [ui/isiLive_settings.lua](ui/isiLive_settings.lua) — both checkbox
+  read sites (the getter at the checkbox definition and the
+  `panel.Refresh()` call) now use `~= false` so the UI matches the
+  resolver behaviour.
+
+Existing user behaviour:
+
+- User never touched the setting → default-ON, UI auto-closes on key
+  start.
+- User explicitly enabled → unchanged, still ON.
+- User explicitly disabled → unchanged, opt-out is respected.
+
+Test updates: `isilive_test_scenarios_factory_resolvers.lua`,
+`isilive_test_scenarios_group.lua`,
+`isilive_test_scenarios_ui_settings.lua`. The savedvariables-reload
+simulator's "default-OFF Pattern B" demo moved from
+`autoCloseOnKeyStart` to `autoCloseOnSoloChange` (still default-OFF) so
+the simulator keeps exercising both pattern shapes.
+
+### Fix 3 — Raid Center Notice failed silently after 0.9.237
+
+Companion to Fix 1: the Raid invite-accept Center Notice (added in
+0.9.237) used the same `acceptedInviteSearchResultID` state that Fix 1
+now guards. The raid notice path itself was not directly affected, but
+the state-machine shape is now uniform across both pipelines —
+`acceptedInviteSearchResultID` only clears on group-leave, never on a
+post-accept negative status update for the accepted listing.
+
+### Fix 4 — GROUP_ROSTER_UPDATE dropped during sustained combat (Delves)
+
+Reported in-game: in a Delve, a third player got invited mid-run, joined
+the group, but never appeared in the addon's roster — until the end-boss
+was killed. The Delve keeps the player in combat for the whole run, and
+GROUP_ROSTER_UPDATE was registered with `combat=false` in the event
+registry — so the gate dropped the event the moment a new member joined.
+Blizzard does not re-fire GROUP_ROSTER_UPDATE; the next refresh only
+arrived when some unrelated combat-end-adjacent event (boss-kill loot
+flow, member moving slot, etc.) happened to trigger a fresh
+GROUP_ROSTER_UPDATE.
+
+[core/isiLive_bootstrap.lua](core/isiLive_bootstrap.lua) now marks
+GROUP_ROSTER_UPDATE as `combat=true`. The handler chain
+(`HandleGroupRosterUpdate` in
+[logic/isiLive_group.lua](logic/isiLive_group.lua) →
+`UpdatePartyMembersInRoster` → `updateUI()`) only touches Lua tables
+plus the FontString-driven main frame; no secure / taint-sensitive
+code is reachable, so it is safe to run during InCombatLockdown.
+
+Pinned by a new test in
+[testmodul/isilive_test_scenarios_event_utils.lua](testmodul/isilive_test_scenarios_event_utils.lua)
+("Bootstrap gate allows GROUP_ROSTER_UPDATE during combat (Delves
+member-join fix)") which drives the gate with `isInCombat()=true` and
+asserts the event reaches the dispatcher.
+
 ## 2026-05-13 - Version 0.9.237 (patch)
 
 Raid Center Notice support: invite accept + raid entry both surface in

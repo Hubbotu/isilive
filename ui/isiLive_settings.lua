@@ -1769,7 +1769,11 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     labels.SETTINGS_AUTO_CLOSE_ON_KEY_START or "Auto-close when key starts",
     function()
       local db = config.getDB()
-      return db.autoCloseOnKeyStart == true
+      -- Default-ON since 0.9.238: only an explicit `false` keeps the box
+      -- unchecked. nil / true / any non-false value renders as checked so
+      -- the UI matches the resolver behaviour
+      -- (ResolveAutoCloseOnKeyStartEnabled in factory/isiLive_factory.lua).
+      return db.autoCloseOnKeyStart ~= false
     end,
     function(checked)
       local db = config.getDB()
@@ -2306,7 +2310,7 @@ local function RefreshSettingsControls(controls, config)
   controls.minimapBtn.check:SetChecked(db.showMinimapButton == true)
   controls.sync.check:SetChecked(db.syncEnabled ~= false)
   controls.autoOpen.check:SetChecked(db.autoOpenOnQueue ~= false)
-  controls.autoCloseOnKeyStart.check:SetChecked(db.autoCloseOnKeyStart == true)
+  controls.autoCloseOnKeyStart.check:SetChecked(db.autoCloseOnKeyStart ~= false)
   controls.autoCloseOnSoloChange.check:SetChecked(db.autoCloseOnSoloChange == true)
   controls.lockMainFramePosition.check:SetChecked(db.lockMainFramePosition ~= false)
   controls.combatFadeMM.check:SetChecked(db.combatFadeMM == true)

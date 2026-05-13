@@ -542,14 +542,21 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
 
       autoCloseCheck = Assert.NotNil(autoCloseCheck, "settings panel should create a key-start auto-close checkbox")
       ---@diagnostic disable: undefined-field
-      Assert.False(
+      -- 0.9.238: default flipped to ON so the addon UI gets out of the way
+      -- during a pull unless the user explicitly opts out. The Settings
+      -- checkbox renders checked when `db.autoCloseOnKeyStart` is nil so
+      -- the user sees the active behaviour at a glance.
+      Assert.True(
         autoCloseCheck:GetChecked(),
-        "key-start auto-close should default to disabled when no saved value exists"
+        "key-start auto-close should default to ENABLED when no saved value exists (0.9.238)"
       )
+
+      db.autoCloseOnKeyStart = false
+      panel.Refresh()
+      Assert.False(autoCloseCheck:GetChecked(), "refresh should honor an explicit false opt-out")
 
       db.autoCloseOnKeyStart = true
       panel.Refresh()
-
       Assert.True(autoCloseCheck:GetChecked(), "refresh should honor an explicit true override")
       ---@diagnostic enable: undefined-field
     end)

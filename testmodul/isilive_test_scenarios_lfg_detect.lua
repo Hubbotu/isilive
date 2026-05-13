@@ -879,6 +879,117 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
+  -- 0.9.237 follow-up: Blizzard fires `declined_delisted` for the ACCEPTED
+  -- searchResultID the moment the LFG group fills after our join. Without the
+  -- post-accept guard, that event nulled activeInviteTitleLevel and the
+  -- deferred chat target-dungeon announce fell back to the player's own key
+  -- (wrong "+N"). The accepted-invite state must stay until the player
+  -- actually leaves the group (ClearAllStateImpl).
+  test("LFGDetect OnInviteDeclined for the ACCEPTED searchResultID keeps active invite state", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [42] = { activityID = 1768, name = "+12 Relaxed", leaderName = "Pinto-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "inviteaccepted")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 12, "setup: +12 listing was accepted")
+      Assert.Equal(addon.LFGDetect.GetAcceptedInviteSearchResultID(), 42, "setup: accepted searchResultID is 42")
+
+      -- The accepted listing itself delists once the group fills.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 42, "declined_delisted")
+
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        12,
+        "delisting of the accepted listing after join must not null out activeInviteTitleLevel"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Pinto-Realm",
+        "delisting of the accepted listing after join must not null out activeInviteLeader"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+        42,
+        "acceptedInviteSearchResultID must survive the post-accept delisting"
+      )
+
+      -- ClearAllState (group-leave) is the only thing allowed to drop it.
+      addon.LFGDetect.ClearAllState()
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        "ClearAllState must still drop activeInviteTitleLevel on group-leave"
+      )
+      Assert.Nil(addon.LFGDetect.GetActiveInviteLeader(), "ClearAllState must drop activeInviteLeader on group-leave")
+    end)
+  end)
+
+  -- Same flow with declined_full (group hit max capacity at the moment of
+  -- accept rather than via a separate delist event). Both negative statuses
+  -- route through OnInviteDeclined and must be ignored for the accepted ID.
+  test("LFGDetect OnInviteDeclined declined_full for the accepted searchResultID keeps state", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [77] = { activityID = 1768, name = "+15 push", leaderName = "Push-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 77, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 77, "inviteaccepted")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 77, "declined_full")
+
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        15,
+        "declined_full on the accepted listing must keep activeInviteTitleLevel"
+      )
+    end)
+  end)
+
+  test("LFGDetect OnInviteDeclined still clears state when no accept ever happened", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [99] = { activityID = 1768, name = "+13 push", leaderName = "Push-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 99, "invited")
+      Assert.Nil(addon.LFGDetect.GetAcceptedInviteSearchResultID(), "setup: no accept yet")
+
+      -- Listing gets declined / delisted before we ever accepted. The state
+      -- never got promoted to "accepted", so the regular detected-map clear
+      -- path still runs.
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 99, "declined_delisted")
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        "declined of a never-accepted invite must still clear state"
+      )
+    end)
+  end)
+
   test("LFGDetect OnInvited passes the searchResultID through to the invite-hint callback", function()
     local globals, fire = BuildLFGDetectEnv({
       globals = {

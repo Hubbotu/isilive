@@ -655,19 +655,37 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
     return nil
   end
 
+  -- Unique-owner fallback: only one roster member carries a key for the
+  -- target dungeon. This used to return that single match unconditionally,
+  -- but during the race "player joins LFG group → GROUP_ROSTER_UPDATE fires
+  -- before the leader's key has synced", the only locally known key is the
+  -- player's own one. Returning "player" there caused the chat
+  -- "Target Dungeon" announce to surface the wrong "+N" (e.g. the player's
+  -- own SOT +15 instead of the group's SOT +12) when the hint fallback
+  -- (UnitIsGroupLeader sweep) could not nail down a preferred owner. Guard:
+  -- when "player" is the sole match in a group of 2+, treat the owner as
+  -- "not yet known" so the deferred chat announce waits for a real source.
+  -- Solo / 1-man scenarios still resolve to "player" correctly.
   local ownerUnit = nil
+  local rosterSize = 0
   local matches = 0
   for unit, info in pairs(roster or {}) do
-    if type(info) == "table" and tonumber(info.keyMapID) == targetMapID then
-      matches = matches + 1
-      ownerUnit = unit
-      if matches > 1 then
-        return nil
+    if type(info) == "table" and not info.isGhost then
+      rosterSize = rosterSize + 1
+      if tonumber(info.keyMapID) == targetMapID then
+        matches = matches + 1
+        ownerUnit = unit
+        if matches > 1 then
+          return nil
+        end
       end
     end
   end
 
   if matches == 1 then
+    if ownerUnit == "player" and rosterSize > 1 then
+      return nil
+    end
     return ownerUnit
   end
   return nil

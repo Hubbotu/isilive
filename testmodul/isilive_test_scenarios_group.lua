@@ -899,10 +899,13 @@ local function RegisterGroupLifecycleFollowupTests(test, Assert, LoadAddonModule
     if resolveKeyStart == nil or resolveSolo == nil then
       error("factory should export both auto-close resolvers")
     end
-    Assert.False(resolveKeyStart(nil), "missing saved data should default key-start auto-close to disabled")
-    Assert.False(resolveKeyStart({}), "missing saved value should default key-start auto-close to disabled")
+    Assert.True(resolveKeyStart(nil), "missing saved data should default key-start auto-close to ENABLED (0.9.238)")
+    Assert.True(resolveKeyStart({}), "missing saved value should default key-start auto-close to ENABLED")
     Assert.True(resolveKeyStart({ autoCloseOnKeyStart = true }), "explicit true enables key-start auto-close")
-    Assert.False(resolveKeyStart({ autoCloseOnKeyStart = false }), "explicit false keeps key-start auto-close off")
+    Assert.False(
+      resolveKeyStart({ autoCloseOnKeyStart = false }),
+      "explicit false opts the user out of key-start auto-close"
+    )
     Assert.True(resolveSolo({ autoCloseOnSoloChange = true }), "explicit true enables solo-change auto-close")
     Assert.False(resolveSolo({ autoCloseOnSoloChange = false }), "explicit false keeps solo-change auto-close off")
   end)

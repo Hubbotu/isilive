@@ -579,6 +579,51 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
     Assert.Equal(dispatched[4], "CONFIRM_SUMMON", "incoming summon trigger should pass hidden gate")
   end)
 
+  -- 0.9.238: GROUP_ROSTER_UPDATE is now combat-allowed. In sustained-combat
+  -- instances (Delves are the canonical case) Blizzard fires the event only
+  -- once when a member joins; if the gate drops it because of InCombat-
+  -- Lockdown, the new member stays missing from the addon's roster until
+  -- some unrelated later event happens to trigger a fresh GROUP_ROSTER_UPDATE
+  -- — typically the post-boss combat-end follow-up several minutes later.
+  -- HandleGroupRosterUpdate touches only Lua state plus the FontString-driven
+  -- main frame, no secure / taint-sensitive code, so it is safe to run
+  -- during combat.
+  test("Bootstrap gate allows GROUP_ROSTER_UPDATE during combat (Delves member-join fix)", function()
+    local dispatched = {}
+
+    local addon = LoadAddonModules({ "isiLive_events.lua", "isiLive_bootstrap.lua" })
+    local gate = addon.Bootstrap.CreateGatedOnEvent({
+      events = addon.Events,
+      dispatch = function(_frame, event, ...)
+        local _ = ...
+        table.insert(dispatched, event)
+      end,
+      isStopped = function()
+        return false
+      end,
+      isPaused = function()
+        return false
+      end,
+      isTestMode = function()
+        return false
+      end,
+      -- Player is in combat — Delves keep this true for minutes at a time.
+      isInCombat = function()
+        return true
+      end,
+    })
+
+    local frame = {
+      IsShown = function()
+        return true
+      end,
+    }
+
+    gate(frame, "GROUP_ROSTER_UPDATE")
+    Assert.Equal(#dispatched, 1, "GROUP_ROSTER_UPDATE must pass through during combat")
+    Assert.Equal(dispatched[1], "GROUP_ROSTER_UPDATE", "the GROUP_ROSTER_UPDATE event must reach the dispatcher")
+  end)
+
   test("Bootstrap gate allows portal navigator zone events while frame is hidden", function()
     local dispatched = {}
 

@@ -705,13 +705,31 @@ local function OnInviteDeclined(searchResultID)
   -- must not erase the active-invite state of the listing the player actually
   -- accepted — otherwise the LFG-title level hint disappears and downstream
   -- consumers (status announce, owner resolve) fall back to a worse level
-  -- source. Only the accepted searchResultID is allowed to reset state.
+  -- source.
   if acceptedInviteSearchResultID ~= nil and searchResultID ~= acceptedInviteSearchResultID then
     Log(
       "invite_declined_ignored",
       "searchResultID=%s reason=other_listing accepted=%s",
       tostring(searchResultID),
       tostring(acceptedInviteSearchResultID)
+    )
+    return
+  end
+  -- Negative status for the SAME searchResultID after a successful accept:
+  -- Blizzard fires `declined_delisted` / `declined_full` for the accepted
+  -- listing the moment the group fills (typical with auto-accept on the last
+  -- open slot — "Die Gruppe '+12 Relaxed' ist voll und wurde abgemeldet").
+  -- That is post-accept cleanup, not a real decline of our spot, so the
+  -- accepted-invite state (detectedMapID, activeInviteLeader,
+  -- activeInviteTitleLevel) must stay until group-leave clears it via
+  -- ClearAllStateImpl. Without this guard, the chat target-dungeon announce
+  -- loses its LFG-title hint and falls back to a worse level source (roster
+  -- owner / synced target — surfaces wrong "+N" e.g. the player's own key).
+  if searchResultID == acceptedInviteSearchResultID then
+    Log(
+      "invite_declined_post_accept_ignored",
+      "searchResultID=%s reason=listing_delisted_after_accept",
+      tostring(searchResultID)
     )
     return
   end

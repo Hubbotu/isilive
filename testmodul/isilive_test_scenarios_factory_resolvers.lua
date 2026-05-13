@@ -13,15 +13,19 @@ return function(test, ctx)
   local Assert = ctx.assert
   local LoadAddonModules = ctx.load_modules
 
-  test("factory resolvers: ResolveAutoCloseOnKeyStartEnabled requires explicit true", function()
+  test("factory resolvers: ResolveAutoCloseOnKeyStartEnabled defaults ON, opt-out via explicit false", function()
     local addon = Load(LoadAddonModules)
     local fn = addon._FactoryInternal.ResolveAutoCloseOnKeyStartEnabled
-    Assert.Equal(fn(nil), false, "nil DB must default to disabled")
-    Assert.Equal(fn({}), false, "empty table must default to disabled")
-    Assert.Equal(fn({ autoCloseOnKeyStart = false }), false)
-    Assert.Equal(fn({ autoCloseOnKeyStart = "true" }), false, "only strict boolean true counts")
-    Assert.Equal(fn({ autoCloseOnKeyStart = true }), true)
-    Assert.Equal(fn("not-a-table"), false, "non-table input must degrade to false")
+    Assert.Equal(fn(nil), true, "nil DB must default to enabled (default-ON since 0.9.238)")
+    Assert.Equal(fn({}), true, "empty table must default to enabled")
+    Assert.Equal(fn({ autoCloseOnKeyStart = false }), false, "explicit false opts the user out")
+    Assert.Equal(
+      fn({ autoCloseOnKeyStart = "false" }),
+      true,
+      "only strict boolean false opts out; non-boolean values keep the default"
+    )
+    Assert.Equal(fn({ autoCloseOnKeyStart = true }), true, "explicit true matches the default")
+    Assert.Equal(fn("not-a-table"), true, "non-table input falls back to the default")
   end)
 
   test("factory resolvers: ResolveAutoCloseOnSoloChangeEnabled requires explicit true", function()

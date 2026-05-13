@@ -416,24 +416,27 @@ local function Run()
     "Pattern A: read site `db.inviteHintEnabled ~= false` returns false after toggle-OFF + reload"
   )
 
-  -- Pattern B on a fresh DB: autoCloseOnKeyStart is unset; production read
-  -- `db.autoCloseOnKeyStart == true` must yield false (default-OFF works).
+  -- Pattern B on a fresh DB: autoCloseOnSoloChange is unset; production read
+  -- `db.autoCloseOnSoloChange == true` must yield false (default-OFF works).
+  -- (autoCloseOnKeyStart switched to default-ON in 0.9.238, so the default-OFF
+  -- demonstration moved to autoCloseOnSoloChange which still uses the
+  -- opt-in-via-explicit-true pattern.)
   local patternBSession = BuildPanelSession({})
   Check(
-    (patternBSession.db.autoCloseOnKeyStart == true) == false,
-    "Pattern B on fresh DB: read `db.autoCloseOnKeyStart == true` is false (default-OFF read pattern works pre-toggle)"
+    (patternBSession.db.autoCloseOnSoloChange == true) == false,
+    "Pattern B fresh DB: read `db.autoCloseOnSoloChange == true` is false (default-OFF read pattern works pre-toggle)"
   )
 
-  -- User toggles autoCloseOnKeyStart ON.
-  ClickCheckbox(patternBSession.frames, "SETTINGS_AUTO_CLOSE_ON_KEY_START", true)
-  Check(patternBSession.db.autoCloseOnKeyStart == true, "Pattern B: toggle-ON persists explicit `true` in DB")
+  -- User toggles autoCloseOnSoloChange ON.
+  ClickCheckbox(patternBSession.frames, "SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE", true)
+  Check(patternBSession.db.autoCloseOnSoloChange == true, "Pattern B: toggle-ON persists explicit `true` in DB")
 
   -- Reload and re-check.
   local patternBReloaded = BuildPanelSession(CopyTable(patternBSession.db))
-  Check(patternBReloaded.db.autoCloseOnKeyStart == true, "Pattern B: explicit `true` survives /reload")
+  Check(patternBReloaded.db.autoCloseOnSoloChange == true, "Pattern B: explicit `true` survives /reload")
   Check(
-    (patternBReloaded.db.autoCloseOnKeyStart == true) == true,
-    "Pattern B: read site `db.autoCloseOnKeyStart == true` returns true after toggle-ON + reload"
+    (patternBReloaded.db.autoCloseOnSoloChange == true) == true,
+    "Pattern B: read site `db.autoCloseOnSoloChange == true` returns true after toggle-ON + reload"
   )
 
   if failures > 0 then

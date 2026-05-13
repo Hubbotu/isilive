@@ -104,7 +104,15 @@ local EVENT_REGISTRY = {
   { "ZONE_CHANGED_INDOORS", false, true, false },
   { "ZONE_CHANGED_NEW_AREA", false, true, false },
   { "UPDATE_INSTANCE_INFO", false, false, false },
-  { "GROUP_ROSTER_UPDATE", false, "cond", false },
+  -- combat=true: in Delves (and in any sustained combat instance) Blizzard
+  -- only fires GROUP_ROSTER_UPDATE once when a member joins. If the gate
+  -- drops it because of InCombatLockdown, no later event re-issues the
+  -- update — the new member stays missing from the roster until something
+  -- else (often the post-boss combat-end follow-up) happens to trigger a
+  -- fresh GROUP_ROSTER_UPDATE. HandleGroupRosterUpdate touches only Lua
+  -- state plus the FontString-driven main frame, no secure / taint-
+  -- sensitive code, so it is safe to run during combat.
+  { "GROUP_ROSTER_UPDATE", true, "cond", false },
   { "PARTY_LEADER_CHANGED", false, "cond", false },
   { "PLAYER_ROLES_ASSIGNED", false, true, false },
   { "ROLE_CHANGED_INFORM", false, true, false },
