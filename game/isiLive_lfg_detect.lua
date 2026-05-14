@@ -1160,8 +1160,12 @@ function LFGDetect.HandleEvent(event, ...)
     -- Once GROUP_ROSTER_UPDATE reports inGroup=true (rosterEstablishedSinceAccept),
     -- any further PLC is treated as a genuine handoff and clears as before.
     if not rosterEstablishedSinceAccept then
-      Log("plc_initial_convert_keep", "leader=%s titleLevel=%s",
-        tostring(activeInviteLeader), tostring(activeInviteTitleLevel))
+      Log(
+        "plc_initial_convert_keep",
+        "leader=%s titleLevel=%s",
+        tostring(activeInviteLeader),
+        tostring(activeInviteTitleLevel)
+      )
     elseif activeInviteLeader ~= nil or acceptedInviteSearchResultID ~= nil then
       ClearAcceptedInviteListingIdentity("PARTY_LEADER_CHANGED")
     end

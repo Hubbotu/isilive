@@ -1121,72 +1121,69 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
   -- must stay intact so the status resolver chain can still find the +N
   -- after the form-up. Before the fix every PLC dropped the identity
   -- unconditionally.
-  test(
-    "LFGDetect PARTY_LEADER_CHANGED keeps the listing identity during the initial convert-to-party-lead",
-    function()
-      local globals, fire = BuildLFGDetectEnv({
-        IsInGroup = function()
-          return true
-        end,
-        globals = {
-          C_LFGList = BuildC_LFGList({
-            [777] = { activityID = 1768, name = "+13 NPX", leaderName = "Listing-Owner" },
-          }, nil),
-        },
-      })
+  test("LFGDetect PARTY_LEADER_CHANGED keeps the listing identity during the initial convert-to-party-lead", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [777] = { activityID = 1768, name = "+13 NPX", leaderName = "Listing-Owner" },
+        }, nil),
+      },
+    })
 
-      WithGlobals(globals, function()
-        local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
 
-        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "invited")
-        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "inviteaccepted")
-        Assert.Equal(
-          addon.LFGDetect.GetActiveInviteLeader(),
-          "Listing-Owner",
-          "setup: accept captures the listing leader"
-        )
-        Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 13, "setup: accept captures the listing +N")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "inviteaccepted")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Listing-Owner",
+        "setup: accept captures the listing leader"
+      )
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 13, "setup: accept captures the listing +N")
 
-        -- Initial convert-to-party-lead: PLC fires BEFORE the first
-        -- GROUP_ROSTER_UPDATE. The listing owner becomes the party leader,
-        -- the captured identity still describes them, and must stay intact.
-        fire("PARTY_LEADER_CHANGED")
+      -- Initial convert-to-party-lead: PLC fires BEFORE the first
+      -- GROUP_ROSTER_UPDATE. The listing owner becomes the party leader,
+      -- the captured identity still describes them, and must stay intact.
+      fire("PARTY_LEADER_CHANGED")
 
-        Assert.Equal(
-          addon.LFGDetect.GetActiveInviteLeader(),
-          "Listing-Owner",
-          "initial-convert PLC must not drop activeInviteLeader"
-        )
-        Assert.Equal(
-          addon.LFGDetect.GetActiveInviteTitleLevel(),
-          13,
-          "initial-convert PLC must not drop activeInviteTitleLevel"
-        )
-        Assert.Equal(
-          addon.LFGDetect.GetAcceptedInviteSearchResultID(),
-          777,
-          "initial-convert PLC must not drop acceptedInviteSearchResultID"
-        )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Listing-Owner",
+        "initial-convert PLC must not drop activeInviteLeader"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevel(),
+        13,
+        "initial-convert PLC must not drop activeInviteTitleLevel"
+      )
+      Assert.Equal(
+        addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+        777,
+        "initial-convert PLC must not drop acceptedInviteSearchResultID"
+      )
 
-        -- After the roster establishes, the SAME identity must still be
-        -- there — the convert keep-path is a one-shot bypass, not a
-        -- permanent immunity.
-        fire("GROUP_ROSTER_UPDATE")
-        Assert.Equal(
-          addon.LFGDetect.GetActiveInviteLeader(),
-          "Listing-Owner",
-          "post-form-up GROUP_ROSTER_UPDATE must not retroactively drop the identity"
-        )
+      -- After the roster establishes, the SAME identity must still be
+      -- there — the convert keep-path is a one-shot bypass, not a
+      -- permanent immunity.
+      fire("GROUP_ROSTER_UPDATE")
+      Assert.Equal(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "Listing-Owner",
+        "post-form-up GROUP_ROSTER_UPDATE must not retroactively drop the identity"
+      )
 
-        -- A genuine handoff THEN fires: now the identity must clear.
-        fire("PARTY_LEADER_CHANGED")
-        Assert.Nil(
-          addon.LFGDetect.GetActiveInviteLeader(),
-          "second PLC after form-up is a real handoff and must clear the identity"
-        )
-      end)
-    end
-  )
+      -- A genuine handoff THEN fires: now the identity must clear.
+      fire("PARTY_LEADER_CHANGED")
+      Assert.Nil(
+        addon.LFGDetect.GetActiveInviteLeader(),
+        "second PLC after form-up is a real handoff and must clear the identity"
+      )
+    end)
+  end)
 
   -- 0.9.240: direct-push hook fires with the listing's entry.titleLevel so
   -- the chat Target-Dungeon line surfaces the exact same "+N" the Center
