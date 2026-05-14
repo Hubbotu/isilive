@@ -1401,6 +1401,20 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     isPlayerLeader = ctx.IsPlayerLeader,
     isInGroup = IsInGroup,
     getTargetDungeonInfo = ctx.GetStatusTargetDungeonInfo,
+    -- Chat-announce gate: ResolveLocalStatusTargetMapID is non-nil only
+    -- when the local player has an own queue, an active joined key, or
+    -- a fresh LFG accept (detectedMapID via LFGDetect). A synced-only
+    -- target — one that comes purely from another member's published
+    -- snapshot — does NOT light up the local resolver and must not
+    -- trigger a chat announce, even though the status frame still
+    -- surfaces it as informational.
+    hasLocalTargetSource = function()
+      if type(ctx.ResolveLocalStatusTargetMapID) ~= "function" then
+        return false
+      end
+      local localMapID = ctx.ResolveLocalStatusTargetMapID()
+      return type(localMapID) == "number" and localMapID > 0
+    end,
     hasActiveDungeons = function()
       local seasonData = ctx.addonTable.SeasonData
       if type(seasonData) == "table" and type(seasonData.HasActiveDungeons) == "function" then

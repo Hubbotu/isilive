@@ -190,6 +190,53 @@ Test changes; usecase count rises from 1702 to 1704.
   EnabledFn`, `IsInGroup()=false` — the callback must still fire and
   carry the listing's `+N`.
 
+### Follow-up 2026-05-14 — synced-only chat false positives
+
+In-game report after the IsInGroup race fix: a manual `/invite`
+(without any LFG search on the player's side) still produced chat
+lines like `Ziel-Dungeon: Maisarakavernen`, then flipped to `Ziel-
+Dungeon: Grube von Saron` when a roster member left. Only the third
+line (`Akademie von Algeth'ar +12`), drawn from the group's own LFG
+listing, matched what the player actually saw.
+
+Root cause: `GetStatusTargetDungeonInfo` falls back to
+`ResolveSyncedTargetInfo` when `ResolveLocalStatusTargetMapID`
+yields nil (no own queue, no active joined key, no detectedMapID
+from a fresh LFG accept). The synced-target consensus is fine for
+the status frame — it is informational, "this is what some peer is
+currently broadcasting" — but it is NOT a semantic "this is the
+dungeon the group has decided to play" signal: the value flips
+whenever the broadcasting member changes. The chat announce should
+not surface that flip.
+
+Fix:
+
+- [ui/isiLive_status.lua](ui/isiLive_status.lua):
+  `MaybeAnnounceTargetDungeonChat` now consults a new
+  `deps.hasLocalTargetSource` callback after the lock-in match and
+  before emitting / deferring. When `hasLocalTargetSource()` returns
+  false, the deferred-announce bookkeeping is cleared and the
+  function returns silent. The lock-in itself is NOT touched (the
+  status frame still renders the synced target as informational; a
+  later AnnounceTargetDungeonFromPayload via LFG-accept still
+  bypasses the gate because direct push emits through
+  EmitTargetDungeonAnnouncement, not through the resolver path).
+- [factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+  wires `hasLocalTargetSource = ctx.ResolveLocalStatusTargetMapID()
+  ~= nil`. Mirrors the existing resolver — own queue / active
+  joined key / detectedMapID (LFG accept) light it up, synced-only
+  does not.
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- New `suppresses the announce when only a synced peer target is
+  available` covers all four branches: synced-only target stays
+  silent, name flip across roster changes stays silent, a local
+  trigger appearing later opens the gate, and direct-push bypasses
+  the gate regardless.
+
+Usecase count rises from 1704 to 1705.
+
 ## 2026-05-13 - Version 0.9.239 (patch)
 
 Three follow-up fixes to the 0.9.238 LFG-edge-case audit. All three

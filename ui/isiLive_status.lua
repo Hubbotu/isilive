@@ -385,6 +385,27 @@ local function MaybeAnnounceTargetDungeonChat(state, deps)
     return
   end
 
+  -- Local-trigger gate: a non-LFG manual /invite gives the player no
+  -- own LFG-listing and no own LFG-accept; ResolveLocalStatusTargetMapID
+  -- then returns nil and GetStatusTargetDungeonInfo falls back to the
+  -- synced-target consensus across the roster. That consensus is fine
+  -- for the status frame (informational), but it is NOT a semantic
+  -- "this is the dungeon the group has decided to play" signal — it
+  -- merely reflects whichever member happens to currently sync a
+  -- mapID. Without this gate, a manual /invite drops chat lines like
+  -- `Ziel-Dungeon: Maisarakavernen` purely because some other member
+  -- carries that key, and the line flips whenever that member leaves.
+  -- The chat announce therefore fires only when the local player has
+  -- a concrete trigger of their own (own queue, key actively running,
+  -- accepted LFG invite). The direct-push lock-in is set via
+  -- AnnounceTargetDungeonFromPayload separately, so the LFG-accept
+  -- path never depends on this branch.
+  if type(deps.hasLocalTargetSource) == "function" and deps.hasLocalTargetSource() ~= true then
+    state.pendingTargetDungeonAnnouncementName = nil
+    state.pendingTargetDungeonAnnouncementAt = nil
+    return
+  end
+
   if info.level then
     EmitTargetDungeonAnnouncement(state, deps, info)
     return

@@ -1246,6 +1246,81 @@ local function RegisterStatusLineTests(test, Assert, WithGlobals, LoadAddonModul
     end)
   end)
 
+  test("Status target dungeon chat suppresses the announce when only a synced peer target is available", function()
+    -- Manual /invite scenario: the player joined a group with no own
+    -- LFG-listing and no own LFG-accept, so ResolveLocalStatusTargetMapID
+    -- in the factory returns nil and the resolver chain falls back to the
+    -- synced-target consensus across the roster. That consensus is fine
+    -- for the status frame (which always renders getTargetDungeonInfo)
+    -- but must NOT drop a chat line — it merely reflects whichever member
+    -- is currently broadcasting a mapID, not a semantic "this is the
+    -- dungeon the group has decided to play" signal. The gate also has
+    -- to flip the right way once the local player does establish a
+    -- local trigger (own LFG-accept / own queue), and direct-push must
+    -- continue to bypass the gate completely.
+    local current = {
+      inGroup = true,
+      targetInfo = { name = "Maisarakavernen" },
+      hasLocalTarget = false,
+    }
+    local prints = {}
+
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return current.inGroup
+        end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
+        hasLocalTargetSource = function()
+          return current.hasLocalTarget
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 0, "synced-only target must not surface in chat without a local trigger")
+
+      -- Roster reshuffle: the previously syncing member leaves, another
+      -- member's target takes over. With only synced sources, the chat
+      -- still stays quiet.
+      current.targetInfo = { name = "Grube von Saron" }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 0, "synced-target name flip across roster changes still stays silent")
+
+      -- Local trigger appears (own LFG-accept / own queue): the gate
+      -- opens and the announce fires for the now-authoritative target.
+      current.hasLocalTarget = true
+      current.targetInfo = { name = "Akademie von Algeth'ar", level = 12 }
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "once a local trigger exists, the announce drops normally")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Akademie von Algeth'ar +12|r",
+        "the announce carries the resolved local-trigger target"
+      )
+
+      -- Direct-push bypasses the gate by design: it sets the lock-in
+      -- itself, and EmitTargetDungeonAnnouncement does not consult
+      -- hasLocalTargetSource. Pin that contract.
+      current.hasLocalTarget = false
+      current.targetInfo = { name = "Akademie von Algeth'ar", level = 12 }
+      controller.AnnounceTargetDungeonFromPayload({ name = "Die Himmelsnadel", level = 13 })
+      Assert.Equal(#prints, 2, "direct-push from LFG-accept ignores the local-trigger gate")
+      Assert.Equal(
+        prints[2],
+        "Target Dungeon: |cffffd200Die Himmelsnadel +13|r",
+        "direct-push announce carries the listing's +N regardless of synced-only state"
+      )
+    end)
+  end)
+
   test("Status target dungeon chat upgrades to key level when level resolves before fallback announce", function()
     local current = {
       inGroup = true,
