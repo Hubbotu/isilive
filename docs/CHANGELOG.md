@@ -1,5 +1,133 @@
 # Changelog
 
+## 2026-05-14 - Version 0.9.241 (patch)
+
+Release rollup of two 2026-05-14 follow-ups to the 0.9.240
+direct-push target-dungeon chat work. Both bugs surfaced the same
+class of failure — the chat target-dungeon line said the wrong
+thing (missing `+N`, wrong dungeon entirely) while the Center
+Notice / status frame rendered correctly — but for different
+reasons.
+
+### Fix 1 — IsInGroup race after invite-accept
+
+In-game report: Center Notice shows `Die Himmelsnadel +13`, chat
+shows `Ziel-Dungeon: Die Himmelsnadel` (no `+13`). Two coupled
+IsInGroup misuses formed the race:
+
+1. The factory wired the direct-push callback with a
+   `SetTargetDungeonChatEnabledFn(() -> IsInGroup() == true)` gate.
+   Blizzard sends `LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted`
+   before the matching `GROUP_ROSTER_UPDATE`, so `IsInGroup()` is
+   still false in that window (the `ClearDetectedState` guard in
+   [game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua) already
+   documents the same race). The gate silenced the direct push on
+   every accept where the roster signal lagged.
+2. [logic/isiLive_event_handlers_queue.lua](logic/isiLive_event_handlers_queue.lua)
+   runs `RefreshTargetStatusAfterInviteAccepted` *synchronously*
+   right after the LFG-detect handler returns. That triggers
+   `ctx.updateStatusLine()` → `MaybeAnnounceTargetDungeonChat` while
+   `IsInGroup()` is still false; the old `isInGroup() ~= true`
+   branch hit `ResetTargetDungeonChatState` and wiped the
+   `levelAnnouncedTargetDungeonName` the direct push had just set.
+   The subsequent `GROUP_ROSTER_UPDATE`-driven pass then re-fired
+   through the resolver chain — usually without `+N` because the
+   LFG-title hint had aged out.
+
+Fix:
+
+- [factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+  the `SetTargetDungeonChatEnabledFn(() -> IsInGroup() == true)`
+  setter is removed from the production wiring. The
+  `LFGDetect.SetTargetDungeonChatEnabledFn` API itself stays (tests
+  still cover the gate semantics) but the production wiring installs
+  the callback without it. The chat line is a local `print()` (not
+  `SendChatMessage`), so requiring group membership at the moment
+  of accept has no protocol-level justification.
+- [ui/isiLive_status.lua](ui/isiLive_status.lua):
+  `MaybeAnnounceTargetDungeonChat` is reordered to resolve
+  `ResolveConcreteTargetDungeonInfo` *before* the IsInGroup guard.
+  Real group-leave still resets through the `info=nil` branch (no
+  roster / queue / synced target ⇒ no target info). The IsInGroup
+  branch now protects the lock-in: when
+  `state.levelAnnouncedTargetDungeonName` is already set, only the
+  deferred-announce bookkeeping clears; the lock-in itself survives
+  the transient flicker.
+
+### Fix 2 — synced-only chat false positives
+
+In-game report after Fix 1: a manual `/invite` (no own LFG search
+on the player's side) produced chat lines like `Ziel-Dungeon:
+Maisarakavernen`, then flipped to `Ziel-Dungeon: Grube von Saron`
+when a roster member left. Only the third line, drawn from the
+group's own LFG listing (`Akademie von Algeth'ar +12`), matched
+what the player actually saw.
+
+Root cause: `GetStatusTargetDungeonInfo` falls back to
+`ResolveSyncedTargetInfo` when `ResolveLocalStatusTargetMapID`
+yields nil (no own queue, no active joined key, no detectedMapID
+from a fresh LFG accept). The synced-target consensus is fine for
+the status frame — it is informational, "this is what some peer is
+currently broadcasting" — but it is NOT a semantic "this is the
+dungeon the group has decided to play" signal: the value flips
+whenever the broadcasting member changes. The chat announce should
+not surface that flip.
+
+Fix:
+
+- [ui/isiLive_status.lua](ui/isiLive_status.lua):
+  `MaybeAnnounceTargetDungeonChat` now consults a new
+  `deps.hasLocalTargetSource` callback after the lock-in match and
+  before emitting / deferring. When `hasLocalTargetSource()` returns
+  false, the deferred-announce bookkeeping is cleared and the
+  function returns silent. The lock-in itself is NOT touched (the
+  status frame still renders the synced target as informational; a
+  later `AnnounceTargetDungeonFromPayload` via LFG-accept still
+  bypasses the gate because direct push emits through
+  `EmitTargetDungeonAnnouncement`, not through the resolver path).
+- [factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+  wires `hasLocalTargetSource = ctx.ResolveLocalStatusTargetMapID()
+  ~= nil`. Mirrors the existing resolver — own queue / active joined
+  key / detectedMapID (LFG accept) light it up, synced-only does not.
+
+### Tests
+
+Usecase count rises from 1702 (post-0.9.240) to 1705.
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- Rewrote `lock-in resets when group leaves` on the real `info=nil`
+  reset path (the mocked `targetInfo` is cleared alongside
+  `inGroup=false`, matching how the live resolver collapses to nil
+  when the roster is empty).
+- New `preserves the lock-in during transient IsInGroup=false`
+  pins the LFG-accept race window: direct push fires, `IsInGroup`
+  flips false, the synchronous status refresh runs — the chat line
+  stays quiet, the next `GROUP_ROSTER_UPDATE` pass stays quiet too.
+- New `suppresses the announce when only a synced peer target is
+  available` covers all four branches: synced-only stays silent,
+  name flip across roster changes stays silent, a local trigger
+  appearing later opens the gate, and direct-push bypasses the
+  gate regardless.
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- New `direct-push fires even while IsInGroup() is transient false`
+  pins the production wiring: callback set, no
+  `SetTargetDungeonChatEnabledFn`, `IsInGroup()=false` — the
+  callback must still fire and carry the listing's `+N`.
+
+[tools/simulate_multi_invite_target_chain.lua](tools/simulate_multi_invite_target_chain.lua):
+
+- Phase 5 (`leave + rejoin must allow a fresh announce`) realigned
+  with the real group-leave sequence: `ClearAllState` clears the
+  LFG-detect identity slots, `isInGroup`/`numMembers` flip back to
+  the unjoined state, and a real `GROUP_ROSTER_UPDATE` follows the
+  fresh accept on rejoin. Mirrors how the live client signals a
+  group-leave; the previous test simulated only `IsInGroup=false`
+  without the roster collapse, which the new lock-in protection
+  would (correctly) refuse to honour.
+
 ## 2026-05-14 - Version 0.9.240 (patch)
 
 Architectural fix for the recurring "chat target-dungeon line surfaces
