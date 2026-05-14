@@ -25,6 +25,7 @@ FILE_PATHS["RULES.md"] = "docs/RULES.md"
 FILE_PATHS["RULES_LOGIC.md"] = "docs/RULES_LOGIC.md"
 FILE_PATHS["USECASES.md"] = "docs/USECASES.md"
 FILE_PATHS["WARTUNG.md"] = "docs/WARTUNG.md"
+FILE_PATHS["simulate_multi_invite_target_chain.lua"] = "tools/simulate_multi_invite_target_chain.lua"
 
 local function ReadFile(path)
   if type(ioLib) ~= "table" or type(ioLib.open) ~= "function" then
@@ -322,6 +323,84 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
         file .. " must not lean on bare C_ChatInfo short-circuit chains"
       )
     end
+  end)
+
+  -- Pins the Phase 5 fix from commit 60f2236 against replica-drift. The
+  -- target-dungeon-chat simulator must drive the group-leave path through
+  -- the real production sequence (ClearAllState -> isInGroup flip ->
+  -- numMembers=0 -> GROUP_ROSTER_UPDATE on re-accept), not a bare
+  -- statusModel.inGroup=false flicker. Without these assertions a future
+  -- edit to Phase 5 could silently regress to the pre-60f2236 shape and
+  -- mask the same class of "info=nil reset never reached" bugs the fix
+  -- was written to cover.
+  -- Pins the PARTY_LEADER_CHANGED initial-convert guard: WoW fires PLC when
+  -- the listing owner forms the freshly accepted group, BEFORE the first
+  -- GROUP_ROSTER_UPDATE reports inGroup=true. The rosterEstablishedSinceAccept
+  -- flag distinguishes that path from a genuine later handoff. Without these
+  -- assertions a future refactor could drop one of the four trigger sites
+  -- (set false on accept, set true on inGroup=true, reset on
+  -- ClearAllStateImpl, read inside the PLC handler) and silently regress to
+  -- the pre-fix shape where every PLC dropped the listing identity.
+  test("Architecture lfg_detect pins the PLC initial-convert guard wiring", function()
+    local content = ReadFile("isiLive_lfg_detect.lua")
+
+    AssertContains(
+      Assert,
+      content,
+      "local rosterEstablishedSinceAccept = false",
+      "lfg_detect.lua must declare the rosterEstablishedSinceAccept flag at module scope"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "rosterEstablishedSinceAccept = false",
+      "lfg_detect.lua must reset rosterEstablishedSinceAccept on accept (and clear)"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "rosterEstablishedSinceAccept = true",
+      "lfg_detect.lua must arm rosterEstablishedSinceAccept once GROUP_ROSTER_UPDATE confirms inGroup=true"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "if not rosterEstablishedSinceAccept then",
+      "lfg_detect.lua PARTY_LEADER_CHANGED handler must guard on rosterEstablishedSinceAccept before clearing"
+    )
+  end)
+
+  test("Architecture target-dungeon-chat simulator Phase 5 mirrors the real group-leave sequence", function()
+    local content = ReadFile("simulate_multi_invite_target_chain.lua")
+
+    local phase5Start = content:find("Phase 5: end-of-cycle reset", 1, true)
+    Assert.True(phase5Start ~= nil, "simulator must keep its Phase 5 header so the section is locatable")
+
+    local phase5 = content:sub(phase5Start)
+    AssertContains(
+      Assert,
+      phase5,
+      "addon.LFGDetect.ClearAllState()",
+      "Phase 5 must drop LFGDetect identity through the production ClearAllState path"
+    )
+    AssertContains(
+      Assert,
+      phase5,
+      "isInGroup[1] = false",
+      "Phase 5 must flip the IsInGroup stub to false before the reset announce"
+    )
+    AssertContains(
+      Assert,
+      phase5,
+      "numMembers[1] = 0",
+      "Phase 5 must empty the roster numMembers stub so the resolver collapses to nil"
+    )
+    AssertContains(
+      Assert,
+      phase5,
+      'fire("GROUP_ROSTER_UPDATE")',
+      "Phase 5 re-accept must fire GROUP_ROSTER_UPDATE so the resolver re-arms via real events"
+    )
   end)
 
   test("Architecture InCombatLockdown consumers route through rawget(_G) cache", function()

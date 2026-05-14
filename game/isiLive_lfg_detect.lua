@@ -164,6 +164,30 @@ local activeInviteTitleLevel = nil
 -- same dungeon) would null out the active invite state and force the status
 -- announce to fall back on a worse level source.
 local acceptedInviteSearchResultID = nil
+-- Tracks whether GROUP_ROSTER_UPDATE has reported an established group since
+-- the last accept. Used by PARTY_LEADER_CHANGED to distinguish two paths:
+--   * Initial convert-to-party-lead right after accept: WoW fires
+--     LFG_LIST_APPLICATION_STATUS_UPDATED(inviteaccepted) -> PARTY_LEADER_CHANGED
+--     -> GROUP_ROSTER_UPDATE. The PLC here is the listing owner forming the
+--     group, NOT a handoff away from them. The active-invite identity captured
+--     during accept is still authoritative and must not be cleared.
+--   * Real handoff later in the run: GROUP_ROSTER_UPDATE has long since fired,
+--     so the flag is true. PLC at this point is a genuine leader change, the
+--     listing identity is stale, and ClearAcceptedInviteListingIdentity runs
+--     as before.
+-- The flag flips back to false on every accept and on every group leave so
+-- the next cycle starts fresh.
+local rosterEstablishedSinceAccept = false
+
+-- Last searchResultID for which MaybeShowAcceptedInviteNotice rendered the
+-- Center Notice. Used to swallow same-searchResultID replays of
+-- LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted (Blizzard has shipped
+-- duplicate-fire bugs for this event before). The direct-push chat path is
+-- already protected by the Status controller's lock-in; the notice path
+-- lacked an equivalent guard. Reset on ClearAllStateImpl (group-leave) and
+-- ClearAcceptedInviteListingIdentity (CHALLENGE_MODE_* / genuine PLC) so
+-- legitimate next-cycle accepts for the same listing render again.
+local lastShownNoticeSearchResultID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -652,6 +676,15 @@ local function MaybeShowAcceptedInviteNotice(entry, searchResultID)
   if type(acceptedInviteNoticeEnabledFn) == "function" and acceptedInviteNoticeEnabledFn() == false then
     return
   end
+  -- Swallow same-searchResultID replays of LFG_LIST_APPLICATION_STATUS_UPDATED
+  -- =inviteaccepted (Blizzard duplicate-fire). Mirrors the Status controller's
+  -- lock-in on the chat path. Cleared at run-end / group-leave so the next
+  -- legitimate cycle for the same listing renders again.
+  if searchResultID ~= nil and searchResultID == lastShownNoticeSearchResultID then
+    Log("notice_skip_duplicate", "searchResultID=%s", tostring(searchResultID))
+    return
+  end
+  lastShownNoticeSearchResultID = searchResultID
 
   acceptedInviteNoticeCallback({
     mapID = entry.mapID,
@@ -712,6 +745,9 @@ local function OnInviteAccepted(searchResultID)
     activeInviteTitleLevel = titleLevel
     acceptedInviteSearchResultID = searchResultID
     pendingAcceptedInviteMapID = mapID
+    -- Fresh accept: the upcoming PARTY_LEADER_CHANGED is the initial
+    -- convert-to-party-lead, not a handoff. See state-block comment above.
+    rosterEstablishedSinceAccept = false
     if detectedMapID ~= mapID then
       Log("state_set", "var=detectedMapID before=%s after=%s", tostring(detectedMapID), tostring(mapID))
       detectedMapID = mapID
@@ -876,6 +912,8 @@ local function ClearAllStateImpl()
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
   acceptedInviteSearchResultID = nil
+  rosterEstablishedSinceAccept = false
+  lastShownNoticeSearchResultID = nil
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
@@ -1085,6 +1123,7 @@ local function ClearAcceptedInviteListingIdentity(reason)
   activeInviteTitleLevel = nil
   acceptedInviteSearchResultID = nil
   pendingAcceptedInviteMapID = nil
+  lastShownNoticeSearchResultID = nil
   TriggerHighlightUpdate("queue")
 end
 
@@ -1112,7 +1151,18 @@ function LFGDetect.HandleEvent(event, ...)
     -- should be resolved via UnitIsGroupLeader instead of the stale name.
     -- Skip when no listing identity was captured to begin with so the
     -- log stays quiet for solo / pre-formed groups.
-    if activeInviteLeader ~= nil or acceptedInviteSearchResultID ~= nil then
+    --
+    -- Initial-convert guard: WoW also fires PARTY_LEADER_CHANGED when the
+    -- listing owner forms the freshly accepted group (before the first
+    -- GROUP_ROSTER_UPDATE). That PLC is not a handoff — it is the listing
+    -- owner taking the lead they already had — and the captured identity
+    -- (leader / title-level / searchResultID) is still authoritative.
+    -- Once GROUP_ROSTER_UPDATE reports inGroup=true (rosterEstablishedSinceAccept),
+    -- any further PLC is treated as a genuine handoff and clears as before.
+    if not rosterEstablishedSinceAccept then
+      Log("plc_initial_convert_keep", "leader=%s titleLevel=%s",
+        tostring(activeInviteLeader), tostring(activeInviteTitleLevel))
+    elseif activeInviteLeader ~= nil or acceptedInviteSearchResultID ~= nil then
       ClearAcceptedInviteListingIdentity("PARTY_LEADER_CHANGED")
     end
   elseif event == "GROUP_ROSTER_UPDATE" then
@@ -1155,6 +1205,9 @@ function LFGDetect.HandleEvent(event, ...)
     end
     local groupMemberCount = GetGroupMemberCount()
     pendingAcceptedInviteMapID = nil
+    -- inGroup=true reached: the group has formed. Any future
+    -- PARTY_LEADER_CHANGED is a genuine handoff, not the initial convert.
+    rosterEstablishedSinceAccept = true
     -- Joined a group: if we have a pending invite but detectedMapID was not
     -- set yet (e.g. GROUP_ROSTER_UPDATE arrived before the inviteaccepted
     -- status event), resolve deterministically — never guess 1-of-N.

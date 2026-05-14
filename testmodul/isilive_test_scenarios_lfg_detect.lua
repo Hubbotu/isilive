@@ -1088,6 +1088,11 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
         "setup: accept captures the original listing leader"
       )
 
+      -- Group form-up completes — GROUP_ROSTER_UPDATE reports inGroup=true.
+      -- This flips rosterEstablishedSinceAccept and arms the next PLC as a
+      -- genuine handoff (not the initial convert-to-party-lead).
+      fire("GROUP_ROSTER_UPDATE")
+
       -- The original leader hands off / drops group; PARTY_LEADER_CHANGED
       -- fires. The captured listing identity belongs to the previous leader,
       -- so it must be dropped — the new leader is its own authority.
@@ -1107,6 +1112,81 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       )
     end)
   end)
+
+  -- Regression for the initial-convert race: WoW fires PARTY_LEADER_CHANGED
+  -- when the listing owner forms the freshly accepted group, BEFORE the
+  -- first GROUP_ROSTER_UPDATE reports inGroup=true. That PLC is the owner
+  -- taking the lead they already have — not a handoff away from them — and
+  -- the captured listing identity (leader / titleLevel / searchResultID)
+  -- must stay intact so the status resolver chain can still find the +N
+  -- after the form-up. Before the fix every PLC dropped the identity
+  -- unconditionally.
+  test(
+    "LFGDetect PARTY_LEADER_CHANGED keeps the listing identity during the initial convert-to-party-lead",
+    function()
+      local globals, fire = BuildLFGDetectEnv({
+        IsInGroup = function()
+          return true
+        end,
+        globals = {
+          C_LFGList = BuildC_LFGList({
+            [777] = { activityID = 1768, name = "+13 NPX", leaderName = "Listing-Owner" },
+          }, nil),
+        },
+      })
+
+      WithGlobals(globals, function()
+        local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "invited")
+        fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 777, "inviteaccepted")
+        Assert.Equal(
+          addon.LFGDetect.GetActiveInviteLeader(),
+          "Listing-Owner",
+          "setup: accept captures the listing leader"
+        )
+        Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 13, "setup: accept captures the listing +N")
+
+        -- Initial convert-to-party-lead: PLC fires BEFORE the first
+        -- GROUP_ROSTER_UPDATE. The listing owner becomes the party leader,
+        -- the captured identity still describes them, and must stay intact.
+        fire("PARTY_LEADER_CHANGED")
+
+        Assert.Equal(
+          addon.LFGDetect.GetActiveInviteLeader(),
+          "Listing-Owner",
+          "initial-convert PLC must not drop activeInviteLeader"
+        )
+        Assert.Equal(
+          addon.LFGDetect.GetActiveInviteTitleLevel(),
+          13,
+          "initial-convert PLC must not drop activeInviteTitleLevel"
+        )
+        Assert.Equal(
+          addon.LFGDetect.GetAcceptedInviteSearchResultID(),
+          777,
+          "initial-convert PLC must not drop acceptedInviteSearchResultID"
+        )
+
+        -- After the roster establishes, the SAME identity must still be
+        -- there — the convert keep-path is a one-shot bypass, not a
+        -- permanent immunity.
+        fire("GROUP_ROSTER_UPDATE")
+        Assert.Equal(
+          addon.LFGDetect.GetActiveInviteLeader(),
+          "Listing-Owner",
+          "post-form-up GROUP_ROSTER_UPDATE must not retroactively drop the identity"
+        )
+
+        -- A genuine handoff THEN fires: now the identity must clear.
+        fire("PARTY_LEADER_CHANGED")
+        Assert.Nil(
+          addon.LFGDetect.GetActiveInviteLeader(),
+          "second PLC after form-up is a real handoff and must clear the identity"
+        )
+      end)
+    end
+  )
 
   -- 0.9.240: direct-push hook fires with the listing's entry.titleLevel so
   -- the chat Target-Dungeon line surfaces the exact same "+N" the Center
@@ -2193,6 +2273,45 @@ local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
         557,
         "missing notice callback must not break the existing pipeline"
       )
+    end)
+  end)
+
+  -- Test F2 (BUG-DUPLICATE-FIRE): Blizzard has historically replayed
+  -- LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted for the same
+  -- searchResultID. The Status controller dedupes the chat path via its
+  -- lock-in; this regression pins the notice-side dedup added in the same
+  -- audit. A legitimate next-cycle accept (after ClearAllState) for the
+  -- same listing must still render.
+  test("AcceptedInviteNotice dedupes duplicate inviteaccepted for the same searchResultID", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [701] = { activityID = 1542, name = "+13 spire", leaderName = "Tank" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "inviteaccepted")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "inviteaccepted") -- Blizzard replay
+      Assert.Equal(#payloads, 1, "duplicate inviteaccepted for same searchResultID must render once")
+
+      -- After a group-leave reset, the SAME searchResultID must render again
+      -- (a legitimate next cycle, not a replay).
+      addon.LFGDetect.ClearAllState()
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "inviteaccepted")
+      Assert.Equal(#payloads, 2, "after ClearAllState the same searchResultID renders again")
     end)
   end)
 
