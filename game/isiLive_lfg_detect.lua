@@ -401,6 +401,17 @@ end
 -- accepts every separator we have seen while still rejecting "+abc 13" (alpha
 -- character blocks the lazy match) — i.e. digits not directly anchored to a
 -- "+" are still ignored.
+--
+-- Pattern C: Blizzard's keystone-level pipe markup `|Kk<N>|k`. Since some
+-- WoW client version, the LFG listing-title API rewrites a leader-typed
+-- "+12" into the encoded form `|Kk12|k` (the chat frame renders it as the
+-- familiar "+12" with its own color, but raw string operations see only
+-- the markup — there is NO literal "+" byte). Without this pattern the
+-- "+N" parse falls flat for every modern LFG listing whose title is
+-- nothing but the level (a very common shape: leaders just type "+12" as
+-- the title and the API replaces it with the markup). Captured by bytes:
+-- `[124,75,107]` = `|Kk`, digits, `[124,107]` = `|k`. See vorfall
+-- 2026-05-14 (Sitz des Triumvirats / Maisarakavernen incidents).
 local function ParseTitleKeyLevel(title)
   if type(title) ~= "string" or title == "" then
     return nil
@@ -408,6 +419,15 @@ local function ParseTitleKeyLevel(title)
   local best = nil
   -- Pattern A: "+N" with optional non-alphanumeric separator.
   for digits in string.gmatch(title, "%+[^%a%d]-(%d+)") do
+    local n = tonumber(digits)
+    if n and n >= 1 and n <= 40 then
+      if not best or n > best then
+        best = n
+      end
+    end
+  end
+  -- Pattern C: Blizzard keystone-level pipe markup `|Kk<N>|k`.
+  for digits in string.gmatch(title, "|Kk(%d+)|k") do
     local n = tonumber(digits)
     if n and n >= 1 and n <= 40 then
       if not best or n > best then

@@ -1370,6 +1370,27 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
         "non-breaking space between + and digits still parses (extended parser pattern)"
       )
       Assert.Equal(resolve({ titleLevel = nil, groupName = "(+13) push" }), 13, "parenthesised + still parses")
+      -- Pattern C: Blizzard rewrites a leader-typed "+N" listing title into
+      -- the encoded form "|Kk<N>|k" (the chat frame renders it as the
+      -- familiar "+N" but the raw string contains no "+" byte at all).
+      -- Vorfall 2026-05-14: every modern LFG listing with a level-only
+      -- title hit this path, dropping the +N in both notice and chat.
+      local blizzardMarkup = string.char(124, 75, 107, 49, 50, 124, 107) -- |Kk12|k
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = blizzardMarkup }),
+        12,
+        "Blizzard keystone-level pipe markup |Kk12|k parses to 12 (vorfall 2026-05-14)"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = "|Kk13|k Competitive" }),
+        13,
+        "markup with trailing text still parses"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = "+12 |Kk13|k" }),
+        13,
+        "mixed plain + markup picks the highest valid level"
+      )
     end)
   end)
 

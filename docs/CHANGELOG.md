@@ -1,5 +1,89 @@
 # Changelog
 
+## 2026-05-14 - Version 0.9.242 (patch)
+
+In-game data finally explained the recurring "chat / notice shows
+dungeon name without `+N`" bug class that survived 0.9.236 (3 s
+defer), 0.9.238 (race guards), 0.9.239 (identity drops), 0.9.240
+(direct-push), and 0.9.241 (lock-in protection + synced-only gate).
+Diagnosed with a byte-level debug print on a fresh accept:
+
+```
+entry.titleLevel=nil entry.groupName="+12"
+len=8 bytes=[124,75,107,49,50,124,107,…]
+```
+
+The bytes decode to `|Kk12|k…` — a Blizzard pipe-markup
+encoding that the chat frame **renders** as the familiar "+12" with
+keystone coloring, but raw Lua string operations see no literal `+`
+byte at all. Every Pattern-A / Pattern-B match in
+`ParseTitleKeyLevel` therefore failed silently, and the
+0.9.241-introduced `ResolveEntryTitleLevel` recovery helper still
+fell back through to `nil` because re-parsing the same markup with
+the same patterns produced the same miss. The Center Notice line
+"Gruppe: +12" looked correct only because it printed the markup
+verbatim to the chat frame — which then rendered it as "+12".
+
+### Pattern C — Blizzard `|Kk<N>|k` keystone-level markup
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- `ParseTitleKeyLevel` learns a third pattern: `|Kk(%d+)|k`.
+  Runs alongside Pattern A so a listing title that mixes plain
+  text (`"+13"`) and markup (`"|Kk13|k"`) still picks the highest
+  valid match. Pattern C is the only path that fires on
+  modern level-only titles where the leader typed "+12" and the
+  API rewrote it into the markup form.
+- Confirmed against the bytes captured in-game
+  (`[124,75,107,49,50,124,107]` → `12`) and against the helper's
+  recovery path so `entry.titleLevel=nil + entry.groupName=<markup>`
+  resolves correctly through `ResolveEntryTitleLevel`.
+
+### Rollup of the 0.9.241-era helper work
+
+The `ResolveEntryTitleLevel` helper introduced in commit
+`88360b7` (defensive groupName re-parse on every consumer) is now
+the active recovery path for Pattern C — `entry.titleLevel=nil`
+arrives at the consumers, the helper re-parses
+`entry.groupName`, Pattern C extracts the level from the markup,
+and the Center Notice / direct-push chat / resolver hint all
+emit the same `+N`.
+
+Routing through the helper for:
+
+- `MaybeShowAcceptedInviteNotice` — notice payload `level`
+- `MaybeFireTargetDungeonChatFromAccept` — chat payload `level`
+- `OnInviteAccepted` body — `activeInviteTitleLevel` state-set
+  (LFG-title hint that the resolver-driven
+  `MaybeAnnounceTargetDungeonChat` falls back to)
+
+### Telemetry
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- `ResolveEntryTitleLevel` emits a `title_level_fallback` log
+  entry whenever the recovery path actually fires (e.g. markup-only
+  titles). Cheap, no PII (LFG titles are public listings), gives
+  the next user-reported divergence concrete data instead of
+  guesswork. The 2026-05-14 vorfall was diagnosed in two screenshot
+  rounds because the byte dump went straight to the chat frame —
+  this log makes the same data persistent.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- Existing `ResolveEntryTitleLevel recovers level from groupName
+  when titleLevel is nil` extended with three Pattern C assertions:
+  - Raw byte string `[124,75,107,49,50,124,107]` resolves to `12`
+    (pins the exact in-game capture).
+  - `"|Kk13|k Competitive"` (markup + trailing text) resolves
+    to `13`.
+  - `"+12 |Kk13|k"` (mixed plain + markup) resolves to `13`
+    (highest-match-wins still applies).
+
+Usecase count rises from 1713 to 1714.
+
 ## 2026-05-14 - Version 0.9.241 (patch)
 
 Release rollup of two 2026-05-14 follow-ups to the 0.9.240
