@@ -36,7 +36,8 @@ local function BuildLFGGroupRosterTraceLogger(ctx, modules)
     local localTargetMapID = type(ctx.ResolveLocalStatusTargetMapID) == "function"
         and ctx.ResolveLocalStatusTargetMapID()
       or nil
-    local now = tonumber(GetTime and GetTime()) or 0
+    local getTimeFn = rawget(_G, "GetTime")
+    local now = type(getTimeFn) == "function" and (tonumber(getTimeFn()) or 0) or 0
 
     local signature = string.format(
       "%s|%s|%s|%s|%s|%s|%s|%s|%s",
@@ -347,8 +348,9 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       end
 
       local capturedAt = nil
-      if type(GetTime) == "function" then
-        capturedAt = GetTime()
+      local getTimeFn = rawget(_G, "GetTime")
+      if type(getTimeFn) == "function" then
+        capturedAt = getTimeFn()
       end
 
       if logFn then
@@ -974,7 +976,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
       local activeLocale = (db and db.locale) or ctx.locale
       return modules.teleport.GetDungeonName(mapID, localeTag or activeLocale)
     end,
-    getTime = GetTime,
+    getTime = rawget(_G, "GetTime"),
     shareKeysDebounceSeconds = 30,
     sendShareKeysRequest = function()
       return modules.sync.SendShareKeysRequest()
@@ -1526,7 +1528,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     updateUI = ctx.UpdateUI,
     refreshLocalPlayerKey = ctx.RefreshLocalPlayerKey,
     getActiveChallengeMapID = ctx.GetActiveChallengeMapID,
-    getTime = GetTime,
+    getTime = rawget(_G, "GetTime"),
     refreshDebounceSeconds = 10,
     logRuntimeTrace = ctx.runtimeLogController and ctx.runtimeLogController.Log or nil,
     logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil,
@@ -1549,7 +1551,8 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
     if not btn then
       return
     end
-    local now = GetTime and GetTime() or 0
+    local getTimeFn = rawget(_G, "GetTime")
+    local now = type(getTimeFn) == "function" and getTimeFn() or 0
     local remaining = math.ceil(resyncCooldownEnd - now)
     if remaining > 0 then
       btn:SetEnabled(false)
@@ -1576,7 +1579,8 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
   end
 
   ctx.refreshButton:SetScript("OnClick", function()
-    local now = GetTime and GetTime() or 0
+    local getTimeFn = rawget(_G, "GetTime")
+    local now = type(getTimeFn) == "function" and getTimeFn() or 0
     if now < resyncCooldownEnd then
       return
     end
@@ -1943,7 +1947,7 @@ end
 local function InitializeFactorySecondaryControllers(ctx)
   local modules = ctx.modules
   local runtimeState = ctx.runtimeState
-  local getTime = GetTime
+  local getTime = rawget(_G, "GetTime")
   local getUnitName = UnitName
   local getRealmName = GetRealmName
 

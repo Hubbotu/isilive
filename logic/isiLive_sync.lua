@@ -1045,7 +1045,8 @@ end
 -- Returns (blocked:boolean, now:number). onBlocked, if provided, is called with
 -- ("unchanged") or ("cooldown", remainSeconds) for deep-trace logging.
 local function IsBlockedBySendGate(opts, lastPayload, lastAt, dedupePayload, cooldown, onBlocked)
-  local now = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
   if opts.force then
     return false, now
   end
@@ -1075,7 +1076,8 @@ function Sync.SendHello(opts)
     return
   end
 
-  local now = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
   if not opts.force and (now - lastIsiLiveHelloAt) < ISILIVE_HELLO_COOLDOWN then
     return
   end
@@ -1402,7 +1404,8 @@ function Sync.SendRefreshRequest(opts)
     return
   end
 
-  local now = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
   if not opts.force and (now - lastIsiLiveRefreshRequestAt) < ISILIVE_REFRESH_REQUEST_COOLDOWN then
     return
   end
@@ -1433,7 +1436,8 @@ function Sync.SendLibKeystoneRequest(opts)
     return false
   end
 
-  local now = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
   if not opts.force and (now - lastLibKeystoneRequestAt) < LIBKEYSTONE_REQUEST_COOLDOWN then
     return false
   end

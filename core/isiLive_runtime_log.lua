@@ -34,16 +34,19 @@ function RuntimeLog.CreateController(opts)
 
   local getTimestamp = opts.getTimestamp
     or function()
-      if GetTime then
-        return string.format("%.3f", tonumber(GetTime()) or 0)
+      local getTimeFn = rawget(_G, "GetTime")
+      if type(getTimeFn) == "function" then
+        return string.format("%.3f", tonumber(getTimeFn()) or 0)
       end
-      return date and date("%H:%M:%S") or "0.000"
+      local dateFn = rawget(_G, "date")
+      return type(dateFn) == "function" and dateFn("%H:%M:%S") or "0.000"
     end
 
   local getRawTime = opts.getRawTime
     or function()
-      if type(GetTime) == "function" then
-        return tonumber(GetTime())
+      local getTimeFn = rawget(_G, "GetTime")
+      if type(getTimeFn) == "function" then
+        return tonumber(getTimeFn())
       end
       return nil
     end

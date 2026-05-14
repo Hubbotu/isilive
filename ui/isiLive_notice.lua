@@ -18,6 +18,15 @@ local preparePrivateTooltip = assert(
 )
 local hidePrivateTooltip =
   assert(addonTable.UICommon and addonTable.UICommon.HidePrivateTooltip, "isiLive: UICommon.HidePrivateTooltip missing")
+
+-- Sandbox-safe GetTime read: WoW always exposes the global, but the test
+-- _G can omit it. Falling back to 0 keeps endsAt arithmetic numeric on a
+-- mocked _G; in WoW the function path is always taken.
+local function CurrentTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  return type(getTimeFn) == "function" and getTimeFn() or 0
+end
+
 local function BuildCenterNoticeConfig(opts)
   opts = opts or {}
   local frameName = type(opts.frameName) == "string" and opts.frameName ~= "" and opts.frameName
@@ -840,7 +849,7 @@ local function ShowCenterNotice(state, message, durationSeconds, dungeonName, ac
     end
   end
 
-  state.endsAt = state.isPersistent and math.huge or (GetTime() + (durationSeconds or 20))
+  state.endsAt = state.isPersistent and math.huge or (CurrentTime() + (durationSeconds or 20))
   SetCenterNoticeVisible(state, true)
 end
 
@@ -968,7 +977,7 @@ local function AttachCenterNoticeFrameScripts(state)
       end
     end
 
-    if not state.isPersistent and GetTime() >= state.endsAt then
+    if not state.isPersistent and CurrentTime() >= state.endsAt then
       SetCenterNoticeVisible(state, false)
     end
   end)
@@ -1243,7 +1252,7 @@ function Notice.CreateInviteHint(opts)
     currentResultID = searchResultID
     text:SetText(message)
     Position()
-    endsAt = GetTime() + (durationSeconds or 10)
+    endsAt = CurrentTime() + (durationSeconds or 10)
     if not IsHintMismatchedToVisibleDialog() then
       frame:Show()
     end
@@ -1254,7 +1263,7 @@ function Notice.CreateInviteHint(opts)
   -- endsAt + dialog-mismatch checks stay per-frame so the hint hides snappily.
   local repositionAccum = 0
   frame:SetScript("OnUpdate", function(self, elapsed)
-    if GetTime() >= endsAt then
+    if CurrentTime() >= endsAt then
       currentResultID = nil
       self:Hide()
       return

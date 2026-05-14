@@ -319,7 +319,8 @@ local function ProcessRetryQueue(controller, now)
 end
 
 local function OnUpdate(controller)
-  local now = GetTime()
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
 
   if controller.isInspecting then
     if now - controller.lastInspectTime > controller.inspectTimeout then
