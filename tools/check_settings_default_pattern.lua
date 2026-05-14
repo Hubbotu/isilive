@@ -38,7 +38,70 @@ local OVERRIDES = {
   mplusForcesEstimate = "tri-state mode-toggle (off/tooltip/nameplate); migrated in ApplyDBSettings",
 }
 
-local lfs = require("lfs")
+-- Directory walking via io.popen instead of LuaFileSystem so the gate is
+-- runnable on a stock Lua install (no `luarocks install luafilesystem`).
+-- The CI runner has lfs available, but pre-commit / local audits should not
+-- need an extra dep just to verify the settings pattern.
+local function listEntries(dir)
+  local sep = package.config:sub(1, 1)
+  local files, dirs = {}, {}
+  if sep == "\\" then
+    -- Windows cmd: /A:-D = non-directories, /A:D = directories.
+    local fileP = io.popen('dir /b /A:-D "' .. dir:gsub("/", "\\") .. '" 2>nul')
+    if fileP then
+      for line in fileP:lines() do
+        line = line:gsub("\r$", "")
+        if line ~= "" then
+          files[#files + 1] = line
+        end
+      end
+      fileP:close()
+    end
+    local dirP = io.popen('dir /b /A:D "' .. dir:gsub("/", "\\") .. '" 2>nul')
+    if dirP then
+      for line in dirP:lines() do
+        line = line:gsub("\r$", "")
+        if line ~= "" then
+          dirs[#dirs + 1] = line
+        end
+      end
+      dirP:close()
+    end
+  else
+    -- POSIX: `ls -A -p` marks directories with a trailing slash.
+    local p = io.popen('ls -A -p "' .. dir .. '" 2>/dev/null')
+    if p then
+      for line in p:lines() do
+        if line:sub(-1) == "/" then
+          dirs[#dirs + 1] = line:sub(1, -2)
+        elseif line ~= "" then
+          files[#files + 1] = line
+        end
+      end
+      p:close()
+    end
+  end
+  return files, dirs
+end
+
+local function fileExists(path)
+  -- io.open on a directory returns nil on Windows, so this is files-only.
+  local fh = io.open(path, "r")
+  if not fh then
+    return false
+  end
+  fh:close()
+  return true
+end
+
+local function dirExists(path)
+  -- Probe via listEntries — listing a missing dir yields zero entries on
+  -- both Windows and POSIX paths via io.popen. Distinguishes "missing dir"
+  -- from "empty dir" only weakly, but for our scan dirs that is acceptable:
+  -- core/factory/game/logic/ui are never legitimately empty in this repo.
+  local files, dirs = listEntries(path)
+  return (#files + #dirs) > 0
+end
 
 local function fail(code, message)
   io.stderr:write("settings-default-pattern: " .. message .. "\n")
@@ -46,16 +109,14 @@ local function fail(code, message)
 end
 
 local function walkDir(dir, files)
-  for entry in lfs.dir(dir) do
-    if entry ~= "." and entry ~= ".." then
-      local path = dir .. "/" .. entry
-      local mode = lfs.attributes(path, "mode")
-      if mode == "directory" then
-        walkDir(path, files)
-      elseif mode == "file" and path:match("%.lua$") then
-        files[#files + 1] = path
-      end
+  local entryFiles, entryDirs = listEntries(dir)
+  for _, name in ipairs(entryFiles) do
+    if name:match("%.lua$") then
+      files[#files + 1] = dir .. "/" .. name
     end
+  end
+  for _, name in ipairs(entryDirs) do
+    walkDir(dir .. "/" .. name, files)
   end
   return files
 end
@@ -186,13 +247,13 @@ end
 -- Main.
 -- ----------------------------------------------------------------------
 local function main()
-  if not lfs.attributes(SETTINGS_FILE, "mode") then
+  if not fileExists(SETTINGS_FILE) then
     fail(2, "scan dir mismatch: " .. SETTINGS_FILE .. " not found (run from repo root)")
   end
 
   local files = {}
   for _, dir in ipairs(SCAN_DIRS) do
-    if lfs.attributes(dir, "mode") == "directory" then
+    if dirExists(dir) then
       walkDir(dir, files)
     end
   end

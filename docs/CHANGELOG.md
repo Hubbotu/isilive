@@ -762,6 +762,19 @@ during the assertions.
 
 ## 2026-05-13 - Version 0.9.236 (patch)
 
+> **Superseded for the LFG-accept path by [Version 0.9.240](#2026-05-14---version-09240-patch).**
+> The "Why the defer and not a direct push from `OnInviteAccepted`?" section
+> below documents the contract as it stood on 2026-05-13. Two further
+> in-game reports between 0.9.237 and 0.9.240 made it clear that the
+> deferred wait could not reliably close the race for the LFG-listing
+> path (the resolver chain itself surfaced the wrong / no level even
+> within the 3 s window). 0.9.240 replaces the defer for the LFG-accept
+> trigger with a direct push that reuses `entry.titleLevel` from the
+> listing payload. The defer + resolver chain stays in place for the
+> three remaining trigger sources it actually serves (manual `/invite`,
+> peer-sync, pre-formed groups) — see the "Why the resolver chain stays"
+> section of the 0.9.240 entry.
+
 Bug fix: when the user accepted an LFG invite, the Center Notice showed
 "Dungeon + N" immediately (the level comes directly from the LFG listing
 payload) but the chat line "isiLive: Ziel-Dungeon: …" was emitted without

@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local
+---@diagnostic disable: undefined-global, undefined-field, unused-local
 
 -- Scenarios for core/isiLive_context_helpers.lua.
 -- Covers the API-fallback branches the composition-root test cannot

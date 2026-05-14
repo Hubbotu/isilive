@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local
+---@diagnostic disable: undefined-global, undefined-field, unused-local
 
 -- Builds the minimal WoW global stubs needed to load isiLive_combat_events.lua.
 -- Returns the captured onEvent handler so tests can inject events directly,
@@ -210,32 +210,30 @@ local function RegisterCombatEventsBRTests(test, ctx)
       nameMap = nameMap,
     })
     -- HandleUnitSpellcastSucceeded only fires on the literal "player" unit
-    -- (Secret-Value safety), so we drive the dedup map via direct controller
-    -- traffic at t=100..102 by reusing the player unit five times with the
-    -- caster name rebound each call.
-    nameMap.player = nameMap.player1
-    controller.HandleUnitSpellcastSucceeded("player", "cast-1", 20484)
-    nameMap.player = nameMap.player2
-    nowRef.value = 100.5
-    controller.HandleUnitSpellcastSucceeded("player", "cast-2", 20484)
-    nameMap.player = nameMap.player3
-    nowRef.value = 101
-    controller.HandleUnitSpellcastSucceeded("player", "cast-3", 20484)
-    nameMap.player = nameMap.player4
-    nowRef.value = 101.5
-    controller.HandleUnitSpellcastSucceeded("player", "cast-4", 20484)
-    nameMap.player = nameMap.player5
-    nowRef.value = 102
-    controller.HandleUnitSpellcastSucceeded("player", "cast-5", 20484)
+    -- (Secret-Value safety), so we cannot just iterate party1..party5 to
+    -- generate five distinct caster|spell dedup entries. Instead we rebind
+    -- nameMap.player to a different "CasterN-Realm" name before each call —
+    -- the controller's getUnitName resolves the current binding and ShouldDedup
+    -- keys by name, so each call lands as a different caster from the dedup
+    -- map's perspective. Helper makes the rebind contract explicit.
+    local function fireCastFromCaster(casterIdx, castLabel, atTime)
+      nameMap.player = nameMap["player" .. casterIdx]
+      nowRef.value = atTime
+      controller.HandleUnitSpellcastSucceeded("player", castLabel, 20484)
+    end
+
+    fireCastFromCaster(1, "cast-1", 100)
+    fireCastFromCaster(2, "cast-2", 100.5)
+    fireCastFromCaster(3, "cast-3", 101)
+    fireCastFromCaster(4, "cast-4", 101.5)
+    fireCastFromCaster(5, "cast-5", 102)
     Assert.Equal(controller._Test_GetRecentSize(), 5, "five distinct caster|spell entries are tracked")
 
     -- Jump well past the 3s dedup window. The next cast triggers the
     -- in-line sweep before writing its own timestamp, so the four prior
     -- entries from t=100..101.5 must be reaped. The 102/fresh entries
     -- remain — t=102 is still within 3s of t=104.5.
-    nameMap.player = nameMap.player1
-    nowRef.value = 104.5
-    controller.HandleUnitSpellcastSucceeded("player", "cast-6", 20484)
+    fireCastFromCaster(1, "cast-6", 104.5)
     Assert.True(
       controller._Test_GetRecentSize() <= 2,
       "expired entries must be reaped on the next ShouldDedup miss; map size = "
@@ -244,9 +242,7 @@ local function RegisterCombatEventsBRTests(test, ctx)
 
     -- Long-term unbounded check: many more casts spread across an even
     -- bigger time gap shrink the map back to a single fresh entry.
-    nowRef.value = 200
-    nameMap.player = nameMap.player2
-    controller.HandleUnitSpellcastSucceeded("player", "cast-7", 20484)
+    fireCastFromCaster(2, "cast-7", 200)
     Assert.Equal(
       controller._Test_GetRecentSize(),
       1,

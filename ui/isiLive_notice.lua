@@ -1261,6 +1261,14 @@ function Notice.CreateInviteHint(opts)
   -- Position() reanchors the hint to the LFG dialog. It does not need to run at
   -- 60+ Hz — the dialog itself never moves faster than the user can drag it.
   -- endsAt + dialog-mismatch checks stay per-frame so the hint hides snappily.
+  --
+  -- Slice-race note: if Blizzard remounts LFGListInviteDialog between frames,
+  -- IsHintMismatchedToVisibleDialog() can see a transient nil dialog.resultID
+  -- and return false (no mismatch). The hint then stays visible for one frame
+  -- on a dialog it might not actually belong to. This is acceptable: a 1-frame
+  -- false-positive "show" is less disruptive than a 1-frame false-positive
+  -- "hide" would be, and the next frame re-evaluates with the settled dialog.
+  -- Do not throttle these checks under 0.2 s without first solving the race.
   local repositionAccum = 0
   frame:SetScript("OnUpdate", function(self, elapsed)
     if CurrentTime() >= endsAt then

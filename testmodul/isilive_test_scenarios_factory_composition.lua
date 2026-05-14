@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local, cast-local-type, unused-vararg
+---@diagnostic disable: undefined-global, undefined-field, unused-local, unused-vararg
 
 local unpack = rawget(_G, "unpack") or (type(table) == "table" and rawget(table, "unpack")) or nil
 

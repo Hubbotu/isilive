@@ -1,4 +1,4 @@
----@diagnostic disable: undefined-global, undefined-field, need-check-nil, unused-local, unused-vararg
+---@diagnostic disable: undefined-global, undefined-field, unused-local, unused-vararg
 
 -- Scenarios for ui/isiLive_roster_tooltip.lua - targets the helper
 -- surface that the composition-root test never reaches (simple tooltip

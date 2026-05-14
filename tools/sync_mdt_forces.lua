@@ -9,6 +9,14 @@
 --
 -- MDT dungeon files mutate a global `MDT` table. We stub that table,
 -- run each file as a chunk, and serialize the collected data.
+--
+-- Re-run semantics: every invocation regenerates the whole file from
+-- scratch — there is no incremental cache and no `mdtVersion`-keyed
+-- short-circuit. Two consecutive runs against the same MDT commit
+-- therefore produce identical `dungeonTotal` / `byNpcId` tables and
+-- only differ in the `generatedAt` / `expiresAt` window stamp. That
+-- is expected and not a sign of a header-only refresh: it means MDT
+-- itself was stable upstream.
 
 local SEASON_DEFAULT = "midnight_s1"
 local SEASON_TO_MDT_DIR = {

@@ -830,6 +830,16 @@ function Status.CreateController(opts)
   -- callback fires we are joining or already in the group, but IsInGroup()
   -- can transiently return false right after the accept event. The notice
   -- shows regardless, and the chat line should follow.
+  --
+  -- level=nil semantics (deliberate): when the listing carries no "+N"
+  -- marker, the announce emits level-less AND still arms the lock-in.
+  -- That means a later resolver-driven re-evaluation cannot upgrade the
+  -- announce to "+N" even if a roster-owner or peer-sync source produces
+  -- a level mid-cycle. This is intentional — the LFG payload is the
+  -- authoritative source for the accept path; downstream resolver hits
+  -- are less reliable and have produced wrong-level / wrong-dungeon
+  -- regressions before (cf. 0.9.236 → 0.9.240 changelog). Two cycles
+  -- on the same dungeon name remain possible after a group-leave reset.
   function controller.AnnounceTargetDungeonFromPayload(payload)
     if type(payload) ~= "table" then
       return

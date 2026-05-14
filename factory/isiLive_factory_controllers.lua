@@ -1479,6 +1479,22 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
       if type(resolvedName) ~= "string" or resolvedName == "" then
         return
       end
+      -- Debug trace consumes the descriptive payload fields (leaderName,
+      -- groupName, searchResultID) that lfg_detect carries through. The
+      -- announce itself only needs name+level, but the trace keeps the
+      -- full listing identity visible when diagnosing chat / notice
+      -- divergence reports (e.g. 0.9.240 follow-ups).
+      local logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+      if logRuntimeTracef then
+        logRuntimeTracef(
+          "[TARGET_DUNGEON_CHAT] direct_push mapID=%s level=%s leader=%s group=%s searchResultID=%s",
+          tostring(mapID),
+          tostring(payload.level),
+          tostring(payload.leaderName),
+          tostring(payload.groupName),
+          tostring(payload.searchResultID)
+        )
+      end
       statusController.AnnounceTargetDungeonFromPayload({
         name = resolvedName,
         level = payload.level,
