@@ -406,13 +406,7 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
     if type(chatInfo) ~= "table" or type(chatInfo.SendAddonMessage) ~= "function" then
       return
     end
-    pcall(
-      chatInfo.SendAddonMessage,
-      modules.sync.GetPrefix(),
-      "ACK:" .. deps.getAddonVersionRaw(),
-      "WHISPER",
-      sender
-    )
+    pcall(chatInfo.SendAddonMessage, modules.sync.GetPrefix(), "ACK:" .. deps.getAddonVersionRaw(), "WHISPER", sender)
   end
   config.sendRefreshResponse = RequireFunction(deps.sendRefreshResponse, "sendRefreshResponse")
   config.forEachRosterInfo = function(visitor)
