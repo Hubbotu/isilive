@@ -394,24 +394,13 @@ end
 -- "N+" etc. We pick the highest plausible match (1..40) so descriptive prefixes
 -- like "+12 / +13 swap" still resolve to the actual played level. nil = no hint.
 --
--- Separator class `[^%a%d]-` (lazy non-alphanumeric) instead of `%s*`: Lua's
--- `%s` only matches ASCII whitespace. Real-world LFG titles sporadically use
--- non-breaking spaces (U+00A0), tabs from copy-paste, or filler punctuation
--- ("+ 13", "+\t13", "+\194\160 13", "+(13)"). The lazy non-alphanumeric class
--- accepts every separator we have seen while still rejecting "+abc 13" (alpha
--- character blocks the lazy match) — i.e. digits not directly anchored to a
--- "+" are still ignored.
---
--- Pattern C: Blizzard's keystone-level pipe markup `|Kk<N>|k`. Since some
--- WoW client version, the LFG listing-title API rewrites a leader-typed
--- "+12" into the encoded form `|Kk12|k` (the chat frame renders it as the
--- familiar "+12" with its own color, but raw string operations see only
--- the markup — there is NO literal "+" byte). Without this pattern the
--- "+N" parse falls flat for every modern LFG listing whose title is
--- nothing but the level (a very common shape: leaders just type "+12" as
--- the title and the API replaces it with the markup). Captured by bytes:
--- `[124,75,107]` = `|Kk`, digits, `[124,107]` = `|k`. See vorfall
--- 2026-05-14 (Sitz des Triumvirats / Maisarakavernen incidents).
+-- Modern WoW client (12.0+) replaces a leader-typed "+N" title with the
+-- opaque pipe-markup `|Kk<sessionID>|k`. The <sessionID> is a client-side
+-- lookup index — NOT the level. There is no way to derive "+N" from the
+-- raw bytes; only the chat frame's renderer knows how to map `|Kk584|k`
+-- to "+12 Entspannt". For those listings the parser returns nil and the
+-- chat-line/center-notice pass the raw markup through verbatim instead;
+-- the chat frame renders it client-side. See vorfall 2026-05-14/15.
 local function ParseTitleKeyLevel(title)
   if type(title) ~= "string" or title == "" then
     return nil
@@ -419,15 +408,6 @@ local function ParseTitleKeyLevel(title)
   local best = nil
   -- Pattern A: "+N" with optional non-alphanumeric separator.
   for digits in string.gmatch(title, "%+[^%a%d]-(%d+)") do
-    local n = tonumber(digits)
-    if n and n >= 1 and n <= 40 then
-      if not best or n > best then
-        best = n
-      end
-    end
-  end
-  -- Pattern C: Blizzard keystone-level pipe markup `|Kk<N>|k`.
-  for digits in string.gmatch(title, "|Kk(%d+)|k") do
     local n = tonumber(digits)
     if n and n >= 1 and n <= 40 then
       if not best or n > best then
@@ -731,6 +711,10 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
     mapID = entry.mapID,
     level = ResolveEntryTitleLevel(entry),
     leaderName = entry.leaderName,
+    -- groupName is the raw listing title — may be plain ("+12 Push") or
+    -- Blizzard pipe-markup ("|Kk584|k"). Either way the chat frame
+    -- renders it correctly when printed, so the status controller
+    -- appends it to the chat line whenever a parsed level is missing.
     groupName = entry.groupName,
     searchResultID = searchResultID,
   })

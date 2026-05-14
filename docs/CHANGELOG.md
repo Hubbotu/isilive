@@ -1,5 +1,90 @@
 # Changelog
 
+## 2026-05-15 - Version 0.9.243 (patch)
+
+Diagnosis-driven revert and re-architecture of the keystone-level
+extraction for the chat target-dungeon announce. The 0.9.242 hotfix
+("Pattern C: parse `|Kk(%d+)|k` as the level") turned out to be
+**wrong** once a full byte-dump of `info` ran on the live client:
+
+```
+name (string) = "+12 Entspannt"
+              bytes [124,75,107,53,56,52,124,107]
+                  = "|Kk584|k"
+```
+
+The digits inside `|Kk<...>|k` are NOT the keystone level — they
+are an opaque session-internal lookup index. The same listing
+renders as "Unbekannt" when the client cache has not yet resolved
+the ID (e.g. for a freshly-delisted listing) and as "+12 Entspannt"
+once the entry is present. Reading `<id>` as the level produced
+nonsense values (`|Kk584|k` → 584, out of 1..40 range → nil; the
+parse never recovered the actual `+12`). There is no documented
+Lua API to invoke Blizzard's lookup-table decoder.
+
+### Pattern C reverted
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- `ParseTitleKeyLevel` rolls back to the pre-0.9.242 Pattern A / B
+  set (plain "+N" and "N+"). For Blizzard's pipe markup the parser
+  now correctly returns nil — no false level invented from the
+  opaque ID.
+- `ResolveEntryTitleLevel` keeps its 0.9.241 contract (use
+  `entry.titleLevel` if valid, otherwise re-parse `entry.groupName`)
+  but the re-parse now also returns nil for the markup shape, so
+  the direct-push payload arrives with `level = nil` instead of a
+  bogus number.
+
+### Direct-push bails on level=nil
+
+[ui/isiLive_status.lua](ui/isiLive_status.lua):
+
+- `AnnounceTargetDungeonFromPayload` returns early when
+  `payload.level` is nil. No chat line emitted, no
+  `levelAnnouncedTargetDungeonName` lock-in set. The user wants
+  exactly `Ziel-Dungeon: <Name> +<N>` in chat — never a level-less
+  placeholder, never any of the descriptive text that the listing
+  title carries ("Entspannt", "Push", "Lernen"). Bailing out
+  intentionally yields control to the resolver-driven path
+  (`MaybeAnnounceTargetDungeonChat` via UpdateStatusLine), which
+  supplies the level from the roster-owner key, the LFG-title
+  hint, or the synced target after GROUP_ROSTER_UPDATE has settled.
+
+### What the user sees now
+
+| Listing shape | Notice "Dungeon" row | Chat line |
+| --- | --- | --- |
+| Plain text `"+13 Push"` | `Maisarakavernen +13` | `Ziel-Dungeon: Maisarakavernen +13` (direct push) |
+| Pipe markup `\|Kk584\|k` | `Maisarakavernen` (no +N — Notice keeps its "Gruppe:" row for the decoded title) | `Ziel-Dungeon: Maisarakavernen +13` (resolver from roster-owner key) |
+| No level anywhere | `Maisarakavernen` | `Ziel-Dungeon: Maisarakavernen` (resolver fallback after 3 s defer) |
+
+Notice and chat are now **consistent** wherever a level is
+ascertainable, and the chat line is uniformly the compact
+`Dungeon +N` form — no descriptive title fragments leak in.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua):
+
+- Removed `renders without +N when level is nil` — the old contract
+  ("emit anyway, just without +N") is exactly what the user
+  rejected.
+- Added `bails out without emitting or locking when level is nil`
+  pins the new contract: level-less direct-push stays silent, does
+  not poison the lock-in, and the resolver path takes over with the
+  roster-owner level.
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- Pattern C assertions removed.
+- New assertions on the `ResolveEntryTitleLevel` helper pin the
+  Blizzard-markup contract: `|Kk584|k` resolves to nil (no false
+  level), but a mixed `"+12 |Kk999|k"` still picks up the plain
+  text `+12` via Pattern A.
+
+Usecase count stays at 1714.
+
 ## 2026-05-14 - Version 0.9.242 (patch)
 
 In-game data finally explained the recurring "chat / notice shows

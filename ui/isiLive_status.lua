@@ -852,6 +852,19 @@ function Status.CreateController(opts)
     if level and level <= 0 then
       level = nil
     end
+    -- Vorfall 2026-05-15: modern WoW encodes the LFG title as opaque pipe
+    -- markup ("|Kk<id>|k") whose <id> is a client-side lookup, NOT the
+    -- level. ParseTitleKeyLevel correctly returns nil for that shape, so
+    -- payload.level arrives nil. We must NOT emit a level-less direct-push
+    -- line here — the user wants "Ziel-Dungeon: <name> +N" only, no
+    -- descriptive text, no level-less placeholder. Bailing out also
+    -- intentionally leaves levelAnnouncedTargetDungeonName unset so the
+    -- resolver-driven path (UpdateStatusLine → MaybeAnnounceTargetDungeon-
+    -- Chat) can later supply +N from the roster-owner key, the LFG-title
+    -- hint, or the synced target.
+    if not level then
+      return
+    end
     if state.levelAnnouncedTargetDungeonName == name then
       return
     end

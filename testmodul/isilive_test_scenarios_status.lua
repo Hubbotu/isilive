@@ -797,8 +797,17 @@ local function RegisterPortalNavigatorTests(test, Assert, WithGlobals, LoadAddon
     end)
   end)
 
-  test("Status AnnounceTargetDungeonFromPayload renders without +N when level is nil", function()
+  test("Status AnnounceTargetDungeonFromPayload bails out without emitting or locking when level is nil", function()
+    -- Vorfall 2026-05-15: modern WoW (12.0+) encodes the listing title
+    -- as opaque pipe markup "|Kk<id>|k". ParseTitleKeyLevel returns nil
+    -- by design — the <id> is a client-side lookup, NOT the level. We
+    -- explicitly REFUSE to emit a level-less direct-push: the user
+    -- wants "Dungeon +N" only, never a level-less placeholder.
+    -- Bailing out without setting levelAnnouncedTargetDungeonName lets
+    -- the resolver-driven path (MaybeAnnounceTargetDungeonChat) supply
+    -- +N later from the roster-owner key / synced target.
     local prints = {}
+    local current = { targetInfo = { name = "Maisarakavernen", level = 13 } }
     WithGlobals({}, function()
       local addon = LoadAddonModules({ "isiLive_status.lua" })
       local controller = addon.Status.CreateController({
@@ -806,17 +815,26 @@ local function RegisterPortalNavigatorTests(test, Assert, WithGlobals, LoadAddon
         isInGroup = function()
           return true
         end,
+        getTargetDungeonInfo = function()
+          return current.targetInfo
+        end,
         printFn = function(message)
           table.insert(prints, tostring(message))
         end,
       })
 
-      controller.AnnounceTargetDungeonFromPayload({ name = "Ara-Kara" })
-      Assert.Equal(#prints, 1, "missing level still emits an announce (just without +N)")
+      controller.AnnounceTargetDungeonFromPayload({ name = "Maisarakavernen", level = nil })
+      Assert.Equal(#prints, 0, "level-less direct-push must NOT emit a chat line")
+
+      -- Resolver path runs later (e.g. via UpdateStatusLine after
+      -- GROUP_ROSTER_UPDATE) with the roster-owner +N. Because the
+      -- direct-push did not set the lock-in, the resolver is free to fire.
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "resolver-driven announce takes over with the roster-owner level")
       Assert.Equal(
         prints[1],
-        "Target Dungeon: |cffffd200Ara-Kara|r",
-        "missing level renders the dungeon name on its own — same shape the resolver would emit"
+        "Target Dungeon: |cffffd200Maisarakavernen +13|r",
+        "chat line carries the resolver-supplied +N exactly — no descriptive title fragments"
       )
     end)
   end)

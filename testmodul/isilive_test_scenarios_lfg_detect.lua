@@ -1370,26 +1370,23 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
         "non-breaking space between + and digits still parses (extended parser pattern)"
       )
       Assert.Equal(resolve({ titleLevel = nil, groupName = "(+13) push" }), 13, "parenthesised + still parses")
-      -- Pattern C: Blizzard rewrites a leader-typed "+N" listing title into
-      -- the encoded form "|Kk<N>|k" (the chat frame renders it as the
-      -- familiar "+N" but the raw string contains no "+" byte at all).
-      -- Vorfall 2026-05-14: every modern LFG listing with a level-only
-      -- title hit this path, dropping the +N in both notice and chat.
-      local blizzardMarkup = string.char(124, 75, 107, 49, 50, 124, 107) -- |Kk12|k
-      Assert.Equal(
+      -- Vorfall 2026-05-15: Modern WoW (12.0+) replaces a leader-typed "+N"
+      -- listing title with the opaque pipe-markup "|Kk<sessionID>|k" where
+      -- <sessionID> is a client-side lookup index — NOT the level. The
+      -- chat frame renders it client-side; raw string ops cannot derive
+      -- the level. The parser must return nil for the encoded form (no
+      -- false level), and the chat-line passes the raw markup through as
+      -- rawTitle instead so the chat frame can render the user-visible
+      -- "+12 Entspannt" text.
+      local blizzardMarkup = string.char(124, 75, 107, 53, 56, 52, 124, 107) -- |Kk584|k
+      Assert.Nil(
         resolve({ titleLevel = nil, groupName = blizzardMarkup }),
+        "Blizzard pipe-markup |Kk584|k must NOT be parsed as a level — the digit is an opaque lookup ID"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = "+12 |Kk999|k" }),
         12,
-        "Blizzard keystone-level pipe markup |Kk12|k parses to 12 (vorfall 2026-05-14)"
-      )
-      Assert.Equal(
-        resolve({ titleLevel = nil, groupName = "|Kk13|k Competitive" }),
-        13,
-        "markup with trailing text still parses"
-      )
-      Assert.Equal(
-        resolve({ titleLevel = nil, groupName = "+12 |Kk13|k" }),
-        13,
-        "mixed plain + markup picks the highest valid level"
+        "mixed plain '+N' + markup still picks the plain-text level (markup is ignored)"
       )
     end)
   end)
