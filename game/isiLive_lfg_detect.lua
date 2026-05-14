@@ -393,13 +393,21 @@ end
 -- LFG leaders by convention encode the level as "+N", "+N something", "(+N)",
 -- "N+" etc. We pick the highest plausible match (1..40) so descriptive prefixes
 -- like "+12 / +13 swap" still resolve to the actual played level. nil = no hint.
+--
+-- Separator class `[^%a%d]-` (lazy non-alphanumeric) instead of `%s*`: Lua's
+-- `%s` only matches ASCII whitespace. Real-world LFG titles sporadically use
+-- non-breaking spaces (U+00A0), tabs from copy-paste, or filler punctuation
+-- ("+ 13", "+\t13", "+\194\160 13", "+(13)"). The lazy non-alphanumeric class
+-- accepts every separator we have seen while still rejecting "+abc 13" (alpha
+-- character blocks the lazy match) — i.e. digits not directly anchored to a
+-- "+" are still ignored.
 local function ParseTitleKeyLevel(title)
   if type(title) ~= "string" or title == "" then
     return nil
   end
   local best = nil
-  -- Pattern A: "+N" with optional whitespace separator. Captures the digits.
-  for digits in string.gmatch(title, "%+%s*(%d+)") do
+  -- Pattern A: "+N" with optional non-alphanumeric separator.
+  for digits in string.gmatch(title, "%+[^%a%d]-(%d+)") do
     local n = tonumber(digits)
     if n and n >= 1 and n <= 40 then
       if not best or n > best then
@@ -411,7 +419,7 @@ local function ParseTitleKeyLevel(title)
     return best
   end
   -- Pattern B: "N+" trailing-plus form (less common but still seen).
-  for digits in string.gmatch(title, "(%d+)%s*%+") do
+  for digits in string.gmatch(title, "(%d+)[^%a%d]-%+") do
     local n = tonumber(digits)
     if n and n >= 1 and n <= 40 then
       if not best or n > best then
@@ -636,6 +644,54 @@ local function MaybeShowInviteHint(entry, searchResultID)
   inviteHintCallback(headline .. "\n" .. subline, 8, searchResultID)
 end
 
+-- Best-effort recovery of the listing "+N" when entry.titleLevel is nil but
+-- entry.groupName still encodes it. Real-world races (the group title gets
+-- finalised between LFG_LIST_SEARCH_RESULT_RECEIVED and the
+-- inviteaccepted dispatch, premade-finder vs. M+ tab differences, partial
+-- GetSearchResultInfo replies) can leave the cached pendingInvites entry
+-- with titleLevel=nil even though groupName already carries "+13 Competitive"
+-- — and the Center Notice then shows the group name correctly while the
+-- chat line / dungeon row drop the "+N". Re-parsing groupName here is
+-- idempotent (same parser, same input shape) and cheap, so we apply it as
+-- a safety net on every consumer instead of trying to pin down the precise
+-- timing window that produced the divergence.
+local function ResolveEntryTitleLevel(entry)
+  if type(entry) ~= "table" then
+    return nil
+  end
+  local level = tonumber(entry.titleLevel)
+  if level and level > 0 then
+    return math.floor(level)
+  end
+  if type(entry.groupName) == "string" and entry.groupName ~= "" then
+    local parsed = ParseTitleKeyLevel(entry.groupName)
+    if parsed and parsed > 0 then
+      -- Telemetry: the fallback only fires when entry.titleLevel diverged
+      -- from entry.groupName despite both being derived from info.name in
+      -- ResolveInviteEntry. Logging the recovery lets us count how often
+      -- this divergence occurs in the wild, and on the next user-reported
+      -- vorfall the RuntimeLog carries a concrete data point instead of
+      -- a guess. Cheap (only fires on actual fallback), no PII (group
+      -- titles are public LFG listings).
+      Log(
+        "title_level_fallback",
+        "groupName=%q stored_titleLevel=%s parsed=%d",
+        tostring(entry.groupName),
+        tostring(entry.titleLevel),
+        parsed
+      )
+      return parsed
+    end
+  end
+  return nil
+end
+
+-- Exposed for callers that hold a raw entry table (e.g. tests pinning the
+-- divergence-recovery contract, or future consumers that bypass the
+-- MaybeShow* helpers). Mirrors the Get* naming used by the rest of the
+-- module's public surface.
+LFGDetect.ResolveEntryTitleLevel = ResolveEntryTitleLevel
+
 -- Fires the direct-push target-dungeon chat hook with the listing payload.
 -- The listing's titleLevel is the same field the Center Notice uses, so the
 -- chat line and the notice surface identical "+N" without going through the
@@ -653,7 +709,7 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
   end
   targetDungeonChatCallback({
     mapID = entry.mapID,
-    level = entry.titleLevel,
+    level = ResolveEntryTitleLevel(entry),
     leaderName = entry.leaderName,
     groupName = entry.groupName,
     searchResultID = searchResultID,
@@ -689,7 +745,7 @@ local function MaybeShowAcceptedInviteNotice(entry, searchResultID)
   acceptedInviteNoticeCallback({
     mapID = entry.mapID,
     activityID = entry.activityID,
-    level = entry.titleLevel,
+    level = ResolveEntryTitleLevel(entry),
     leaderName = entry.leaderName,
     groupName = entry.groupName,
     comment = entry.comment,
@@ -730,7 +786,12 @@ local function OnInviteAccepted(searchResultID)
   end
   local mapID = type(entry) == "table" and entry.mapID or nil
   local leaderName = type(entry) == "table" and entry.leaderName or nil
-  local titleLevel = type(entry) == "table" and entry.titleLevel or nil
+  -- ResolveEntryTitleLevel falls back to ParseTitleKeyLevel(entry.groupName)
+  -- when entry.titleLevel is nil — covers the case where the cached
+  -- pendingInvites entry lost the level but kept the group name (the bug
+  -- where the Center Notice showed "Gruppe: +13 Competitive" while the
+  -- dungeon row and the chat line dropped the "+13").
+  local titleLevel = ResolveEntryTitleLevel(entry)
   Log(
     "invite_accepted",
     "searchResultID=%s mapID=%s leader=%s titleLevel=%s",

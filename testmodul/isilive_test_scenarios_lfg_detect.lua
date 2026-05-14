@@ -1326,6 +1326,53 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect ResolveEntryTitleLevel recovers level from groupName when titleLevel is nil", function()
+    -- Pin the in-the-wild divergence: even when an entry lands at the
+    -- consumers with titleLevel=nil (whatever post-resolve race produced
+    -- that), as long as groupName still encodes "+N", the helper must
+    -- recover the level. This is the contract that keeps Center Notice
+    -- and chat line in sync with the Blizzard popup when the LFG title
+    -- carries the level.
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local resolve = addon.LFGDetect.ResolveEntryTitleLevel
+
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = "+13 Competitive" }),
+        13,
+        "nil titleLevel + parsable groupName must recover the level"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = 14, groupName = "+13" }),
+        14,
+        "stored titleLevel wins over groupName parse — no false downgrade"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = "12", groupName = "+13" }),
+        12,
+        "numeric-string titleLevel is honoured before falling back"
+      )
+      Assert.Nil(
+        resolve({ titleLevel = nil, groupName = "Sitz des Triumvirats" }),
+        "groupName without +N stays nil — no level invented"
+      )
+      Assert.Nil(resolve({ titleLevel = nil, groupName = "" }), "empty groupName stays nil")
+      Assert.Nil(resolve({ titleLevel = nil }), "missing groupName stays nil")
+      Assert.Nil(resolve(nil), "non-table input stays nil")
+      Assert.Equal(
+        resolve({ titleLevel = 0, groupName = "+13 fallback" }),
+        13,
+        "titleLevel=0 is treated as invalid and falls through to the groupName parse"
+      )
+      Assert.Equal(
+        resolve({ titleLevel = nil, groupName = "+\194\16013 NBSP" }),
+        13,
+        "non-breaking space between + and digits still parses (extended parser pattern)"
+      )
+      Assert.Equal(resolve({ titleLevel = nil, groupName = "(+13) push" }), 13, "parenthesised + still parses")
+    end)
+  end)
+
   test("LFGDetect PARTY_LEADER_CHANGED is a no-op when no listing identity was captured", function()
     -- Pre-formed-group case: never went through an LFG accept, so the
     -- accepted-invite identity slots are nil to begin with. The event must
