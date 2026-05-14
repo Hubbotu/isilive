@@ -89,8 +89,9 @@ local function ReadLiveData()
   end
 
   local mapID = nil
-  if C_ChallengeMode and type(C_ChallengeMode.GetActiveChallengeMapID) == "function" then
-    local ok, id = pcall(C_ChallengeMode.GetActiveChallengeMapID)
+  local challengeMode = rawget(_G, "C_ChallengeMode")
+  if type(challengeMode) == "table" and type(challengeMode.GetActiveChallengeMapID) == "function" then
+    local ok, id = pcall(challengeMode.GetActiveChallengeMapID)
     if ok and type(id) == "number" and id > 0 and not issecret(id) then
       mapID = id
     end

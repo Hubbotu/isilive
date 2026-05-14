@@ -42,7 +42,11 @@ local function LoadKeyTimeLimits(mapId)
   if type(mapId) ~= "number" or mapId <= 0 then
     return
   end
-  local ok, _, _, timeLimit = pcall(C_ChallengeMode.GetMapUIInfo, mapId)
+  local challengeMode = rawget(_G, "C_ChallengeMode")
+  if type(challengeMode) ~= "table" or type(challengeMode.GetMapUIInfo) ~= "function" then
+    return
+  end
+  local ok, _, _, timeLimit = pcall(challengeMode.GetMapUIInfo, mapId)
   if not ok or type(timeLimit) ~= "number" or timeLimit <= 0 then
     return
   end
@@ -59,9 +63,12 @@ end
 local DEATH_PENALTY_MIN_LEVEL = 4
 
 local function StartTimer()
+  local challengeMode = rawget(_G, "C_ChallengeMode")
+  local hasChallengeAPI = type(challengeMode) == "table"
+
   local mapId
-  do
-    local ok, id = pcall(C_ChallengeMode.GetActiveChallengeMapID)
+  if hasChallengeAPI and type(challengeMode.GetActiveChallengeMapID) == "function" then
+    local ok, id = pcall(challengeMode.GetActiveChallengeMapID)
     if ok and type(id) == "number" then
       mapId = id
     end
@@ -69,8 +76,8 @@ local function StartTimer()
   LoadKeyTimeLimits(mapId)
 
   local keyLevel = 0
-  do
-    local ok, level = pcall(C_ChallengeMode.GetActiveKeystoneInfo)
+  if hasChallengeAPI and type(challengeMode.GetActiveKeystoneInfo) == "function" then
+    local ok, level = pcall(challengeMode.GetActiveKeystoneInfo)
     if ok and type(level) == "number" then
       keyLevel = level
     end
@@ -103,7 +110,11 @@ local function StopTimer(completed)
 end
 
 local function UpdateDeaths()
-  local ok, count, timeLost = pcall(C_ChallengeMode.GetDeathCount)
+  local challengeMode = rawget(_G, "C_ChallengeMode")
+  if type(challengeMode) ~= "table" or type(challengeMode.GetDeathCount) ~= "function" then
+    return
+  end
+  local ok, count, timeLost = pcall(challengeMode.GetDeathCount)
   if ok then
     if type(count) == "number" then
       state.deaths = count

@@ -252,14 +252,13 @@ function Teleport.GetDungeonName(mapID, localeTag)
     return dungeonName
   end
 
-  if
-    (resolvedLocale == nil or resolvedLocale == "" or resolvedLocale == currentLocale)
-    and C_ChallengeMode
-    and C_ChallengeMode.GetMapUIInfo
-  then
-    local okName, localizedName = pcall(C_ChallengeMode.GetMapUIInfo, numericMapID)
-    if okName and type(localizedName) == "string" and localizedName ~= "" then
-      return localizedName
+  if resolvedLocale == nil or resolvedLocale == "" or resolvedLocale == currentLocale then
+    local challengeMode = rawget(_G, "C_ChallengeMode")
+    if type(challengeMode) == "table" and type(challengeMode.GetMapUIInfo) == "function" then
+      local okName, localizedName = pcall(challengeMode.GetMapUIInfo, numericMapID)
+      if okName and type(localizedName) == "string" and localizedName ~= "" then
+        return localizedName
+      end
     end
   end
 

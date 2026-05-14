@@ -276,6 +276,73 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
     )
   end)
 
+  -- Pins the rawget(_G, "...") sweep finished after the 1ed372d / 1575a5b / 1a5612a
+  -- commits. Each consumer must reach C_ChallengeMode / C_ChatInfo / InCombatLockdown
+  -- through a sandbox-safe local cache, not a bare global lookup. Without these
+  -- assertions a regression goes silently green because the bare-global form still
+  -- runs in WoW itself (only Mock-_G tests would notice).
+  test("Architecture C_ChallengeMode consumers route through rawget(_G) cache", function()
+    local consumers = {
+      "isiLive_status.lua",
+      "isiLive_killtrack.lua",
+      "isiLive_mplus_timer.lua",
+      "isiLive_teleport.lua",
+    }
+    for _, file in ipairs(consumers) do
+      local content = ReadFile(file)
+      AssertContains(
+        Assert,
+        content,
+        'rawget(_G, "C_ChallengeMode")',
+        file .. " must cache C_ChallengeMode via rawget(_G, ...) before calling its API"
+      )
+      AssertNotContains(
+        Assert,
+        content,
+        "pcall(C_ChallengeMode.",
+        file .. " must not pcall bare C_ChallengeMode.X — go through the rawget cache"
+      )
+    end
+  end)
+
+  test("Architecture C_ChatInfo senders route through rawget(_G) cache", function()
+    local senders = { "isiLive_controller_wiring.lua", "isiLive_sync.lua" }
+    for _, file in ipairs(senders) do
+      local content = ReadFile(file)
+      AssertContains(
+        Assert,
+        content,
+        'rawget(_G, "C_ChatInfo")',
+        file .. " must cache C_ChatInfo via rawget(_G, ...) before sending addon messages"
+      )
+      AssertNotContains(
+        Assert,
+        content,
+        "C_ChatInfo and C_ChatInfo.",
+        file .. " must not lean on bare C_ChatInfo short-circuit chains"
+      )
+    end
+  end)
+
+  test("Architecture InCombatLockdown consumers route through rawget(_G) cache", function()
+    local consumers = { "isiLive_roster_layout.lua", "isiLive_notice.lua", "isiLive_teleport_ui.lua" }
+    for _, file in ipairs(consumers) do
+      local content = ReadFile(file)
+      AssertContains(
+        Assert,
+        content,
+        'rawget(_G, "InCombatLockdown")',
+        file .. " must cache InCombatLockdown via rawget(_G, ...) instead of touching the bare global"
+      )
+      AssertNotContains(
+        Assert,
+        content,
+        "InCombatLockdown and InCombatLockdown()",
+        file .. " must not lean on bare InCombatLockdown short-circuit chains"
+      )
+    end
+  end)
+
   test("Architecture combat utility ticker rerenders UI while Mythic+ timer is active", function()
     local content = ReadFile("isiLive_factory_controllers.lua")
 

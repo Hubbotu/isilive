@@ -399,15 +399,20 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
   config.playIncomingSummonSound = type(deps.playIncomingSummonSound) == "function" and deps.playIncomingSummonSound
     or function() end
   config.sendAck = function(sender)
-    if C_ChatInfo and C_ChatInfo.SendAddonMessage and type(sender) == "string" and sender ~= "" then
-      pcall(
-        C_ChatInfo.SendAddonMessage,
-        modules.sync.GetPrefix(),
-        "ACK:" .. deps.getAddonVersionRaw(),
-        "WHISPER",
-        sender
-      )
+    if type(sender) ~= "string" or sender == "" then
+      return
     end
+    local chatInfo = rawget(_G, "C_ChatInfo")
+    if type(chatInfo) ~= "table" or type(chatInfo.SendAddonMessage) ~= "function" then
+      return
+    end
+    pcall(
+      chatInfo.SendAddonMessage,
+      modules.sync.GetPrefix(),
+      "ACK:" .. deps.getAddonVersionRaw(),
+      "WHISPER",
+      sender
+    )
   end
   config.sendRefreshResponse = RequireFunction(deps.sendRefreshResponse, "sendRefreshResponse")
   config.forEachRosterInfo = function(visitor)

@@ -136,7 +136,8 @@ local UI_VISIBILITY_RULES = {
 RI.UI_VISIBILITY_RULES = UI_VISIBILITY_RULES
 
 local function IsCombatLockdownActive()
-  return type(InCombatLockdown) == "function" and InCombatLockdown() == true
+  local inCombatFn = rawget(_G, "InCombatLockdown")
+  return type(inCombatFn) == "function" and inCombatFn() == true
 end
 RI.IsCombatLockdownActive = IsCombatLockdownActive
 
