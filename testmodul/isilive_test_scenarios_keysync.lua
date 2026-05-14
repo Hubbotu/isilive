@@ -205,6 +205,74 @@ local function RegisterKeySyncPresenceTests(test, Assert, LoadAddonModules)
     end
   )
 
+  test("KeySync.GetDiagnostics counts unique-owner guard skips and ResetDiagnostics zeros them", function()
+    -- The unique-owner guard above (sole match, multi-member roster, no hint)
+    -- fails closed silently. KeySync.GetDiagnostics exposes how many times
+    -- the guard fired so /dump can distinguish "guard never engages" from
+    -- "guard suppressing X resolutions per session". Without this signal the
+    -- consumer is mute and the race-safety choice has no telemetry.
+    --
+    -- The Controller and the diagnostics accessor must come from the SAME
+    -- KeySync module instance — LoadAddonModules creates a fresh chunk per
+    -- call, so going through BuildController (which re-loads internally)
+    -- would split state across two instances and the counter would look
+    -- like it never advanced.
+    local sync = BuildMockSync()
+    local addon = LoadAddonModules({ "isiLive_keysync.lua" })
+    local KeySync = addon.KeySync
+    KeySync.ResetDiagnostics()
+    Assert.Equal(KeySync.GetDiagnostics().uniqueOwnerGuardSkips, 0, "ResetDiagnostics zeroes the counter")
+
+    local ctrl = KeySync.CreateController({
+      sync = sync,
+      getUnitNameAndRealm = function(unit)
+        if unit == "player" then
+          return "TestPlayer", "TestRealm"
+        end
+        return nil, nil
+      end,
+      getAddonVersionRaw = function()
+        return "0.9.99"
+      end,
+      getUnitRio = function(_unit)
+        return nil
+      end,
+      isFrameVisible = function()
+        return true
+      end,
+    })
+    local roster = {
+      player = { name = "Me", realm = "R", keyMapID = 100, keyLevel = 10 },
+      party1 = { name = "P1", realm = "R", keyMapID = 200, keyLevel = 12 },
+      party2 = { name = "P2", realm = "R", keyMapID = 300, keyLevel = 8 },
+    }
+    -- Trigger the guard twice. Each call hits the "sole match + multi-member
+    -- + no hint" branch and increments the counter by exactly one.
+    ctrl.ResolveActiveKeyOwnerUnit(roster, 200)
+    ctrl.ResolveActiveKeyOwnerUnit(roster, 200)
+    Assert.Equal(
+      KeySync.GetDiagnostics().uniqueOwnerGuardSkips,
+      2,
+      "each unique-owner guard hit must increment the counter exactly once"
+    )
+
+    -- A resolution that does NOT hit the guard (hint provided, hint matches)
+    -- must leave the counter alone.
+    ctrl.ResolveActiveKeyOwnerUnit(roster, 200, "P1")
+    Assert.Equal(
+      KeySync.GetDiagnostics().uniqueOwnerGuardSkips,
+      2,
+      "hint-driven resolutions must not bump the guard counter"
+    )
+
+    KeySync.ResetDiagnostics()
+    Assert.Equal(
+      KeySync.GetDiagnostics().uniqueOwnerGuardSkips,
+      0,
+      "ResetDiagnostics zeroes again after counts accumulate"
+    )
+  end)
+
   test("KeySync ResolveActiveKeyOwnerUnit returns nil for duplicate mapID", function()
     local sync = BuildMockSync()
     local ctrl = BuildController(LoadAddonModules, sync)

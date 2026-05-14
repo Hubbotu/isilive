@@ -7,6 +7,27 @@ addonTable.KeySync = KeySync
 
 local SeasonData = addonTable.SeasonData or {}
 
+-- Module-level diagnostics counters. These are write-only from inside
+-- KeySync internals and read-only from outside via KeySync.GetDiagnostics().
+-- The unique-owner guard in ResolveActiveKeyOwnerUnit fails closed when a
+-- single-match roster lacks a hint, which is silent by design — surfacing
+-- the skip count lets `/dump` / debug code distinguish "guard never fired"
+-- from "guard suppressing X resolutions per session" without spamming the
+-- runtime log on the hot path.
+local diagnostics = {
+  uniqueOwnerGuardSkips = 0,
+}
+
+function KeySync.GetDiagnostics()
+  return {
+    uniqueOwnerGuardSkips = diagnostics.uniqueOwnerGuardSkips,
+  }
+end
+
+function KeySync.ResetDiagnostics()
+  diagnostics.uniqueOwnerGuardSkips = 0
+end
+
 -- Fallback for when C_MythicPlus.GetOwnedKeystone* returns nil/0 (observed
 -- on receivers after SHAREKEYS broadcast: API is present but returns empty
 -- because the per-client cache has not been populated yet). The bag link
@@ -675,7 +696,7 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
   --     SOT +15, or another member's POS +14 instead of the listing's
   --     POS +13). Stay nil and let the deferred consumer wait for a real
   --     source. Solo / 1-man rosters still resolve normally.
-  local hintWasProvided = type(preferredOwnerName) == "string" and preferredOwnerName ~= ""
+  local noHintProvided = not (type(preferredOwnerName) == "string" and preferredOwnerName ~= "")
 
   local ownerUnit = nil
   local rosterSize = 0
@@ -694,7 +715,8 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
   end
 
   if matches == 1 then
-    if rosterSize > 1 and not hintWasProvided then
+    if rosterSize > 1 and noHintProvided then
+      diagnostics.uniqueOwnerGuardSkips = diagnostics.uniqueOwnerGuardSkips + 1
       return nil
     end
     return ownerUnit
