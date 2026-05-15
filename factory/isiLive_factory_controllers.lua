@@ -638,13 +638,12 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
 
     local isVisible = ctx.mainFrame and ctx.mainFrame:IsShown() or false
     local targetMapID = ctx.ResolveLocalStatusTargetMapID()
-    local targetLevel = nil
 
     -- Mirror GetStatusTargetDungeonInfo's level-resolution priority so the
     -- payload broadcast to peers matches the local announce: LFG-title hint
     -- (authoritative) wins over the roster-owner key level.
     local lfgDetect = addonTable.LFGDetect
-    targetLevel = ResolveActiveInviteLevelHint(lfgDetect)
+    local targetLevel = ResolveActiveInviteLevelHint(lfgDetect)
 
     if
       (not targetLevel or targetLevel <= 0)
