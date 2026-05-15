@@ -273,6 +273,28 @@ local function InitializeRioHelpers(ctx, runtimeState)
   end
 end
 
+local function ResolveActiveInviteLevelHint(lfgDetect)
+  if type(lfgDetect) ~= "table" then
+    return nil, nil
+  end
+
+  if type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
+    local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
+    if hint and hint > 0 then
+      return math.floor(hint), nil
+    end
+  end
+
+  if type(lfgDetect.GetActiveInviteTitleLevelText) == "function" then
+    local hintText = lfgDetect.GetActiveInviteTitleLevelText()
+    if type(hintText) == "string" and hintText ~= "" then
+      return nil, hintText
+    end
+  end
+
+  return nil, nil
+end
+
 -- Sub-function: Status target resolution, dungeon info, and operational helpers.
 local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
   ctx.getPlayerSyncSummary = function(name, realm)
@@ -576,25 +598,8 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     --   2. Roster owner key level: fallback when no title hint exists (manual
     --      /invite, no LFG context).
     --   3. Synced target level: last fallback for peers that publish a target.
-    local targetLevel = nil
-    local targetLevelText = nil
     local lfgDetect = addonTable.LFGDetect
-    if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
-      local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
-      if hint and hint > 0 then
-        targetLevel = math.floor(hint)
-      end
-    end
-    if
-      not targetLevel
-      and type(lfgDetect) == "table"
-      and type(lfgDetect.GetActiveInviteTitleLevelText) == "function"
-    then
-      local hintText = lfgDetect.GetActiveInviteTitleLevelText()
-      if type(hintText) == "string" and hintText ~= "" then
-        targetLevelText = hintText
-      end
-    end
+    local targetLevel, targetLevelText = ResolveActiveInviteLevelHint(lfgDetect)
 
     if not targetLevel or targetLevel <= 0 then
       local ownerUnit = ctx.ResolveActiveKeyOwnerUnit and ctx.ResolveActiveKeyOwnerUnit() or nil
@@ -639,12 +644,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     -- payload broadcast to peers matches the local announce: LFG-title hint
     -- (authoritative) wins over the roster-owner key level.
     local lfgDetect = addonTable.LFGDetect
-    if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
-      local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
-      if hint and hint > 0 then
-        targetLevel = math.floor(hint)
-      end
-    end
+    targetLevel = ResolveActiveInviteLevelHint(lfgDetect)
 
     if
       (not targetLevel or targetLevel <= 0)
