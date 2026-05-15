@@ -917,6 +917,30 @@ return function(test, ctx)
   end)
 
   test(
+    "factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved",
+    function()
+      local addon = Load()
+      local rs = BuildRuntimeStateStub({ latestDungeonName = "Ara-Kara", latestQueueMapID = 2649 })
+      rs.rosterRef = { player = { name = "Alice", realm = "D" } }
+      addon.LFGDetect = {
+        GetActiveInviteTitleLevel = function()
+          return nil
+        end,
+        GetActiveInviteTitleLevelText = function()
+          return "|Kk584|k"
+        end,
+      }
+      local c = BuildCtx(rs, BuildModulesStub())
+      WithGlobals({}, function()
+        Init(addon, c)
+        local info = c.GetStatusTargetDungeonInfo()
+        Assert.Nil(info.level, "opaque Blizzard markup must not become a synthetic numeric level")
+        Assert.Equal(info.levelText, "|Kk584|k", "exact Blizzard keystone markup must remain available to UI")
+      end)
+    end
+  )
+
+  test(
     "factory_controllers.status: GetStatusTargetDungeonInfo falls back to roster owner when title hint missing",
     function()
       -- Manual /invite or no LFG context: GetActiveInviteTitleLevel returns nil

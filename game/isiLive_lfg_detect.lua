@@ -157,6 +157,7 @@ local activeInviteLeader = nil
 -- neither a roster owner nor a synced target supplies a level (typical for
 -- groups whose leader does not run isiLive). nil = no hint available.
 local activeInviteTitleLevel = nil
+local activeInviteTitleLevelText = nil
 -- searchResultID of the invite the player actually accepted (nil before accept
 -- or after a full reset). Used by OnInviteDeclined to ignore decline/delisted
 -- events for *other* parallel listings — without this guard, any same-mapID
@@ -188,6 +189,8 @@ local rosterEstablishedSinceAccept = false
 local lastShownNoticeSearchResultID = nil
 local acceptedInviteNoticeBlockedUntilReset = false
 local lastFiredTargetDungeonChatSearchResultID = nil
+local pendingTargetDungeonChatEntry = nil
+local pendingTargetDungeonChatSearchResultID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -518,6 +521,34 @@ local function ResolveInviteEntry(searchResultID)
   }
 end
 
+local function MergeAcceptedInviteEntry(cachedEntry, freshEntry)
+  if type(freshEntry) ~= "table" then
+    return cachedEntry
+  end
+  if type(cachedEntry) ~= "table" then
+    return freshEntry
+  end
+
+  local merged = {}
+  for key, value in pairs(cachedEntry) do
+    merged[key] = value
+  end
+  for _, key in ipairs({ "mapID", "leaderName", "titleLevel", "groupName", "activityID", "comment" }) do
+    if freshEntry[key] ~= nil then
+      merged[key] = freshEntry[key]
+    end
+  end
+  return merged
+end
+
+local function RefreshInviteEntryOnAccept(searchResultID, cachedEntry)
+  local freshEntry = ResolveInviteEntry(searchResultID)
+  if type(freshEntry) == "table" then
+    return MergeAcceptedInviteEntry(cachedEntry, freshEntry)
+  end
+  return cachedEntry
+end
+
 -- Raid-only mirror of ResolveInviteEntry. Reads the same search-result-info
 -- structure but routes through MapIDFromRaidActivityID so the M+ activity
 -- filter cannot swallow a Raid listing. Never returns titleLevel /
@@ -700,6 +731,11 @@ local function ResolveEntryTitleLevelText(entry)
   return nil
 end
 
+local function ClearPendingTargetDungeonChat()
+  pendingTargetDungeonChatEntry = nil
+  pendingTargetDungeonChatSearchResultID = nil
+end
+
 -- Exposed for callers that hold a raw entry table (e.g. tests pinning the
 -- divergence-recovery contract, or future consumers that bypass the
 -- MaybeShow* helpers). Mirrors the Get* naming used by the rest of the
@@ -733,6 +769,7 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
   end
   targetDungeonChatCallback({
     mapID = entry.mapID,
+    activityID = entry.activityID,
     level = resolvedLevel,
     levelText = resolvedLevelText,
     leaderName = entry.leaderName,
@@ -745,6 +782,27 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
   })
   if (resolvedLevel or resolvedLevelText) and searchResultID ~= nil then
     lastFiredTargetDungeonChatSearchResultID = searchResultID
+  end
+end
+
+local function FlushPendingTargetDungeonChat()
+  if pendingTargetDungeonChatEntry == nil then
+    return
+  end
+  local entry = pendingTargetDungeonChatEntry
+  local searchResultID = pendingTargetDungeonChatSearchResultID
+  ClearPendingTargetDungeonChat()
+  MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
+end
+
+local function QueueTargetDungeonChatFromAccept(entry, searchResultID)
+  if type(entry) ~= "table" or not entry.mapID then
+    return
+  end
+  pendingTargetDungeonChatEntry = entry
+  pendingTargetDungeonChatSearchResultID = searchResultID
+  if IsInGroup() then
+    FlushPendingTargetDungeonChat()
   end
 end
 
@@ -820,6 +878,9 @@ local function OnInviteAccepted(searchResultID)
   if entry == nil and not suppressedInviteAccepts[searchResultID] then
     entry = ResolveInviteEntry(searchResultID)
   end
+  if entry ~= nil and not suppressedInviteAccepts[searchResultID] then
+    entry = RefreshInviteEntryOnAccept(searchResultID, entry)
+  end
   local mapID = type(entry) == "table" and entry.mapID or nil
   local leaderName = type(entry) == "table" and entry.leaderName or nil
   -- ResolveEntryTitleLevel falls back to ParseTitleKeyLevel(entry.groupName)
@@ -828,6 +889,7 @@ local function OnInviteAccepted(searchResultID)
   -- where the Center Notice showed "Gruppe: +13 Competitive" while the
   -- dungeon row and the chat line dropped the "+13").
   local titleLevel = ResolveEntryTitleLevel(entry)
+  local titleLevelText = not titleLevel and ResolveEntryTitleLevelText(entry) or nil
   Log(
     "invite_accepted",
     "searchResultID=%s mapID=%s leader=%s titleLevel=%s",
@@ -840,6 +902,7 @@ local function OnInviteAccepted(searchResultID)
     pendingInvites[searchResultID] = nil
     activeInviteLeader = leaderName
     activeInviteTitleLevel = titleLevel
+    activeInviteTitleLevelText = titleLevelText
     acceptedInviteSearchResultID = searchResultID
     pendingAcceptedInviteMapID = mapID
     -- Fresh accept: the upcoming PARTY_LEADER_CHANGED is the initial
@@ -852,14 +915,14 @@ local function OnInviteAccepted(searchResultID)
     end
     Log("state_set", "var=activeInviteLeader val=%s", tostring(leaderName))
     Log("state_set", "var=activeInviteTitleLevel val=%s", tostring(titleLevel))
+    Log("state_set", "var=activeInviteTitleLevelText val=%s", tostring(titleLevelText))
     Log("state_set", "var=acceptedInviteSearchResultID val=%s", tostring(searchResultID))
     TriggerHighlightUpdate("invite")
     MaybeShowAcceptedInviteNotice(entry, searchResultID)
-    -- Direct-push the chat announce with the SAME entry the notice just
-    -- rendered. The status controller bypasses its resolver chain for this
-    -- payload and emits the Target-Dungeon line immediately with the
-    -- listing's "+N", so chat and notice are guaranteed to agree.
-    MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
+    -- Queue the chat announce with the SAME entry the notice just rendered.
+    -- The actual print waits until the group is observed as joined so the
+    -- Target-Dungeon line lands after Blizzard's group-join noise.
+    QueueTargetDungeonChatFromAccept(entry, searchResultID)
     return
   end
 
@@ -924,7 +987,9 @@ local function OnInviteDeclined(searchResultID)
     detectedMapID = nil
     activeInviteLeader = nil
     activeInviteTitleLevel = nil
+    activeInviteTitleLevelText = nil
     acceptedInviteSearchResultID = nil
+    ClearPendingTargetDungeonChat()
     TriggerHighlightUpdate("queue")
   end
 end
@@ -974,7 +1039,9 @@ local function ClearDetectedState()
     lastQueueMapID = nil
     activeInviteLeader = nil
     activeInviteTitleLevel = nil
+    activeInviteTitleLevelText = nil
     acceptedInviteSearchResultID = nil
+    ClearPendingTargetDungeonChat()
     TriggerHighlightUpdate("queue")
   end
 end
@@ -1001,18 +1068,22 @@ local function ClearAllStateImpl()
     or pendingAcceptedInviteMapID ~= nil
     or activeInviteLeader ~= nil
     or activeInviteTitleLevel ~= nil
+    or activeInviteTitleLevelText ~= nil
     or acceptedInviteSearchResultID ~= nil
+    or pendingTargetDungeonChatEntry ~= nil
   Log("clear_all_state", "hadState=%s", tostring(hadState))
   detectedMapID = nil
   lastQueueMapID = nil
   pendingAcceptedInviteMapID = nil
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
+  activeInviteTitleLevelText = nil
   acceptedInviteSearchResultID = nil
   rosterEstablishedSinceAccept = false
   lastShownNoticeSearchResultID = nil
   acceptedInviteNoticeBlockedUntilReset = false
   lastFiredTargetDungeonChatSearchResultID = nil
+  ClearPendingTargetDungeonChat()
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
@@ -1034,6 +1105,10 @@ end
 -- pattern in the title).
 function LFGDetect.GetActiveInviteTitleLevel()
   return activeInviteTitleLevel
+end
+
+function LFGDetect.GetActiveInviteTitleLevelText()
+  return activeInviteTitleLevelText
 end
 
 -- searchResultID of the invite the player actually accepted. Exposed for tests
@@ -1204,7 +1279,9 @@ local function ClearAcceptedInviteListingIdentity(reason)
     detectedMapID == nil
     and activeInviteLeader == nil
     and activeInviteTitleLevel == nil
+    and activeInviteTitleLevelText == nil
     and acceptedInviteSearchResultID == nil
+    and pendingTargetDungeonChatEntry == nil
     and pendingAcceptedInviteMapID == nil
   then
     return
@@ -1220,9 +1297,11 @@ local function ClearAcceptedInviteListingIdentity(reason)
   detectedMapID = nil
   activeInviteLeader = nil
   activeInviteTitleLevel = nil
+  activeInviteTitleLevelText = nil
   acceptedInviteSearchResultID = nil
   pendingAcceptedInviteMapID = nil
   lastFiredTargetDungeonChatSearchResultID = nil
+  ClearPendingTargetDungeonChat()
   TriggerHighlightUpdate("queue")
 end
 
@@ -1317,6 +1396,7 @@ function LFGDetect.HandleEvent(event, ...)
     -- inGroup=true reached: the group has formed. Any future
     -- PARTY_LEADER_CHANGED is a genuine handoff, not the initial convert.
     rosterEstablishedSinceAccept = true
+    FlushPendingTargetDungeonChat()
     -- Joined a group: if we have a pending invite but detectedMapID was not
     -- set yet (e.g. GROUP_ROSTER_UPDATE arrived before the inviteaccepted
     -- status event), resolve deterministically — never guess 1-of-N.
@@ -1356,6 +1436,7 @@ function LFGDetect.HandleEvent(event, ...)
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
         activeInviteTitleLevel = ResolveEntryTitleLevel(entry)
+        activeInviteTitleLevelText = not activeInviteTitleLevel and ResolveEntryTitleLevelText(entry) or nil
         acceptedInviteSearchResultID = resultID
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")

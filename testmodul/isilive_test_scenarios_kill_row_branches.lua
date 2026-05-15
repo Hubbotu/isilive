@@ -51,15 +51,26 @@ local function NewFontStringStub()
 end
 
 local function NewRow(barContainerWidth)
+  local barContainer = {
+    _shown = true,
+    GetWidth = function()
+      return barContainerWidth or 100
+    end,
+    Show = function(self)
+      self._shown = true
+    end,
+    Hide = function(self)
+      self._shown = false
+    end,
+  }
   return {
-    killTrackBarContainer = {
-      GetWidth = function()
-        return barContainerWidth or 100
-      end,
-    },
+    killTrackBarContainer = barContainer,
+    killTrackBarBg = NewBarStub(),
     killTrackBarFill = NewBarStub(),
     killTrackBarPull = NewBarStub(),
     killTrackTargetText = NewFontStringStub(),
+    killTrackTargetLevelText = NewFontStringStub(),
+    killTrackActiveDungeonText = NewFontStringStub(),
     killTrackPctText = NewFontStringStub(),
     killTrackPullText = NewFontStringStub(),
   }
@@ -101,6 +112,8 @@ return function(test, ctx)
       Assert.True(row.killTrackBarFill._shown == false, "fill bar must hide")
       Assert.True(row.killTrackBarPull._shown == false, "pull bar must hide")
       Assert.Equal(row.killTrackTargetText._text, "", "target text must clear")
+      Assert.Equal(row.killTrackTargetLevelText._text, "", "target level text must clear")
+      Assert.Equal(row.killTrackActiveDungeonText._text, "", "active dungeon context must clear")
       Assert.Equal(row.killTrackPctText._text, "--,--", "pct text must reset")
       Assert.Equal(row.killTrackPullText._text, "", "pull text must clear")
     end)
@@ -138,17 +151,91 @@ return function(test, ctx)
         })
         Assert.True(row.killTrackBarFill._shown == false, "pre-key target must hide percent fill")
         Assert.True(row.killTrackBarPull._shown == false, "pre-key target must hide pull overlay")
+        Assert.True(row.killTrackBarContainer._shown == false, "pre-key target must hide percent bar background")
+        Assert.True(row.killTrackBarBg._shown == false, "pre-key target must hide static bar background")
+        Assert.Equal(row.killTrackTargetText._text, "Windlaeufer Turm", "pre-key target must show the dungeon name")
+        Assert.Equal(row.killTrackTargetLevelText._text, "+14", "pre-key target must show the colored key level")
         Assert.Equal(
-          row.killTrackTargetText._text,
-          "Windlaeufer Turm +14",
-          "pre-key target must show dungeon and level"
+          row.killTrackActiveDungeonText._text,
+          "",
+          "pre-key target must not duplicate active dungeon context"
         )
+        Assert.Equal(row.killTrackTargetText._color[1], 1.0, "pre-key dungeon text must be gold-tinted")
+        Assert.Equal(row.killTrackTargetLevelText._color[3], 1.0, "pre-key level text must be blue-tinted")
         Assert.Equal(row.killTrackTargetText._justifyH, "RIGHT", "pre-key target must be right-aligned")
+        Assert.Equal(row.killTrackTargetLevelText._justifyH, "RIGHT", "pre-key level must be right-aligned")
         Assert.Equal(row.killTrackPctText._text, "", "pre-key target must not split the level into the percent field")
         Assert.Equal(row.killTrackPullText._text, "", "pre-key target must clear pull text")
       end)
     end
   )
+
+  test("UpdateKillTrackRow renders literal pipe characters in verified pre-key dungeon names", function()
+    WithGlobals({}, function()
+      local addon = LoadKillRow({ active = false, percent = 0 })
+      local row = NewRow()
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "A|B",
+            level = 2,
+          }
+        end,
+        isInChallengeMode = function()
+          return false
+        end,
+      })
+      Assert.Equal(row.killTrackTargetText._text, "A|B", "pre-key target must not inject inline color markup")
+      Assert.Equal(row.killTrackTargetLevelText._text, "+2", "pre-key target level must be rendered separately")
+    end)
+  end)
+
+  test("UpdateKillTrackRow renders verified pre-key dungeon when level is unresolved", function()
+    WithGlobals({}, function()
+      local addon = LoadKillRow({ active = false, percent = 0 })
+      local row = NewRow()
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "  Nexuspunkt Xenas  ",
+            level = nil,
+          }
+        end,
+        isInChallengeMode = function()
+          return false
+        end,
+      })
+      Assert.True(row.killTrackBarContainer._shown == false, "pre-key dungeon must hide percent bar even without level")
+      Assert.Equal(row.killTrackTargetText._text, "Nexuspunkt Xenas", "verified dungeon name must render")
+      Assert.Equal(row.killTrackTargetLevelText._text, "", "unresolved level must stay hidden")
+      Assert.Equal(row.killTrackPctText._text, "", "pre-key dungeon must clear percent placeholder")
+      Assert.Equal(row.killTrackTargetText._justifyH, "RIGHT", "pre-key dungeon must stay right-aligned")
+    end)
+  end)
+
+  test("UpdateKillTrackRow renders verified Blizzard level markup before challenge start", function()
+    WithGlobals({}, function()
+      local addon = LoadKillRow({ active = false, percent = 0 })
+      local row = NewRow()
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "Windlaeuferturm",
+            levelText = "|Kk584|k",
+          }
+        end,
+        isInChallengeMode = function()
+          return false
+        end,
+      })
+      Assert.Equal(row.killTrackTargetText._text, "Windlaeuferturm", "verified dungeon name must render")
+      Assert.Equal(
+        row.killTrackTargetLevelText._text,
+        "|Kk584|k",
+        "exact Blizzard keystone markup must stay visible as the pre-key level"
+      )
+    end)
+  end)
 
   test("UpdateKillTrackRow suppresses target key after challenge start until percent data is active", function()
     WithGlobals({}, function()
@@ -166,7 +253,68 @@ return function(test, ctx)
         end,
       })
       Assert.Equal(row.killTrackTargetText._text, "", "key-start boundary must clear pre-key target text")
+      Assert.Equal(row.killTrackTargetLevelText._text, "", "key-start boundary must clear pre-key level text")
+      Assert.Equal(row.killTrackActiveDungeonText._text, "", "inactive post-start row must not show active context")
       Assert.Equal(row.killTrackPctText._text, "--,--", "inactive post-start row must use the percent placeholder")
+      Assert.True(row.killTrackBarContainer._shown == true, "post-start placeholder must restore the percent bar")
+    end)
+  end)
+
+  test("UpdateKillTrackRow restores percent bar after pre-key target display", function()
+    WithGlobals({}, function()
+      local killTrackData = { active = false, percent = 0 }
+      local addon = LoadKillRow(killTrackData)
+      local row = NewRow(200)
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "Windlaeufer Turm",
+            level = 14,
+          }
+        end,
+        isInChallengeMode = function()
+          return false
+        end,
+      })
+      Assert.True(row.killTrackBarContainer._shown == false, "pre-key target must hide the bar")
+
+      killTrackData.active = true
+      killTrackData.percent = 42
+      addon._RosterInternal.UpdateKillTrackRow(row)
+      Assert.True(row.killTrackBarContainer._shown == true, "active percent data must restore the bar")
+      Assert.True(row.killTrackBarBg._shown == true, "active percent data must restore the bar background")
+      Assert.True(row.killTrackBarFill._shown == true, "active percent data must show the percent fill")
+      Assert.Equal(row.killTrackTargetText._text, "", "active percent data must clear the pre-key target")
+      Assert.Equal(row.killTrackTargetLevelText._text, "", "active percent data must clear the pre-key level")
+    end)
+  end)
+
+  test("UpdateKillTrackRow keeps dimmed dungeon context under active percent bar", function()
+    WithGlobals({}, function()
+      local addon = LoadKillRow({ active = true, percent = 42 })
+      local row = NewRow(200)
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "  Nexuspunkt Xenas  ",
+            level = 14,
+          }
+        end,
+        isInChallengeMode = function()
+          return true
+        end,
+      })
+      Assert.True(row.killTrackBarContainer._shown == true, "active percent bar must stay visible")
+      Assert.Equal(row.killTrackTargetText._text, "", "active percent view must clear pre-key dungeon text")
+      Assert.Equal(row.killTrackTargetLevelText._text, "", "active percent view must clear pre-key level text")
+      Assert.Equal(
+        row.killTrackActiveDungeonText._text,
+        "Nexuspunkt Xenas",
+        "active percent view must keep the dungeon as dimmed context"
+      )
+      Assert.Equal(row.killTrackActiveDungeonText._justifyH, "RIGHT", "active dungeon context must be right-aligned")
+      Assert.Equal(row.killTrackActiveDungeonText._color[1], 0.35, "active dungeon context must be dimmed")
+      Assert.Equal(row.killTrackPctText._text, "42,00%", "active percent text must stay primary")
     end)
   end)
 

@@ -577,6 +577,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     --      /invite, no LFG context).
     --   3. Synced target level: last fallback for peers that publish a target.
     local targetLevel = nil
+    local targetLevelText = nil
     local lfgDetect = addonTable.LFGDetect
     if type(lfgDetect) == "table" and type(lfgDetect.GetActiveInviteTitleLevel) == "function" then
       local hint = tonumber(lfgDetect.GetActiveInviteTitleLevel())
@@ -584,11 +585,24 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
         targetLevel = math.floor(hint)
       end
     end
+    if
+      not targetLevel
+      and type(lfgDetect) == "table"
+      and type(lfgDetect.GetActiveInviteTitleLevelText) == "function"
+    then
+      local hintText = lfgDetect.GetActiveInviteTitleLevelText()
+      if type(hintText) == "string" and hintText ~= "" then
+        targetLevelText = hintText
+      end
+    end
 
     if not targetLevel or targetLevel <= 0 then
       local ownerUnit = ctx.ResolveActiveKeyOwnerUnit and ctx.ResolveActiveKeyOwnerUnit() or nil
       if ownerUnit and type(roster[ownerUnit]) == "table" then
         targetLevel = tonumber(roster[ownerUnit].keyLevel)
+        if targetLevel and targetLevel > 0 then
+          targetLevelText = nil
+        end
       end
     end
 
@@ -596,6 +610,9 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       local syncedTargetInfo = ctx.ResolveSyncedTargetInfo and ctx.ResolveSyncedTargetInfo() or nil
       if type(syncedTargetInfo) == "table" and tonumber(syncedTargetInfo.mapID) == tonumber(targetMapID) then
         targetLevel = tonumber(syncedTargetInfo.level)
+        if targetLevel and targetLevel > 0 then
+          targetLevelText = nil
+        end
       end
     end
 
@@ -606,6 +623,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     return {
       name = targetName,
       level = targetLevel,
+      levelText = targetLevelText,
     }
   end
   ctx.SendOwnTargetSnapshot = function(force, source, allowHidden)
@@ -893,6 +911,48 @@ local function WireAcceptedInviteNoticeCallbacks(ctx, modules, lfgDetect)
   end
 end
 FI.WireAcceptedInviteNoticeCallbacks = WireAcceptedInviteNoticeCallbacks
+
+local function HandleTargetDungeonChatPayload(ctx, modules, statusController, payload)
+  if type(payload) ~= "table" then
+    return
+  end
+  local mapID = tonumber(payload.mapID)
+  if not mapID or mapID <= 0 then
+    return
+  end
+  local resolvedName = ResolveAcceptedInviteDungeonName(ctx, modules, mapID)
+  if type(resolvedName) ~= "string" or resolvedName == "" then
+    return
+  end
+  if ctx.runtimeState and type(ctx.runtimeState.SetLatestQueueState) == "function" then
+    ctx.runtimeState.SetLatestQueueState(resolvedName, payload.activityID, nil, mapID)
+  end
+  -- Debug trace consumes the descriptive payload fields (leaderName,
+  -- groupName, searchResultID) that lfg_detect carries through. The
+  -- announce itself only needs name+level, but the trace keeps the
+  -- full listing identity visible when diagnosing chat / notice
+  -- divergence reports (e.g. 0.9.240 follow-ups).
+  local logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
+  if logRuntimeTracef then
+    logRuntimeTracef(
+      "[TARGET_DUNGEON_CHAT] direct_push mapID=%s level=%s leader=%s group=%s searchResultID=%s",
+      tostring(mapID),
+      tostring(payload.level),
+      tostring(payload.leaderName),
+      tostring(payload.groupName),
+      tostring(payload.searchResultID)
+    )
+  end
+  statusController.AnnounceTargetDungeonFromPayload({
+    name = resolvedName,
+    level = payload.level,
+    levelText = payload.levelText,
+  })
+  if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
+    ctx.rosterPanelController.RefreshKillTrackRow()
+  end
+end
+FI.HandleTargetDungeonChatPayload = HandleTargetDungeonChatPayload
 
 local function InitializeFactoryPrimaryControllers(ctx)
   local modules = ctx.modules
@@ -1483,41 +1543,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
   local lfgDetectForChat = addonTable.LFGDetect
   if type(lfgDetectForChat) == "table" and type(lfgDetectForChat.SetTargetDungeonChatCallback) == "function" then
     lfgDetectForChat.SetTargetDungeonChatCallback(function(payload)
-      if type(payload) ~= "table" then
-        return
-      end
-      local mapID = tonumber(payload.mapID)
-      if not mapID or mapID <= 0 then
-        return
-      end
-      local resolvedName = ResolveAcceptedInviteDungeonName(ctx, modules, mapID)
-      if type(resolvedName) ~= "string" or resolvedName == "" then
-        return
-      end
-      -- Debug trace consumes the descriptive payload fields (leaderName,
-      -- groupName, searchResultID) that lfg_detect carries through. The
-      -- announce itself only needs name+level, but the trace keeps the
-      -- full listing identity visible when diagnosing chat / notice
-      -- divergence reports (e.g. 0.9.240 follow-ups).
-      local logRuntimeTracef = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
-      if logRuntimeTracef then
-        logRuntimeTracef(
-          "[TARGET_DUNGEON_CHAT] direct_push mapID=%s level=%s leader=%s group=%s searchResultID=%s",
-          tostring(mapID),
-          tostring(payload.level),
-          tostring(payload.leaderName),
-          tostring(payload.groupName),
-          tostring(payload.searchResultID)
-        )
-      end
-      statusController.AnnounceTargetDungeonFromPayload({
-        name = resolvedName,
-        level = payload.level,
-        levelText = payload.levelText,
-      })
-      if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
-        ctx.rosterPanelController.RefreshKillTrackRow()
-      end
+      HandleTargetDungeonChatPayload(ctx, modules, statusController, payload)
     end)
   end
 

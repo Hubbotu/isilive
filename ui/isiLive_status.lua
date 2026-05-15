@@ -240,6 +240,8 @@ local function BuildTargetDungeonText(deps)
   local targetText = name
   if level and level > 0 then
     targetText = string.format("%s +%d", name, level)
+  elseif type(info.levelText) == "string" and info.levelText ~= "" then
+    targetText = string.format("%s %s", name, info.levelText)
   end
 
   return string.format(template, targetText)
@@ -267,6 +269,7 @@ local function ResolveConcreteTargetDungeonInfo(deps)
   return {
     name = name,
     level = level,
+    levelText = (not level and type(info.levelText) == "string" and info.levelText ~= "") and info.levelText or nil,
   }
 end
 

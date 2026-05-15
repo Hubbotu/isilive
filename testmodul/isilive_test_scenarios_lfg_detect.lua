@@ -1221,7 +1221,67 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       )
       Assert.Equal(payloads[1].leaderName, "Leader-Realm", "callback payload carries the leader name")
       Assert.Equal(payloads[1].groupName, "+13 Relaxed", "callback payload carries the listing title")
+      Assert.Equal(payloads[1].activityID, 1768, "callback payload carries the accepted activityID")
       Assert.Equal(payloads[1].searchResultID, 601, "callback payload carries the accepted searchResultID")
+    end)
+  end)
+
+  test("LFGDetect inviteaccepted refreshes incomplete invited listing before direct-push", function()
+    local searchInfoCalls = 0
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = {
+          GetSearchResultInfo = function(id)
+            if id ~= 605 then
+              return nil
+            end
+            searchInfoCalls = searchInfoCalls + 1
+            if searchInfoCalls == 1 then
+              return { activityID = 1768, leaderName = "Leader-Realm" }
+            end
+            return { activityID = 1768, name = "+14 Kompetitiv", leaderName = "Leader-Realm" }
+          end,
+          GetActiveEntryInfo = function()
+            return nil
+          end,
+          GetActivityFullName = function(_activityID)
+            return nil
+          end,
+          GetActivityInfoTable = function(_activityID)
+            return nil
+          end,
+        },
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local chatPayloads = {}
+      local noticePayloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        chatPayloads[#chatPayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        noticePayloads[#noticePayloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 605, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 605, "inviteaccepted")
+
+      Assert.Equal(searchInfoCalls, 2, "inviteaccepted must re-read the accepted search result")
+      Assert.Equal(addon.LFGDetect.GetActiveInviteTitleLevel(), 14, "fresh accept title level must become active")
+      Assert.Equal(#chatPayloads, 1, "direct-push must fire once")
+      Assert.Equal(chatPayloads[1].level, 14, "direct-push must use the refreshed title level")
+      Assert.Equal(chatPayloads[1].groupName, "+14 Kompetitiv", "direct-push must use the refreshed group title")
+      Assert.Equal(#noticePayloads, 1, "accepted notice must fire once")
+      Assert.Equal(noticePayloads[1].level, 14, "accepted notice must use the refreshed title level")
+      Assert.Equal(noticePayloads[1].groupName, "+14 Kompetitiv", "accepted notice must use the refreshed group title")
     end)
   end)
 
@@ -1313,6 +1373,11 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       Assert.Equal(#payloads, 1, "callback must fire for exact Blizzard keystone markup")
       Assert.Nil(payloads[1].level, "opaque Blizzard markup must not be parsed as a synthetic numeric level")
       Assert.Equal(
+        addon.LFGDetect.GetActiveInviteTitleLevelText(),
+        "|Kk584|k",
+        "exact Blizzard keystone markup must remain available after accept"
+      )
+      Assert.Equal(
         payloads[1].levelText,
         "|Kk584|k",
         "exact Blizzard keystone markup must be forwarded for chat-frame rendering"
@@ -1320,20 +1385,19 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
     end)
   end)
 
-  test("LFGDetect direct-push fires even while IsInGroup() is transient false", function()
+  test("LFGDetect direct-push waits for GROUP_ROSTER_UPDATE when IsInGroup is transient false", function()
     -- Reproduces the LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted
     -- race: Blizzard sends the accept event before the matching
     -- GROUP_ROSTER_UPDATE, so IsInGroup() can still return false in this
-    -- window (see the ClearDetectedState guard's comment in
-    -- isiLive_lfg_detect.lua). The production factory wiring deliberately
-    -- installs the callback WITHOUT SetTargetDungeonChatEnabledFn — the
-    -- chat line is a local print and the Center Notice path has no
-    -- IsInGroup gate either, so the direct push must mirror that
-    -- contract. This test mirrors the production setup (no enabled fn)
-    -- and asserts the callback fires.
+    -- window. The chat line must wait until the group-settle event so it
+    -- appears after Blizzard's group-join messages.
+    local grouped = false
     local globals, fire = BuildLFGDetectEnv({
       IsInGroup = function()
-        return false
+        return grouped
+      end,
+      GetNumGroupMembers = function()
+        return grouped and 5 or 0
       end,
       globals = {
         C_LFGList = BuildC_LFGList({
@@ -1354,7 +1418,10 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 604, "invited")
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 604, "inviteaccepted")
 
-      Assert.Equal(#payloads, 1, "direct-push fires regardless of IsInGroup state")
+      Assert.Equal(#payloads, 0, "direct-push must wait until the group is observed")
+      grouped = true
+      fire("GROUP_ROSTER_UPDATE")
+      Assert.Equal(#payloads, 1, "direct-push fires once after group join settles")
       Assert.Equal(payloads[1].level, 13, "payload still carries entry.titleLevel from the listing")
     end)
   end)

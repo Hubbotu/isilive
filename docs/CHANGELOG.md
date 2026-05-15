@@ -14,9 +14,18 @@ Fixes M+ target display and enemy-forces freshness in the bottom tracker.
   from the LFG/target-dungeon path before falling back to synced peer
   targets.
 - After an LFG invite target announce, the bottom M+ killtracker shows
-  the verified dungeon and key level as one right-aligned pre-key text.
+  the verified dungeon and key level as right-aligned pre-key text, with
+  the level rendered separately so the percentage slot cannot overwrite
+  the dungeon.
+- Blizzard keystone title markup (`|Kk...|k`) is now preserved as an
+  exact level source for the pre-key Killtracker text and status target
+  info when no numeric `+N` can be parsed.
+- The Target-Dungeon chat announce is queued until the group join is
+  observed, so it prints after Blizzard's group-forming messages instead
+  of being buried before them.
 - Once the key starts, the row suppresses the pre-key text and returns to
-  the enemy-forces percentage display.
+  the enemy-forces percentage display; active percentage rows may keep
+  the verified dungeon name dimmed below the bar as context.
 
 ### Killtracker live forces refresh
 
@@ -32,12 +41,17 @@ Fixes M+ target display and enemy-forces freshness in the bottom tracker.
 ### Tests
 
 [testmodul/isilive_test_scenarios_factory_highlight_priority.lua](testmodul/isilive_test_scenarios_factory_highlight_priority.lua),
+[testmodul/isilive_test_scenarios_factory_controllers_status_helpers.lua](testmodul/isilive_test_scenarios_factory_controllers_status_helpers.lua),
 [testmodul/isilive_test_scenarios_kill_row_branches.lua](testmodul/isilive_test_scenarios_kill_row_branches.lua),
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua),
 [testmodul/isilive_test_scenarios_killtrack.lua](testmodul/isilive_test_scenarios_killtrack.lua):
 
 - `Factory primary highlight forwards local target map to shared resolver`
 - `UpdateKillTrackRow renders verified target key as right-aligned combined text before challenge start`
+- `UpdateKillTrackRow renders verified Blizzard level markup before challenge start`
 - `UpdateKillTrackRow suppresses target key after challenge start until percent data is active`
+- `factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved`
+- `LFGDetect direct-push waits for GROUP_ROSTER_UPDATE when IsInGroup is transient false`
 - `PLAYER_REGEN_ENABLED refreshes live forces before the next pull starts`
 - `refresh ticker callback reads live forces and notifies subscribers while state is active`
 - `factory_controllers: GetActiveChallengeMapID returns nil for secret values`

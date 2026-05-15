@@ -987,6 +987,66 @@ return function(test, ctx)
     Assert.Equal(captured.opts.fields[4].value, "Heal-DE", "role row must reflect HEALER -> ROLE_NAME_HEALER")
   end)
 
+  test("factory_controllers: direct-push persists accepted target for killtracker refresh", function()
+    local addon = Load()
+    local handle = addon._FactoryInternal.HandleTargetDungeonChatPayload
+    local latestQueue
+    local announced
+    local refreshes = 0
+    local c = BuildAcceptedInviteCtx({
+      GetL = function()
+        return {
+          INVITE_HINT_UNKNOWN_DUNGEON = "Unbekannt-DE",
+        }
+      end,
+    })
+    c.runtimeState = {
+      SetLatestQueueState = function(dungeonName, activityID, teleportSpellID, mapID)
+        latestQueue = {
+          dungeonName = dungeonName,
+          activityID = activityID,
+          teleportSpellID = teleportSpellID,
+          mapID = mapID,
+        }
+      end,
+    }
+    c.rosterPanelController = {
+      RefreshKillTrackRow = function()
+        refreshes = refreshes + 1
+      end,
+    }
+    local modules = {
+      teleport = {
+        GetTeleportInfoByMapID = function(mapID)
+          Assert.Equal(mapID, 2688, "direct-push must resolve the accepted mapID")
+          return { mapName = "Nexuspunkt Xenas" }
+        end,
+      },
+    }
+    local statusController = {
+      AnnounceTargetDungeonFromPayload = function(payload)
+        announced = payload
+      end,
+    }
+
+    handle(c, modules, statusController, {
+      mapID = 2688,
+      activityID = 1768,
+      level = 14,
+      groupName = "+14 Kompetitiv",
+      searchResultID = 605,
+    })
+
+    Assert.NotNil(latestQueue, "direct-push must persist the accepted target for status consumers")
+    Assert.Equal(latestQueue.dungeonName, "Nexuspunkt Xenas", "killtracker source must receive the resolved dungeon")
+    Assert.Equal(latestQueue.activityID, 1768, "accepted activityID must stay attached to the target")
+    Assert.Nil(latestQueue.teleportSpellID, "direct-push must not invent a teleport spellID")
+    Assert.Equal(latestQueue.mapID, 2688, "accepted mapID must stay attached to the target")
+    Assert.Equal(announced.name, "Nexuspunkt Xenas", "chat announce must use the same accepted dungeon")
+    Assert.Equal(announced.level, 14, "chat announce must use the accepted level")
+    Assert.Equal(refreshes, 1, "killtracker must refresh after the accepted target is persisted")
+  end)
+
   -- =====================================================
   -- Raid invite-accept notice (0.9.237). Mirrors the M+ tests above but pins
   -- the Raid-specific surface: no "+N" headline, no teleport-button wiring,

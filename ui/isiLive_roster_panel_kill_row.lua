@@ -9,6 +9,8 @@ local CD_TRACKER_ROW_HEIGHT = RI.CD_TRACKER_ROW_HEIGHT or 20
 
 local KILLTRACK_ROW_BOTTOM_OFFSET = 12
 local CD_TRACKER_FONT_SIZE = 12
+local ACTIVE_DUNGEON_FONT_SIZE = 9
+local PREKEY_LEVEL_WIDTH = 42
 
 local function CreateKillTrackRow(mainFrame)
   local UICommon = addonTable.UICommon or {}
@@ -85,10 +87,24 @@ local function CreateKillTrackRow(mainFrame)
 
   local targetText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   targetText:SetPoint("LEFT", box, "LEFT", 94, 0)
-  targetText:SetPoint("RIGHT", box, "RIGHT", -6, 0)
+  targetText:SetPoint("RIGHT", box, "RIGHT", -(PREKEY_LEVEL_WIDTH + 10), 0)
   targetText:SetJustifyH("RIGHT")
   targetText:SetText("")
   ApplyFontStringSize(targetText, CD_TRACKER_FONT_SIZE)
+
+  local targetLevelText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  targetLevelText:SetPoint("RIGHT", box, "RIGHT", -6, 0)
+  targetLevelText:SetWidth(PREKEY_LEVEL_WIDTH)
+  targetLevelText:SetJustifyH("RIGHT")
+  targetLevelText:SetText("")
+  ApplyFontStringSize(targetLevelText, CD_TRACKER_FONT_SIZE)
+
+  local activeDungeonText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  activeDungeonText:SetPoint("TOPLEFT", barContainer, "BOTTOMLEFT", 0, -1)
+  activeDungeonText:SetPoint("RIGHT", barContainer, "RIGHT", 0, 0)
+  activeDungeonText:SetJustifyH("RIGHT")
+  activeDungeonText:SetText("")
+  ApplyFontStringSize(activeDungeonText, ACTIVE_DUNGEON_FONT_SIZE)
 
   local pctText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   pctText:SetPoint("RIGHT", box, "RIGHT", -6, 0)
@@ -98,12 +114,33 @@ local function CreateKillTrackRow(mainFrame)
   ApplyFontStringSize(pctText, CD_TRACKER_FONT_SIZE)
 
   row.killTrackBarContainer = barContainer
+  row.killTrackBarBg = barBg
   row.killTrackBarFill = barFill
   row.killTrackBarPull = barPull
   row.killTrackTargetText = targetText
+  row.killTrackTargetLevelText = targetLevelText
+  row.killTrackActiveDungeonText = activeDungeonText
   row.killTrackPctText = pctText
   row.killTrackPullText = pullText
   return row
+end
+
+local function ResolveTargetDungeonNameFromInfo(info)
+  if type(info) ~= "table" or type(info.name) ~= "string" then
+    return nil
+  end
+  local name = string.match(info.name, "^%s*(.-)%s*$")
+  if name == "" then
+    return nil
+  end
+  return name
+end
+
+local function ResolveTargetDungeonName(deps)
+  if type(deps) ~= "table" or type(deps.getTargetDungeonInfo) ~= "function" then
+    return nil
+  end
+  return ResolveTargetDungeonNameFromInfo(deps.getTargetDungeonInfo())
 end
 
 local function ResolvePreKeyTargetInfo(deps, data)
@@ -118,17 +155,20 @@ local function ResolvePreKeyTargetInfo(deps, data)
   end
 
   local info = deps.getTargetDungeonInfo()
-  if type(info) ~= "table" or type(info.name) ~= "string" then
+  local name = ResolveTargetDungeonNameFromInfo(info)
+  local level = type(info) == "table" and tonumber(info.level) or nil
+  if not name then
     return nil
   end
-  local name = string.match(info.name, "^%s*(.-)%s*$")
-  local level = tonumber(info.level)
-  if name == "" or not level or level <= 0 then
-    return nil
+  if level and level <= 0 then
+    level = nil
   end
   return {
     name = name,
-    level = math.floor(level),
+    level = level and math.floor(level) or nil,
+    levelText = (not level and type(info) == "table" and type(info.levelText) == "string" and info.levelText ~= "")
+        and info.levelText
+      or nil,
   }
 end
 
@@ -142,15 +182,37 @@ local function UpdateKillTrackRow(row, deps)
   local targetInfo = ResolvePreKeyTargetInfo(deps, data)
 
   local barContainer = row.killTrackBarContainer
+  local barBg = row.killTrackBarBg
   local barFill = row.killTrackBarFill
   local barPull = row.killTrackBarPull
   local targetText = row.killTrackTargetText
+  local targetLevelText = row.killTrackTargetLevelText
+  local activeDungeonText = row.killTrackActiveDungeonText
   local pctText = row.killTrackPctText
   local pullText = row.killTrackPullText
 
   if data and data.active then
+    if barContainer and type(barContainer.Show) == "function" then
+      barContainer:Show()
+    end
+    if barBg and type(barBg.Show) == "function" then
+      barBg:Show()
+    end
     if targetText then
       targetText:SetText("")
+    end
+    if targetLevelText then
+      targetLevelText:SetText("")
+    end
+    if activeDungeonText then
+      local activeTargetName = ResolveTargetDungeonName(deps)
+      activeDungeonText:SetText(activeTargetName or "")
+      if type(activeDungeonText.SetJustifyH) == "function" then
+        activeDungeonText:SetJustifyH("RIGHT")
+      end
+      if type(activeDungeonText.SetTextColor) == "function" then
+        activeDungeonText:SetTextColor(0.35, 0.35, 0.42)
+      end
     end
     local pct = math.max(0, math.min(data.percent, 100))
     local r, g, b
@@ -203,6 +265,12 @@ local function UpdateKillTrackRow(row, deps)
       end
     end
   elseif targetInfo then
+    if barContainer and type(barContainer.Hide) == "function" then
+      barContainer:Hide()
+    end
+    if barBg and type(barBg.Hide) == "function" then
+      barBg:Hide()
+    end
     if barFill then
       barFill:Hide()
     end
@@ -210,13 +278,25 @@ local function UpdateKillTrackRow(row, deps)
       barPull:Hide()
     end
     if targetText then
-      targetText:SetText(string.format("%s +%d", targetInfo.name, targetInfo.level))
+      targetText:SetText(targetInfo.name)
       if type(targetText.SetJustifyH) == "function" then
         targetText:SetJustifyH("RIGHT")
       end
       if type(targetText.SetTextColor) == "function" then
-        targetText:SetTextColor(0.9, 0.82, 0.45)
+        targetText:SetTextColor(1.0, 0.84, 0.35)
       end
+    end
+    if targetLevelText then
+      targetLevelText:SetText(targetInfo.level and ("+" .. tostring(targetInfo.level)) or targetInfo.levelText or "")
+      if type(targetLevelText.SetJustifyH) == "function" then
+        targetLevelText:SetJustifyH("RIGHT")
+      end
+      if type(targetLevelText.SetTextColor) == "function" then
+        targetLevelText:SetTextColor(0.65, 0.85, 1.0)
+      end
+    end
+    if activeDungeonText then
+      activeDungeonText:SetText("")
     end
     if pctText then
       pctText:SetText("")
@@ -228,6 +308,12 @@ local function UpdateKillTrackRow(row, deps)
       pullText:SetText("")
     end
   else
+    if barContainer and type(barContainer.Show) == "function" then
+      barContainer:Show()
+    end
+    if barBg and type(barBg.Show) == "function" then
+      barBg:Show()
+    end
     if barFill then
       barFill:Hide()
     end
@@ -236,6 +322,12 @@ local function UpdateKillTrackRow(row, deps)
     end
     if targetText then
       targetText:SetText("")
+    end
+    if targetLevelText then
+      targetLevelText:SetText("")
+    end
+    if activeDungeonText then
+      activeDungeonText:SetText("")
     end
     if pctText then
       pctText:SetText("--,--")
