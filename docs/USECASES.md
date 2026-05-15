@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.231`
-Zuletzt aktualisiert: `2026-05-11`
+Versionsbasis: `0.9.246`
+Zuletzt aktualisiert: `2026-05-15`
 
 ## Akteure
 
@@ -13,7 +13,7 @@ Zuletzt aktualisiert: `2026-05-11`
 
 1. Das Addon ist geladen und nicht im Zustand `stopped`.
 2. Das Season-Dataset wird ueber `ACTIVE_SEASON_ID` ausgewaehlt; aktuell `midnight_s1` mit dem live 8-Dungeon-Midnight-Season-1-Portalpool.
-3. Die relevante UI ist fuer Queue-Scanning und Rendering sichtbar; waehrend hidden duerfen Addon-Message-Sync und Roster-Updates im Hintergrund weiterlaufen, die UI darf durch frischen Gruppenjoin, Key-Ende, echten Dungeon-Entry-Transition-Flow oder UI-Reload waehrend bestehender Gruppe auto-openen, und explizite Refresh-Requests duerfen genau eine hidden Sync-Reply triggern, auch waehrend eines aktiven Mythic+-Runs; derselbe Refresh-Pfad darf zusaetzlich genau eine `LibKS`-Party-Anfrage an kompatible Nicht-`isiLive`-Peers senden. Wenn LFGDetect bereits einen konkreten Map-Kontext kennt, gewinnt dieser fuer das Portal-Highlight gegen peer-synced Zielkontext. Nur stopped oder paused unterdruecken die hidden `isiLive`-Reply.
+3. Die relevante UI ist fuer Queue-Scanning und Rendering sichtbar; waehrend hidden duerfen Addon-Message-Sync und Roster-Updates im Hintergrund weiterlaufen, die UI darf durch frischen Gruppenjoin, Key-Ende, echten Dungeon-Entry-Transition-Flow oder UI-Reload waehrend bestehender Gruppe auto-openen, und explizite Refresh-Requests duerfen genau eine hidden Sync-Reply triggern, auch waehrend eines aktiven Mythic+-Runs; derselbe Refresh-Pfad darf zusaetzlich genau eine `LibKS`-Party-Anfrage an kompatible Nicht-`isiLive`-Peers senden. Wenn LFGDetect bereits einen konkreten lokalen Map-Kontext kennt, gewinnt dieser fuer das Portal-Highlight gegen peer-synced Zielkontext. Nur stopped oder paused unterdruecken die hidden `isiLive`-Reply.
 4. Nicht-`isiLive`-Spieler koennen nur dann `Key` und `RIO` beitragen, wenn auf ihrer Seite ein kompatibles `LibKeystone`-sprechendes Addon laeuft; ohne sendenden Addon-Code bleiben diese Daten unresolved.
 5. Raid-Gruppen sind ein eigener Hard-off-Zustand: UI aus und Background-Processing aus.
 6. Die optionalen `Esc`-Tooling- und Travel-Strips sind aktiv, solange der User sie nicht explizit in den Addon-Settings deaktiviert.
@@ -35,7 +35,7 @@ Zuletzt aktualisiert: `2026-05-11`
 | UC-11 | M+Marker World Marker | Vertikaler Balken mit 8 sicheren World-Marker-Buttons fuer direktes Place/Clear |
 | UC-12 | Roster-Panel Mini Mode | Collapse-Toggle blendet Roster-Liste und `Travel` aus, waehrend kompakte Marker- und Management-Tools sichtbar bleiben |
 | UC-13 | Esc-Shortcuts und Addon-Settings | Der User bekommt zwei Blizzard-UI-Einstiegsflaechen plus lokalisierte Config-Toggles und eine dedizierte Sounds-Sektion |
-| UC-14 | Combat-Utility-Tracker | Live-BRes, Lust, Mythic+-Timer und gesyncter Interrupt-State bleiben im Roster-Panel sichtbar |
+| UC-14 | Combat-Utility-Tracker | Live-BRes, Lust, Mythic+-Timer, M+-Killtracker und gesyncter Interrupt-State bleiben im Roster-Panel sichtbar |
 | UC-15 | LFG-Detektion und Portal-Highlight | LFG-Einladungen und eigene Listings loesen lokalisierte Hinweise und das passende Portal-Highlight deterministisch aus |
 | UC-16 | BR- und Bloodlust-Gruppen-Announce im Mythic+ | Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird innerhalb eines aktiven Keys genau einmal als lokalisierte Chat-Zeile an alle isiLive-Peers verteilt |
 | UC-17 | Mob-Tooltip mit Forces-Anteil | Hovern ueber einen Mob in einem aktiven M+-Run haengt eine Forces-Zeile aus der DB an den Blizzard-Tooltip an |
@@ -168,7 +168,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 
 ## UC-14 Combat-Utility-Tracker
 
-Ziel: Live-BRes, Bloodlust/Heroism/Time Warp, aktive Mythic+-Timer-Cutoffs und gesyncten Interrupt-Cooldown-State im Roster-Panel zeigen, ohne zu raten.
+Ziel: Live-BRes, Bloodlust/Heroism/Time Warp, aktive Mythic+-Timer-Cutoffs, den M+-Killtracker und gesyncten Interrupt-Cooldown-State im Roster-Panel zeigen, ohne zu raten.
 
 1. Trigger: Das Roster-Panel ist sichtbar und der One-Second-Utility-Ticker feuert, oder ein manueller Refresh, ein lokaler Lust-Spellcast oder ein `UNIT_AURA`-Update des Spielers verlangt einen Tracker-Refresh, oder die UI wird erneut sichtbar, waehrend der Utility-Tracker aus dem Hidden-Modus als dirty markiert ist.
 2. Verarbeitung: Das Addon scannt `C_Spell.GetSpellCharges` mit Struct-Return (`currentCharges`, `maxCharges`, `cooldownStartTime`, `cooldownDuration`) fuer Battle Resurrection und iteriert die `HARMFUL`-Auren des Spielers ueber `C_UnitAuras.GetAuraDataByIndex("player", index, "HARMFUL")` fuer die Erschoepfungsvarianten von Bloodlust, Heroism und Time Warp.
@@ -176,14 +176,16 @@ Ziel: Live-BRes, Bloodlust/Heroism/Time Warp, aktive Mythic+-Timer-Cutoffs und g
 4. Regel: `UNIT_AURA`-Updates mit `isFullUpdate=true` nach Zone-/World-Transitions oder UI-Reloads muessen den aktiven Lust-State hydrieren, ohne einen neuen Onset-Callback auszufeuern.
 5. Regel: `PLAYER_ENTERING_WORLD` darf nur ein kurzes 2-Sekunden-Suppress-Fenster als Sicherheitsnetz bis zum Full-Aura-Restore-Event behalten.
 6. Verarbeitung: Solange ein aktiver Mythic+-Timer laeuft und das Roster-Panel sichtbar ist, muss derselbe One-Second-Utility-Ticker auch einen Vollrender des Panels ausloesen, damit die sichtbaren `+3/+2/+1`-Cutoffs live herunterzaehlen; Hidden-Modus darf diesen Utility-Poller nicht weiterlaufen lassen, und beim erneuten Oeffnen der UI darf genau ein frischer Utility-Rescan nur auf dem ersten sichtbaren Render nach Dirty-Markierung stattfinden.
-7. Output: Die Tracker-Zeile zeigt BRes-Charges/Cooldown, das aktuelle Lust-Icon samt Restzeit sowie aktive `+3/+2/+1`-Timer-Cutoffs und Death-Penalty-Loss, oder `--`, wenn Daten fehlen.
+6a. Verarbeitung: Nach einem verifizierten LFG-Invite-Target-Announce zeigt die untere M+-Killtracker-Zeile bis `CHALLENGE_MODE_START` den belastbaren Ziel-Dungeon plus Keystufe als rechtsbuendigen kombinierten Text; sobald der Key gestartet ist, wird dieser Pre-Key-Zieltext unterdrueckt und die Zeile nutzt wieder die Forces-Prozentanzeige.
+6b. Verarbeitung: `KillTrack` muss auf `PLAYER_REGEN_ENABLED` und vor jedem aktiven Refresh-Ticker-Notify die Blizzard-Live-Szenariodaten erneut lesen und daraus die Pull-/Gesamtprozentwerte aktualisieren, damit abgeschlossene Pulls sofort in UI und Nameplate-Restbedarf sichtbar werden.
+7. Output: Die Tracker-Zeile zeigt BRes-Charges/Cooldown, das aktuelle Lust-Icon samt Restzeit, aktive `+3/+2/+1`-Timer-Cutoffs und Death-Penalty-Loss, den Pre-Key-Zieltext oder den aktuellen Killtracker-Prozentstand, oder `--`, wenn Daten fehlen.
 8. Output: Roster-Zeilen zeigen zusaetzlich gesyncten Interrupt-Status in der `Kick`-Spalte: `ready` in Gruen, wenn verfuegbar, rote Restsekunden waehrend Cooldown und `-` in Grau, wenn die Spec keinen Interrupt hat oder der Pet-Interrupt aktuell nicht verfuegbar ist, zum Beispiel Demonology Warlock ohne Pet.
 9. Verarbeitung: Interrupt-State wird lokal ueber `KickTracker` verfolgt; pet-basierte Interrupts fuer Warlock Affliction/Destruction (`Spell Lock`) und Demonology (`Axe Toss`/`Spell Lock`) tracken die Pet-Cast-Unit getrennt, damit der Cooldown nur startet, wenn das Pet wirklich castet und nicht der Spieler. Heal-Specs ohne Interrupt (Holy Paladin spec 65, Mistweaver Monk spec 270, Restoration Druid spec 105, Discipline Priest spec 256, Holy Priest spec 257) sind explizit in `NO_INTERRUPT_SPEC_IDS` gelistet und liefern `hasKick=false`, sodass die `Kick`-Spalte ein graues `-` rendert statt einen ungueltigen Cooldown.
 10. Regel: Gesynctes `hasKick = false` fuer No-Interrupt-Specs muss in der `Kick`-Spalte als `-` gerendert werden, nicht als `0s` oder `ready`, und als `KICK:-1:0` uebertragen werden, damit Peers es von einem ready Interrupt unterscheiden koennen.
 11. Regel: Ein lokaler Kick-Cooldown darf nur durch beobachteten Interrupt-Cast oder exakte Blizzard-Cooldown-API-Daten in den laufenden Zustand wechseln; wenn keine dieser Quellen einen aktiven Cooldown belegt, darf das Addon keinen synthetischen oder geratenen Cooldown erzeugen.
 12. Regel: Wenn Raid-Hard-off lokales Kick-Tracking unterdrueckt, darf Kick-Sync erst wieder aufgenommen werden, nachdem exakte Blizzard-Cooldown-Daten, ein neu beobachteter Post-Raid-Interrupt-Cast oder eine exakte `no kick`-Aufloesung den Zustand erneut belastbar hergestellt haben; malformed KICK-Payloads werden fail-closed verworfen, fremde Casts duerfen die Suppression nicht aufheben, und solange kein exakter Zustand vorhanden ist, bleibt der Kick-State unresolved und unsent.
 13. Regel: Nach `CHALLENGE_MODE_COMPLETED` haelt der M+-Timer-Snapshot die finalen `+3/+2/+1`-Restzeiten und die Death-Penalty-Werte sichtbar, solange der Spieler noch in der Challenge-Mode-Zone steht; das naechste `PLAYER_ENTERING_WORLD` raeumt den eingefrorenen Snapshot vollstaendig auf (`completed=false`, `timer=0`, `timeLimit=0`, `deaths=0`), sodass die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. `PLAYER_ENTERING_WORLD` darf einen aktiv laufenden Key niemals stoppen oder Zeitstaende zuruecksetzen; `CHALLENGE_MODE_RESET` raeumt weiterhin sofort und unabhaengig vom Zonenwechsel.
-14. Erfolgskriterium: Die Zeile und die `Kick`-Spalte aktualisieren deterministisch, bleiben nicht-negativ und verhalten sich stabil, wenn relevante APIs fehlen, gemischte Aura-Payloads mit valider und invalider Datenform auftreten oder Zone-/Reload-Aura-Restores spaet eintreffen; beim erneuten Oeffnen nach Hidden-Modus muss der aktuelle Utility-Zeilenstate sofort sichtbar sein.
+14. Erfolgskriterium: Die Zeile, der M+-Killtracker und die `Kick`-Spalte aktualisieren deterministisch, bleiben nicht-negativ und verhalten sich stabil, wenn relevante APIs fehlen, gemischte Aura-Payloads mit valider und invalider Datenform auftreten oder Zone-/Reload-Aura-Restores spaet eintreffen; beim erneuten Oeffnen nach Hidden-Modus muss der aktuelle Utility-Zeilenstate sofort sichtbar sein, und ein abgeschlossener Pull darf nicht bis zum naechsten Combat-Start unsichtbar bleiben.
 
 ## UC-15 LFG-Detektion und Portal-Highlight
 
@@ -191,7 +193,7 @@ Ziel: LFG-Einladungen und eigene Listings sollen das Portal-Highlight und die Ch
 
 1. Trigger: `LFG_LIST_APPLICATION_STATUS_UPDATED` meldet `invited` oder `inviteaccepted`, oder `LFG_LIST_ACTIVE_ENTRY_UPDATE` meldet eine eigene aktive Listing-Info.
 2. Verarbeitung: Der Status wird kleingeschrieben normalisiert; die Activity-zu-Map-Aufloesung nutzt nur exakte Aktivitaetsdaten. Namen, Tokens oder andere heuristische Fallbacks bleiben unresolved.
-3. Verarbeitung: Der Invite-Kontext bleibt bis zur exakten Bestaetigung per `inviteaccepted` pending; danach wird der erkannte Dungeon-Zielzustand gesetzt und das Portal-Highlight ohne Sound aktiviert. Wenn LFGDetect bereits einen konkreten Map-Kontext hat, hat dieser Vorrang vor peer-synced Highlight-Quellen. Die locale-injizierte Chatmeldung bleibt an den Invite-/Join-Confirm-Pfad gebunden.
+3. Verarbeitung: Der Invite-Kontext bleibt bis zur exakten Bestaetigung per `inviteaccepted` pending; danach wird der erkannte Dungeon-Zielzustand gesetzt und das Portal-Highlight ohne Sound aktiviert. Wenn LFGDetect bereits einen konkreten lokalen Map-Kontext hat, wird dieser an den gemeinsamen Highlight-Resolver weitergereicht und hat Vorrang vor peer-synced Highlight-Quellen. Die locale-injizierte Chatmeldung bleibt an den Invite-/Join-Confirm-Pfad gebunden.
 4. Regel: Eine eigene Queue-/Listing-Detektion triggert das Portal-Highlight ueber den injizierten Callback; Portal-Sound bleibt fuer Queue- und Invite-getriebene Updates unterdrueckt.
 5. Regel: `GROUP_ROSTER_UPDATE` ohne Gruppe loescht den gesamten LFG-Zustand inklusive pending invites, aber nur beim echten Gruppenende (`GetNumGroupMembers() == 0`); `CHALLENGE_MODE_START` und die aktive Challenge-Map allein loeschen den Invite-Zustand nicht mehr, sondern erst der echte Dungeon-Eintritt ueber den finalen Map-Check.
 6. Erfolgskriterium: Erkennungen erscheinen einmalig und lokalisiert, late `inviteaccepted`-Events bleiben korrekt aufloesbar, identische Listing-Updates erzeugen keinen inkonsistenten Highlight-State, und unbekannte Namen werden nie als Dungeon-Ziel geraten.
@@ -235,7 +237,7 @@ Ziel: Eine optionale Live-Anzeige auf jeder feindlichen Namensplakette waehrend 
 2. Voraussetzung: `data/isiLive_mplus_forces.lua` ist geladen und liefert `MPlusForces.byNpcId` plus `MPlusForces.dungeonTotal[mapID].total`.
 3. Aktivierungs-Gate (alle vier muessen halten): aktiver Key, User-Toggle gesetzt, `UnitReaction(unit,"player") <= 4` (hostile/neutral, friendly Units skipped), `UnitGUID` ist ein nicht-leerer String und kein Secret Value.
 4. Verarbeitung: Der GUID wird in eine NpcID umgewandelt (Pattern-Match auf den Blizzard-GUID, akzeptiert nur `Creature` und `Vehicle`), und der `count`-Wert aus `MPlusForces.byNpcId[npcId]` wird durch `MPlusForces.dungeonTotal[mapID].total` geteilt -> `percent = count / total * 100`. Diese DB-basierte Berechnung ist die primaere Quelle; die Blizzard-API `C_ScenarioInfo.GetUnitCriteriaProgressValues` wird nur als Fallback genutzt, wenn die DB den NPC nicht kennt (frischer Patch-Mob vor naechstem MDT-Refresh).
-5. Regel: `BuildText` rendert `<percent>%` oder versteckt das Frame, wenn der Anteil nicht ermittelbar ist (Secret Value, leerer String, fehlender NPC im DB). Solange `mobNameplateShowRemaining` nicht explizit `false` ist und `KillTrack.GetData()` fuer dieselbe aktive `mapID` einen belastbaren `rawCount`/`total`- oder `percent`/`total`-Stand liefert, wird zusaetzlich `/<remaining>%` angehaengt; ohne passende KillTrack-Daten bleibt nur der Mob-Anteil sichtbar.
+5. Regel: `BuildText` rendert `<percent>%` oder versteckt das Frame, wenn der Anteil nicht ermittelbar ist (Secret Value, leerer String, fehlender NPC im DB). Solange `mobNameplateShowRemaining` nicht explizit `false` ist und `KillTrack.GetData()` fuer dieselbe aktive `mapID` einen belastbaren `rawCount`/`total`- oder `percent`/`total`-Stand liefert, wird zusaetzlich `/<remaining>%` angehaengt; ohne passende KillTrack-Daten bleibt nur der Mob-Anteil sichtbar. Nach Combat-Ende muss der Restbedarf mit dem live aktualisierten KillTrack-Gesamtstand konvergieren.
 6. Regel: 12.0-Secret-Value-Guards greifen vor jedem `==`/`~=`/`<=`/`<`/Pattern-Match-Operator: `mapID`, `numCriteria`, `quantity`, `totalQuantity`, `unitGUID`, `unitReaction`, `percentString`. Die Reihenfolge ist `type() -> IsSecretValue() -> Comparison`, niemals umgekehrt, da der Comparison-Operator den Stack tainted, bevor der Guard laeuft.
 7. Regel: Frame-Pool pro `unit`-Token, sodass `CreateFrame` hoechstens einmal pro gleichzeitig aktivem Nameplate-Slot gerufen wird. `NAME_PLATE_UNIT_REMOVED` versteckt das Frame und entfernt den Pool-Eintrag.
 8. Regel: Plater- oder Platynator-Soft-Detect zeigt eine dezente Warnung in den Settings; `mobNameplateEnabled` defaultet auf `true` fuer Frischinstallationen, damit die Forces-Prozentanzeige im Key ohne manuelles Aktivieren sichtbar ist.
@@ -290,7 +292,7 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1650` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1725` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -302,8 +304,8 @@ Aktuelle Validator-Baseline: `1650` Szenarien ueber die in `tools/usecase_scenar
 8. UC-10: Raid-Size-Zero-Process-Verhalten, hidden UI-Suppression und kein Raid-Notice-Output.
 9. UC-11 und UC-12: Secure-World-Marker-Button-Konfiguration fuer M+Marker und Compact-Layout-Visibility-Logik fuer M/V/H.
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
-11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering und gesyncte Interrupt-Cooldown-Anzeige.
-12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, concrete-LFG-Prioritaet und Highlight-Dispatch.
+11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering, M+-Killtracker-Live-Refresh und gesyncte Interrupt-Cooldown-Anzeige.
+12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, konkrete lokale LFG-Map-Prioritaet und Highlight-Dispatch.
 13. UC-16: BR-/Lust-Self-Cast-Filter gegen 12.0-Secret-Value-Spam, 3s-`sourceGUID|spellID`-Dedup, Toggle-Gating, ChatThrottleLib-Routing via `BRLUST`-Addon-Message, Receiver-Dispatch in lokalisierten Template-Zeilen und Drop-On-Unknown-Kind.
 14. UC-17: Mob-Tooltip-Forces-Rendering nur bei aktiver Challenge-Map-ID mit passendem NPC-Dataset, Per-Tooltip-Dedup gegen `TooltipDataProcessor`-Rerender und `SetEnabled(false)`-Gate.
 
@@ -318,7 +320,7 @@ Aktuelle Validator-Baseline: `1650` Szenarien ueber die in `tools/usecase_scenar
 | Gruppen-Lifecycle, Leader-State-Mirroring und Roster-Rebuild | `isiLive_group.lua`, `isiLive_roster.lua` |
 | RIO-Baseline-Capture und Delta-Preview | `isiLive_event_handlers_challenge.lua`, `isiLive_roster.lua`, `isiLive_test_mode.lua`, `isiLive_runtime_state.lua` |
 | Last-Run-DPS-Capture und begrenzte Stats-Persistenz | `isiLive_stats.lua`, `isiLive_event_handlers_challenge.lua`, `isiLive_event_handlers_runtime.lua`, `isiLive_roster_panel.lua`, `isiLive_roster_tooltip.lua` |
-| Combat-Utility-Tracker-Zeile, Kick-State und LibKeystone-Key-Interop | `isiLive_cd_tracker.lua`, `isiLive_mplus_timer.lua`, `isiLive_kick_tracker.lua`, `isiLive_sync.lua`, `isiLive_keysync.lua`, `isiLive_factory_controllers.lua`, `isiLive_roster_panel.lua`, `isiLive_roster_tooltip.lua`, `isiLive_texts.lua` |
+| Combat-Utility-Tracker-Zeile, M+-Killtracker, Kick-State und LibKeystone-Key-Interop | `isiLive_cd_tracker.lua`, `isiLive_mplus_timer.lua`, `isiLive_killtrack.lua`, `isiLive_kick_tracker.lua`, `isiLive_sync.lua`, `isiLive_keysync.lua`, `isiLive_factory_controllers.lua`, `isiLive_roster_panel.lua`, `isiLive_roster_panel_kill_row.lua`, `isiLive_roster_tooltip.lua`, `isiLive_texts.lua` |
 | Leader-Transfer-Erkennung und Feedback | `isiLive_leader_watch.lua` |
 | UI-Aktionen, Rollen-Buttons, Key-Share-Button | `isiLive_roster_panel.lua` |
 | Esc-Tooling-/Travel-Strips und Blizzard-Settings-Canvas | `isiLive_ui.lua`, `isiLive_settings.lua`, `isiLive_factory.lua`, `isiLive_texts.lua`, `isiLive_ui_common.lua` |

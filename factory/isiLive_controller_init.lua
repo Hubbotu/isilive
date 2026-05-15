@@ -118,6 +118,8 @@ local function CreateRosterPanelController(ctx, keySyncResult)
     getTime = ctx.getTime,
     shareKeysDebounceSeconds = ctx.shareKeysDebounceSeconds,
     getPlayerLastRunDps = ctx.getPlayerLastRunDps,
+    getTargetDungeonInfo = ctx.getTargetDungeonInfo,
+    isInChallengeMode = ctx.isInChallengeMode,
     sendShareKeysRequest = ctx.sendShareKeysRequest,
     isSyncUserKnown = ctx.isSyncUserKnown,
     showRosterColumnGuides = function()

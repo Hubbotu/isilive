@@ -79,6 +79,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 56. Runtime-Log-Eintraege werden nur bei aktivem Runtime-Logging geschrieben; jeder Eintrag traegt eine stabile Sequenznummer und einen praezisen Zeitstempel, `[TAG] action`-Nachrichten werden zu `[TAG] event=action` normalisiert, teure Formatierung und Trace-Builder duerfen bei ausgeschaltetem Log oder deaktivierter Deep-Stufe nicht laufen, und der Logspeicher muss seine Tail-Reihenfolge und sein Cap auch bei grossen Log-, Sync- und Roster-Bursts behalten.
 57. Der Ingame-Testmodus muss die aktuellen Demo-Daten fuer M+-Timer, Combat-CDs, den unteren M+-Forces-Tracker und Multi-Kick-Tooltip-Extras setzen und beim Verlassen wieder bereinigen.
 58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
+59. Der untere M+-Killtracker zeigt vor Key-Start nur verifizierte Ziel-Key-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig als zusammenhaengenden Dungeon-plus-Stufe-Text und wechselt ab Key-Start zur Prozentanzeige zurueck.
+60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
 
 ## Regelbloecke
 
@@ -152,6 +154,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Highlight invite-accepted state survives late roster false negatives while group members are still present
   - Highlight queue path ignores active challenge map before actual dungeon entry
   - Factory target dungeon clear waits for actual player map entry
+  - Factory primary highlight forwards local target map to shared resolver
 
 ### RULE-QUEUEFLOW-CHALLENGE-UND-DEDUP
 - Regelnummer: 9
@@ -706,3 +709,19 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - mplus_timer: PLAYER_ENTERING_WORLD clears the frozen post-COMPLETED snapshot
   - mplus_timer: PLAYER_ENTERING_WORLD is a no-op while the key is still running
   - mplus_timer: PLAYER_ENTERING_WORLD before any key is a no-op
+
+### RULE-MPLUS-KILLTRACKER-PREKEY-ZIEL
+- Regelnummer: 59
+- Status: aktiv
+- Zusammenfassung: Der untere M+-Killtracker darf vor Key-Start Dungeon und Keystufe rechtsbuendig als zusammenhaengenden Text anzeigen, wenn die Target-Dungeon-Aufloesung einen konkreten Namen und eine positive Keystufe liefert. Sobald der Key gestartet ist, darf diese Vor-Key-Anzeige nicht mehr sichtbar bleiben; danach gilt wieder die Prozentanzeige des Killtrackers beziehungsweise deren Platzhalter, bis aktive Prozentdaten vorliegen.
+- Erforderliche Tests:
+  - UpdateKillTrackRow renders verified target key as right-aligned combined text before challenge start
+  - UpdateKillTrackRow suppresses target key after challenge start until percent data is active
+
+### RULE-MPLUS-KILLTRACKER-LIVE-FORCES-REFRESH
+- Regelnummer: 60
+- Status: aktiv
+- Zusammenfassung: Der M+-Killtracker muss nach `PLAYER_REGEN_ENABLED` die Live-Scenario-Daten erneut lesen, den sichtbaren Gesamtfortschritt sofort aktualisieren und die aktualisierte Rohmenge als Basis fuer den naechsten Pull verwenden. Solange der Key aktiv ist, muss auch der Killtracker-Refresh-Ticker Live-Scenario-Daten neu lesen, bevor er die UI benachrichtigt.
+- Erforderliche Tests:
+  - PLAYER_REGEN_ENABLED refreshes live forces before the next pull starts
+  - refresh ticker callback reads live forces and notifies subscribers while state is active

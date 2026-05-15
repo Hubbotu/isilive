@@ -4,7 +4,7 @@ return function(test, ctx)
   local WithGlobals = ctx.with_globals
 
   local function RunHighlightPriorityScenario(opts, assertFn)
-    local captured = { buttonsUpdate = nil }
+    local captured = { buttonsUpdate = nil, highlightResolveArgs = nil }
 
     WithGlobals({
       IsInGroup = function()
@@ -32,7 +32,11 @@ return function(test, ctx)
             CreateControllers = function()
               return {
                 highlightController = {
-                  ResolveActiveTeleportSpellID = function()
+                  ResolveActiveTeleportSpellID = function(latestQueueActivityID, latestQueueMapID)
+                    captured.highlightResolveArgs = {
+                      latestQueueActivityID = latestQueueActivityID,
+                      latestQueueMapID = latestQueueMapID,
+                    }
                     return opts.highlightSpellID
                   end,
                   ResolveJoinedKeyMapID = function()
@@ -165,10 +169,10 @@ return function(test, ctx)
             return false
           end,
           GetLatestQueueState = function()
-            return nil, nil, nil, nil
+            return nil, opts.latestQueueActivityID, nil, opts.latestQueueMapID
           end,
           GetActiveJoinedKeyMapID = function()
-            return nil
+            return opts.activeJoinedKeyMapID
           end,
         },
         locale = "enUS",
@@ -210,6 +214,9 @@ return function(test, ctx)
         end,
         ResolveActiveKeyOwnerUnit = function()
           return nil
+        end,
+        ResolveLocalStatusTargetMapID = function()
+          return opts.localTargetMapID
         end,
         ResolveStatusTargetMapID = function()
           return nil
@@ -305,6 +312,30 @@ return function(test, ctx)
         "peer-synced resolver must still drive the highlight when no LFG target is detected"
       )
       Assert.Equal(captured.buttonsUpdate.soundContext, "queue", "soundContext must propagate on queue updates")
+    end)
+  end)
+
+  test("Factory primary highlight forwards local target map to shared resolver", function()
+    RunHighlightPriorityScenario({
+      detectedMapID = nil,
+      localTargetMapID = 557,
+      latestQueueMapID = nil,
+      highlightSpellID = 1254400,
+      teleportSpellForMapID = {},
+    }, function(factoryCtx, captured)
+      factoryCtx.UpdateMPlusTeleportButton()
+      Assert.NotNil(captured.buttonsUpdate, "UpdateButtons must be called")
+      Assert.NotNil(captured.highlightResolveArgs, "highlight resolver must be called")
+      Assert.Equal(
+        captured.highlightResolveArgs.latestQueueMapID,
+        557,
+        "active joined-key target map must be forwarded to the shared highlight resolver"
+      )
+      Assert.Equal(
+        captured.buttonsUpdate.resolvedSpellID,
+        1254400,
+        "local target map resolver must be able to drive the M+ UI dungeon highlight"
+      )
     end)
   end)
 end

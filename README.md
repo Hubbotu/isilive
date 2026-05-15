@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.231`
+- **Current version:** `0.9.246`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -18,7 +18,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
-- Forces percentage with a live pull-prediction bar so you see at a glance how much the running pull will add
+- Forces percentage with a live pull-prediction bar and combat-end refresh so completed pulls are reflected immediately
 - Default-on **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus the verified remaining count needed to finish enemy forces
 - Forces info on the **mouseover tooltip** for any mob in a key
 
@@ -97,7 +97,9 @@ During a ready check, the row background changes color: **green** for ready, **r
 A bottom bar that shows your kill-count percentage:
 
 - **Green** < 80%, **Yellow** < 95%, **Red** ≥ 95%
+- After a verified LFG invite target announce, the bar shows the target dungeon and key level right-aligned until the key starts
 - During a pull, a light-blue segment on the right shows **how much the current pull will add** (`+X.XX%`) — so you can see mid-pull whether it's enough
+- When combat ends, the tracker refreshes Blizzard's live scenario progress immediately, so the last pull is counted before the next pull or boss engagement
 
 ### Teleport Grid
 
@@ -171,7 +173,7 @@ You can turn either announce off in the settings. Non-isiLive group members won'
 
 ### Pre-key group view
 
-When you get an LFG invite, the matching portal highlights and the chat tells you which dungeon and level you joined — so you know before loading in.
+When you get an LFG invite, the matching portal highlights and the chat tells you which dungeon and level you joined — so you know before loading in. The bottom M+ killtracker mirrors that verified target as a right-aligned dungeon + key-level label until the key starts.
 
 ### Ghost rows after wipes / reloads
 

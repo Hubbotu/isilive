@@ -224,6 +224,33 @@ local function RegisterPullBaselineTests(test, Assert, WithGlobals, LoadAddonMod
     end)
   end)
 
+  test("PLAYER_REGEN_ENABLED refreshes live forces before the next pull starts", function()
+    local env = BuildKillTrackEnv({ scenario = { quantity = 10, total = 100 }, nowStart = 1000 })
+    WithGlobals(env.globals, function()
+      local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
+      addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
+      addon.KillTrack._DispatchEvent("PLAYER_REGEN_DISABLED")
+
+      -- The pull finished and Blizzard's live forces value has advanced, but
+      -- no SCENARIO_CRITERIA_UPDATE was observed before leaving combat.
+      env.scenario.SetQuantity(25)
+      addon.KillTrack._DispatchEvent("PLAYER_REGEN_ENABLED")
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.rawCount, 25, "combat-end refresh must commit the latest raw forces immediately")
+      Assert.True(math.abs(data.percent - 25) < 0.01, "combat-end refresh must update the visible total percent")
+      Assert.True(
+        math.abs(data.pullPercent - 15) < 0.01,
+        "combat-end refresh must keep the completed pull delta visible"
+      )
+
+      addon.KillTrack._DispatchEvent("PLAYER_REGEN_DISABLED")
+      env.scenario.SetQuantity(30)
+      addon.KillTrack._DispatchEvent("SCENARIO_CRITERIA_UPDATE")
+      data = addon.KillTrack.GetData()
+      Assert.True(math.abs(data.pullPercent - 5) < 0.01, "next pull baseline must use the combat-end forces")
+    end)
+  end)
+
   test("PLAYER_REGEN_DISABLED does not start a pull when no key is active", function()
     local env = BuildKillTrackEnv({
       scenario = { quantity = 10, total = 100 },
@@ -302,7 +329,7 @@ local function RegisterTickerTests(test, Assert, WithGlobals, LoadAddonModules)
     end)
   end)
 
-  test("refresh ticker callback notifies subscribers while state is active", function()
+  test("refresh ticker callback reads live forces and notifies subscribers while state is active", function()
     local env = BuildKillTrackEnv({ scenario = { quantity = 5, total = 100 } })
     WithGlobals(env.globals, function()
       local addon = LoadAddonModules({ "isiLive_killtrack.lua" })
@@ -313,7 +340,11 @@ local function RegisterTickerTests(test, Assert, WithGlobals, LoadAddonModules)
       addon.KillTrack._DispatchEvent("CHALLENGE_MODE_START")
       local before = calls
       -- Simulate the ticker firing.
+      env.scenario.SetQuantity(17)
       env.tickers[1].fn()
+      local data = addon.KillTrack.GetData()
+      Assert.Equal(data.rawCount, 17, "ticker must refresh raw forces from the live scenario API")
+      Assert.True(math.abs(data.percent - 17) < 0.01, "ticker must refresh total percent from live data")
       Assert.True(calls > before, "ticker firing must notify subscribers while state is active")
     end)
   end)

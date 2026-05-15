@@ -651,6 +651,8 @@ function RosterPanel.CreateController(opts)
   end
   local sendShareKeysRequest = type(opts.sendShareKeysRequest) == "function" and opts.sendShareKeysRequest or nil
   local getPlayerLastRunDps = type(opts.getPlayerLastRunDps) == "function" and opts.getPlayerLastRunDps or nil
+  local getTargetDungeonInfo = type(opts.getTargetDungeonInfo) == "function" and opts.getTargetDungeonInfo or nil
+  local isInChallengeMode = type(opts.isInChallengeMode) == "function" and opts.isInChallengeMode or nil
   local logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil
   local logRuntimeTraceDeep = type(opts.logRuntimeTraceDeep) == "function" and opts.logRuntimeTraceDeep or nil
   local showRosterColumnGuides = type(opts.showRosterColumnGuides) == "function" and opts.showRosterColumnGuides
@@ -886,7 +888,10 @@ function RosterPanel.CreateController(opts)
     }, roster)
     RefreshSystemOptionToggles(ui)
     UpdateCdTrackerRow(ui.cdTrackerRow, cdController)
-    UpdateKillTrackRow(ui.killTrackRow)
+    UpdateKillTrackRow(ui.killTrackRow, {
+      getTargetDungeonInfo = getTargetDungeonInfo,
+      isInChallengeMode = isInChallengeMode,
+    })
   end
 
   function controller.RefreshReadyCheckState(roster)
@@ -940,7 +945,10 @@ function RosterPanel.CreateController(opts)
   end
 
   function controller.RefreshKillTrackRow()
-    UpdateKillTrackRow(ui.killTrackRow)
+    UpdateKillTrackRow(ui.killTrackRow, {
+      getTargetDungeonInfo = getTargetDungeonInfo,
+      isInChallengeMode = isInChallengeMode,
+    })
   end
 
   function controller.MarkCdTrackerDirty()

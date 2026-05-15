@@ -83,6 +83,13 @@ local function CreateKillTrackRow(mainFrame)
   end
   barPull:Hide()
 
+  local targetText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  targetText:SetPoint("LEFT", box, "LEFT", 94, 0)
+  targetText:SetPoint("RIGHT", box, "RIGHT", -6, 0)
+  targetText:SetJustifyH("RIGHT")
+  targetText:SetText("")
+  ApplyFontStringSize(targetText, CD_TRACKER_FONT_SIZE)
+
   local pctText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   pctText:SetPoint("RIGHT", box, "RIGHT", -6, 0)
   pctText:SetWidth(58)
@@ -93,26 +100,58 @@ local function CreateKillTrackRow(mainFrame)
   row.killTrackBarContainer = barContainer
   row.killTrackBarFill = barFill
   row.killTrackBarPull = barPull
+  row.killTrackTargetText = targetText
   row.killTrackPctText = pctText
   row.killTrackPullText = pullText
   return row
 end
 
-local function UpdateKillTrackRow(row)
+local function ResolvePreKeyTargetInfo(deps, data)
+  if data and data.active then
+    return nil
+  end
+  if type(deps) ~= "table" or type(deps.getTargetDungeonInfo) ~= "function" then
+    return nil
+  end
+  if type(deps.isInChallengeMode) == "function" and deps.isInChallengeMode() == true then
+    return nil
+  end
+
+  local info = deps.getTargetDungeonInfo()
+  if type(info) ~= "table" or type(info.name) ~= "string" then
+    return nil
+  end
+  local name = string.match(info.name, "^%s*(.-)%s*$")
+  local level = tonumber(info.level)
+  if name == "" or not level or level <= 0 then
+    return nil
+  end
+  return {
+    name = name,
+    level = math.floor(level),
+  }
+end
+
+local function UpdateKillTrackRow(row, deps)
   if not row then
     return
   end
 
   local KillTrack = addonTable.KillTrack
   local data = type(KillTrack) == "table" and type(KillTrack.GetData) == "function" and KillTrack.GetData() or nil
+  local targetInfo = ResolvePreKeyTargetInfo(deps, data)
 
   local barContainer = row.killTrackBarContainer
   local barFill = row.killTrackBarFill
   local barPull = row.killTrackBarPull
+  local targetText = row.killTrackTargetText
   local pctText = row.killTrackPctText
   local pullText = row.killTrackPullText
 
   if data and data.active then
+    if targetText then
+      targetText:SetText("")
+    end
     local pct = math.max(0, math.min(data.percent, 100))
     local r, g, b
     if pct < 80 then
@@ -163,12 +202,40 @@ local function UpdateKillTrackRow(row)
         pullText:SetText("")
       end
     end
+  elseif targetInfo then
+    if barFill then
+      barFill:Hide()
+    end
+    if barPull then
+      barPull:Hide()
+    end
+    if targetText then
+      targetText:SetText(string.format("%s +%d", targetInfo.name, targetInfo.level))
+      if type(targetText.SetJustifyH) == "function" then
+        targetText:SetJustifyH("RIGHT")
+      end
+      if type(targetText.SetTextColor) == "function" then
+        targetText:SetTextColor(0.9, 0.82, 0.45)
+      end
+    end
+    if pctText then
+      pctText:SetText("")
+      if type(pctText.SetTextColor) == "function" then
+        pctText:SetTextColor(0.9, 0.82, 0.45)
+      end
+    end
+    if pullText then
+      pullText:SetText("")
+    end
   else
     if barFill then
       barFill:Hide()
     end
     if barPull then
       barPull:Hide()
+    end
+    if targetText then
+      targetText:SetText("")
     end
     if pctText then
       pctText:SetText("--,--")

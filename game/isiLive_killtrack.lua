@@ -229,6 +229,8 @@ local function StartRefreshTicker()
     if not state.active then
       return
     end
+    ReadLiveData()
+    UpdatePullPercent()
     NotifyUpdate()
   end)
 end
@@ -312,6 +314,8 @@ function KillTrack._DispatchEvent(event)
     end
     NotifyUpdate()
   elseif event == "PLAYER_REGEN_ENABLED" then
+    ReadLiveData()
+    UpdatePullPercent()
     pull.inCombat = false
     pull.displayUntil = Now() + POST_COMBAT_GRACE_SECONDS
     NotifyUpdate()

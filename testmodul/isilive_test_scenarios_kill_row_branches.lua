@@ -44,6 +44,9 @@ local function NewFontStringStub()
   function fs.SetTextColor(self, r, g, b)
     self._color = { r, g, b }
   end
+  function fs.SetJustifyH(self, justifyH)
+    self._justifyH = justifyH
+  end
   return fs
 end
 
@@ -56,6 +59,7 @@ local function NewRow(barContainerWidth)
     },
     killTrackBarFill = NewBarStub(),
     killTrackBarPull = NewBarStub(),
+    killTrackTargetText = NewFontStringStub(),
     killTrackPctText = NewFontStringStub(),
     killTrackPullText = NewFontStringStub(),
   }
@@ -96,6 +100,7 @@ return function(test, ctx)
       addon._RosterInternal.UpdateKillTrackRow(row)
       Assert.True(row.killTrackBarFill._shown == false, "fill bar must hide")
       Assert.True(row.killTrackBarPull._shown == false, "pull bar must hide")
+      Assert.Equal(row.killTrackTargetText._text, "", "target text must clear")
       Assert.Equal(row.killTrackPctText._text, "--,--", "pct text must reset")
       Assert.Equal(row.killTrackPullText._text, "", "pull text must clear")
     end)
@@ -109,6 +114,59 @@ return function(test, ctx)
       addon._RosterInternal.UpdateKillTrackRow(row)
       Assert.True(row.killTrackBarFill._shown == false, "inactive must hide fill bar")
       Assert.Equal(row.killTrackPctText._text, "--,--", "inactive must reset pct text")
+    end)
+  end)
+
+  test(
+    "UpdateKillTrackRow renders verified target key as right-aligned combined text before challenge start",
+    function()
+      WithGlobals({}, function()
+        local addon = LoadKillRow({ active = false, percent = 0 })
+        local row = NewRow()
+        row.killTrackBarFill._shown = true
+        row.killTrackBarPull._shown = true
+        addon._RosterInternal.UpdateKillTrackRow(row, {
+          getTargetDungeonInfo = function()
+            return {
+              name = "  Windlaeufer Turm  ",
+              level = 14,
+            }
+          end,
+          isInChallengeMode = function()
+            return false
+          end,
+        })
+        Assert.True(row.killTrackBarFill._shown == false, "pre-key target must hide percent fill")
+        Assert.True(row.killTrackBarPull._shown == false, "pre-key target must hide pull overlay")
+        Assert.Equal(
+          row.killTrackTargetText._text,
+          "Windlaeufer Turm +14",
+          "pre-key target must show dungeon and level"
+        )
+        Assert.Equal(row.killTrackTargetText._justifyH, "RIGHT", "pre-key target must be right-aligned")
+        Assert.Equal(row.killTrackPctText._text, "", "pre-key target must not split the level into the percent field")
+        Assert.Equal(row.killTrackPullText._text, "", "pre-key target must clear pull text")
+      end)
+    end
+  )
+
+  test("UpdateKillTrackRow suppresses target key after challenge start until percent data is active", function()
+    WithGlobals({}, function()
+      local addon = LoadKillRow({ active = false, percent = 0 })
+      local row = NewRow()
+      addon._RosterInternal.UpdateKillTrackRow(row, {
+        getTargetDungeonInfo = function()
+          return {
+            name = "Windlaeufer Turm",
+            level = 14,
+          }
+        end,
+        isInChallengeMode = function()
+          return true
+        end,
+      })
+      Assert.Equal(row.killTrackTargetText._text, "", "key-start boundary must clear pre-key target text")
+      Assert.Equal(row.killTrackPctText._text, "--,--", "inactive post-start row must use the percent placeholder")
     end)
   end)
 

@@ -11,6 +11,15 @@ local function FormatTraceValue(value)
   return tostring(value)
 end
 
+local function IsSecretValue(value)
+  local checker = rawget(_G, "issecretvalue")
+  if type(checker) ~= "function" then
+    return false
+  end
+  local ok, result = pcall(checker, value)
+  return ok and result == true
+end
+
 local function BuildLFGGroupRosterTraceLogger(ctx, modules)
   local lastSignature = nil
   return function(snapshot)
@@ -86,7 +95,7 @@ local function InitializeGameAPIHelpers(ctx, runtimeState)
       return nil
     end
     local ok, mapID = pcall(challengeMode.GetActiveChallengeMapID)
-    if not ok then
+    if not ok or IsSecretValue(mapID) or type(mapID) ~= "number" or mapID <= 0 then
       return nil
     end
     return mapID
@@ -978,6 +987,10 @@ local function InitializeFactoryPrimaryControllers(ctx)
     end,
     getTime = rawget(_G, "GetTime"),
     shareKeysDebounceSeconds = 30,
+    getTargetDungeonInfo = ctx.GetStatusTargetDungeonInfo,
+    isInChallengeMode = function()
+      return ctx.GetActiveChallengeMapID() ~= nil -- secret-value-ok: ctx wrapper is pcall- and IsSecretValue-protected
+    end,
     sendShareKeysRequest = function()
       return modules.sync.SendShareKeysRequest()
     end,
@@ -1044,7 +1057,9 @@ local function InitializeFactoryPrimaryControllers(ctx)
     local _, latestQueueActivityID, _, latestQueueMapID = ctx.runtimeState.GetLatestQueueState()
     local effectiveQueueMapID = latestQueueMapID
     local localTargetMapID = ctx.ResolveLocalStatusTargetMapID and ctx.ResolveLocalStatusTargetMapID() or nil
-    if not localTargetMapID then
+    if localTargetMapID then
+      effectiveQueueMapID = localTargetMapID
+    else
       local syncedTargetInfo = ctx.ResolveSyncedTargetInfo and ctx.ResolveSyncedTargetInfo() or nil
       if type(syncedTargetInfo) == "table" then
         effectiveQueueMapID = tonumber(syncedTargetInfo.mapID) or effectiveQueueMapID
@@ -1500,6 +1515,9 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
         level = payload.level,
         levelText = payload.levelText,
       })
+      if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshKillTrackRow) == "function" then
+        ctx.rosterPanelController.RefreshKillTrackRow()
+      end
     end)
   end
 

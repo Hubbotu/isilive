@@ -219,6 +219,26 @@ return function(test, ctx)
     end)
   end)
 
+  test("factory_controllers: GetActiveChallengeMapID returns nil for secret values", function()
+    local addon = Load()
+    local rs = BuildRuntimeStateStub()
+    local c = BuildCtx(rs, BuildModulesStub())
+    local secretMapID = {}
+    WithGlobals({
+      issecretvalue = function(value)
+        return value == secretMapID
+      end,
+      C_ChallengeMode = {
+        GetActiveChallengeMapID = function()
+          return secretMapID
+        end,
+      },
+    }, function()
+      InitializeHelpers(c, addon)
+      Assert.Nil(c.GetActiveChallengeMapID(), "secret active map ID must resolve to nil")
+    end)
+  end)
+
   test("factory_controllers: ready-check delegates forward to runtimeState", function()
     local addon = Load()
     local rs, storage = BuildRuntimeStateStub()

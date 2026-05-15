@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-05-15 - Version 0.9.246 (patch)
+
+Fixes M+ target display and enemy-forces freshness in the bottom tracker.
+
+### M+ target and portal highlight
+
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua),
+[ui/isiLive_roster_panel.lua](ui/isiLive_roster_panel.lua),
+[ui/isiLive_roster_panel_kill_row.lua](ui/isiLive_roster_panel_kill_row.lua):
+
+- The portal highlight resolver now receives the verified local target map
+  from the LFG/target-dungeon path before falling back to synced peer
+  targets.
+- After an LFG invite target announce, the bottom M+ killtracker shows
+  the verified dungeon and key level as one right-aligned pre-key text.
+- Once the key starts, the row suppresses the pre-key text and returns to
+  the enemy-forces percentage display.
+
+### Killtracker live forces refresh
+
+[game/isiLive_killtrack.lua](game/isiLive_killtrack.lua):
+
+- `PLAYER_REGEN_ENABLED` now re-reads Blizzard's live scenario forces
+  before notifying the UI, so completed pulls are committed immediately
+  instead of waiting for the next combat start.
+- The active KillTrack ticker also refreshes live scenario data before
+  UI/nameplate updates, keeping the bottom tracker and nameplate
+  remaining-count suffix aligned.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_factory_highlight_priority.lua](testmodul/isilive_test_scenarios_factory_highlight_priority.lua),
+[testmodul/isilive_test_scenarios_kill_row_branches.lua](testmodul/isilive_test_scenarios_kill_row_branches.lua),
+[testmodul/isilive_test_scenarios_killtrack.lua](testmodul/isilive_test_scenarios_killtrack.lua):
+
+- `Factory primary highlight forwards local target map to shared resolver`
+- `UpdateKillTrackRow renders verified target key as right-aligned combined text before challenge start`
+- `UpdateKillTrackRow suppresses target key after challenge start until percent data is active`
+- `PLAYER_REGEN_ENABLED refreshes live forces before the next pull starts`
+- `refresh ticker callback reads live forces and notifies subscribers while state is active`
+- `factory_controllers: GetActiveChallengeMapID returns nil for secret values`
+
 ## 2026-05-15 - Version 0.9.245 (patch)
 
 Rolls up the 2026-05-15 key-start notice-replay work plus a
