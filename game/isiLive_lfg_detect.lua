@@ -188,6 +188,7 @@ local rosterEstablishedSinceAccept = false
 -- ClearAcceptedInviteListingIdentity (CHALLENGE_MODE_* / genuine PLC) so
 -- legitimate next-cycle accepts for the same listing render again.
 local lastShownNoticeSearchResultID = nil
+local lastFiredTargetDungeonChatSearchResultID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
 -- Replaces the previous direct _factoryCtx access (ARCH-1 fix).
@@ -707,9 +708,14 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
   if type(targetDungeonChatEnabledFn) == "function" and targetDungeonChatEnabledFn() == false then
     return
   end
+  local resolvedLevel = ResolveEntryTitleLevel(entry)
+  if resolvedLevel and searchResultID ~= nil and searchResultID == lastFiredTargetDungeonChatSearchResultID then
+    Log("chat_skip_duplicate", "searchResultID=%s", tostring(searchResultID))
+    return
+  end
   targetDungeonChatCallback({
     mapID = entry.mapID,
-    level = ResolveEntryTitleLevel(entry),
+    level = resolvedLevel,
     leaderName = entry.leaderName,
     -- groupName is the raw listing title — may be plain ("+12 Push") or
     -- Blizzard pipe-markup ("|Kk584|k"). Either way the chat frame
@@ -718,6 +724,9 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
     groupName = entry.groupName,
     searchResultID = searchResultID,
   })
+  if resolvedLevel and searchResultID ~= nil then
+    lastFiredTargetDungeonChatSearchResultID = searchResultID
+  end
 end
 
 -- Renders the post-accept Center Notice. Pulls ALL data from the supplied
@@ -979,6 +988,7 @@ local function ClearAllStateImpl()
   acceptedInviteSearchResultID = nil
   rosterEstablishedSinceAccept = false
   lastShownNoticeSearchResultID = nil
+  lastFiredTargetDungeonChatSearchResultID = nil
   pendingInvites = {}
   if hadState then
     TriggerHighlightUpdate("queue")
@@ -1189,6 +1199,7 @@ local function ClearAcceptedInviteListingIdentity(reason)
   acceptedInviteSearchResultID = nil
   pendingAcceptedInviteMapID = nil
   lastShownNoticeSearchResultID = nil
+  lastFiredTargetDungeonChatSearchResultID = nil
   TriggerHighlightUpdate("queue")
 end
 
@@ -1293,10 +1304,12 @@ function LFGDetect.HandleEvent(event, ...)
       if resultID and entry then
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
-        activeInviteTitleLevel = entry.titleLevel
+        activeInviteTitleLevel = ResolveEntryTitleLevel(entry)
         acceptedInviteSearchResultID = resultID
         pendingInvites[resultID] = nil
         TriggerHighlightUpdate("invite")
+        MaybeShowAcceptedInviteNotice(entry, resultID)
+        MaybeFireTargetDungeonChatFromAccept(entry, resultID)
       else
         -- "No pending invites at all" means no entry with a table value:
         -- OnInviteDeclined writes `false` sentinels into pendingInvites

@@ -1595,6 +1595,43 @@ local function RegisterLFGDetectResetTests(test, ctx)
     end)
   end)
 
+  test("LFGDetect GROUP_ROSTER_UPDATE recovery fires target-dungeon-chat callback once", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [1] = { activityID = 1542, name = "+13 vault", leaderName = "Leader-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetTargetDungeonChatEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "invited")
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(#payloads, 1, "GROUP_ROSTER_UPDATE recovery must fire the chat direct-push once")
+      Assert.Equal(payloads[1].mapID, 557, "chat payload must carry the recovered invite map")
+      Assert.Equal(payloads[1].level, 13, "chat payload must carry the recovered invite title level")
+      Assert.Equal(payloads[1].leaderName, "Leader-Realm", "chat payload must carry the recovered leader hint")
+      Assert.Equal(payloads[1].searchResultID, 1, "chat payload must carry the recovered searchResultID")
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 1, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "late inviteaccepted must not duplicate the recovered chat direct-push")
+    end)
+  end)
+
   test("LFGDetect inviteaccepted preserves title level when own listing already set the same map", function()
     local currentActiveEntry = { activityID = 1542 }
     local globals, fire = BuildLFGDetectEnv({

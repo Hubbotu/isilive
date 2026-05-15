@@ -1,5 +1,90 @@
 # Changelog
 
+## 2026-05-15 - Version 0.9.244 (patch)
+
+Fixes the race that produced the `Gruppe: Unbekannt` Center Notice
+(plus a stale or missing chat-line) when Blizzard delivered
+`GROUP_ROSTER_UPDATE` **before** `LFG_LIST_APPLICATION_STATUS_UPDATED
+=inviteaccepted` — a real-world ordering for delisted-listing
+accepts and high-latency cross-realm groups.
+
+### Race-sequence reconstruction
+
+Reconstructed from the in-game byte-dump (vorfall 2026-05-15):
+
+1. Bewerbung → `invited` event → `pendingInvites[id]` populated
+   with the listing snapshot taken at `invited` time
+   (`info.name = "|Kk584|k"`, leader, mapID, …). Snapshot is
+   sound.
+2. Accept → Blizzard's roster signal **arrives first**.
+   `GROUP_ROSTER_UPDATE` handler's recovery branch (in
+   [game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua))
+   sets `detectedMapID` / `activeInviteLeader` /
+   `activeInviteTitleLevel` / `acceptedInviteSearchResultID` from
+   the cached `pendingInvites[id]`, **consumes** the cache entry
+   (`pendingInvites[id] = nil`), and fires the highlight update.
+   Before 0.9.244, however, it did **not** fire the post-accept
+   Notice nor the direct-push chat — those were tied to the later
+   `OnInviteAccepted` only.
+3. `inviteaccepted` lands now → `OnInviteAccepted` reads
+   `pendingInvites[id]` = nil → falls back to a fresh
+   `ResolveInviteEntry(searchResultID)` → the API has by then
+   delisted the listing and returns minimal data, the title slot
+   collapses to `_G.UNKNOWN` ("Unbekannt"). Notice renders that
+   placeholder.
+
+### Fix — recovery branch fires the post-accept hooks itself
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- The recovery branch in `LFGDetect.HandleEvent("GROUP_ROSTER_UPDATE")`
+  now calls `MaybeShowAcceptedInviteNotice(entry, resultID)` and
+  `MaybeFireTargetDungeonChatFromAccept(entry, resultID)` directly
+  after the state-set, so the Notice + chat use the **still-sound**
+  cached entry. The same recovery branch also routes
+  `activeInviteTitleLevel` through `ResolveEntryTitleLevel(entry)`
+  for consistency with the 0.9.241 helper (covers entry.titleLevel
+  divergence vs. entry.groupName).
+- New module-local `lastFiredTargetDungeonChatSearchResultID`,
+  mirror of the existing `lastShownNoticeSearchResultID`, used by
+  `MaybeFireTargetDungeonChatFromAccept` to suppress a duplicate
+  fire when the (late) `inviteaccepted` event re-enters the same
+  path. Reset in `ClearAllStateImpl` and
+  `ClearAcceptedInviteListingIdentity` alongside the notice marker
+  so a legitimate next-cycle accept for the same listing renders
+  again.
+- The dedupe marker is set **only** when the call carried a
+  resolved level. Calls that exited at the status-controller
+  level-less bail (0.9.243 contract) leave the marker untouched —
+  so a later trigger that does carry a level can still fire
+  through. Asymmetric on purpose: successful pushes lock further
+  repeats out, ineffectual ones do not.
+
+### What the user sees now
+
+| Sequence | Notice | Chat |
+| --- | --- | --- |
+| `inviteaccepted` first (normal) | renders once via `OnInviteAccepted` (no change vs. 0.9.243) | direct-push fires when level resolvable, resolver fallback otherwise (no change vs. 0.9.243) |
+| `GROUP_ROSTER_UPDATE` first (race) | renders once via the recovery branch with the still-cached entry (no more `Gruppe: Unbekannt`) | direct-push fires once with the cached level (or bails for `\|Kk…\|k`-encoded titles → resolver supplies +N) |
+| Late `inviteaccepted` after recovery | suppressed by `lastShownNoticeSearchResultID` (no Doppel-Notice) | suppressed by `lastFiredTargetDungeonChatSearchResultID` when the recovery fire carried a level |
+
+### Tests
+
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua):
+
+- New `LFGDetect GROUP_ROSTER_UPDATE recovery fires target-dungeon-chat
+  callback once` pins the full race contract in one sequence:
+  `invited` → `GROUP_ROSTER_UPDATE` → callback fires once with
+  `mapID/level/leader/searchResultID`; the subsequent
+  `inviteaccepted` is silently deduped.
+
+[docs/RULES_LOGIC.md](docs/RULES_LOGIC.md):
+
+- The "Status target dungeon chat" rule now lists the new test as
+  required, so future audits keep the contract enforced.
+
+Usecase count rises from 1714 to 1715.
+
 ## 2026-05-15 - Version 0.9.243 (patch)
 
 Diagnosis-driven revert and re-architecture of the keystone-level

@@ -294,6 +294,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Status target dungeon chat defers the level-less announce and fires once the level resolves
   - Status target dungeon chat falls back to a level-less announce once the deferred wait elapses
+  - LFGDetect GROUP_ROSTER_UPDATE recovery fires target-dungeon-chat callback once
 
 ### RULE-UI-STRG-F9-JEDERZEIT
 - Regelnummer: 26
