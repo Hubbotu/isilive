@@ -290,6 +290,8 @@ local function BuildTargetDungeonAnnouncementText(deps, info)
   local highlighted
   if level then
     highlighted = string.format("|cffffd200%s +%d|r", info.name, math.floor(level))
+  elseif type(info.levelText) == "string" and info.levelText ~= "" then
+    highlighted = string.format("|cffffd200%s %s|r", info.name, info.levelText)
   else
     highlighted = string.format("|cffffd200%s|r", info.name)
   end
@@ -852,23 +854,24 @@ function Status.CreateController(opts)
     if level and level <= 0 then
       level = nil
     end
+    local levelText = nil
+    if not level and type(payload.levelText) == "string" and string.match(payload.levelText, "^|Kk%d+|k$") then
+      levelText = payload.levelText
+    end
     -- Vorfall 2026-05-15: modern WoW encodes the LFG title as opaque pipe
     -- markup ("|Kk<id>|k") whose <id> is a client-side lookup, NOT the
     -- level. ParseTitleKeyLevel correctly returns nil for that shape, so
-    -- payload.level arrives nil. We must NOT emit a level-less direct-push
-    -- line here — the user wants "Ziel-Dungeon: <name> +N" only, no
-    -- descriptive text, no level-less placeholder. Bailing out also
-    -- intentionally leaves levelAnnouncedTargetDungeonName unset so the
-    -- resolver-driven path (UpdateStatusLine → MaybeAnnounceTargetDungeon-
-    -- Chat) can later supply +N from the roster-owner key, the LFG-title
-    -- hint, or the synced target.
-    if not level then
+    -- payload.level arrives nil. If LFGDetect can still provide the exact
+    -- opaque Blizzard keystone markup as levelText, the chat frame can render
+    -- that observed value as "+N"; otherwise we must NOT emit a level-less
+    -- direct-push line.
+    if not level and not levelText then
       return
     end
     if state.levelAnnouncedTargetDungeonName == name then
       return
     end
-    EmitTargetDungeonAnnouncement(state, deps, { name = name, level = level })
+    EmitTargetDungeonAnnouncement(state, deps, { name = name, level = level, levelText = levelText })
   end
 
   return controller

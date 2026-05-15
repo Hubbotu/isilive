@@ -65,6 +65,22 @@ local function RegisterChallengeStartAndDelayTests(test, Assert, _WithGlobals, L
     Assert.Equal(resetCalls, 1, "challenge start must reset kick stats exactly once")
   end)
 
+  test("Event handlers forward challenge start to LFGDetect", function()
+    local lfgEvents = {}
+
+    local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
+    local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
+      handleLFGDetectEvent = function(event)
+        lfgEvents[#lfgEvents + 1] = event
+      end,
+    })
+
+    controller:Dispatch("CHALLENGE_MODE_START")
+
+    Assert.Equal(#lfgEvents, 1, "challenge start must notify LFGDetect exactly once")
+    Assert.Equal(lfgEvents[1], "CHALLENGE_MODE_START", "LFGDetect must receive the key-start boundary")
+  end)
+
   test("Event handlers auto-show main frame on challenge completion while grouped", function()
     local showCalls = 0
     local lastVisible = nil

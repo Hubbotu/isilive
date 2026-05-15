@@ -294,6 +294,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Status target dungeon chat defers the level-less announce and fires once the level resolves
   - Status target dungeon chat falls back to a level-less announce once the deferred wait elapses
+  - Status AnnounceTargetDungeonFromPayload emits exact Blizzard keystone level markup
+  - LFGDetect direct-push carries exact Blizzard keystone level markup
   - LFGDetect GROUP_ROSTER_UPDATE recovery fires target-dungeon-chat callback once
 
 ### RULE-UI-STRG-F9-JEDERZEIT
@@ -367,6 +369,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Existing grouped roster updates do not re-open a manually hidden frame
   - Event handlers do not auto-hide main frame on challenge start by default
   - Event handlers auto-hide main frame on challenge start when auto-close is enabled
+  - Event handlers forward challenge start to LFGDetect
   - Event handlers auto-show main frame on challenge completion while grouped
   - Event handlers skip auto-show on challenge completion when key-end setting is disabled
   - Settings panel defaults Login / Reload auto-show and Key-End auto-open to enabled
@@ -651,6 +654,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - LFGDetect keeps partially unresolved invite activity maps unresolved
   - LFGDetect active listing stays unresolved when only dungeon name text is available
   - LFGDetect exact invite stays pending until inviteaccepted and then highlights without sound
+  - LFGDetect direct-push carries exact Blizzard keystone level markup
+  - AcceptedInviteNotice does not replay after challenge start
+  - AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE recovery after ClearAllState
 
 ### RULE-MAIN-UI-POSITION-LOCK
 - Regelnummer: 55

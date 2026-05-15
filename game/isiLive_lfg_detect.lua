@@ -182,12 +182,11 @@ local rosterEstablishedSinceAccept = false
 -- Last searchResultID for which MaybeShowAcceptedInviteNotice rendered the
 -- Center Notice. Used to swallow same-searchResultID replays of
 -- LFG_LIST_APPLICATION_STATUS_UPDATED=inviteaccepted (Blizzard has shipped
--- duplicate-fire bugs for this event before). The direct-push chat path is
--- already protected by the Status controller's lock-in; the notice path
--- lacked an equivalent guard. Reset on ClearAllStateImpl (group-leave) and
--- ClearAcceptedInviteListingIdentity (CHALLENGE_MODE_* / genuine PLC) so
--- legitimate next-cycle accepts for the same listing render again.
+-- duplicate-fire bugs for this event before). Reset only on ClearAllStateImpl
+-- (group-leave / explicit full reset), because a key-start is not a fresh
+-- invite cycle and must not allow the accepted-invite notice to replay.
 local lastShownNoticeSearchResultID = nil
+local acceptedInviteNoticeBlockedUntilReset = false
 local lastFiredTargetDungeonChatSearchResultID = nil
 
 -- Injected by the factory after UpdateMPlusTeleportButton is available.
@@ -687,6 +686,20 @@ local function ResolveEntryTitleLevel(entry)
   return nil
 end
 
+local function ResolveEntryTitleLevelText(entry)
+  if type(entry) ~= "table" then
+    return nil
+  end
+  local groupName = entry.groupName
+  if type(groupName) ~= "string" or groupName == "" then
+    return nil
+  end
+  if string.match(groupName, "^|Kk%d+|k$") then
+    return groupName
+  end
+  return nil
+end
+
 -- Exposed for callers that hold a raw entry table (e.g. tests pinning the
 -- divergence-recovery contract, or future consumers that bypass the
 -- MaybeShow* helpers). Mirrors the Get* naming used by the rest of the
@@ -709,13 +722,19 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
     return
   end
   local resolvedLevel = ResolveEntryTitleLevel(entry)
-  if resolvedLevel and searchResultID ~= nil and searchResultID == lastFiredTargetDungeonChatSearchResultID then
+  local resolvedLevelText = not resolvedLevel and ResolveEntryTitleLevelText(entry) or nil
+  if
+    (resolvedLevel or resolvedLevelText)
+    and searchResultID ~= nil
+    and searchResultID == lastFiredTargetDungeonChatSearchResultID
+  then
     Log("chat_skip_duplicate", "searchResultID=%s", tostring(searchResultID))
     return
   end
   targetDungeonChatCallback({
     mapID = entry.mapID,
     level = resolvedLevel,
+    levelText = resolvedLevelText,
     leaderName = entry.leaderName,
     -- groupName is the raw listing title — may be plain ("+12 Push") or
     -- Blizzard pipe-markup ("|Kk584|k"). Either way the chat frame
@@ -724,7 +743,7 @@ local function MaybeFireTargetDungeonChatFromAccept(entry, searchResultID)
     groupName = entry.groupName,
     searchResultID = searchResultID,
   })
-  if resolvedLevel and searchResultID ~= nil then
+  if (resolvedLevel or resolvedLevelText) and searchResultID ~= nil then
     lastFiredTargetDungeonChatSearchResultID = searchResultID
   end
 end
@@ -745,10 +764,14 @@ local function MaybeShowAcceptedInviteNotice(entry, searchResultID)
   if type(acceptedInviteNoticeEnabledFn) == "function" and acceptedInviteNoticeEnabledFn() == false then
     return
   end
+  if acceptedInviteNoticeBlockedUntilReset then
+    Log("notice_skip_after_key_start", "searchResultID=%s", tostring(searchResultID))
+    return
+  end
   -- Swallow same-searchResultID replays of LFG_LIST_APPLICATION_STATUS_UPDATED
   -- =inviteaccepted (Blizzard duplicate-fire). Mirrors the Status controller's
-  -- lock-in on the chat path. Cleared at run-end / group-leave so the next
-  -- legitimate cycle for the same listing renders again.
+  -- lock-in on the chat path. Cleared only by full reset so key-start and
+  -- post-start event replays cannot surface the accepted-invite notice again.
   if searchResultID ~= nil and searchResultID == lastShownNoticeSearchResultID then
     Log("notice_skip_duplicate", "searchResultID=%s", tostring(searchResultID))
     return
@@ -988,6 +1011,7 @@ local function ClearAllStateImpl()
   acceptedInviteSearchResultID = nil
   rosterEstablishedSinceAccept = false
   lastShownNoticeSearchResultID = nil
+  acceptedInviteNoticeBlockedUntilReset = false
   lastFiredTargetDungeonChatSearchResultID = nil
   pendingInvites = {}
   if hadState then
@@ -1198,7 +1222,6 @@ local function ClearAcceptedInviteListingIdentity(reason)
   activeInviteTitleLevel = nil
   acceptedInviteSearchResultID = nil
   pendingAcceptedInviteMapID = nil
-  lastShownNoticeSearchResultID = nil
   lastFiredTargetDungeonChatSearchResultID = nil
   TriggerHighlightUpdate("queue")
 end
@@ -1211,6 +1234,12 @@ function LFGDetect.HandleEvent(event, ...)
     HandleApplicationStatus(searchResultID, newStatus)
   elseif event == "LFG_LIST_ACTIVE_ENTRY_UPDATE" then
     CheckActiveGroup()
+  elseif event == "CHALLENGE_MODE_START" then
+    -- Key start closes the accepted-invite notice window for the current
+    -- group. Keep detectedMapID / active invite identity alive for target
+    -- resolution, but do not let late LFG or roster replays re-render the
+    -- "Invite accepted" Center Notice.
+    acceptedInviteNoticeBlockedUntilReset = true
   elseif event == "CHALLENGE_MODE_COMPLETED" or event == "CHALLENGE_MODE_RESET" then
     -- The run ended (completed or aborted). The LFG-listing identity that
     -- brought the group together is no longer authoritative for whatever
@@ -1300,7 +1329,29 @@ function LFGDetect.HandleEvent(event, ...)
     -- non-accepted entry, consume it, and leave the real inviteaccepted
     -- handler unable to recover its data.
     if not detectedMapID then
-      local resultID, entry = ResolveAcceptedPendingInvite()
+      -- Recovery requires at least one cached pendingInvites table entry.
+      -- ClearAllStateImpl wipes pendingInvites alongside detectedMapID /
+      -- lastShownNoticeSearchResultID / acceptedInviteNoticeBlockedUntilReset
+      -- (post-key-start via checkIfEnteredTargetDungeon, post-leave). If a
+      -- late GROUP_ROSTER_UPDATE then re-enters this branch with an empty
+      -- cache, ResolveAcceptedPendingInvite would otherwise fall back to a
+      -- fresh ResolveInviteEntry via the live LFG API — and the listing's
+      -- applicationStatus can still report "inviteaccepted" for a brief
+      -- window after the consume, rebuilding the entry from scratch and
+      -- re-firing the Center Notice / direct-push chat for an
+      -- already-consumed accept cycle. Bailing here keeps the
+      -- post-key-start / post-leave reset terminal.
+      local hasPendingTableEntry = false
+      for _, pendingEntry in pairs(pendingInvites) do
+        if type(pendingEntry) == "table" then
+          hasPendingTableEntry = true
+          break
+        end
+      end
+      local resultID, entry
+      if hasPendingTableEntry then
+        resultID, entry = ResolveAcceptedPendingInvite()
+      end
       if resultID and entry then
         detectedMapID = entry.mapID
         activeInviteLeader = entry.leaderName
@@ -1316,14 +1367,7 @@ function LFGDetect.HandleEvent(event, ...)
         -- (line ~554) which `next()` happily returns as non-nil, so the
         -- recovery fallback to CheckActiveGroup would otherwise be neutralised
         -- after the first decline in a push-lobby spam scenario.
-        local hasUnresolved = false
-        for _, pendingEntry in pairs(pendingInvites) do
-          if type(pendingEntry) == "table" then
-            hasUnresolved = true
-            break
-          end
-        end
-        if not hasUnresolved then
+        if not hasPendingTableEntry then
           -- Safe to fall back to own-listing detection. With pending invites
           -- present we defer instead, so a queue-listing mapID cannot leak in
           -- over an unresolved invite.

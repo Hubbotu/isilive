@@ -1498,6 +1498,7 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
       statusController.AnnounceTargetDungeonFromPayload({
         name = resolvedName,
         level = payload.level,
+        levelText = payload.levelText,
       })
     end)
   end

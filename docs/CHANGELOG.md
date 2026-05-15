@@ -1,5 +1,111 @@
 # Changelog
 
+## 2026-05-15 - Version 0.9.245 (patch)
+
+Rolls up the 2026-05-15 key-start notice-replay work plus a
+follow-up belt-and-suspenders guard for the recovery branch.
+
+### Key-start closes the accepted-invite notice window
+
+[logic/isiLive_event_handlers_challenge.lua](logic/isiLive_event_handlers_challenge.lua),
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua):
+
+- The challenge-mode-start handler now forwards `CHALLENGE_MODE_START`
+  to `LFGDetect.HandleEvent`. The new branch sets
+  `acceptedInviteNoticeBlockedUntilReset = true` without clearing
+  `detectedMapID` / `activeInviteLeader` / `activeInviteTitleLevel`,
+  so target-dungeon resolution keeps working but a late LFG-event
+  replay (Blizzard occasionally re-emits `inviteaccepted` after the
+  group has settled, e.g. on cross-realm joins) can no longer
+  re-render the "Einladung angenommen" Center Notice.
+- `MaybeShowAcceptedInviteNotice` honours the new flag with an
+  early return + `notice_skip_after_key_start` log line.
+- The flag is cleared only by `ClearAllStateImpl` (group-leave or
+  explicit full reset). Key-end paths
+  (`CHALLENGE_MODE_COMPLETED` / `CHALLENGE_MODE_RESET` /
+  `PARTY_LEADER_CHANGED`) intentionally keep it set: a pre-formed
+  group's next run is not a fresh invite cycle.
+- `lastShownNoticeSearchResultID` is no longer cleared in
+  `ClearAcceptedInviteListingIdentity`; the new flag carries the
+  guarantee and clearing the marker there would only weaken it.
+
+### Recovery branch refuses to rebuild from the live API alone
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua) — the
+GROUP_ROSTER_UPDATE recovery branch now requires at least one
+cached `pendingInvites` table entry before it asks
+`ResolveAcceptedPendingInvite` for an answer. Without this guard
+the post-key-start sequence had a remaining theoretical leak:
+
+1. `CHALLENGE_MODE_START` sets the blocker (above).
+2. Same handler calls `ctx.checkIfEnteredTargetDungeon()`.
+3. `currentMapID == targetMapID` → `LFGDetect.ClearAllState()`.
+4. `ClearAllStateImpl` wipes `pendingInvites`,
+   `lastShownNoticeSearchResultID` AND
+   `acceptedInviteNoticeBlockedUntilReset`.
+5. A late `GROUP_ROSTER_UPDATE` (sub-zone settle / roster refresh
+   after dungeon entry) re-enters the recovery branch; the live
+   LFG application may still report `inviteaccepted` for the
+   already-consumed searchResultID; `ResolveInviteEntry` rebuilds
+   an entry from scratch; without the guard the Notice + direct-
+   push chat would fire a second time.
+
+With the guard, `ResolveAcceptedPendingInvite` is only consulted
+when there is at least one real cached pendingInvites table entry
+to anchor the resolution. An empty cache → no live-API fallback,
+straight to the `CheckActiveGroup` own-listing path. The
+sentinel-only / negative-status case (`false` entries from
+`OnInviteDeclined`) keeps its existing `CheckActiveGroup` fallback
+because those are not table values either.
+
+### Direct-push carries the exact Blizzard keystone markup
+
+[game/isiLive_lfg_detect.lua](game/isiLive_lfg_detect.lua),
+[ui/isiLive_status.lua](ui/isiLive_status.lua),
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+
+- New helper `ResolveEntryTitleLevelText(entry)` returns
+  `entry.groupName` verbatim **only** when it matches
+  `^|Kk%d+|k$` (anchor-strict). Free-form titles like
+  `"+12 Push"` or `"+12 Entspannt"` are rejected so the chat
+  line never inherits descriptive marketing text.
+- `MaybeFireTargetDungeonChatFromAccept` forwards `levelText`
+  alongside `level`; the dedupe marker is set whenever either is
+  resolvable.
+- `AnnounceTargetDungeonFromPayload` accepts the markup as a
+  fallback when `payload.level` is nil, validates the anchor
+  again, and emits the chat line with the raw markup appended
+  after the dungeon name. The WoW chat frame decodes the markup
+  client-side to the familiar `+N`, so the user reads exactly
+  what the Center Notice / Blizzard invite popup already
+  rendered, without any descriptive title fragments leaking in.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_status.lua](testmodul/isilive_test_scenarios_status.lua),
+[testmodul/isilive_test_scenarios_lfg_detect.lua](testmodul/isilive_test_scenarios_lfg_detect.lua),
+[testmodul/isilive_test_scenarios_event_challenges.lua](testmodul/isilive_test_scenarios_event_challenges.lua):
+
+- `Event handlers forward challenge start to LFGDetect` — dispatch
+  contract.
+- `AcceptedInviteNotice does not replay after challenge start` —
+  the late-replay sequence: `invited` → `inviteaccepted` →
+  `CHALLENGE_MODE_START` → `inviteaccepted` replay → Notice fires
+  exactly once.
+- `AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE
+  recovery after ClearAllState` — pins the new recovery guard:
+  even with the live LFG API still reporting
+  `inviteaccepted` for the consumed searchResultID, the
+  post-`ClearAllState` recovery branch cannot rebuild a Notice.
+- `LFGDetect direct-push carries exact Blizzard keystone level
+  markup` — anchor-strict markup forwarded as `levelText`.
+- `Status AnnounceTargetDungeonFromPayload emits exact Blizzard
+  keystone level markup` — chat line composes
+  `"Target Dungeon: <name> |Kk584|k"` and locks out the
+  level-less resolver fallback.
+
+Usecase count rises from 1715 to 1720.
+
 ## 2026-05-15 - Version 0.9.244 (patch)
 
 Fixes the race that produced the `Gruppe: Unbekannt` Center Notice

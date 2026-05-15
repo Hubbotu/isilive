@@ -839,6 +839,37 @@ local function RegisterPortalNavigatorTests(test, Assert, WithGlobals, LoadAddon
     end)
   end)
 
+  test("Status AnnounceTargetDungeonFromPayload emits exact Blizzard keystone level markup", function()
+    local prints = {}
+    WithGlobals({}, function()
+      local addon = LoadAddonModules({ "isiLive_status.lua" })
+      local controller = addon.Status.CreateController({
+        getL = BuildLocale,
+        isInGroup = function()
+          return true
+        end,
+        getTargetDungeonInfo = function()
+          return { name = "Die Himmelsnadel" }
+        end,
+        printFn = function(message)
+          table.insert(prints, tostring(message))
+        end,
+      })
+
+      controller.AnnounceTargetDungeonFromPayload({ name = "Die Himmelsnadel", levelText = "|Kk584|k" })
+
+      Assert.Equal(#prints, 1, "exact Blizzard keystone markup must emit a direct-push chat line")
+      Assert.Equal(
+        prints[1],
+        "Target Dungeon: |cffffd200Die Himmelsnadel |Kk584|k|r",
+        "chat line must preserve the exact renderable Blizzard markup after the dungeon name"
+      )
+
+      controller.MaybeAnnounceTargetDungeonChat()
+      Assert.Equal(#prints, 1, "markup direct-push must lock out the later level-less resolver fallback")
+    end)
+  end)
+
   test("Status AnnounceTargetDungeonFromPayload is a no-op for invalid payloads", function()
     local prints = {}
     WithGlobals({}, function()

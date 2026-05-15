@@ -516,6 +516,7 @@ function ChallengeLifecycle.BuildHandlers(ctx)
     ctx.handleMplusTimerEvent("CHALLENGE_MODE_START")
     ctx.handleKillTrackEvent("CHALLENGE_MODE_START")
     ctx.handleCombatEventsEvent("CHALLENGE_MODE_START")
+    ctx.handleLFGDetectEvent("CHALLENGE_MODE_START")
     if type(ctx.logRuntimeTrace) == "function" then
       ctx.logRuntimeTrace("[RC] challenge_mode_start state_set var=readyCheckActive val=false")
     end

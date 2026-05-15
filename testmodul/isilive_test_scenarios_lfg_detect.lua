@@ -1280,9 +1280,42 @@ local function RegisterLFGDetectQueueStateTests(test, ctx)
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 603, "inviteaccepted")
 
       Assert.Equal(#payloads, 1, "callback still fires even when titleLevel is nil")
-      Assert.Nil(
-        payloads[1].level,
-        "missing +N in the listing title surfaces as nil — the chat line renders level-less"
+      Assert.Nil(payloads[1].level, "missing +N in the listing title surfaces as nil")
+      Assert.Nil(payloads[1].levelText, "free-form titles must not become renderable chat level text")
+    end)
+  end)
+
+  test("LFGDetect direct-push carries exact Blizzard keystone level markup", function()
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [603] = { activityID = 1768, name = "|Kk584|k", leaderName = "Z-Realm" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetTargetDungeonChatCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetTargetDungeonChatEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 603, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 603, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "callback must fire for exact Blizzard keystone markup")
+      Assert.Nil(payloads[1].level, "opaque Blizzard markup must not be parsed as a synthetic numeric level")
+      Assert.Equal(
+        payloads[1].levelText,
+        "|Kk584|k",
+        "exact Blizzard keystone markup must be forwarded for chat-frame rendering"
       )
     end)
   end)
@@ -2411,6 +2444,113 @@ local function RegisterLFGDetectAcceptedInviteNoticeTests(test, ctx)
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "invited")
       fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 701, "inviteaccepted")
       Assert.Equal(#payloads, 2, "after ClearAllState the same searchResultID renders again")
+    end)
+  end)
+
+  test("AcceptedInviteNotice does not replay after challenge start", function()
+    local globals, fire = BuildLFGDetectEnv({
+      globals = {
+        C_LFGList = BuildC_LFGList({
+          [702] = { activityID = 1542, name = "+13 spire", leaderName = "Tank" },
+        }, nil),
+      },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 702, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 702, "inviteaccepted")
+      fire("CHALLENGE_MODE_START")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 702, "inviteaccepted")
+
+      Assert.Equal(#payloads, 1, "key-start must close the accepted-invite notice window")
+      Assert.Equal(addon.LFGDetect.GetDetectedMapID(), 557, "key-start must not clear the detected invite map")
+    end)
+  end)
+
+  test("AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE recovery after ClearAllState", function()
+    -- The closing line of the key-start sequence is ClearAllState (driven
+    -- by CheckIfEnteredTargetDungeon once currentMapID == targetMapID).
+    -- It wipes pendingInvites, lastShownNoticeSearchResultID AND the
+    -- acceptedInviteNoticeBlockedUntilReset flag. If a late
+    -- GROUP_ROSTER_UPDATE re-enters the recovery branch, the live LFG
+    -- API can still hand back a "stale" inviteaccepted searchResultID
+    -- and ResolveInviteEntry would rebuild the entry from scratch. The
+    -- recovery branch must therefore refuse to fall back to the API
+    -- without at least one cached pendingInvites table entry to anchor
+    -- the resolution; otherwise the Center Notice would re-render for
+    -- an accept cycle that was already consumed.
+    local lfgList = BuildC_LFGList({
+      [802] = { activityID = 1542, name = "+13 spire", leaderName = "Tank" },
+    }, nil)
+    -- Live-API stub: the application is still reported as
+    -- "inviteaccepted" for resultID 802 even after the local accept
+    -- cycle was consumed (this is what FindAcceptedSearchResultID can
+    -- legitimately hit in production for a short window).
+    lfgList.GetApplications = function()
+      return { 1001 }
+    end
+    lfgList.GetApplicationInfo = function(applicationID)
+      if applicationID == 1001 then
+        return 802, "inviteaccepted"
+      end
+      return nil
+    end
+
+    local globals, fire = BuildLFGDetectEnv({
+      IsInGroup = function()
+        return true
+      end,
+      globals = { C_LFGList = lfgList },
+    })
+
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_detect.lua" })
+      local payloads = {}
+      addon.LFGDetect.SetAcceptedInviteNoticeCallback(function(payload)
+        payloads[#payloads + 1] = payload
+      end)
+      addon.LFGDetect.SetAcceptedInviteNoticeEnabledFn(function()
+        return true
+      end)
+
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 802, "invited")
+      fire("LFG_LIST_APPLICATION_STATUS_UPDATED", 802, "inviteaccepted")
+      Assert.Equal(#payloads, 1, "setup: invite accepted emits the notice exactly once")
+
+      -- Simulate CheckIfEnteredTargetDungeon's terminal step: a full reset
+      -- including pendingInvites and the new acceptedInviteNoticeBlocked
+      -- flag. After this, only the live API still remembers the listing.
+      addon.LFGDetect.ClearAllState()
+      Assert.Nil(
+        addon.LFGDetect.GetDetectedMapID(),
+        "setup: full reset clears the accepted-invite state, including pendingInvites and the notice blocker"
+      )
+
+      -- Late GROUP_ROSTER_UPDATE (sub-zone settle / roster refresh after
+      -- entering the dungeon). The live LFG stub still reports 802 as the
+      -- accepted searchResultID; without the new guard the recovery
+      -- branch would rebuild the entry via ResolveInviteEntry and fire
+      -- the notice a second time.
+      fire("GROUP_ROSTER_UPDATE")
+
+      Assert.Equal(
+        #payloads,
+        1,
+        "post-reset GROUP_ROSTER_UPDATE recovery must not rebuild a notice from the live API alone"
+      )
+      Assert.Nil(
+        addon.LFGDetect.GetDetectedMapID(),
+        "post-reset recovery must not silently rehydrate detectedMapID either"
+      )
     end)
   end)
 
