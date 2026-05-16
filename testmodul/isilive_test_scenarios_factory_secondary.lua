@@ -296,7 +296,17 @@ local function BuildControllerContext(state, addon, initial)
         }
       end,
       PatchRuntimeFlags = function() end,
-      ClearLatestQueueTarget = function() end,
+      SetLatestQueueState = function(dungeonName, activityID, teleportSpellID, mapID)
+        state.latestQueueState = {
+          dungeonName = dungeonName,
+          activityID = activityID,
+          teleportSpellID = teleportSpellID,
+          mapID = mapID,
+        }
+      end,
+      ClearLatestQueueTarget = function()
+        state.latestQueueState = nil
+      end,
       IsReadyCheckActive = function()
         return initial.readyCheckActive == true
       end,
@@ -482,6 +492,9 @@ local function RegisterTestModeDemoDataTests(test, Assert, WithGlobals, LoadAddo
     Assert.NotNil(state.killTrackDemoData, "test mode must populate bottom M+ forces tracker demo data")
     Assert.True(state.killTrackDemoData.active, "kill-track demo data must be active")
     Assert.Equal(state.killTrackDemoData.percent, 47.34, "kill-track demo percent must match the preview value")
+    Assert.NotNil(state.latestQueueState, "test mode must populate a demo target dungeon context")
+    Assert.Equal(state.latestQueueState.dungeonName, "Demo-Zieldungeon", "demo target dungeon name must be explicit")
+    Assert.Equal(state.latestQueueState.mapID, 559, "demo target dungeon map must match kill-track preview map")
 
     Assert.NotNil(state.afterCallbacks, "test mode must defer CD tracker demo data until controller creation")
     state.afterCallbacks[1]()

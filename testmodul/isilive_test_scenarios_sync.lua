@@ -1165,6 +1165,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1204,6 +1205,37 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
 
       Assert.False(result, "share-keys request must report failure when no addon sync channel exists")
       Assert.Equal(#sentMessages, 0, "share-keys request must not publish without an addon sync channel")
+    end)
+  end)
+
+  test("Sync SendShareKeysRequest returns false when addon message dispatch fails", function()
+    local sentMessages = {}
+
+    WithGlobals({
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+          return false
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local result = addon.Sync.SendShareKeysRequest()
+
+      Assert.False(result, "share-keys request must report failure when the addon message dispatch fails")
+      Assert.Equal(#sentMessages, 1, "share-keys request should still attempt one addon message dispatch")
+      Assert.Equal(sentMessages[1].message, "SHAREKEYS", "failed dispatch must still carry the SHAREKEYS payload")
     end)
   end)
 

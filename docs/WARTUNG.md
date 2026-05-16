@@ -176,10 +176,12 @@ Aktueller Soll-Zustand:
   - `NORMAL` → `HELLO`, `KEY`, `TARGET`, `SHAREKEYS`, `BRLUST`, LibKeystone-Party-/Request-Envelopes
   - `BULK` → `STATS`, `DPS`, `LOC` (Metriken, duerfen unter Last zurueckstehen)
 - Jeder Send loggt `sent=true|false` in den SyncLog-Trace; ChatThrottleLib-Drops werden dort sichtbar.
+- `Sync.SendShareKeysRequest()` darf nur `true` zurueckgeben, wenn `DispatchAddonMessage()` den `SHAREKEYS`-Payload tatsaechlich erfolgreich angenommen hat; ein vorhandener Kanal allein reicht nicht als Erfolg.
 
 Typische Ursachen fuer Brueche:
 - `.luacheckrc` oder `.stylua`-Ausnahmen fuer `libs/` werden entfernt → StyLua- oder Luacheck-Diagnose bricht auf der vendored Lib.
 - Jemand sendet wieder raw `C_ChatInfo.SendAddonMessage` direkt → unter Last droppt die Nachricht ohne Trace.
+- Ein SHAREKEYS-Caller ignoriert den Rueckgabewert von `DispatchAddonMessage` → der Button kann faelschlich sperren, obwohl kein Peer die Anfrage erhalten hat.
 
 ### 3.7 Mob-Tooltip mit Forces-Anteil
 

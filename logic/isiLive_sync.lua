@@ -1524,7 +1524,7 @@ function Sync.SendShareKeysRequest()
   end
   local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel, "NORMAL")
   SyncLog("send_sharekeys", "channel=%s sent=%s", tostring(channel), tostring(sent))
-  return true
+  return sent == true
 end
 
 local MAX_ADDON_MESSAGE_LENGTH = 255

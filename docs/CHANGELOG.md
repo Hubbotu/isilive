@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-05-16 - Version 0.9.247 (patch)
+
+Cleans up the M+ killtracker pre-key level cell, repositions the
+active-key dungeon name on the progress bar, and tightens the Share Keys
+success signal.
+
+### M+ KillTracker
+
+[ui/isiLive_roster_panel_kill_row.lua](ui/isiLive_roster_panel_kill_row.lua):
+
+- Pre-key level cell now only renders the numeric `+N`; raw LFG title
+  scraps (group-leader notes, unprocessed Blizzard keystone markup) no
+  longer leak into the level position.
+- Active-key dungeon name moved on top of the progress bar (left-aligned,
+  outlined, with a subtle contrast label) so the bar stays the dominant
+  element while the dungeon label stays legible.
+
+### Share Keys
+
+[logic/isiLive_sync.lua](logic/isiLive_sync.lua):
+
+- `SendShareKeysRequest()` now reports success only when the `SHAREKEYS`
+  addon message dispatch actually succeeds. Failed dispatch attempts no
+  longer look like a successful peer broadcast to the button/cooldown
+  chain.
+
 ## 2026-05-15 - Version 0.9.246 (patch)
 
 Fixes M+ target display and enemy-forces freshness in the bottom tracker.

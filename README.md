@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.246`
+- **Current version:** `0.9.247`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -98,6 +98,7 @@ A bottom bar that shows your kill-count percentage:
 
 - **Green** < 80%, **Yellow** < 95%, **Red** ≥ 95%
 - After a verified LFG invite target announce, the bar shows the target dungeon and key level right-aligned until the key starts
+- During an active key, the verified dungeon name stays visible on the progress bar as a left-aligned outlined label with a subtle contrast background
 - During a pull, a light-blue segment on the right shows **how much the current pull will add** (`+X.XX%`) — so you can see mid-pull whether it's enough
 - When combat ends, the tracker refreshes Blizzard's live scenario progress immediately, so the last pull is counted before the next pull or boss engagement
 
@@ -126,7 +127,7 @@ Only enabled when you are the leader:
 
 ### Share Keys
 
-Posts everyone's keystone in party chat — yours first, then other isiLive users reply with their own. The button has a 30-second cooldown that also triggers across the group so nobody spams duplicates.
+Posts everyone's keystone in group chat — yours first, then other isiLive users reply with their own. The button has a 30-second cooldown after a real local share or successful peer request; receiving clients only lock their button when they actually post their own key.
 
 ### Re-Sync
 

@@ -79,7 +79,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 56. Runtime-Log-Eintraege werden nur bei aktivem Runtime-Logging geschrieben; jeder Eintrag traegt eine stabile Sequenznummer und einen praezisen Zeitstempel, `[TAG] action`-Nachrichten werden zu `[TAG] event=action` normalisiert, teure Formatierung und Trace-Builder duerfen bei ausgeschaltetem Log oder deaktivierter Deep-Stufe nicht laufen, und der Logspeicher muss seine Tail-Reihenfolge und sein Cap auch bei grossen Log-, Sync- und Roster-Bursts behalten.
 57. Der Ingame-Testmodus muss die aktuellen Demo-Daten fuer M+-Timer, Combat-CDs, den unteren M+-Forces-Tracker und Multi-Kick-Tooltip-Extras setzen und beim Verlassen wieder bereinigen.
 58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
-59. Der untere M+-Killtracker zeigt vor Key-Start verifizierte Ziel-Dungeon-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig an; eine Keystufe wird nur bei positiver verifizierter Aufloesung ergaenzt. Ab Key-Start wechselt er zur Prozentanzeige zurueck; waehrend aktiver Prozentdaten darf der verifizierte Dungeonname gedimmt als Kontext unter dem Prozentbalken sichtbar bleiben.
+59. Der untere M+-Killtracker zeigt vor Key-Start verifizierte Ziel-Dungeon-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig an; eine Keystufe wird nur bei positiver numerischer Aufloesung ergaenzt. Ab Key-Start wechselt er zur Prozentanzeige zurueck; waehrend aktiver Prozentdaten darf der verifizierte Dungeonname linksbuendig als helles Outline-Label mit dunkler Hinterlegung auf dem Prozentbalken sichtbar bleiben.
 60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
 
 ## Regelbloecke
@@ -639,6 +639,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Roster panel share keys button ignores no-op clicks without chat or sync success
   - Roster panel share keys button locks on remote SHAREKEYS signal
   - Sync SendShareKeysRequest returns false without an addon sync channel
+  - Sync SendShareKeysRequest returns false when addon message dispatch fails
   - Event handlers answer SHAREKEYS requests while frame is hidden
   - Event handlers skip SHAREKEYS cooldown when no own key chat share was posted
 
@@ -716,17 +717,18 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-MPLUS-KILLTRACKER-PREKEY-ZIEL
 - Regelnummer: 59
 - Status: aktiv
-- Zusammenfassung: Der untere M+-Killtracker darf vor Key-Start einen verifizierten Dungeon rechtsbuendig anzeigen, sobald die Target-Dungeon-Aufloesung einen konkreten Namen liefert; die Keystufe darf nur als farbiger Zusatz erscheinen, wenn sie positiv verifiziert ist oder als exakt beobachtetes Blizzard-Keystone-Markup vorliegt. Sobald der Key gestartet ist, darf diese Vor-Key-Anzeige nicht mehr sichtbar bleiben; danach gilt wieder die Prozentanzeige des Killtrackers beziehungsweise deren Platzhalter, bis aktive Prozentdaten vorliegen. Bei aktiven Prozentdaten darf der verifizierte Dungeonname gedimmt und rechtsbuendig als Kontext unter dem Prozentbalken sichtbar bleiben; die Keystufe bleibt dort ausgeblendet.
+- Zusammenfassung: Der untere M+-Killtracker darf vor Key-Start einen verifizierten Dungeon rechtsbuendig anzeigen, sobald die Target-Dungeon-Aufloesung einen konkreten Namen liefert; die Keystufe darf nur als farbiger Zusatz erscheinen, wenn sie positiv verifiziert als ganze Zahl vorliegt. Rohe Titel-Strings des Gruppen-Erstellers oder unverarbeitetes Blizzard-Keystone-Markup duerfen nicht in das Keystufe-Feld geschrieben werden. Sobald der Key gestartet ist, darf diese Vor-Key-Anzeige nicht mehr sichtbar bleiben; danach gilt wieder die Prozentanzeige des Killtrackers beziehungsweise deren Platzhalter, bis aktive Prozentdaten vorliegen. Bei aktiven Prozentdaten darf der verifizierte Dungeonname linksbuendig auf dem Prozentbalken sichtbar bleiben (Outline-Schrift, hell, mit dunklem Hinterlegungslabel fuer stabilen Kontrast); die Keystufe bleibt dort ausgeblendet.
 - Erforderliche Tests:
   - UpdateKillTrackRow renders verified target key as right-aligned combined text before challenge start
   - UpdateKillTrackRow renders literal pipe characters in verified pre-key dungeon names
   - UpdateKillTrackRow renders verified pre-key dungeon when level is unresolved
-  - UpdateKillTrackRow renders verified Blizzard level markup before challenge start
+  - UpdateKillTrackRow drops raw level text when no numeric level resolves
   - factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved
   - factory_controllers: direct-push persists accepted target for killtracker refresh
   - UpdateKillTrackRow suppresses target key after challenge start until percent data is active
   - UpdateKillTrackRow restores percent bar after pre-key target display
-  - UpdateKillTrackRow keeps dimmed dungeon context under active percent bar
+  - CreateKillTrackRow anchors active dungeon text to the full row overlay
+  - UpdateKillTrackRow keeps dungeon context visible while active percent data is visible
 
 ### RULE-MPLUS-KILLTRACKER-LIVE-FORCES-REFRESH
 - Regelnummer: 60

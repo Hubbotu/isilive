@@ -16,8 +16,8 @@ local function NewBarStub(getWidth)
   function bar.SetWidth(self, w)
     self._width = w
   end
-  function bar.SetVertexColor(self, r, g, b)
-    self._color = { r, g, b }
+  function bar.SetVertexColor(self, ...)
+    self._color = { ... }
   end
   function bar.SetTexture(self, _path) end
   function bar.SetPoint(self, ...) end
@@ -50,6 +50,123 @@ local function NewFontStringStub()
   return fs
 end
 
+local function NewCreateFrameRecorder()
+  local createdFrames = {}
+  local createdFontStrings = {}
+
+  local function NewFontString(parent)
+    local fs = {
+      _parent = parent,
+      _points = {},
+      _drawLayer = nil,
+      _alpha = nil,
+    }
+    function fs.SetPoint(self, ...)
+      table.insert(self._points, { ... })
+    end
+    function fs.SetWidth(self, width)
+      self._width = width
+    end
+    function fs.SetJustifyH(self, justifyH)
+      self._justifyH = justifyH
+    end
+    function fs.SetJustifyV(self, justifyV)
+      self._justifyV = justifyV
+    end
+    function fs.SetDrawLayer(self, layer, sublayer)
+      self._drawLayer = { layer, sublayer }
+    end
+    function fs.SetAlpha(self, alpha)
+      self._alpha = alpha
+    end
+    function fs.SetText(self, text)
+      self._text = text
+    end
+    function fs.SetTextColor() end
+    function fs.GetFont()
+      return "font", 10, ""
+    end
+    function fs.SetFont(self, path, size, flags)
+      self._font = { path, size, flags }
+    end
+    table.insert(createdFontStrings, fs)
+    return fs
+  end
+
+  local function NewTexture()
+    local tex = {
+      _points = {},
+      _shown = true,
+    }
+    function tex.SetAllPoints(self, owner)
+      self._allPoints = owner or true
+    end
+    function tex.SetTexture() end
+    function tex.SetVertexColor(self, ...)
+      self._color = { ... }
+    end
+    function tex.SetPoint(self, ...)
+      table.insert(self._points, { ... })
+    end
+    function tex.SetWidth(self, width)
+      self._width = width
+    end
+    function tex.SetHeight(self, height)
+      self._height = height
+    end
+    function tex.Hide(self)
+      self._shown = false
+    end
+    function tex.Show(self)
+      self._shown = true
+    end
+    return tex
+  end
+
+  local function NewFrame(parent)
+    local frame = {
+      _parent = parent,
+      _points = {},
+      _shown = true,
+      _frameLevel = 1,
+    }
+    function frame.SetHeight(self, height)
+      self._height = height
+    end
+    function frame.SetPoint(self, ...)
+      table.insert(self._points, { ... })
+    end
+    function frame.SetFrameLevel(self, level)
+      self._frameLevel = level
+    end
+    function frame.GetFrameLevel(self)
+      return self._frameLevel
+    end
+    function frame.CreateTexture()
+      return NewTexture()
+    end
+    function frame.CreateFontString(self)
+      return NewFontString(self)
+    end
+    function frame.Hide(self)
+      self._shown = false
+    end
+    function frame.Show(self)
+      self._shown = true
+    end
+    table.insert(createdFrames, frame)
+    return frame
+  end
+
+  return {
+    createdFrames = createdFrames,
+    createdFontStrings = createdFontStrings,
+    createFrame = function(_frameType, _name, parent)
+      return NewFrame(parent)
+    end,
+  }
+end
+
 local function NewRow(barContainerWidth)
   local barContainer = {
     _shown = true,
@@ -70,6 +187,7 @@ local function NewRow(barContainerWidth)
     killTrackBarPull = NewBarStub(),
     killTrackTargetText = NewFontStringStub(),
     killTrackTargetLevelText = NewFontStringStub(),
+    killTrackActiveDungeonBackdrop = NewBarStub(),
     killTrackActiveDungeonText = NewFontStringStub(),
     killTrackPctText = NewFontStringStub(),
     killTrackPullText = NewFontStringStub(),
@@ -90,6 +208,42 @@ return function(test, ctx)
     }
     return addon
   end
+
+  test("CreateKillTrackRow anchors active dungeon text to the full row overlay", function()
+    local recorder = NewCreateFrameRecorder()
+    WithGlobals({
+      CreateFrame = recorder.createFrame,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel_helpers.lua", "isiLive_roster_panel_kill_row.lua" })
+      local mainFrame = recorder.createFrame("Frame", nil, nil)
+      local row = addon._RosterInternal.CreateKillTrackRow(mainFrame)
+      local overlay = row.killTrackActiveDungeonOverlay
+      local backdrop = row.killTrackActiveDungeonBackdrop
+      local activeText = row.killTrackActiveDungeonText
+
+      Assert.NotNil(overlay, "active dungeon context overlay frame must be created")
+      Assert.NotNil(backdrop, "active dungeon context contrast backdrop must be created")
+      Assert.NotNil(activeText, "active dungeon context fontstring must be created")
+      Assert.True(
+        overlay._frameLevel > row.killTrackBarContainer._frameLevel,
+        "active dungeon context overlay must be above the bar container frame"
+      )
+      Assert.True(
+        overlay._points[1][2] ~= row.killTrackBarContainer,
+        "active dungeon context overlay must not be anchored to the 8px bar container"
+      )
+      Assert.Equal(activeText._points[1][1], "LEFT", "active dungeon context keeps a left anchor")
+      Assert.Equal(activeText._points[1][2], overlay, "active dungeon context anchors inside the overlay frame")
+      Assert.Equal(backdrop._points[1][2], overlay, "active dungeon backdrop anchors inside the overlay frame")
+      Assert.Equal(backdrop._width, 146, "active dungeon backdrop reserves a stable contrast label width")
+      Assert.Equal(backdrop._color[4], 0.5, "active dungeon backdrop must subtly darken the bar below the label")
+      Assert.True(backdrop._shown == false, "active dungeon backdrop starts hidden until text is available")
+      Assert.Equal(activeText._justifyV, "MIDDLE", "active dungeon context must be vertically centered in the row")
+      Assert.Equal(activeText._drawLayer[1], "OVERLAY", "active dungeon context must render above bar textures")
+      Assert.Equal(activeText._drawLayer[2], 7, "active dungeon context uses a high overlay sublayer")
+      Assert.Equal(activeText._alpha, 0.92, "active dungeon context starts with the configured default alpha")
+    end)
+  end)
 
   -- Early return ---------------------------------------------------------------
 
@@ -213,7 +367,7 @@ return function(test, ctx)
     end)
   end)
 
-  test("UpdateKillTrackRow renders verified Blizzard level markup before challenge start", function()
+  test("UpdateKillTrackRow drops raw level text when no numeric level resolves", function()
     WithGlobals({}, function()
       local addon = LoadKillRow({ active = false, percent = 0 })
       local row = NewRow()
@@ -231,8 +385,8 @@ return function(test, ctx)
       Assert.Equal(row.killTrackTargetText._text, "Windlaeuferturm", "verified dungeon name must render")
       Assert.Equal(
         row.killTrackTargetLevelText._text,
-        "|Kk584|k",
-        "exact Blizzard keystone markup must stay visible as the pre-key level"
+        "",
+        "raw level text (Blizzard markup or LFG title scraps) must not leak into the pre-key level cell"
       )
     end)
   end)
@@ -289,7 +443,7 @@ return function(test, ctx)
     end)
   end)
 
-  test("UpdateKillTrackRow keeps dimmed dungeon context under active percent bar", function()
+  test("UpdateKillTrackRow keeps dungeon context visible while active percent data is visible", function()
     WithGlobals({}, function()
       local addon = LoadKillRow({ active = true, percent = 42 })
       local row = NewRow(200)
@@ -310,10 +464,19 @@ return function(test, ctx)
       Assert.Equal(
         row.killTrackActiveDungeonText._text,
         "Nexuspunkt Xenas",
-        "active percent view must keep the dungeon as dimmed context"
+        "active percent view must keep the dungeon context visible on the progress row"
       )
-      Assert.Equal(row.killTrackActiveDungeonText._justifyH, "RIGHT", "active dungeon context must be right-aligned")
-      Assert.Equal(row.killTrackActiveDungeonText._color[1], 0.35, "active dungeon context must be dimmed")
+      Assert.Equal(
+        row.killTrackActiveDungeonText._justifyH,
+        "LEFT",
+        "active dungeon context must be left-aligned on the progress row"
+      )
+      Assert.Equal(
+        row.killTrackActiveDungeonText._color[1],
+        1.0,
+        "active dungeon context must use bright outline text for bar legibility"
+      )
+      Assert.True(row.killTrackActiveDungeonBackdrop._shown == true, "active dungeon backdrop must show behind text")
       Assert.Equal(row.killTrackPctText._text, "42,00%", "active percent text must stay primary")
     end)
   end)

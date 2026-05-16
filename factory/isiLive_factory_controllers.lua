@@ -1722,6 +1722,9 @@ local function InitializeFactorySecondaryTestModeAndBindings(ctx, modules, runti
           deathTimeLost = 8,
         })
       end
+      if type(runtimeState.SetLatestQueueState) == "function" then
+        runtimeState.SetLatestQueueState("Demo-Zieldungeon", nil, nil, 559)
+      end
       local KillTrack = ctx.addonTable and ctx.addonTable.KillTrack
       if type(KillTrack) == "table" and type(KillTrack.SetDemoData) == "function" then
         KillTrack.SetDemoData({

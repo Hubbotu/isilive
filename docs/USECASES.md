@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.246`
-Zuletzt aktualisiert: `2026-05-15`
+Versionsbasis: `0.9.247`
+Zuletzt aktualisiert: `2026-05-16`
 
 ## Akteure
 
@@ -106,11 +106,11 @@ Ziel: Sowohl natuerliches Cooldown-Ende als auch Dungeon-Finish-Reset unterstuet
 Ziel: Dem User erlauben, aktuelle Party-Keys schnell zu posten.
 
 1. Trigger: Der User klickt den Button `Share Keys` im rechten Kontrollstapel.
-2. Verarbeitung: Das Addon postet sofort die Key-Zeile des lokalen Spielers, bevorzugt mit Blizzard-Owned-Keystone-Hyperlink und als Fallback mit lokalisiertem Dungeon-Short-Code plus Level; der Fallback bleibt dabei anklickbar.
-3. Verarbeitung: Danach broadcastet das Addon `SHAREKEYS` ueber den Addon-Sync-Channel, damit andere `isiLive`-Peers ihre eigene lokale Key-Zeile posten koennen, ohne einen vollen `Re-Sync` zu brauchen.
-4. Output: Eine lokale Key-Zeile geht sofort an `PARTY`; bei Sendefehler gibt es einen lokalen Print-Fallback, der nicht als erfolgreicher Party-Share zaehlt. Weitere Peer-Zeilen duerfen danach von antwortenden Gruppenmitgliedern folgen.
-5. Regel: `Share Keys`-Button-Klicks werden entprellt, um schnelle doppelte Chat-Ausgaben zu vermeiden, und der Button zeigt waehrend der Sperre sichtbar `30s` Cooldown.
-5a. Regel: Wenn ein Client eine eingehende `SHAREKEYS`-Sync-Message erhaelt, wird der lokale `Share Keys`-Button nur dann ueber `TriggerRemoteCooldown` fuer `30s` gesperrt, wenn dieser Empfangspfad tatsaechlich einen eigenen Party-Share ausgeloest hat; ein bereits laufender lokaler Cooldown wird nicht zurueckgesetzt.
+2. Verarbeitung: Das Addon postet sofort die Key-Zeile des lokalen Spielers in den passenden Gruppenchat (`PARTY` oder `INSTANCE_CHAT`), bevorzugt mit Blizzard-Owned-Keystone-Hyperlink und als Fallback mit lokalisiertem Dungeon-Short-Code plus Level; der Fallback bleibt dabei anklickbar.
+3. Verarbeitung: Danach broadcastet das Addon `SHAREKEYS` ueber den Addon-Sync-Channel, damit andere `isiLive`-Peers ihre eigene lokale Key-Zeile posten koennen, ohne einen vollen `Re-Sync` zu brauchen; dieser Request gilt nur dann als erfolgreich, wenn der Addon-Message-Dispatch selbst Erfolg meldet.
+4. Output: Eine lokale Key-Zeile geht sofort in den Gruppenchat; bei Sendefehler gibt es einen lokalen Print-Fallback, der nicht als erfolgreicher Gruppenchat-Share zaehlt. Weitere Peer-Zeilen duerfen danach von antwortenden Gruppenmitgliedern folgen.
+5. Regel: `Share Keys`-Button-Klicks werden entprellt, um schnelle doppelte Chat-Ausgaben zu vermeiden, und der Button zeigt waehrend der Sperre sichtbar `30s` Cooldown; ein fehlgeschlagener eigener Gruppenchat-Post ohne erfolgreich dispatchten `SHAREKEYS`-Request darf keine Sperre starten.
+5a. Regel: Wenn ein Client eine eingehende `SHAREKEYS`-Sync-Message erhaelt, wird der lokale `Share Keys`-Button nur dann ueber `TriggerRemoteCooldown` fuer `30s` gesperrt, wenn dieser Empfangspfad tatsaechlich einen eigenen Gruppenchat-Share ausgeloest hat; ein bereits laufender lokaler Cooldown wird nicht zurueckgesetzt.
 6. Verwandte Aktion: Der danebenliegende `Re-Sync`-Button erzwingt den Hidden-Peer-Sync-Handshake, sendet zusaetzlich eine `LibKS`-Party-Anfrage fuer kompatible Nicht-`isiLive`-Peers und bleibt danach sichtbar `10s` auf Cooldown.
 7. Erfolgskriterium: Der ausloesende User bekommt immer zuerst die eigene Owned-Keystone-Zeile, und Peer-Antworten bleiben senderverteilt statt aus gecachten Remote-Roster-Daten rekonstruiert zu werden.
 
@@ -176,8 +176,9 @@ Ziel: Live-BRes, Bloodlust/Heroism/Time Warp, aktive Mythic+-Timer-Cutoffs, den 
 4. Regel: `UNIT_AURA`-Updates mit `isFullUpdate=true` nach Zone-/World-Transitions oder UI-Reloads muessen den aktiven Lust-State hydrieren, ohne einen neuen Onset-Callback auszufeuern.
 5. Regel: `PLAYER_ENTERING_WORLD` darf nur ein kurzes 2-Sekunden-Suppress-Fenster als Sicherheitsnetz bis zum Full-Aura-Restore-Event behalten.
 6. Verarbeitung: Solange ein aktiver Mythic+-Timer laeuft und das Roster-Panel sichtbar ist, muss derselbe One-Second-Utility-Ticker auch einen Vollrender des Panels ausloesen, damit die sichtbaren `+3/+2/+1`-Cutoffs live herunterzaehlen; Hidden-Modus darf diesen Utility-Poller nicht weiterlaufen lassen, und beim erneuten Oeffnen der UI darf genau ein frischer Utility-Rescan nur auf dem ersten sichtbaren Render nach Dirty-Markierung stattfinden.
-6a. Verarbeitung: Nach einem verifizierten LFG-Invite-Target-Announce zeigt die untere M+-Killtracker-Zeile bis `CHALLENGE_MODE_START` den belastbaren Ziel-Dungeon plus Keystufe als rechtsbuendigen kombinierten Text; sobald der Key gestartet ist, wird dieser Pre-Key-Zieltext unterdrueckt und die Zeile nutzt wieder die Forces-Prozentanzeige.
-6b. Verarbeitung: `KillTrack` muss auf `PLAYER_REGEN_ENABLED` und vor jedem aktiven Refresh-Ticker-Notify die Blizzard-Live-Szenariodaten erneut lesen und daraus die Pull-/Gesamtprozentwerte aktualisieren, damit abgeschlossene Pulls sofort in UI und Nameplate-Restbedarf sichtbar werden.
+6a. Verarbeitung: Nach einem verifizierten LFG-Invite-Target-Announce zeigt die untere M+-Killtracker-Zeile bis `CHALLENGE_MODE_START` den belastbaren Ziel-Dungeon plus Keystufe als rechtsbuendigen kombinierten Text; die Keystufe erscheint nur, wenn sie positiv verifiziert numerisch vorliegt. Sobald der Key gestartet ist, wird dieser Pre-Key-Zieltext unterdrueckt und die Zeile nutzt wieder die Forces-Prozentanzeige.
+6b. Verarbeitung: Wenn waehrend aktiver Prozentdaten ein verifizierter Ziel-Dungeon bekannt ist, bleibt dessen Name linksbuendig als helles Outline-Label mit dunkler Hinterlegung auf dem Prozentbalken sichtbar; eine Keystufe wird in diesem aktiven Kontext nicht angezeigt.
+6c. Verarbeitung: `KillTrack` muss auf `PLAYER_REGEN_ENABLED` und vor jedem aktiven Refresh-Ticker-Notify die Blizzard-Live-Szenariodaten erneut lesen und daraus die Pull-/Gesamtprozentwerte aktualisieren, damit abgeschlossene Pulls sofort in UI und Nameplate-Restbedarf sichtbar werden.
 7. Output: Die Tracker-Zeile zeigt BRes-Charges/Cooldown, das aktuelle Lust-Icon samt Restzeit, aktive `+3/+2/+1`-Timer-Cutoffs und Death-Penalty-Loss, den Pre-Key-Zieltext oder den aktuellen Killtracker-Prozentstand, oder `--`, wenn Daten fehlen.
 8. Output: Roster-Zeilen zeigen zusaetzlich gesyncten Interrupt-Status in der `Kick`-Spalte: `ready` in Gruen, wenn verfuegbar, rote Restsekunden waehrend Cooldown und `-` in Grau, wenn die Spec keinen Interrupt hat oder der Pet-Interrupt aktuell nicht verfuegbar ist, zum Beispiel Demonology Warlock ohne Pet.
 9. Verarbeitung: Interrupt-State wird lokal ueber `KickTracker` verfolgt; pet-basierte Interrupts fuer Warlock Affliction/Destruction (`Spell Lock`) und Demonology (`Axe Toss`/`Spell Lock`) tracken die Pet-Cast-Unit getrennt, damit der Cooldown nur startet, wenn das Pet wirklich castet und nicht der Spieler. Heal-Specs ohne Interrupt (Holy Paladin spec 65, Mistweaver Monk spec 270, Restoration Druid spec 105, Discipline Priest spec 256, Holy Priest spec 257) sind explizit in `NO_INTERRUPT_SPEC_IDS` gelistet und liefern `hasKick=false`, sodass die `Kick`-Spalte ein graues `-` rendert statt einen ungueltigen Cooldown.

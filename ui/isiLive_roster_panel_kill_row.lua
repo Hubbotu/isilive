@@ -9,8 +9,10 @@ local CD_TRACKER_ROW_HEIGHT = RI.CD_TRACKER_ROW_HEIGHT or 20
 
 local KILLTRACK_ROW_BOTTOM_OFFSET = 12
 local CD_TRACKER_FONT_SIZE = 12
-local ACTIVE_DUNGEON_FONT_SIZE = 9
+local ACTIVE_DUNGEON_FONT_SIZE = 11
 local PREKEY_LEVEL_WIDTH = 42
+local ACTIVE_DUNGEON_RIGHT_OFFSET = 122
+local ACTIVE_DUNGEON_LABEL_WIDTH = 146
 
 local function CreateKillTrackRow(mainFrame)
   local UICommon = addonTable.UICommon or {}
@@ -99,10 +101,48 @@ local function CreateKillTrackRow(mainFrame)
   targetLevelText:SetText("")
   ApplyFontStringSize(targetLevelText, CD_TRACKER_FONT_SIZE)
 
-  local activeDungeonText = box:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  activeDungeonText:SetPoint("TOPLEFT", barContainer, "BOTTOMLEFT", 0, -1)
-  activeDungeonText:SetPoint("RIGHT", barContainer, "RIGHT", 0, 0)
-  activeDungeonText:SetJustifyH("RIGHT")
+  local activeDungeonOverlay = CreateFrame("Frame", nil, box)
+  activeDungeonOverlay:SetPoint("LEFT", box, "LEFT", 98, 0)
+  activeDungeonOverlay:SetPoint("RIGHT", box, "RIGHT", -ACTIVE_DUNGEON_RIGHT_OFFSET, 0)
+  activeDungeonOverlay:SetHeight(CD_TRACKER_ROW_HEIGHT)
+  if type(activeDungeonOverlay.SetFrameLevel) == "function" then
+    local baseLevel = type(barContainer.GetFrameLevel) == "function" and tonumber(barContainer:GetFrameLevel()) or nil
+    activeDungeonOverlay:SetFrameLevel((baseLevel or 1) + 5)
+  end
+
+  local activeDungeonBackdrop = activeDungeonOverlay:CreateTexture(nil, "ARTWORK")
+  if type(activeDungeonBackdrop.SetPoint) == "function" then
+    activeDungeonBackdrop:SetPoint("LEFT", activeDungeonOverlay, "LEFT", -3, 0)
+  end
+  if type(activeDungeonBackdrop.SetWidth) == "function" then
+    activeDungeonBackdrop:SetWidth(ACTIVE_DUNGEON_LABEL_WIDTH)
+  end
+  if type(activeDungeonBackdrop.SetHeight) == "function" then
+    activeDungeonBackdrop:SetHeight(CD_TRACKER_ROW_HEIGHT - 4)
+  end
+  if type(activeDungeonBackdrop.SetTexture) == "function" then
+    activeDungeonBackdrop:SetTexture("Interface\\Buttons\\WHITE8X8")
+  end
+  if type(activeDungeonBackdrop.SetVertexColor) == "function" then
+    activeDungeonBackdrop:SetVertexColor(0.02, 0.02, 0.02, 0.5)
+  end
+  if type(activeDungeonBackdrop.Hide) == "function" then
+    activeDungeonBackdrop:Hide()
+  end
+
+  local activeDungeonText = activeDungeonOverlay:CreateFontString(nil, "OVERLAY", "GameFontNormalOutline")
+  activeDungeonText:SetPoint("LEFT", activeDungeonOverlay, "LEFT", 2, 0)
+  activeDungeonText:SetPoint("RIGHT", activeDungeonOverlay, "RIGHT", 0, 0)
+  activeDungeonText:SetJustifyH("LEFT")
+  if type(activeDungeonText.SetJustifyV) == "function" then
+    activeDungeonText:SetJustifyV("MIDDLE")
+  end
+  if type(activeDungeonText.SetDrawLayer) == "function" then
+    activeDungeonText:SetDrawLayer("OVERLAY", 7)
+  end
+  if type(activeDungeonText.SetAlpha) == "function" then
+    activeDungeonText:SetAlpha(0.92)
+  end
   activeDungeonText:SetText("")
   ApplyFontStringSize(activeDungeonText, ACTIVE_DUNGEON_FONT_SIZE)
 
@@ -119,6 +159,8 @@ local function CreateKillTrackRow(mainFrame)
   row.killTrackBarPull = barPull
   row.killTrackTargetText = targetText
   row.killTrackTargetLevelText = targetLevelText
+  row.killTrackActiveDungeonOverlay = activeDungeonOverlay
+  row.killTrackActiveDungeonBackdrop = activeDungeonBackdrop
   row.killTrackActiveDungeonText = activeDungeonText
   row.killTrackPctText = pctText
   row.killTrackPullText = pullText
@@ -134,13 +176,6 @@ local function ResolveTargetDungeonNameFromInfo(info)
     return nil
   end
   return name
-end
-
-local function ResolveTargetDungeonName(deps)
-  if type(deps) ~= "table" or type(deps.getTargetDungeonInfo) ~= "function" then
-    return nil
-  end
-  return ResolveTargetDungeonNameFromInfo(deps.getTargetDungeonInfo())
 end
 
 local function ResolvePreKeyTargetInfo(deps, data)
@@ -166,9 +201,6 @@ local function ResolvePreKeyTargetInfo(deps, data)
   return {
     name = name,
     level = level and math.floor(level) or nil,
-    levelText = (not level and type(info) == "table" and type(info.levelText) == "string" and info.levelText ~= "")
-        and info.levelText
-      or nil,
   }
 end
 
@@ -187,9 +219,33 @@ local function UpdateKillTrackRow(row, deps)
   local barPull = row.killTrackBarPull
   local targetText = row.killTrackTargetText
   local targetLevelText = row.killTrackTargetLevelText
+  local activeDungeonBackdrop = row.killTrackActiveDungeonBackdrop
   local activeDungeonText = row.killTrackActiveDungeonText
   local pctText = row.killTrackPctText
   local pullText = row.killTrackPullText
+
+  local function SetActiveDungeonContext(text)
+    if not activeDungeonText then
+      return
+    end
+    activeDungeonText:SetText(text or "")
+    if text and text ~= "" then
+      if activeDungeonBackdrop and type(activeDungeonBackdrop.Show) == "function" then
+        activeDungeonBackdrop:Show()
+      end
+      if type(activeDungeonText.SetJustifyH) == "function" then
+        activeDungeonText:SetJustifyH("LEFT")
+      end
+      if type(activeDungeonText.SetTextColor) == "function" then
+        activeDungeonText:SetTextColor(1.0, 1.0, 1.0)
+      end
+      if type(activeDungeonText.SetAlpha) == "function" then
+        activeDungeonText:SetAlpha(1.0)
+      end
+    elseif activeDungeonBackdrop and type(activeDungeonBackdrop.Hide) == "function" then
+      activeDungeonBackdrop:Hide()
+    end
+  end
 
   if data and data.active then
     if barContainer and type(barContainer.Show) == "function" then
@@ -204,16 +260,11 @@ local function UpdateKillTrackRow(row, deps)
     if targetLevelText then
       targetLevelText:SetText("")
     end
-    if activeDungeonText then
-      local activeTargetName = ResolveTargetDungeonName(deps)
-      activeDungeonText:SetText(activeTargetName or "")
-      if type(activeDungeonText.SetJustifyH) == "function" then
-        activeDungeonText:SetJustifyH("RIGHT")
-      end
-      if type(activeDungeonText.SetTextColor) == "function" then
-        activeDungeonText:SetTextColor(0.35, 0.35, 0.42)
-      end
-    end
+    local activeInfo = type(deps) == "table"
+        and type(deps.getTargetDungeonInfo) == "function"
+        and deps.getTargetDungeonInfo()
+      or nil
+    SetActiveDungeonContext(ResolveTargetDungeonNameFromInfo(activeInfo))
     local pct = math.max(0, math.min(data.percent, 100))
     local r, g, b
     if pct < 80 then
@@ -287,7 +338,7 @@ local function UpdateKillTrackRow(row, deps)
       end
     end
     if targetLevelText then
-      targetLevelText:SetText(targetInfo.level and ("+" .. tostring(targetInfo.level)) or targetInfo.levelText or "")
+      targetLevelText:SetText(targetInfo.level and ("+" .. tostring(targetInfo.level)) or "")
       if type(targetLevelText.SetJustifyH) == "function" then
         targetLevelText:SetJustifyH("RIGHT")
       end
@@ -295,9 +346,7 @@ local function UpdateKillTrackRow(row, deps)
         targetLevelText:SetTextColor(0.65, 0.85, 1.0)
       end
     end
-    if activeDungeonText then
-      activeDungeonText:SetText("")
-    end
+    SetActiveDungeonContext(nil)
     if pctText then
       pctText:SetText("")
       if type(pctText.SetTextColor) == "function" then
@@ -326,9 +375,7 @@ local function UpdateKillTrackRow(row, deps)
     if targetLevelText then
       targetLevelText:SetText("")
     end
-    if activeDungeonText then
-      activeDungeonText:SetText("")
-    end
+    SetActiveDungeonContext(nil)
     if pctText then
       pctText:SetText("--,--")
       if type(pctText.SetTextColor) == "function" then
