@@ -18,6 +18,8 @@ local diagnostics = {
   uniqueOwnerGuardSkips = 0,
 }
 
+local KICK_PEER_STALE_SECONDS = 45
+
 function KeySync.GetDiagnostics()
   return {
     uniqueOwnerGuardSkips = diagnostics.uniqueOwnerGuardSkips,
@@ -468,6 +470,7 @@ local function ClearKickFields(info)
     info.syncHasKick == nil
     and info.syncKickOnCooldown == nil
     and info.syncKickRemain == nil
+    and info.syncKickSpellID == nil
     and info.syncKickExtras == nil
   then
     return false
@@ -475,6 +478,7 @@ local function ClearKickFields(info)
   info.syncHasKick = nil
   info.syncKickOnCooldown = nil
   info.syncKickRemain = nil
+  info.syncKickSpellID = nil
   info.syncKickExtras = nil
   return true
 end
@@ -484,6 +488,7 @@ local function ApplyHasNoKick(info)
     info.syncHasKick == false
     and info.syncKickOnCooldown == nil
     and info.syncKickRemain == nil
+    and info.syncKickSpellID == nil
     and info.syncKickExtras == nil
   then
     return false
@@ -491,18 +496,32 @@ local function ApplyHasNoKick(info)
   info.syncHasKick = false
   info.syncKickOnCooldown = nil
   info.syncKickRemain = nil
+  info.syncKickSpellID = nil
   info.syncKickExtras = nil
   return true
+end
+
+local function IsKickInfoStale(kickInfo)
+  if type(kickInfo) ~= "table" or kickInfo.receivedAtGetTime == nil then
+    return false
+  end
+  local elapsed = ResolveElapsedSinceReceived(kickInfo.receivedAtGetTime)
+  return elapsed > KICK_PEER_STALE_SECONDS
 end
 
 local function ApplyActiveKick(info, kickInfo)
   local interpolatedRemain = InterpolateKickRemain(kickInfo)
   local interpolatedExtras = InterpolateKickExtras(kickInfo)
+  local spellID = tonumber(kickInfo.spellID)
+  if spellID and spellID <= 0 then
+    spellID = nil
+  end
   local extrasChanged = DidExtrasChange(info.syncKickExtras, interpolatedExtras)
   if
     info.syncHasKick == true
     and info.syncKickOnCooldown == kickInfo.onCooldown
     and math.abs((info.syncKickRemain or 0) - interpolatedRemain) <= 0.05
+    and info.syncKickSpellID == spellID
     and not extrasChanged
   then
     return false
@@ -510,6 +529,7 @@ local function ApplyActiveKick(info, kickInfo)
   info.syncHasKick = true
   info.syncKickOnCooldown = kickInfo.onCooldown
   info.syncKickRemain = interpolatedRemain
+  info.syncKickSpellID = spellID
   info.syncKickExtras = interpolatedExtras
   return true
 end
@@ -517,6 +537,9 @@ end
 local function BackfillKick(sync, info)
   local kickInfo = type(sync.GetPlayerKickInfo) == "function" and sync.GetPlayerKickInfo(info.name, info.realm)
   if type(kickInfo) ~= "table" then
+    return ClearKickFields(info)
+  end
+  if IsKickInfoStale(kickInfo) then
     return ClearKickFields(info)
   end
   if kickInfo.hasKick == false then

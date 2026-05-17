@@ -199,26 +199,26 @@ return function(test, ctx)
     Assert.Equal(cell.texts[1], "|cff666666-|r", "zero remaining must collapse to dash")
   end)
 
-  test("SetKickCellText renders green ready label using locale string when available", function()
+  test("SetKickCellText renders compact green ready marker using locale string when available", function()
     local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
     local RI = addon._RosterInternal
     local cell = MakeCellStub()
 
     RI.SetKickCellText(cell, { syncHasKick = true, syncKickOnCooldown = false }, function()
-      return { SYNC_KICK_READY = "bereit" }
+      return { SYNC_KICK_READY_SHORT = "OK" }
     end)
 
-    Assert.Equal(cell.texts[1], "|cff44ff44bereit|r", "locale string must override default 'ready'")
+    Assert.Equal(cell.texts[1], "|cff44ff44OK|r", "compact ready marker must render in green")
   end)
 
-  test("SetKickCellText falls back to 'ready' when getL returns no string", function()
+  test("SetKickCellText falls back to compact ready marker when getL returns no string", function()
     local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
     local RI = addon._RosterInternal
     local cell = MakeCellStub()
 
     RI.SetKickCellText(cell, { syncHasKick = true, syncKickOnCooldown = false })
 
-    Assert.Equal(cell.texts[1], "|cff44ff44ready|r", "missing getL must fall back to literal 'ready'")
+    Assert.Equal(cell.texts[1], "|cff44ff44OK|r", "missing getL must fall back to compact ready marker")
   end)
 
   test("SetKickCellText renders dash when syncKickOnCooldown is unresolved (nil)", function()

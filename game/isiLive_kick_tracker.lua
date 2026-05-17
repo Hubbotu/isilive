@@ -72,7 +72,7 @@ local SPEC_DATA = {
     castUnit = "pet",
     requireAvailability = true,
     spells = {
-      { spellID = 119914, cd = 30 }, -- Axe Toss (player-facing ID; pet-cast event ID is 89766)
+      { spellID = 119914, cd = 30, castSpellIDs = { 89766 } }, -- Axe Toss (player-facing ID; pet cast uses 89766)
       { spellID = 19647, cd = 24 }, -- Spell Lock (e.g. Fel Ravager path)
     },
   },
@@ -252,6 +252,13 @@ local function GetSpellDataByID(specData, spellID)
   for _, spellData in ipairs(specData.spells) do
     if type(spellData) == "table" and spellData.spellID == spellID then
       return spellData
+    end
+    if type(spellData) == "table" and type(spellData.castSpellIDs) == "table" then
+      for _, castSpellID in ipairs(spellData.castSpellIDs) do
+        if castSpellID == spellID then
+          return spellData
+        end
+      end
     end
   end
   return nil
@@ -448,7 +455,7 @@ local function LookupExtraKickCd(spellID)
       end
     end
   end
-  return 30 -- conservative default
+  return nil
 end
 
 local function ApplyTalentCdReduction(base, talent)
@@ -558,6 +565,7 @@ function KickTracker.CreateController(opts)
   local SetCooldown
 
   local function ClearResolvedKickState()
+    extras = {}
     watchedSpellID = nil
     watchedCd = nil
     hasKickAvailable = false
@@ -584,6 +592,7 @@ function KickTracker.CreateController(opts)
       return
     end
 
+    extras = {}
     watchedSpellID = nextSpellID
     watchedCd = activeSpellData and activeSpellData.cd or nil
     talentScanDirty = true
@@ -751,7 +760,10 @@ function KickTracker.CreateController(opts)
       watchedCd = watchedCd or spellData.cd
       ReadBaseCd()
       ScanOwnTalents()
-      local cd = watchedCd or 15
+      local cd = tonumber(watchedCd or spellData.cd)
+      if not cd or cd <= 0 then
+        return false
+      end
       SetCooldown(true, getTime() + cd)
       return true
     end
@@ -762,6 +774,9 @@ function KickTracker.CreateController(opts)
     -- Avenger's Shield interrupt talent. Tracked separately from primary.
     if IsExtraKickSpellForClass(ResolvePlayerClass(), watchedSpellID, spellID) then
       local cd = LookupExtraKickCd(spellID)
+      if not cd or cd <= 0 then
+        return false
+      end
       extras[spellID] = { cd = cd, cdEnd = getTime() + cd }
       if onCooldownChanged then
         onCooldownChanged(onCooldown, cooldownRemain, watchedSpellID)

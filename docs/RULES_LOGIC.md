@@ -55,7 +55,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 32. verlaesst ein gruppenmitglied die gruppe, bleibt es als "geist" (ausgegraut) in der liste, bis der slot neu besetzt wird oder ein reload erfolgt
 33. spieler, die sich bereits im zieldungeon befinden, werden mit einem portal-icon markiert
 34. waehrend eines ready-checks bleibt die schrift in der roster-zeile unveraendert; stattdessen markiert ein statusfarbener zeilenhintergrund bereit=gruen, nicht bereit=rot und wartend=gelb. nach `READY_CHECK_FINISHED` bleiben bereit-antworten 20 sekunden gruen und sowohl explizit nicht bereite als auch unbeantwortete spieler 20 sekunden rot; die aktualisierung laeuft ueber einen dedizierten Ready-Check-Refreshpfad ohne Secure-Rollenbutton-Neuschreibung.
-35. die kompakten roster-datenspalten behalten ihr festes breitenbudget fuer spec, name, ilvl, key, rio, dps und flagge.
+35. die kompakten roster-datenspalten behalten ihr festes breitenbudget fuer spec, name, ilvl, key, rio, dps, kick und flagge.
 36. roster-kurztexte bleiben kompakt und faktenbasiert: name max 12 zeichen, spec max 5 zeichen mit hunter-kurzlabels `MM`/`BM`, sprache nur flagge, key-code max 4 zeichen und kein numerischer mapID-Fallback.
 37. die wartungsdatei `WARTUNG.md` darf nicht im curseforge-paket landen.
 38. `WARTUNG.md` muss die verpflichtende wartungskette fuer den wiedereinstieg nennen: `CHANGELOG.md`, `TODO.md`, `RULES_LOGIC.md`, `ARCHITECTURE_RULES.md`, `AGENTS.md`, `README.md`, `RELEASE.md`, `USECASES.md`, `ARCHITECTURE.md`.
@@ -70,7 +70,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 47. Die ESC-Panel-Overlays muessen im Kampf als bereits gemountete `GameMenuFrame`-Kinder sichtbar bleiben; waehrend Kampf-Lockdown sind an ihnen keine Show/Hide- oder Layout-Mutationen erlaubt, unsichere Shortcuts bleiben sichtbar, duerfen ihre Aktion aber erst ausserhalb des Kampfes ausfuehren.
 48. Der isiLive-Last-Run-Sync transportiert nur den belastbar verifizierten `DPS`-Wert eines Snapshots; das Roster nutzt `syncDps` nur als Fallback, wenn lokal kein Last-Run-DPS vorliegt.
 49. Der Kick-Tracker bildet den aktuell verfuegbaren Interrupt der aktuellen Spezialisierung ab; Heal-Specs ohne Interrupt (Holy Paladin, Mistweaver Monk, Restoration Druid, Discipline / Holy Priest) melden `hasKick=false`, Devourer Demon Hunter nutzt `Disrupt`, und verfuegbare pet-basierte Warlock-Interrupts zaehlen als eigener Kick.
-50. Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an; der lokalisierte `SYNC_KICK_READY`-Text ist gruen, laufende Cooldowns zeigen rote Restsekunden, `-` steht fuer keinen verfuegbaren Kick oder fehlenden isiLive-Sync, und aktive Kick-Statusaenderungen werden spaetestens einmal pro Sekunde synchronisiert.
+50. Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an; der kompakte `SYNC_KICK_READY_SHORT`-Marker ist gruen, laufende Cooldowns zeigen rote Restsekunden, `-` steht fuer keinen verfuegbaren Kick oder fehlenden isiLive-Sync, und aktive Kick-Statusaenderungen werden spaetestens einmal pro Sekunde synchronisiert.
 51. Bei ausgeblendeter UI bleibt der komplette isiLive-Gruppensync aktiv; nur nicht-sync-bezogenes Polling wie Queue-Scanning bleibt deaktiviert. Im Raid ist diese Hintergrundverarbeitung komplett aus.
 52. Hidden-Clients senden weiterhin alle gruppenrelevanten isiLive-Sync-Buckets einschliesslich `KEY`, `STATS`, `DPS`, `LOC`, `TARGET` und `KICK`; sichtbarkeitsabhängige Unterdrückung ist nur ohne explizite Hidden-Freigabe erlaubt. Im Raid ist das deaktiviert.
 53. Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt; lokal startet die Sperre nur nach einem wirksamen Klick mit erfolgreichem eigenem Party-Post oder erfolgreichem `SHAREKEYS`-Sync, und empfangende isiLive-Clients sperren ihren Button nur dann, wenn der eingehende `SHAREKEYS`-Pfad tatsaechlich einen eigenen Party-Post ausloest. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
@@ -81,6 +81,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
 59. Der untere M+-Killtracker zeigt vor Key-Start verifizierte Ziel-Dungeon-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig an; eine Keystufe wird nur bei positiver numerischer Aufloesung ergaenzt. Ab Key-Start wechselt er zur Prozentanzeige zurueck; waehrend aktiver Prozentdaten darf der verifizierte Dungeonname linksbuendig als helles Outline-Label mit dunkler Hinterlegung auf dem Prozentbalken sichtbar bleiben.
 60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
+61. Die LFG-Invite-Liste zeigt nur offene Premade-LFG-Invites aus Blizzard-LFG-Daten an; Dungeon, Keystufe, Kommentar und Rolle duerfen nicht geraten werden, und Accept/Decline-Aktionen muessen auf die konkrete `searchResultID` zielen.
 
 ## Regelbloecke
 
@@ -242,6 +243,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Sync ProcessAddonMessage handles HELLO, REQSYNC, and KEY payloads
   - Sync ProcessAddonMessage stores ACK version as hello info
   - Sync ProcessAddonMessage handles LibKeystone requests and payloads
+  - Sync ProcessAddonMessage ignores LibKeystone payloads for kick state
   - Sync ProcessAddonMessage keeps richer isiLive stats when LibKeystone only refreshes rio
   - Sync ProcessAddonMessage parses KICK payloads with no-interrupt state
   - Sync ProcessAddonMessage parses TARGET payload and stores it
@@ -436,7 +438,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-ROSTER-KOMPAKT-SPALTENBREITEN
 - Regelnummer: 35
 - Status: aktiv
-- Zusammenfassung: Die Roster-Datenspalten behalten ein festes Kompaktlayout mit den Breiten Spec=52, Name=134, iLvl=34, Key=56, Rio=70, DPS=58 und Flagge=14.
+- Zusammenfassung: Die Roster-Datenspalten behalten ein festes Kompaktlayout mit den Breiten Spec=52, Name=122, iLvl=32, Key=62, Rio=70, DPS=40, Kick=40 und Flagge=18.
 - Erforderliche Tests:
   - Roster panel uses compact width budget for primary data columns
 
@@ -576,13 +578,14 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - KickTracker resolves exact no-kick matrix for supported specs
   - KickTracker resolves Warlock pet-based Spell Lock for Affliction and Destruction
   - KickTracker resolves Demonology Warlock pet interrupt when available
+  - KickTracker tracks Demonology Axe Toss cooldown from the pet-cast spell alias
   - KickTracker shows no kick when Warlock pet interrupt is unavailable
   - KickTracker resolves Devourer Demon Hunter to Disrupt
 
 ### RULE-KICK-UI-UND-SYNC
 - Regelnummer: 50
 - Status: aktiv
-- Zusammenfassung: Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an: benutzbar ergibt den lokalisierten `SYNC_KICK_READY`-Text in Gruen, laufender Cooldown ergibt rote Restsekunden, und ohne verfuegbaren Kick oder ohne isiLive-Sync bleibt `-`. Kick-Statusaenderungen und aktive Cooldowns muessen spaetestens einmal pro Sekunde an isiLive-Gruppenmitglieder synchronisiert werden; wenn ein `ready`-Paket verloren geht, muss der periodische Sync wieder auf den benutzbaren Kick-Zustand konvergieren. Ein laufender Kick-Cooldown darf nur aus beobachtetem Cast oder aus exakten Blizzard-Cooldown-Daten abgeleitet werden; ohne belastbare Live-Daten darf kein Cooldown geraten werden. Malformed KICK-Payloads werden fail-closed verworfen und duerfen keinen synthetischen Kick-Zustand erzeugen. Nach Raid-Hard-off bleibt der Kick-Status unresolved und ungesendet, bis exakte Blizzard-Cooldown-Daten, ein danach neu beobachteter Kick-Cast oder ein danach exakt aufgeloester `kein Kick verfuegbar`-Zustand ihn wieder belastbar belegen; beliebige andere Casts duerfen diese Suppression nicht aufheben. `kein Kick verfuegbar` und `unresolved` sind getrennte Zustaende; ein `spellID == nil` darf nur dann als exakter No-Kick-Zustand synchronisiert werden, wenn die Kick-Verfuegbarkeit selbst eindeutig aufgeloest wurde. Nach `ClearKnownUsers()` darf ein identischer lokaler Kick-Status beim naechsten Sendeversuch nicht von altem Dedup- oder Cooldown-Zustand unterdrueckt werden.
+- Zusammenfassung: Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an: benutzbar ergibt den kompakten `SYNC_KICK_READY_SHORT`-Marker in Gruen, laufender Cooldown ergibt rote Restsekunden, und ohne verfuegbaren Kick oder ohne isiLive-Sync bleibt `-`. Kick-Statusaenderungen und aktive Cooldowns muessen spaetestens einmal pro Sekunde an isiLive-Gruppenmitglieder synchronisiert werden; wenn ein `ready`-Paket verloren geht, muss der periodische Sync wieder auf den benutzbaren Kick-Zustand konvergieren. Ein laufender Kick-Cooldown darf nur aus beobachtetem Cast oder aus exakten Blizzard-Cooldown-Daten abgeleitet werden; ohne belastbare Live-Daten darf kein Cooldown geraten werden. Malformed KICK-Payloads werden fail-closed verworfen und duerfen keinen synthetischen Kick-Zustand erzeugen. Ein von Peers empfangener Kick-Status wird nach mehr als 45 Sekunden ohne neues KICK-Paket wieder unresolved, weil der Hintergrund-Heartbeat alle 15 Sekunden sendet. Nach Raid-Hard-off bleibt der Kick-Status unresolved und ungesendet, bis exakte Blizzard-Cooldown-Daten, ein danach neu beobachteter Kick-Cast oder ein danach exakt aufgeloester `kein Kick verfuegbar`-Zustand ihn wieder belastbar belegen; beliebige andere Casts duerfen diese Suppression nicht aufheben. `kein Kick verfuegbar` und `unresolved` sind getrennte Zustaende; ein `spellID == nil` darf nur dann als exakter No-Kick-Zustand synchronisiert werden, wenn die Kick-Verfuegbarkeit selbst eindeutig aufgeloest wurde. Nach `ClearKnownUsers()` darf ein identischer lokaler Kick-Status beim naechsten Sendeversuch nicht von altem Dedup- oder Cooldown-Zustand unterdrueckt werden.
 - Erforderliche Tests:
   - Architecture kick tracker uses lightweight kick-column refresh hooks
   - KickTracker scans all talent trees for cooldown reductions
@@ -590,8 +593,12 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - KickTracker reconstructs active cooldown from Blizzard cooldown data without guessing
   - KickTracker keeps observed active cooldown when Blizzard cooldown fields are unreadable
   - Sync SendKick encodes no-interrupt state and deduplicates payloads
+  - Sync SendKick retries identical payload after a rejected dispatch
+  - Sync SendKick appends primary spell suffix when spellID is explicit
   - Sync SendKick rejects malformed kick payload inputs without guessing
   - Sync ClearKnownUsers resets kick send cooldowns so next identical payload fires immediately
+  - KeySync ApplyKnownKeyToRosterEntry clears peer kick state after stale heartbeat window
+  - KeySync ApplyKnownKeyToRosterEntry backfills primary kick spellID when synced
   - Sync ProcessAddonMessage reports kick updates when remaining cooldown changes
   - Sync ProcessAddonMessage rejects malformed KICK payloads without inventing a state
   - Event handlers answer refresh requests while frame is hidden
@@ -601,6 +608,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Factory post-raid unresolved kick availability does not invent a no-kick state
   - Factory post-raid kick recovery emits exactly one sync after exact cooldown change
   - Factory post-raid unrelated cast keeps kick state unresolved until the tracked kick is observed
+  - SetKickCellText renders compact green ready marker using locale string when available
+  - SetKickCellText falls back to compact ready marker when getL returns no string
+  - roster_tooltip: ShowRosterInfoTooltip renders multi-kick extras sorted by spellID
 
 ### RULE-UI-HIDDEN-VOLLER-GRUPPENSYNC
 - Regelnummer: 51
@@ -737,3 +747,17 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - PLAYER_REGEN_ENABLED refreshes live forces before the next pull starts
   - refresh ticker callback reads live forces and notifies subscribers while state is active
+
+### RULE-LFG-INVITE-LISTE-KEIN-GUESSING
+- Regelnummer: 61
+- Status: aktiv
+- Zusammenfassung: Die LFG-Invite-Liste darf nur offene Premade-LFG-Invites anzeigen, die aus `LFG_LIST_APPLICATION_STATUS_UPDATED` oder `C_LFGList.GetApplications()` plus `C_LFGList.GetApplicationInfo()` und `C_LFGList.GetSearchResultInfo()` stammen. Ein Invite-Eintrag wird ueber seine konkrete `searchResultID` dedupliziert. Dungeonname und Map-Kontext duerfen nur aus eindeutig aufgeloesten Activity-IDs entstehen; Keystufe, Kommentar und Rolle duerfen nur aus expliziten Blizzard-LFG-Feldern oder aus der bereits etablierten Blizzard-Titel-Markup-/Titel-Level-Auswertung stammen. Fehlt eine Quelle, bleibt das Feld leer. `Accept` und `Decline` muessen die konkrete `searchResultID` des angeklickten Eintrags verwenden; nach erfolgreichem `Accept` wird die offene Invite-Liste geschlossen, nach erfolgreichem `Decline` nur der betroffene Eintrag entfernt.
+- Erforderliche Tests:
+  - Invites list adds one verified LFG invite from invited status
+  - Invites list orders multiple open invites chronologically
+  - Invites list deduplicates duplicate invited events by searchResultID
+  - Invites list removes only the declined invite
+  - Invites list clears all open invites after accepting one invite
+  - Invites list decline button path removes the selected invite
+  - Invites list rehydrates invited applications after reload
+  - Invites list keeps missing role and unresolved dungeon empty instead of guessing

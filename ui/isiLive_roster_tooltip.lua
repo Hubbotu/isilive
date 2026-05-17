@@ -795,9 +795,23 @@ local function ShowRosterInfoTooltip(
           and type(C_Spell_ref.GetSpellName) == "function"
           and C_Spell_ref.GetSpellName
         or nil
+      local extraEntries = {}
       for spellID, data in pairs(info.syncKickExtras) do
         local remain = type(data) == "table" and tonumber(data.cooldownRemain) or nil
         if remain and remain > 0 then
+          extraEntries[#extraEntries + 1] = {
+            spellID = tonumber(spellID),
+            remain = remain,
+          }
+        end
+      end
+      table.sort(extraEntries, function(a, b)
+        return (a.spellID or 0) < (b.spellID or 0)
+      end)
+      for _, entry in ipairs(extraEntries) do
+        local spellID = entry.spellID
+        local remain = entry.remain
+        if spellID and remain then
           local spellName = nil
           if getSpellName then
             local okName, resolvedName = pcall(getSpellName, spellID)

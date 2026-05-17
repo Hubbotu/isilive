@@ -686,6 +686,7 @@ local function FinalizeFactoryRuntime(ctx)
     teleportDebugController = ctx.teleportDebugController,
     queueDebugController = ctx.queueDebugController,
     runtimeLogController = ctx.runtimeLogController,
+    invitesController = ctx.invitesController,
     recordRun = ctx.RecordRun,
     addonName = ctx.addonName,
     resetDB = ctx.resetDB,

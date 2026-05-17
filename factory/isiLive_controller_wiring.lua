@@ -646,6 +646,18 @@ local function BuildEventHandlersDepsFromContext(ctx)
     handleLFGDetectEvent = function(event, ...)
       DispatchModuleEvent(ctx.modules and ctx.modules.lfgDetect, event, ...)
     end,
+    handleInviteEvent = function(event, ...)
+      local controller = ctx.invitesController
+      if event == "PLAYER_LOGIN" and controller and type(controller.RehydrateFromBlizzard) == "function" then
+        controller.RehydrateFromBlizzard()
+      elseif
+        event == "LFG_LIST_APPLICATION_STATUS_UPDATED"
+        and controller
+        and type(controller.HandleApplicationStatus) == "function"
+      then
+        controller.HandleApplicationStatus(...)
+      end
+    end,
     handleMplusTimerEvent = function(event, ...)
       DispatchModuleEvent(ctx.modules and ctx.modules.mplusTimer, event, ...)
     end,

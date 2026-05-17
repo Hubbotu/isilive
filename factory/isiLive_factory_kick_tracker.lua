@@ -79,7 +79,8 @@ local function InitializeFactorySecondaryKickTracker(
           info.cooldownRemain,
           nil,
           hasKick,
-          info.extras
+          info.extras,
+          info.spellID
         )
       end
     end
@@ -97,6 +98,7 @@ local function InitializeFactorySecondaryKickTracker(
         hasKick = hasKick,
         onCooldown = info.onCooldown,
         cooldownRemain = info.cooldownRemain,
+        spellID = info.spellID,
         extras = info.extras,
         force = force == true or heartbeatDue,
       })

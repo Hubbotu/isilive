@@ -351,6 +351,49 @@ local function RegisterWarlockKickTests(test, Assert, WithGlobals, LoadAddonModu
     Assert.False(info.onCooldown, "available Demonology pet interrupt must start ready")
   end)
 
+  test("KickTracker tracks Demonology Axe Toss cooldown from the pet-cast spell alias", function()
+    local now = 100
+    ---@type KickController|nil
+    local controller = nil
+    WithGlobals({
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function(index)
+        if index == 1 then
+          return 266
+        end
+        return nil
+      end,
+      UnitExists = function(unit)
+        return unit == "pet"
+      end,
+      GetSpellBaseCooldown = function(spellID)
+        if spellID == 119914 then
+          return 30000
+        end
+        return 0
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_kick_tracker.lua" })
+      controller = addon.KickTracker.CreateController({
+        getTime = function()
+          return now
+        end,
+      })
+    end)
+
+    local kickController =
+      RequireController(controller, "kick info must exist for Demonology Axe Toss alias tracking", Assert)
+    local castOk = kickController.OnCast("pet", 89766)
+    local info = kickController.GetKickInfo()
+
+    Assert.True(castOk, "raw pet-cast Axe Toss spell ID must be accepted as a verified cast alias")
+    Assert.Equal(info.spellID, 119914, "Axe Toss display spell must remain the player-facing spell ID")
+    Assert.True(info.onCooldown, "pet-cast Axe Toss alias must start the primary cooldown")
+    Assert.Equal(info.cooldownRemain, 30, "Axe Toss alias cooldown must use the exact configured duration")
+  end)
+
   test("KickTracker shows no kick when Warlock pet interrupt is unavailable", function()
     ---@type KickController|nil
     local controller = nil

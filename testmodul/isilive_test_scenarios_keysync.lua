@@ -1423,6 +1423,70 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
     end)
   end)
 
+  test("KeySync ApplyKnownKeyToRosterEntry clears peer kick state after stale heartbeat window", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "StaleKickUser" and realm == "StaleKickRealm" then
+        return {
+          hasKick = true,
+          spellID = 119914,
+          onCooldown = false,
+          cooldownRemain = 0,
+          receivedAtGetTime = 100,
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 146
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = {
+        name = "StaleKickUser",
+        realm = "StaleKickRealm",
+        syncHasKick = true,
+        syncKickOnCooldown = false,
+        syncKickRemain = 0,
+        syncKickSpellID = 119914,
+      }
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.True(changed, "peer kick data older than three 15s heartbeats must clear")
+      Assert.Nil(info.syncHasKick, "stale peer kick availability must become unresolved")
+      Assert.Nil(info.syncKickOnCooldown, "stale peer kick cooldown state must clear")
+      Assert.Nil(info.syncKickRemain, "stale peer kick remaining time must clear")
+      Assert.Nil(info.syncKickSpellID, "stale peer kick spellID must clear")
+    end)
+  end)
+
+  test("KeySync ApplyKnownKeyToRosterEntry backfills primary kick spellID when synced", function()
+    local sync = BuildMockSync()
+    sync.GetPlayerKickInfo = function(name, realm)
+      if name == "SpellKickUser" and realm == "SpellKickRealm" then
+        return {
+          hasKick = true,
+          spellID = 119914,
+          onCooldown = false,
+          cooldownRemain = 0,
+          receivedAtGetTime = 100,
+        }
+      end
+      return nil
+    end
+    WithGlobals({
+      GetTime = function()
+        return 101
+      end,
+    }, function()
+      local ctrl = BuildController(LoadAddonModules, sync)
+      local info = { name = "SpellKickUser", realm = "SpellKickRealm" }
+      local changed = ctrl.ApplyKnownKeyToRosterEntry(info)
+      Assert.True(changed, "synced primary kick spellID must mark the roster entry changed")
+      Assert.Equal(info.syncKickSpellID, 119914, "primary kick spellID must be available to UI/tooltip code")
+    end)
+  end)
+
   test("KeySync ApplyKnownKeyToRosterEntry clamps interpolated cooldownRemain to 0 when fully elapsed", function()
     local sync = BuildMockSync()
     sync.GetPlayerKickInfo = function(name, realm)
@@ -1438,7 +1502,7 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
     end
     WithGlobals({
       GetTime = function()
-        return 200 -- 100s elapsed > 5s remaining
+        return 106 -- 6s elapsed > 5s remaining, still inside the 45s stale window
       end,
     }, function()
       local ctrl = BuildController(LoadAddonModules, sync)

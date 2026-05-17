@@ -1003,14 +1003,14 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       Assert,
       rosterPanelContent,
       "SetKickCellText(row.kick, info, getL)",
-      "RosterPanel dedicated kick-column refresh must use the same localized ready label as full roster renders"
+      "RosterPanel dedicated kick-column refresh must use the same compact ready marker as full roster renders"
     )
     local rosterPanelRenderContent = ReadFile("isiLive_roster_panel_render.lua")
     AssertContains(
       Assert,
       rosterPanelRenderContent,
       'cell:SetText("|cff44ff44" .. readyText .. "|r")',
-      "RosterPanel render module must render the kick-ready state in green using the localized SYNC_KICK_READY label"
+      "RosterPanel render module must render the compact kick-ready state in green"
     )
   end)
 end

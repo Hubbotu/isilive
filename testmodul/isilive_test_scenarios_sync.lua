@@ -264,6 +264,7 @@ local function RegisterStatsSyncTests(test, Assert, WithGlobals, LoadAddonModule
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -347,6 +348,7 @@ local function RegisterSendOwnKeySnapshotTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
       C_MythicPlus = {
@@ -449,6 +451,7 @@ local function RegisterSendOwnKeySnapshotTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
       C_MythicPlus = {
@@ -545,6 +548,7 @@ local function RegisterHiddenRefreshResponseTests(test, Assert, WithGlobals, Loa
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
       C_MythicPlus = {
@@ -629,6 +633,7 @@ local function RegisterHiddenRefreshResponseTests(test, Assert, WithGlobals, Loa
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1030,6 +1035,40 @@ local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, Loa
     end)
   end)
 
+  test("Sync ProcessAddonMessage ignores LibKeystone payloads for kick state", function()
+    WithGlobals({
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local libKickResult = addon.Sync.ProcessAddonMessage(
+        "LibKS",
+        "KICK:0:0:S:119914",
+        "OtherPlayer-OtherRealm",
+        "MyPlayer",
+        "Realm",
+        "PARTY"
+      )
+      Assert.Nil(libKickResult, "LibKeystone payloads must not be interpreted as isiLive kick state")
+      Assert.Nil(
+        addon.Sync.GetPlayerKickInfo("OtherPlayer", "OtherRealm"),
+        "LibKeystone interop must not create synthetic kick info for non-isiLive peers"
+      )
+    end)
+  end)
+
   test("Sync ProcessAddonMessage keeps richer isiLive stats when LibKeystone only refreshes rio", function()
     WithGlobals({
       strsplit = function(sep, str, max)
@@ -1098,6 +1137,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1260,6 +1300,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1284,6 +1325,46 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
     end)
   end)
 
+  test("Sync SendLibKeystoneRequest reports rejected dispatch and does not start throttle", function()
+    local sentMessages = {}
+    local now = 100
+    local allowSend = false
+
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          if not allowSend then
+            return false
+          end
+          table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local rejected = addon.Sync.SendLibKeystoneRequest()
+      Assert.False(rejected, "rejected LibKeystone request dispatch must report false")
+      Assert.Equal(#sentMessages, 0, "rejected LibKeystone request must not publish")
+
+      allowSend = true
+      now = 100.1
+      local retry = addon.Sync.SendLibKeystoneRequest()
+      Assert.True(retry, "LibKeystone request must retry immediately after dispatch rejection")
+      Assert.Equal(#sentMessages, 1, "retry after rejected LibKeystone request must publish once")
+      Assert.Equal(sentMessages[1].message, "R", "LibKeystone retry must keep the request payload")
+    end)
+  end)
+
   test("Sync SendLibKeystonePartyData publishes current key and rio to party", function()
     local sentMessages = {}
 
@@ -1301,6 +1382,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1316,6 +1398,32 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
       Assert.Equal(sentMessages[1].prefix, "LibKS", "LibKeystone party data must use the LibKS prefix")
       Assert.Equal(sentMessages[1].message, "17,505,3333", "LibKeystone party data must encode level, map, and rio")
       Assert.Equal(sentMessages[1].channel, "PARTY", "LibKeystone party data must use the party channel")
+    end)
+  end)
+
+  test("Sync SendLibKeystonePartyData reports rejected dispatch", function()
+    WithGlobals({
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(_prefix, _message, _channel)
+          return false
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local sent = addon.Sync.SendLibKeystonePartyData({
+        mapID = 505,
+        level = 17,
+        rio = 3333,
+      })
+
+      Assert.False(sent, "rejected LibKeystone party data dispatch must report false")
     end)
   end)
 
@@ -1336,6 +1444,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
       C_ChatInfo = {
         SendAddonMessage = function(prefix, message, channel)
           table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
         end,
       },
     }, function()
@@ -1364,6 +1473,7 @@ local function RegisterProcessMessageSendTests(test, Assert, WithGlobals, LoadAd
       C_ChatInfo = {
         SendAddonMessage = function(prefix, message, channel)
           table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
         end,
       },
     }, function()
@@ -1557,6 +1667,7 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1598,6 +1709,58 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
     end)
   end)
 
+  test("Sync SendKick retries identical payload after a rejected dispatch", function()
+    local sentMessages = {}
+    local now = 100
+    local allowSend = false
+
+    WithGlobals({
+      GetTime = function()
+        return now
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          if not allowSend then
+            return false
+          end
+          table.insert(sentMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+          return true
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      local firstSent = addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+      })
+      Assert.False(firstSent, "rejected kick dispatch must report false")
+      Assert.Equal(#sentMessages, 0, "rejected kick dispatch must not publish")
+
+      allowSend = true
+      now = 100.1
+      local retrySent = addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+      })
+      Assert.True(retrySent, "identical kick payload must retry immediately after dispatch rejection")
+      Assert.Equal(#sentMessages, 1, "retry after rejected dispatch must publish once")
+      Assert.Equal(sentMessages[1].message, "KICK:0:0", "retry must carry the original ready payload")
+    end)
+  end)
+
   test("Sync SendKick appends extras suffix when multi-kick extras are on cooldown", function()
     local sentMessages = {}
     local now = 100
@@ -1615,6 +1778,7 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
       C_ChatInfo = {
         SendAddonMessage = function(prefix, message, channel)
           table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
         end,
       },
     }, function()
@@ -1666,6 +1830,40 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
     end)
   end)
 
+  test("Sync SendKick appends primary spell suffix when spellID is explicit", function()
+    local sentMessages = {}
+
+    WithGlobals({
+      GetTime = function()
+        return 100
+      end,
+      IsInGroup = function(_category)
+        return true
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+        spellID = 119914,
+      })
+
+      Assert.Equal(#sentMessages, 1, "kick with explicit spellID must publish")
+      Assert.Equal(sentMessages[1].message, "KICK:0:0:S:119914", "spell suffix must use ':S:<spellID>'")
+    end)
+  end)
+
   test("Sync ProcessAddonMessage parses KICK extras suffix and stores it on the peer", function()
     WithGlobals({
       GetTime = function()
@@ -1702,10 +1900,18 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
       Assert.NotNil(stored.extras[19647], "Spell Lock (19647) must be in extras")
       Assert.Equal(stored.extras[19647].cooldownRemain, 8, "extras remain must round-trip")
 
+      local spellResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:S:119914:E:31935,22", "Peer-Realm", "Me", "Realm")
+      Assert.True(spellResult.kickUpdated, "KICK with primary spell suffix must update peer kick state")
+      stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+      Assert.Equal(stored.spellID, 119914, "primary spell suffix must be stored on peer kick info")
+      Assert.NotNil(stored.extras[31935], "extras after spell suffix must still be stored")
+
       -- Peer with NO extras suffix must clear stored extras (backwards compat).
       addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0", "Peer-Realm", "Me", "Realm")
       stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
       Assert.Equal(stored.extras, nil, "absent extras suffix must clear previously-stored extras")
+      Assert.Nil(stored.spellID, "absent spell suffix must clear previously-stored primary spellID")
     end)
   end)
 
@@ -1768,6 +1974,7 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
         C_ChatInfo = {
           SendAddonMessage = function(prefix, message, channel)
             table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+            return true
           end,
         },
         strsplit = function(sep, str, max)
@@ -1846,6 +2053,7 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
             message = message,
             channel = channel,
           })
+          return true
         end,
       },
     }, function()
@@ -1987,6 +2195,25 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
       local invalidRemainResult = addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:1:bogus", "Peer-Realm", "Me", "Realm")
       Assert.False(invalidRemainResult.kickUpdated, "invalid KICK remain must be rejected without inventing a payload")
       Assert.Nil(addon.Sync.GetPlayerKickInfo("Peer", "Realm"), "invalid KICK remain must not store any kick info")
+
+      local invalidExtrasMarkerResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:X:31935,8", "Peer-Realm", "Me", "Realm")
+      Assert.False(invalidExtrasMarkerResult.kickUpdated, "invalid KICK suffix marker must reject the full payload")
+      Assert.Nil(addon.Sync.GetPlayerKickInfo("Peer", "Realm"), "invalid suffix marker must not store basic kick info")
+
+      local invalidExtrasEntryResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:E:bad", "Peer-Realm", "Me", "Realm")
+      Assert.False(invalidExtrasEntryResult.kickUpdated, "malformed KICK extras must reject the full payload")
+      Assert.Nil(addon.Sync.GetPlayerKickInfo("Peer", "Realm"), "malformed extras must not store basic kick info")
+
+      local emptyExtrasResult = addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:E:", "Peer-Realm", "Me", "Realm")
+      Assert.False(emptyExtrasResult.kickUpdated, "empty KICK extras suffix must reject the full payload")
+      Assert.Nil(addon.Sync.GetPlayerKickInfo("Peer", "Realm"), "empty extras suffix must not store basic kick info")
+
+      local noKickSpellResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:-1:0:S:119914", "Peer-Realm", "Me", "Realm")
+      Assert.False(noKickSpellResult.kickUpdated, "no-interrupt KICK payload must reject a primary spell suffix")
+      Assert.Nil(addon.Sync.GetPlayerKickInfo("Peer", "Realm"), "no-interrupt spell suffix must not store kick info")
     end)
   end)
 
@@ -2172,6 +2399,7 @@ local function RegisterSyncResetTests(test, Assert, WithGlobals, LoadAddonModule
       C_ChatInfo = {
         SendAddonMessage = function(prefix, message, channel)
           table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
         end,
       },
     }, function()
@@ -2207,6 +2435,7 @@ local function RegisterSyncResetTests(test, Assert, WithGlobals, LoadAddonModule
       C_ChatInfo = {
         SendAddonMessage = function(prefix, message, channel)
           table.insert(sentMessages, { prefix = prefix, message = message, channel = channel })
+          return true
         end,
       },
     }, function()

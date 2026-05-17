@@ -169,6 +169,136 @@ local function SplitPayload(message)
   return parts
 end
 
+local function ParseKickPayload(message)
+  if type(message) ~= "string" then
+    return nil
+  end
+
+  local stateRaw, remainRaw, suffix = message:match("^KICK:([^:]+):([^:]+)(.*)$")
+  if not stateRaw or not remainRaw then
+    return nil
+  end
+
+  local numericState = tonumber(stateRaw)
+  local numericRemain = tonumber(remainRaw)
+  if not ((numericState == -1 or numericState == 0 or numericState == 1) and numericRemain and numericRemain >= 0) then
+    return nil
+  end
+
+  local spellID = nil
+  local extras = nil
+  local sawExtras = false
+  while suffix ~= "" do
+    local spellRaw, afterSpell = suffix:match("^:S:(%d+)(.*)$")
+    if spellRaw then
+      if spellID ~= nil then
+        return nil
+      end
+      spellID = tonumber(spellRaw)
+      if not spellID or spellID <= 0 then
+        return nil
+      end
+      suffix = afterSpell or ""
+    else
+      local extrasRaw, afterExtras = suffix:match("^:E:([^:]+)(.*)$")
+      if not extrasRaw or sawExtras then
+        return nil
+      end
+      sawExtras = true
+      if
+        extrasRaw:find("[^%d,;]")
+        or extrasRaw:sub(1, 1) == ";"
+        or extrasRaw:sub(-1) == ";"
+        or extrasRaw:find(";;", 1, true)
+      then
+        return nil
+      end
+
+      local count = 0
+      for entry in extrasRaw:gmatch("[^;]+") do
+        local sidStr, remainStr = entry:match("^(%d+),(%d+)$")
+        local sid = tonumber(sidStr)
+        local rem = tonumber(remainStr)
+        if not sid or not rem or rem <= 0 then
+          return nil
+        end
+        if count < 8 then
+          extras = extras or {}
+          extras[sid] = { cooldownRemain = rem }
+          count = count + 1
+        end
+      end
+
+      if count == 0 then
+        return nil
+      end
+      suffix = afterExtras or ""
+    end
+  end
+
+  if numericState == -1 and spellID ~= nil then
+    return nil
+  end
+
+  return {
+    state = numericState,
+    remain = numericRemain,
+    hasKick = numericState ~= -1,
+    spellID = spellID,
+    extras = extras,
+  }
+end
+
+local function EncodeKickSpellSuffix(spellID, hasKick)
+  if hasKick ~= true then
+    return ""
+  end
+  local sid = tonumber(spellID)
+  if not sid or sid <= 0 then
+    return ""
+  end
+  return string.format(":S:%d", math.floor(sid))
+end
+
+local function EncodeKickExtrasSuffix(extras)
+  if type(extras) ~= "table" then
+    return ""
+  end
+
+  -- Collect (spellID, remain) tuples, then sort numerically by spellID so
+  -- the dedup-payload hash is deterministic regardless of pairs() order.
+  -- Numerical sort matters when spell IDs differ in digit count (e.g. 1766
+  -- Rogue Kick vs 119914 Axe Toss); a string-based sort would put "1766"
+  -- after "119914" lexicographically, breaking dedup if the same map is
+  -- emitted twice with shuffled pairs() order.
+  local entries = {}
+  for spellID, data in pairs(extras) do
+    if type(data) == "table" then
+      local sid = tonumber(spellID)
+      local r = tonumber(data.cooldownRemain)
+      if sid and r and r > 0 then
+        entries[#entries + 1] = { sid = sid, remain = math.ceil(r) }
+      end
+    end
+  end
+  if #entries == 0 then
+    return ""
+  end
+
+  table.sort(entries, function(a, b)
+    return a.sid < b.sid
+  end)
+  local pieces = {}
+  for _, e in ipairs(entries) do
+    pieces[#pieces + 1] = string.format("%d,%d", e.sid, e.remain)
+  end
+  return ":E:" .. table.concat(pieces, ";")
+end
+
+-- The parser above is intentionally strict: every optional suffix segment
+-- must be known and well-formed, otherwise the full KICK payload is dropped.
+-- This preserves the no-guess contract for peer kick state.
+
 local function IsSyncEnabled()
   local db = rawget(_G, "IsiLiveDB")
   return not db or db.syncEnabled ~= false
@@ -708,8 +838,10 @@ end
 -- @param cooldownRemain number Remaining cooldown seconds; required when hasKick==true.
 -- @param capturedAt number|nil Timestamp from the payload.
 -- @param hasKick boolean Whether the player has a kick spell at all.
+-- @param extras table|nil Extra kick cooldowns keyed by spellID.
+-- @param spellID number|nil Primary kick spell ID when explicitly synced.
 -- @return boolean true if stored kick state changed; false if unchanged or rejected.
-function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick, extras)
+function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capturedAt, hasKick, extras, spellID)
   local key = Sync.NormalizePlayerKey(name, realm)
   if StringUtils.IsBlank(key) then
     return false
@@ -734,6 +866,13 @@ function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capture
   end
   local prevRemain = tonumber(prev and prev.cooldownRemain) or 0
   local remainChanged = newHasKick and newOnCooldown and math.abs(prevRemain - numericRemain) > 0.05
+  local numericSpellID = newHasKick and tonumber(spellID) or nil
+  if numericSpellID then
+    if numericSpellID <= 0 then
+      return false
+    end
+    numericSpellID = math.floor(numericSpellID)
+  end
   -- Extras: sanitize input map; only pass through {[spellID]={cooldownRemain}}
   -- entries with a positive remain. Caller may pass nil to clear.
   local sanitizedExtras = nil
@@ -772,11 +911,13 @@ function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capture
   local changed = not prev
     or prev.onCooldown ~= newOnCooldown
     or prev.hasKick ~= newHasKick
+    or prev.spellID ~= numericSpellID
     or remainChanged
     or extrasChanged
   local getTime = rawget(_G, "GetTime")
   kickInfoByPlayerKey[key] = {
     hasKick = newHasKick,
+    spellID = numericSpellID,
     onCooldown = newOnCooldown,
     cooldownRemain = newHasKick and numericRemain or 0,
     extras = sanitizedExtras,
@@ -1218,7 +1359,7 @@ end
 
 --- Broadcasts the local player's kick/interrupt availability to the group.
 -- Rate-limited to 1 s; deduplicated by payload string.
--- @param opts table {hasKick:boolean, onCooldown:boolean, cooldownRemain:number, force:boolean}
+-- @param opts table {hasKick:boolean, onCooldown:boolean, cooldownRemain:number, spellID:number|nil, force:boolean}
 function Sync.SendKick(opts)
   opts = opts or {}
   local channel = ResolveSendChannel(opts)
@@ -1248,48 +1389,18 @@ function Sync.SendKick(opts)
   if encodedHasKick and cooldownRemain then
     remain = math.ceil(cooldownRemain)
   end
-  -- Optional extras suffix `:E:<spellID,remain;spellID,remain>` for multi-kick
-  -- specs (Prot Pala Avenger's Shield etc.). Only emitted when at least one
-  -- extra is on cooldown -- saves bytes on the common single-kick case.
-  -- Backwards-compatible: older isiLive peers see only parts[2]/parts[3],
-  -- ignore parts[4]/parts[5].
-  local extrasSuffix = ""
-  if type(opts.extras) == "table" then
-    -- Collect (spellID, remain) tuples, then sort numerically by spellID so
-    -- the dedup-payload hash is deterministic regardless of pairs() order.
-    -- Numerical sort matters when spell IDs differ in digit count (e.g. 1766
-    -- Rogue Kick vs 119914 Axe Toss); a string-based sort would put "1766"
-    -- after "119914" lexicographically, breaking dedup if the same map is
-    -- emitted twice with shuffled pairs() order.
-    local entries = {}
-    for spellID, data in pairs(opts.extras) do
-      if type(data) == "table" then
-        local sid = tonumber(spellID)
-        local r = tonumber(data.cooldownRemain)
-        if sid and r and r > 0 then
-          entries[#entries + 1] = { sid = sid, remain = math.ceil(r) }
-        end
-      end
-    end
-    if #entries > 0 then
-      table.sort(entries, function(a, b)
-        return a.sid < b.sid
-      end)
-      local pieces = {}
-      for _, e in ipairs(entries) do
-        pieces[#pieces + 1] = string.format("%d,%d", e.sid, e.remain)
-      end
-      extrasSuffix = ":E:" .. table.concat(pieces, ";")
-    end
-  end
-  local payload = string.format("KICK:%d:%d%s", encodedOnCooldown, remain, extrasSuffix)
+  local spellSuffix = EncodeKickSpellSuffix(opts.spellID, encodedHasKick)
+  local extrasSuffix = EncodeKickExtrasSuffix(opts.extras)
+  local payload = string.format("KICK:%d:%d%s%s", encodedOnCooldown, remain, spellSuffix, extrasSuffix)
   local blocked, now = IsBlockedBySendGate(opts, lastKickPayloadSent, lastIsiLiveKickAt, payload, 1, nil)
   if blocked then
-    return
+    return false
   end
-  lastIsiLiveKickAt = now
-  lastKickPayloadSent = payload
   local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "ALERT")
+  if sent == true then
+    lastIsiLiveKickAt = now
+    lastKickPayloadSent = payload
+  end
   SyncLog(
     "send_kick",
     "hasKick=%s onCooldown=%s remain=%s channel=%s sent=%s",
@@ -1299,6 +1410,7 @@ function Sync.SendKick(opts)
     tostring(channel),
     tostring(sent)
   )
+  return sent == true
 end
 
 --- Broadcasts the local player's current dungeon/zone map ID to the group.
@@ -1442,7 +1554,6 @@ function Sync.SendLibKeystoneRequest(opts)
     return false
   end
 
-  lastLibKeystoneRequestAt = now
   -- Pick the correct party channel: inside an instance the WoW server only
   -- delivers party addon messages on INSTANCE_CHAT, sending to "PARTY" silently
   -- drops. Mirror Sync.GetAddonSyncChannel's instance-aware selection but skip
@@ -1450,8 +1561,11 @@ function Sync.SendLibKeystoneRequest(opts)
   local libKsChannel = (LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE)) and "INSTANCE_CHAT"
     or "PARTY"
   local sent = DispatchAddonMessage(LIBKEYSTONE_SYNC_PREFIX, "R", libKsChannel, "NORMAL")
+  if sent == true then
+    lastLibKeystoneRequestAt = now
+  end
   SyncLog("send_libkeystone_request", "channel=%s sent=%s", tostring(libKsChannel), tostring(sent))
-  return true
+  return sent == true
 end
 
 --- Sends the local player's keystone and rio to party in LibKeystone format ("level,mapID,rio").
@@ -1511,7 +1625,7 @@ function Sync.SendLibKeystonePartyData(opts)
     tostring(numericRio),
     tostring(sent)
   )
-  return true
+  return sent == true
 end
 
 --- Broadcasts a SHAREKEYS request, asking all peers to announce their keystones in group chat.
@@ -1667,34 +1781,19 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   elseif bucket == "TARGET" and parts[2] and parts[3] then
     targetUpdated =
       Sync.SetPlayerTargetInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), tonumber(parts[4]), parts[5])
-  elseif bucket == "KICK" and parts[2] and parts[3] then
-    local numericState = tonumber(parts[2])
-    local numericRemain = tonumber(parts[3])
-    if (numericState == -1 or numericState == 0 or numericState == 1) and numericRemain and numericRemain >= 0 then
-      local hasKick = numericState ~= -1
-      -- Optional extras: parts[4] == "E" marks the extras suffix. parts[5]
-      -- is `<spellID>,<remain>;<spellID>,<remain>`. Older peers omit both.
-      -- Defense-in-depth: cap at 8 entries to bound memory if a malformed
-      -- or hostile peer were to send an oversized list. Realistic max in
-      -- Midnight is 1-2 extras (Prot Pala Avenger's Shield, Demo Warlock pet swap).
-      local extras = nil
-      if parts[4] == "E" and type(parts[5]) == "string" and parts[5] ~= "" then
-        local count = 0
-        for entry in parts[5]:gmatch("[^;]+") do
-          if count >= 8 then
-            break
-          end
-          local sidStr, remainStr = entry:match("^(%d+),(%d+)$")
-          local sid = tonumber(sidStr)
-          local rem = tonumber(remainStr)
-          if sid and rem and rem > 0 then
-            extras = extras or {}
-            extras[sid] = { cooldownRemain = rem }
-            count = count + 1
-          end
-        end
-      end
-      kickUpdated = Sync.SetPlayerKickInfo(sender, nil, numericState == 1, numericRemain, nil, hasKick, extras)
+  elseif bucket == "KICK" then
+    local parsedKick = ParseKickPayload(message)
+    if parsedKick then
+      kickUpdated = Sync.SetPlayerKickInfo(
+        sender,
+        nil,
+        parsedKick.state == 1,
+        parsedKick.remain,
+        nil,
+        parsedKick.hasKick,
+        parsedKick.extras,
+        parsedKick.spellID
+      )
     end
   elseif bucket == "BRLUST" and parts[2] and parts[3] then
     -- Skip self-echo: BroadcastCombatAnnounce already rendered the announce

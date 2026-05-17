@@ -66,8 +66,8 @@ local RIO_COL_WIDTH = RI.RIO_COL_WIDTH or 70
 local DPS_COL_X = RI.DPS_COL_X or (RIO_COL_X + RIO_COL_WIDTH + 2)
 local DPS_COL_WIDTH = RI.DPS_COL_WIDTH or 40
 local KICK_COL_X = RI.KICK_COL_X or (DPS_COL_X + DPS_COL_WIDTH + 4)
-local KICK_COL_WIDTH = RI.KICK_COL_WIDTH or 58
-local KICK_HOVER_WIDTH = 58
+local KICK_COL_WIDTH = RI.KICK_COL_WIDTH or 40
+local KICK_HOVER_WIDTH = KICK_COL_WIDTH
 local ROLE_BUTTON_X = SPEC_COL_X + SPEC_COL_WIDTH + 4
 
 -- Raid-target marker per role: 6 = Blue Square (Tank), 4 = Green Triangle (Healer).
@@ -365,7 +365,7 @@ local function SetKickCellText(cell, info, getL)
   end
   if info.syncKickOnCooldown == false then
     local L = type(getL) == "function" and getL() or {}
-    local readyText = type(L.SYNC_KICK_READY) == "string" and L.SYNC_KICK_READY or "ready"
+    local readyText = type(L.SYNC_KICK_READY_SHORT) == "string" and L.SYNC_KICK_READY_SHORT or "OK"
     cell:SetText("|cff44ff44" .. readyText .. "|r")
     return
   end

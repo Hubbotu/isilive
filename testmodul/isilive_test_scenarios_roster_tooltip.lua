@@ -561,6 +561,40 @@ return function(test, ctx)
     end)
   end)
 
+  test("roster_tooltip: ShowRosterInfoTooltip renders multi-kick extras sorted by spellID", function()
+    WithGlobals(BuildGlobals(), function()
+      local addon = Load()
+      local args = buildShowArgs({
+        name = "Alice",
+        class = "PALADIN",
+        syncKickExtras = {
+          [31935] = { cooldownRemain = 12 },
+          [19647] = { cooldownRemain = 8 },
+        },
+      }, {
+        getL = function()
+          return { TOOLTIP_KICK_EXTRAS_HEADER = "Extra kicks:" }
+        end,
+      })
+      Assert.Equal(callShow(addon, args), true)
+      local tf = args.tooltipFrame
+      local spellLockIndex = nil
+      local avengerIndex = nil
+      for index, line in ipairs(tf._isiLiveTooltipLines) do
+        local text = line:GetText()
+        if text:find("Spell 19647", 1, true) then
+          spellLockIndex = index
+        end
+        if text:find("Spell 31935", 1, true) then
+          avengerIndex = index
+        end
+      end
+      Assert.NotNil(spellLockIndex, "lower spellID extra must render")
+      Assert.NotNil(avengerIndex, "higher spellID extra must render")
+      Assert.True(spellLockIndex < avengerIndex, "extra kick tooltip lines must be sorted by numeric spellID")
+    end)
+  end)
+
   test("roster_tooltip: ShowRosterInfoTooltip omits extras block when all entries expired", function()
     WithGlobals(BuildGlobals(), function()
       local addon = Load()

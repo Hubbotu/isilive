@@ -43,6 +43,7 @@ Zuletzt aktualisiert: `2026-05-16`
 | UC-19 | (reserviert / nicht vergeben) | Nummer ausgelassen; nicht neu belegen, damit bereits referenzierte Test-/Commit-Querverweise stabil bleiben |
 | UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
+| UC-22 | LFG-Invite-Liste | Mehrere offene Premade-LFG-Invites werden gleichzeitig als klickbare Liste angezeigt |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -270,6 +271,21 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 9. Bekannter Constraint: Demonology Warlock Inner Demons (Felguard + Felhunter parallel, beide casten ihren eigenen Interrupt-Spell) wird aktuell **nicht** als Multi-Kick gehandhabt, weil `Spell Lock 19647` in `SPEC_DATA[266].spells` als alternativer Primary fuer den Pet-Switch-Fall (Felhunter ohne Felguard) gelistet ist. Den Array auf einen Spell zu reduzieren wuerde den Pet-Switch-Pfad brechen. Dokumentiert als Future-Work.
 10. Erfolgskriterium: Im aktiven Mythic+-Run zeigt der Roster-Hover-Tooltip eines Prot Paladin mit Avenger's-Shield-Talent zwei separate Cooldowns (Rebuke in der `Kick`-Spalte und Avenger's Shield im Tooltip-Extras-Block) ohne dass der primary-Cooldown durch den Avenger's-Shield-Cast gestoert wird; Peers ohne Talent-Kick sehen weder Header noch Extras-Zeilen.
 
+## UC-22 LFG-Invite-Liste
+
+Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro Invite eine gezielte Entscheidung erlauben.
+
+1. Trigger: `LFG_LIST_APPLICATION_STATUS_UPDATED` meldet fuer eine konkrete `searchResultID` den Status `invited`.
+2. Verarbeitung: Das Invite-Modul liest die zugehoerigen Blizzard-LFG-Daten ueber `C_LFGList.GetSearchResultInfo()` und speichert genau einen offenen Eintrag pro `searchResultID`.
+3. Anzeige: Die Invite-Liste wird unter dem sichtbaren Blizzard-Invite-Popup verankert; wenn kein Popup auffindbar ist, nutzt sie eine feste UIParent-Position.
+4. Anzeige: Dungeonname, Keystufe, Gruppentitel, Lead-Kommentar und Rolle werden nur angezeigt, wenn sie aus den LFG-Daten eindeutig stammen.
+5. Regel: Fehlende oder mehrdeutige Dungeon-, Keystufen- oder Rolleninformationen bleiben leer und werden nicht durch Namen, Spielerrolle oder andere Runtime-Daten geraten.
+6. Benutzeraktion: `Annehmen` ruft die Accept-Aktion fuer die konkrete `searchResultID` der angeklickten Zeile auf und schliesst nach erfolgreicher Ausfuehrung die offene Invite-Liste.
+7. Benutzeraktion: `Ablehnen` ruft die Decline-Aktion fuer die konkrete `searchResultID` der angeklickten Zeile auf und entfernt nach erfolgreicher Ausfuehrung nur diesen Eintrag.
+8. Reload-Verhalten: Bei `PLAYER_LOGIN` rehydriert das Modul offene Invite-Eintraege aus `C_LFGList.GetApplications()` und `C_LFGList.GetApplicationInfo()`.
+9. Abgrenzung: Klassische Nicht-LFG-Party-Invites bleiben Blizzard-Domain und werden nicht in diese Liste aufgenommen.
+10. Erfolgskriterium: Mehrere parallele Invites bleiben gleichzeitig sichtbar, deduplizieren stabil ueber `searchResultID` und fuehren Accept/Decline nur auf der angeklickten Zeile aus.
+
 ## Nichtfunktionale Regeln
 
 1. Kein spekulatives Verhalten: unresolved oder mehrdeutiger Map-Kontext bleibt unresolved; kein Name-/Token-Fallback-Guessing.
@@ -293,7 +309,7 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1733` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1752` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -315,7 +331,7 @@ Aktuelle Validator-Baseline: `1733` Szenarien ueber die in `tools/usecase_scenar
 | Thema | Dateien |
 |---|---|
 | Queue-Erkennung und Target-Capture | `isiLive_queue.lua`, `isiLive_event_handlers_queue.lua` |
-| LFG-Detektion, Chat-Hinweise und Highlight-Dispatch | `isiLive_lfg_detect.lua`, `isiLive_factory_controllers.lua`, `isiLive_texts.lua`, `isiLive_teleport_ui.lua` |
+| LFG-Detektion, Chat-Hinweise, offene Invite-Liste und Highlight-Dispatch | `isiLive_lfg_detect.lua`, `isiLive_invites.lua`, `isiLive_invite_list.lua`, `isiLive_factory_controllers.lua`, `isiLive_texts.lua`, `isiLive_teleport_ui.lua` |
 | Highlight-Aufloesung und Inside-Dungeon-Suppression | `isiLive_highlight.lua` |
 | Teleport-Spell-Mapping und Cooldown-Verhalten | `isiLive_teleport.lua`, `isiLive_spell_utils.lua`, `isiLive_teleport_ui.lua` |
 | Gruppen-Lifecycle, Leader-State-Mirroring und Roster-Rebuild | `isiLive_group.lua`, `isiLive_roster.lua` |
