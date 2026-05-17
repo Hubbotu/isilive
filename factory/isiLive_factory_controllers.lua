@@ -953,6 +953,85 @@ local function HandleTargetDungeonChatPayload(ctx, modules, statusController, pa
 end
 FI.HandleTargetDungeonChatPayload = HandleTargetDungeonChatPayload
 
+local function InitializeInviteControllers(ctx, modules)
+  if modules.invites and type(modules.invites.CreateController) == "function" then
+    local function GetLFGListApiFunction(name)
+      local lfgList = rawget(_G, "C_LFGList")
+      if type(lfgList) ~= "table" then
+        return nil
+      end
+      local fn = lfgList[name]
+      return type(fn) == "function" and fn or nil
+    end
+
+    ctx.invitesController = modules.invites.CreateController({
+      getSearchResultInfo = function(searchResultID)
+        local fn = GetLFGListApiFunction("GetSearchResultInfo")
+        if not fn then
+          return nil
+        end
+        return fn(searchResultID)
+      end,
+      getApplications = function()
+        local fn = GetLFGListApiFunction("GetApplications")
+        if not fn then
+          return nil
+        end
+        return fn()
+      end,
+      getApplicationInfo = function(applicationID)
+        local fn = GetLFGListApiFunction("GetApplicationInfo")
+        if not fn then
+          return nil
+        end
+        return fn(applicationID)
+      end,
+      acceptInvite = function(searchResultID)
+        local fn = GetLFGListApiFunction("AcceptInvite")
+        if not fn then
+          return false
+        end
+        return fn(searchResultID)
+      end,
+      declineInvite = function(searchResultID)
+        local fn = GetLFGListApiFunction("DeclineInvite")
+        if not fn then
+          return false
+        end
+        return fn(searchResultID)
+      end,
+      resolveMapIDByActivityID = modules.teleport.ResolveMapIDByActivityID,
+      getDungeonName = function(mapID)
+        local db = rawget(_G, "IsiLiveDB")
+        local activeLocale = (db and db.locale) or ctx.locale
+        return modules.teleport.GetDungeonName(mapID, activeLocale)
+      end,
+    })
+  end
+
+  if
+    ctx.invitesController
+    and modules.inviteList
+    and type(modules.inviteList.Create) == "function"
+    and rawget(_G, "UIParent")
+  then
+    ctx.inviteList = modules.inviteList.Create({
+      parent = UIParent,
+      getL = ctx.GetL,
+      onAccept = function(searchResultID)
+        ctx.invitesController.Accept(searchResultID)
+      end,
+      onDecline = function(searchResultID)
+        ctx.invitesController.Decline(searchResultID)
+      end,
+    })
+    ctx.invitesController.Subscribe(function(invites)
+      ctx.inviteList.Render(invites)
+    end)
+  end
+end
+FI.InitializeInviteControllers = InitializeInviteControllers
+
 local function InitializeFactoryPrimaryControllers(ctx)
   local modules = ctx.modules
   local initResult = modules.controllerInit.CreateControllers({
@@ -1293,81 +1372,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
     WireAcceptedInviteNoticeCallbacks(ctx, modules, lfgDetect)
   end
 
-  if modules.invites and type(modules.invites.CreateController) == "function" then
-    local function GetLFGListApiFunction(name)
-      local lfgList = rawget(_G, "C_LFGList")
-      if type(lfgList) ~= "table" then
-        return nil
-      end
-      local fn = lfgList[name]
-      return type(fn) == "function" and fn or nil
-    end
-
-    ctx.invitesController = modules.invites.CreateController({
-      getSearchResultInfo = function(searchResultID)
-        local fn = GetLFGListApiFunction("GetSearchResultInfo")
-        if not fn then
-          return nil
-        end
-        return fn(searchResultID)
-      end,
-      getApplications = function()
-        local fn = GetLFGListApiFunction("GetApplications")
-        if not fn then
-          return nil
-        end
-        return fn()
-      end,
-      getApplicationInfo = function(applicationID)
-        local fn = GetLFGListApiFunction("GetApplicationInfo")
-        if not fn then
-          return nil
-        end
-        return fn(applicationID)
-      end,
-      acceptInvite = function(searchResultID)
-        local fn = GetLFGListApiFunction("AcceptInvite")
-        if not fn then
-          return false
-        end
-        return fn(searchResultID)
-      end,
-      declineInvite = function(searchResultID)
-        local fn = GetLFGListApiFunction("DeclineInvite")
-        if not fn then
-          return false
-        end
-        return fn(searchResultID)
-      end,
-      resolveMapIDByActivityID = modules.teleport.ResolveMapIDByActivityID,
-      getDungeonName = function(mapID)
-        local db = rawget(_G, "IsiLiveDB")
-        local activeLocale = (db and db.locale) or ctx.locale
-        return modules.teleport.GetDungeonName(mapID, activeLocale)
-      end,
-    })
-  end
-
-  if
-    ctx.invitesController
-    and modules.inviteList
-    and type(modules.inviteList.Create) == "function"
-    and rawget(_G, "UIParent")
-  then
-    ctx.inviteList = modules.inviteList.Create({
-      parent = UIParent,
-      getL = ctx.GetL,
-      onAccept = function(searchResultID)
-        ctx.invitesController.Accept(searchResultID)
-      end,
-      onDecline = function(searchResultID)
-        ctx.invitesController.Decline(searchResultID)
-      end,
-    })
-    ctx.invitesController.Subscribe(function(invites)
-      ctx.inviteList.Render(invites)
-    end)
-  end
+  InitializeInviteControllers(ctx, modules)
 
   -- Strips the "-Realm" suffix from a player name so the chat output reads
   -- naturally on the local realm. Cross-realm names keep their realm segment.

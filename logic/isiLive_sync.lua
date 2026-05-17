@@ -877,8 +877,8 @@ function Sync.SetPlayerKickInfo(name, realm, onCooldown, cooldownRemain, capture
   -- entries with a positive remain. Caller may pass nil to clear.
   local sanitizedExtras = nil
   if type(extras) == "table" then
-    for spellID, data in pairs(extras) do
-      local sid = tonumber(spellID)
+    for extraSpellID, data in pairs(extras) do
+      local sid = tonumber(extraSpellID)
       local r = type(data) == "table" and tonumber(data.cooldownRemain) or nil
       if sid and r and r > 0 then
         sanitizedExtras = sanitizedExtras or {}

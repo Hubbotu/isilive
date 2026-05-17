@@ -78,7 +78,9 @@ local function BuildPrimaryText(entry)
   if dungeon and level then
     return dungeon .. " " .. level
   end
-  return dungeon or level or (type(entry.groupName) == "string" and entry.groupName ~= "" and entry.groupName)
+  return dungeon
+    or level
+    or (type(entry.groupName) == "string" and entry.groupName ~= "" and entry.groupName)
     or "LFG invite"
 end
 
@@ -183,9 +185,10 @@ function InviteList.Create(opts)
         if role then
           metaParts[#metaParts + 1] = string.format(L.INVITE_LIST_ROLE_FMT or "Role: %s", role)
         end
+        local comment = type(entry.comment) == "string" and entry.comment ~= "" and entry.comment or ""
         row.primary:SetText(BuildPrimaryText(entry))
         row.meta:SetText(table.concat(metaParts, "  |  "))
-        row.comment:SetText(type(entry.comment) == "string" and entry.comment ~= "" and entry.comment or "")
+        row.comment:SetText(comment)
         row.accept:SetText(L.INVITE_LIST_ACCEPT or "Accept")
         row.decline:SetText(L.INVITE_LIST_DECLINE or "Decline")
         row.accept.searchResultID = entry.searchResultID
