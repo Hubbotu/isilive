@@ -12,6 +12,10 @@ return function(test, ctx)
     return LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_roster_layout.lua" })._RosterInternal
   end
 
+  local function loadChromeRIWithUICommon()
+    return LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_roster_panel_chrome.lua" })._RosterInternal
+  end
+
   -- NormalizeLayoutMode
 
   test("RosterLayout NormalizeLayoutMode maps nil to expanded", function()
@@ -276,6 +280,70 @@ return function(test, ctx)
 
       Assert.True(#fontCalls > 0, "font fitting must call SetFont")
       Assert.Equal(fontCalls[1].path, "Fonts\\ARIALN.TTF", "first fit pass must use the ruRU override font")
+    end)
+  end)
+
+  test("RosterLayout SetPanelHeaderText fits ruRU headers to fixed roster columns", function()
+    WithGlobals({
+      IsiLiveDB = { locale = "ruRU" },
+    }, function()
+      local RI = loadChromeRIWithUICommon()
+      local currentText = ""
+      local currentSize = 12
+      local fontCalls = {}
+      local function CountCodepoints(text)
+        local count = 0
+        for i = 1, #text do
+          local byte = string.byte(text, i)
+          if byte < 128 or byte >= 192 then
+            count = count + 1
+          end
+        end
+        return count
+      end
+      local header = {
+        _isiLiveHeaderWidth = 40,
+        SetWordWrap = function(self, value)
+          self.wordWrap = value
+        end,
+        SetNonSpaceWrap = function(self, value)
+          self.nonSpaceWrap = value
+        end,
+        SetMaxLines = function(self, value)
+          self.maxLines = value
+        end,
+        GetFont = function()
+          return "Fonts\\FRIZQT__.TTF", currentSize, "OUTLINE"
+        end,
+        SetFont = function(_self, path, size, flags)
+          currentSize = size
+          fontCalls[#fontCalls + 1] = { path = path, size = size, flags = flags }
+        end,
+        SetText = function(_self, value)
+          currentText = tostring(value or "")
+        end,
+        GetStringWidth = function()
+          return CountCodepoints(currentText) * currentSize
+        end,
+      }
+
+      RI.SetPanelHeaderText(header, "Исключить")
+
+      Assert.Equal(currentText, "Исключить", "header text should keep the localized value")
+      Assert.False(header.wordWrap, "header labels must not wrap into the roster row")
+      Assert.False(header.nonSpaceWrap, "header labels must not non-space-wrap")
+      Assert.Equal(header.maxLines, 1, "header labels must stay single-line")
+      local usedRuFont = false
+      for _, call in ipairs(fontCalls) do
+        if call.path == "Fonts\\ARIALN.TTF" then
+          usedRuFont = true
+        end
+      end
+      Assert.True(usedRuFont, "ruRU header fitting must use the Cyrillic font")
+      Assert.Equal(currentSize, 8, "long ruRU headers should shrink to the readable minimum")
+
+      RI.SetPanelHeaderText(header, "Кик")
+      Assert.Equal(currentSize, 12, "short follow-up headers should restore the base font size")
     end)
   end)
 end

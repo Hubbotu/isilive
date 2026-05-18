@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-05-18 - Version 0.9.250 (patch)
+
+Fixes Russian roster column headers after the `ruRU` locale rollout.
+
+### Locale UI
+
+[locale/isiLive_texts.lua](locale/isiLive_texts.lua),
+[ui/isiLive_roster_panel.lua](ui/isiLive_roster_panel.lua),
+[ui/isiLive_roster_panel_chrome.lua](ui/isiLive_roster_panel_chrome.lua):
+
+- Shortened the Russian iLvl and kick column headers to fit their fixed roster
+  columns.
+- Roster column headers now use the same Cyrillic-capable ruRU font override
+  and deterministic single-line font fitting as the localized action buttons,
+  so long localized headers cannot visually run into adjacent columns.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_roster_layout.lua](testmodul/isilive_test_scenarios_roster_layout.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Added deterministic coverage for ruRU header fitting and attached it to the
+  active ruRU font rendering rule.
+  Usecase count is now 1772.
+
 ## 2026-05-18 - Version 0.9.249 (patch)
 
 Allows longer localized main-button labels without forcing translators to

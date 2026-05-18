@@ -770,3 +770,4 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UICommon.ApplyLocaleFont uses Cyrillic-capable font for ruRU addon locale
   - UICommon.ApplyLocaleFont leaves non-overridden locales unchanged
   - RosterLayout SetFlatButtonText uses ruRU font override before fitting Cyrillic labels
+  - RosterLayout SetPanelHeaderText fits ruRU headers to fixed roster columns

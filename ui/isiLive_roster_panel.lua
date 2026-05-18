@@ -113,6 +113,12 @@ local CreateKillTrackRow = RI.CreateKillTrackRow
 local UpdateKillTrackRow = RI.UpdateKillTrackRow
 local CreateFlatButton = RI.CreateFlatButton
 local CreatePanelHeaders = RI.CreatePanelHeaders
+local SetPanelHeaderText = RI.SetPanelHeaderText
+  or function(fontString, text)
+    if type(fontString) == "table" and type(fontString.SetText) == "function" then
+      fontString:SetText(tostring(text or ""))
+    end
+  end
 local CreateM2ColumnGuides = RI.CreateM2ColumnGuides
 local AttachPanelButtonTooltip = RI.AttachPanelButtonTooltip
 local AttachModeButtonTooltip = RI.AttachModeButtonTooltip
@@ -742,28 +748,18 @@ function RosterPanel.CreateController(opts)
       ui.titleHint:SetText(tostring(L.TITLE_HINT or ""))
       ApplyLocaleFont(ui.titleHint)
     end
-    ApplyLocaleFont(ui.specHeader)
-    ApplyLocaleFont(ui.nameHeader)
-    ApplyLocaleFont(ui.serverHeader)
-    ApplyLocaleFont(ui.keyHeader)
-    ApplyLocaleFont(ui.ilvlHeader)
-    ApplyLocaleFont(ui.rioHeader)
-    ApplyLocaleFont(ui.dpsHeader)
-    ApplyLocaleFont(ui.kickHeader)
-    ApplyLocaleFont(ui.leadOptionsHeader)
-    ApplyLocaleFont(ui.mplusManagementHeader)
-    ui.specHeader:SetText(L.COL_SPEC)
-    ui.nameHeader:SetText(L.COL_NAME)
-    ui.serverHeader:SetText(L.COL_LANGUAGE)
-    ui.keyHeader:SetText(L.COL_KEY)
-    ui.ilvlHeader:SetText(L.COL_ILVL)
-    ui.rioHeader:SetText(L.COL_RIO)
-    ui.dpsHeader:SetText(L.COL_DPS)
+    SetPanelHeaderText(ui.specHeader, L.COL_SPEC)
+    SetPanelHeaderText(ui.nameHeader, L.COL_NAME)
+    SetPanelHeaderText(ui.serverHeader, L.COL_LANGUAGE)
+    SetPanelHeaderText(ui.keyHeader, L.COL_KEY)
+    SetPanelHeaderText(ui.ilvlHeader, L.COL_ILVL)
+    SetPanelHeaderText(ui.rioHeader, L.COL_RIO)
+    SetPanelHeaderText(ui.dpsHeader, L.COL_DPS)
     if ui.kickHeader then
-      ui.kickHeader:SetText(L.COL_KICK or "Kick")
+      SetPanelHeaderText(ui.kickHeader, L.COL_KICK or "Kick")
     end
-    ui.leadOptionsHeader:SetText(L.LEAD_OPTIONS)
-    ui.mplusManagementHeader:SetText(L.MPLUS_MANAGEMENT)
+    SetPanelHeaderText(ui.leadOptionsHeader, L.LEAD_OPTIONS)
+    SetPanelHeaderText(ui.mplusManagementHeader, L.MPLUS_MANAGEMENT)
     readyCheckButton._fullText = L.BTN_READYCHECK
     readyCheckButton._hModeText = L.BTN_READYCHECK_SHORT
     countdownButton._fullText = L.BTN_COUNTDOWN10

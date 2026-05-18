@@ -35,6 +35,8 @@ local DPS_COL_X = RIO_COL_X + RIO_COL_WIDTH + 2
 local DPS_COL_WIDTH = 40
 local KICK_COL_X = DPS_COL_X + DPS_COL_WIDTH + 4
 local KICK_COL_WIDTH = 40
+local HEADER_MIN_FONT_SIZE = 8
+local HEADER_WIDTH_PADDING = 2
 
 RI.SPEC_COL_X = SPEC_COL_X
 RI.NAME_COL_X = NAME_COL_X
@@ -52,6 +54,105 @@ RI.ILVL_COL_WIDTH = ILVL_COL_WIDTH
 RI.RIO_COL_WIDTH = RIO_COL_WIDTH
 RI.DPS_COL_WIDTH = DPS_COL_WIDTH
 RI.KICK_COL_WIDTH = KICK_COL_WIDTH
+
+local function ConfigureSingleLineFontString(fontString)
+  if type(fontString) ~= "table" then
+    return
+  end
+  if type(fontString.SetWordWrap) == "function" then
+    fontString:SetWordWrap(false)
+  end
+  if type(fontString.SetNonSpaceWrap) == "function" then
+    fontString:SetNonSpaceWrap(false)
+  end
+  if type(fontString.SetMaxLines) == "function" then
+    fontString:SetMaxLines(1)
+  end
+end
+
+local function CaptureOriginalFont(fontString)
+  if
+    type(fontString) ~= "table"
+    or type(fontString.GetFont) ~= "function"
+    or type(fontString.SetFont) ~= "function"
+  then
+    return nil
+  end
+  if fontString._isiLiveHeaderOriginalFont then
+    return fontString._isiLiveHeaderOriginalFont
+  end
+
+  local fontPath, fontSize, fontFlags = fontString:GetFont()
+  if type(fontPath) ~= "string" or fontPath == "" or type(fontSize) ~= "number" then
+    return nil
+  end
+
+  fontString._isiLiveHeaderOriginalFont = {
+    path = fontPath,
+    size = fontSize,
+    flags = fontFlags,
+  }
+  return fontString._isiLiveHeaderOriginalFont
+end
+
+local function GetHeaderWidth(fontString)
+  if type(fontString) ~= "table" then
+    return 0
+  end
+  if type(fontString.GetWidth) == "function" then
+    return tonumber(fontString:GetWidth()) or 0
+  end
+  return tonumber(fontString._isiLiveHeaderWidth) or 0
+end
+
+local function FitHeaderFontString(fontString)
+  if
+    type(fontString) ~= "table"
+    or type(fontString.GetFont) ~= "function"
+    or type(fontString.SetFont) ~= "function"
+    or type(fontString.GetStringWidth) ~= "function"
+  then
+    return
+  end
+
+  local width = GetHeaderWidth(fontString) - HEADER_WIDTH_PADDING
+  if width <= 0 then
+    return
+  end
+
+  local fontPath, fontSize, fontFlags = fontString:GetFont()
+  if type(fontPath) ~= "string" or fontPath == "" or type(fontSize) ~= "number" then
+    return
+  end
+
+  local nextSize = fontSize
+  while nextSize > HEADER_MIN_FONT_SIZE and (tonumber(fontString:GetStringWidth()) or 0) > width do
+    nextSize = nextSize - 1
+    fontString:SetFont(fontPath, nextSize, fontFlags)
+  end
+end
+
+local function SetPanelHeaderText(fontString, text)
+  if type(fontString) ~= "table" then
+    return
+  end
+
+  ConfigureSingleLineFontString(fontString)
+  local originalFont = CaptureOriginalFont(fontString)
+  if originalFont then
+    fontString:SetFont(originalFont.path, originalFont.size, originalFont.flags)
+  end
+
+  local UICommon = addonTable and addonTable.UICommon
+  if type(UICommon) == "table" and type(UICommon.ApplyLocaleFont) == "function" then
+    UICommon.ApplyLocaleFont(fontString)
+  end
+
+  if type(fontString.SetText) == "function" then
+    fontString:SetText(tostring(text or ""))
+  end
+  FitHeaderFontString(fontString)
+end
 
 local function CreateFlatButton(parent, width, height)
   local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
@@ -137,69 +238,58 @@ local function CreatePanelHeaders(mainFrame)
   local specHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   specHeader:SetPoint("TOPLEFT", SPEC_COL_X, -34)
   specHeader:SetWidth(SPEC_COL_WIDTH)
+  specHeader._isiLiveHeaderWidth = SPEC_COL_WIDTH
   specHeader:SetJustifyH("RIGHT")
+  ConfigureSingleLineFontString(specHeader)
 
   local nameHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   nameHeader:SetPoint("TOPLEFT", NAME_COL_X, -34)
   nameHeader:SetWidth(NAME_COL_WIDTH)
+  nameHeader._isiLiveHeaderWidth = NAME_COL_WIDTH
   nameHeader:SetJustifyH("LEFT")
+  ConfigureSingleLineFontString(nameHeader)
 
   local ilvlHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   ilvlHeader:SetPoint("TOPLEFT", ILVL_COL_X, -34)
   ilvlHeader:SetWidth(ILVL_COL_WIDTH)
+  ilvlHeader._isiLiveHeaderWidth = ILVL_COL_WIDTH
   ilvlHeader:SetJustifyH("RIGHT")
+  ConfigureSingleLineFontString(ilvlHeader)
 
   local serverHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   serverHeader:SetPoint("TOPLEFT", SERVER_COL_X, -34)
   serverHeader:SetWidth(SERVER_COL_WIDTH)
+  serverHeader._isiLiveHeaderWidth = SERVER_COL_WIDTH
   serverHeader:SetJustifyH("LEFT")
+  ConfigureSingleLineFontString(serverHeader)
 
   local keyHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   keyHeader:SetPoint("TOPLEFT", KEY_COL_X, -34)
   keyHeader:SetWidth(KEY_COL_WIDTH)
+  keyHeader._isiLiveHeaderWidth = KEY_COL_WIDTH
   keyHeader:SetJustifyH("RIGHT")
-  if keyHeader.SetWordWrap then
-    keyHeader:SetWordWrap(false)
-  end
-  if keyHeader.SetNonSpaceWrap then
-    keyHeader:SetNonSpaceWrap(false)
-  end
-  if keyHeader.SetMaxLines then
-    keyHeader:SetMaxLines(1)
-  end
+  ConfigureSingleLineFontString(keyHeader)
 
   local rioHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   rioHeader:SetPoint("TOPLEFT", RIO_COL_X, -34)
   rioHeader:SetWidth(RIO_COL_WIDTH)
+  rioHeader._isiLiveHeaderWidth = RIO_COL_WIDTH
   rioHeader:SetJustifyH("RIGHT")
-  if rioHeader.SetWordWrap then
-    rioHeader:SetWordWrap(false)
-  end
-  if rioHeader.SetNonSpaceWrap then
-    rioHeader:SetNonSpaceWrap(false)
-  end
-  if rioHeader.SetMaxLines then
-    rioHeader:SetMaxLines(1)
-  end
+  ConfigureSingleLineFontString(rioHeader)
 
   local dpsHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   dpsHeader:SetPoint("TOPLEFT", DPS_COL_X, -34)
   dpsHeader:SetWidth(DPS_COL_WIDTH)
+  dpsHeader._isiLiveHeaderWidth = DPS_COL_WIDTH
   dpsHeader:SetJustifyH("RIGHT")
-  if dpsHeader.SetWordWrap then
-    dpsHeader:SetWordWrap(false)
-  end
-  if dpsHeader.SetNonSpaceWrap then
-    dpsHeader:SetNonSpaceWrap(false)
-  end
-  if dpsHeader.SetMaxLines then
-    dpsHeader:SetMaxLines(1)
-  end
+  ConfigureSingleLineFontString(dpsHeader)
 
   local kickHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   kickHeader:SetPoint("TOPLEFT", KICK_COL_X, -34)
   kickHeader:SetWidth(KICK_COL_WIDTH)
+  kickHeader._isiLiveHeaderWidth = KICK_COL_WIDTH
   kickHeader:SetJustifyH("RIGHT")
+  ConfigureSingleLineFontString(kickHeader)
 
   local leadOptionsHeader = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   leadOptionsHeader:SetPoint("TOPRIGHT", -10, -34)
@@ -210,6 +300,7 @@ local function CreatePanelHeaders(mainFrame)
   mplusManagementHeader:SetPoint("TOPRIGHT", -3, -34)
   mplusManagementHeader:SetWidth(110)
   mplusManagementHeader:SetJustifyH("CENTER")
+  ConfigureSingleLineFontString(mplusManagementHeader)
 
   local headerSepLeft = mainFrame:CreateTexture(nil, "ARTWORK")
   headerSepLeft:SetHeight(1)
@@ -456,6 +547,7 @@ end
 
 RI.CreateFlatButton = CreateFlatButton
 RI.CreatePanelHeaders = CreatePanelHeaders
+RI.SetPanelHeaderText = SetPanelHeaderText
 RI.CreateM2ColumnGuides = CreateM2ColumnGuides
 RI.AttachPanelButtonTooltip = AttachPanelButtonTooltip
 RI.AttachModeButtonTooltip = AttachModeButtonTooltip
