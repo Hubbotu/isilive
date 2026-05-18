@@ -90,8 +90,6 @@ end
 function QueueLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
     or function(_event, ...) end
-  ctx.handleInviteEvent = type(ctx.handleInviteEvent) == "function" and ctx.handleInviteEvent
-    or function(_event, ...) end
   local logf = type(ctx.logRuntimeTracef) == "function" and ctx.logRuntimeTracef or nil
   return {
     LFG_LIST_APPLICATION_STATUS_UPDATED = function(_self, ...)
@@ -108,7 +106,6 @@ function QueueLifecycle.BuildHandlers(ctx)
         return
       end
       ctx.handleLFGDetectEvent("LFG_LIST_APPLICATION_STATUS_UPDATED", ...)
-      ctx.handleInviteEvent("LFG_LIST_APPLICATION_STATUS_UPDATED", ...)
       if IsInviteAcceptedStatus(...) then
         RefreshTargetStatusAfterInviteAccepted(ctx)
       end

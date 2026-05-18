@@ -577,7 +577,6 @@ function RuntimeLifecycle.BuildHandlers(ctx)
   local function HandlePlayerLoginEvent(_self)
     ApplyBindingStartupRefresh(ctx)
     ctx.handleLFGDetectEvent("PLAYER_LOGIN")
-    ctx.handleInviteEvent("PLAYER_LOGIN")
     if not IsRaidModeActive(ctx) and ctx.shouldShowMainFrameOnStartup() then
       ctx.setMainFrameVisible(true)
     end

@@ -48,7 +48,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 25. (veraltet — Duplikat zu Regel 15) RIO-Delta bleibt immer bei `+0` oder hoeher.
 26. (veraltet — Duplikat zu Regel 2) UI-Toggle per STRG+F9 ausserhalb des Raids.
 27. das schliessen der ui ist jederzeit anforderbar, entweder per klick auf das rote x rechts oben (windows like) oder per STRG+F9; ausser im Raidmodus bleiben blockierte hide-wechsel bis `PLAYER_REGEN_ENABLED` gependelt und werden dann nachgezogen
-28. während die ui ausgeblendet ist, laufen roster/addon-sync im hintergrund weiter und dürfen eventgetrieben vor-rendern; queue-scanning und sonstige dauerhafte polling-last stoppen jedoch, der kick-sync bleibt fuer isiLive-gruppenmitglieder aktiv. Im Raid sind UI und Hintergrund-Sync komplett aus.
+28. während die ui ausgeblendet ist, laufen roster/addon-sync im hintergrund weiter und dürfen eventgetrieben vor-rendern; queue-scanning und sonstige dauerhafte polling-last stoppen jedoch, der kick-sync bleibt fuer isiLive-gruppenmitglieder aktiv. `LFG_LIST_APPLICATION_STATUS_UPDATED` bleibt hidden fuer Queue- und Invite-Listenverarbeitung blockiert. Im Raid sind UI und Hintergrund-Sync komplett aus.
 29. teleport-eintraege fuer shared spells bleiben deterministisch sortiert und doppelte grid-eintraege werden entfernt.
 30. falls ein anderer user entdeckt wird welcher auch "isiLive" benutzt, hängen wir hinter seinen Namen ein <3 (blaues herz) an
 31. main ui auto-open bleibt bei gruppenbeitritt erhalten, ausser im Raidmodus; key-ende auto-open ist standardmaessig an, aber abschaltbar; automatisches schliessen bei key start ist standardmaessig aus.
@@ -81,7 +81,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
 59. Der untere M+-Killtracker zeigt vor Key-Start verifizierte Ziel-Dungeon-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig an; eine Keystufe wird nur bei positiver numerischer Aufloesung ergaenzt. Ab Key-Start wechselt er zur Prozentanzeige zurueck; waehrend aktiver Prozentdaten darf der verifizierte Dungeonname linksbuendig als helles Outline-Label mit dunkler Hinterlegung auf dem Prozentbalken sichtbar bleiben.
 60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
-61. Die LFG-Invite-Liste zeigt nur offene Premade-LFG-Invites aus Blizzard-LFG-Daten an, wenn die Settings-Option `inviteListEnabled` aktiv ist; Dungeon, Keystufe, Kommentar und Rolle duerfen nicht geraten werden, und Accept/Decline-Aktionen muessen auf die konkrete `searchResultID` zielen.
+61. Die experimentelle LFG-Invite-Liste bleibt deaktiviert: Es gibt kein Settings-Control, kein SavedVariable-Feld und kein Runtime-Wiring; `LFG_LIST_APPLICATION_STATUS_UPDATED` darf keine Invite-Listenverarbeitung ausloesen.
+62. Bei aktivierter Addon-Sprache `ruRU` muessen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen Font verwenden, unabhaengig vom WoW-Client-Locale.
 
 ## Regelbloecke
 
@@ -322,9 +323,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-UI-HIDDEN-SPARFLAMME
 - Regelnummer: 28
 - Status: aktiv
-- Zusammenfassung: waehrend die ui ausgeblendet ist, laeuft der daten-sync (roster/addon-msgs) im hintergrund weiter und darf eventgetrieben ui-zustand vor-rendern; queue-scanning und sonstige dauerhafte polling-last bleiben aus. Der Kick-Sync fuer isiLive-Gruppenmitglieder bleibt davon ausgenommen und darf weiterlaufen, damit ausgeblendete Clients keine Kick-Nachteile erzeugen. Ein expliziter Refresh-Request darf Hidden-Clients genau eine forciert eventgetriebene Antwort entlocken (alle Sync-Buckets: KEY, STATS, DPS, LOC, TARGET, KICK); gestoppte oder pausierte Runs antworten dabei nicht. Im Raid sind UI und Hintergrund-Sync komplett aus.
+- Zusammenfassung: waehrend die ui ausgeblendet ist, laeuft der daten-sync (roster/addon-msgs) im hintergrund weiter und darf eventgetrieben ui-zustand vor-rendern; queue-scanning und sonstige dauerhafte polling-last bleiben aus. `LFG_LIST_APPLICATION_STATUS_UPDATED` bleibt hidden fuer Queue- und Invite-Listenverarbeitung blockiert. Der Kick-Sync fuer isiLive-Gruppenmitglieder bleibt davon ausgenommen und darf weiterlaufen, damit ausgeblendete Clients keine Kick-Nachteile erzeugen. Ein expliziter Refresh-Request darf Hidden-Clients genau eine forciert eventgetriebene Antwort entlocken (alle Sync-Buckets: KEY, STATS, DPS, LOC, TARGET, KICK); gestoppte oder pausierte Runs antworten dabei nicht. Im Raid sind UI und Hintergrund-Sync komplett aus.
 - Erforderliche Tests:
   - Bootstrap gate allows sync events while frame is hidden if configured
+  - ConfigBuilders hidden gate keeps LFG status blocked
   - Hidden grouped roster updates keep pre-rendered UI fresh
   - Event handlers pre-render UI for hidden addon sync updates
   - Event handlers process addon sync messages and refresh changed roster
@@ -752,14 +754,19 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-LFG-INVITE-LISTE-KEIN-GUESSING
 - Regelnummer: 61
 - Status: aktiv
-- Zusammenfassung: Die LFG-Invite-Liste darf nur offene Premade-LFG-Invites anzeigen, die aus `LFG_LIST_APPLICATION_STATUS_UPDATED` oder `C_LFGList.GetApplications()` plus `C_LFGList.GetApplicationInfo()` und `C_LFGList.GetSearchResultInfo()` stammen, und sie muss vollstaendig verborgen bleiben, wenn `inviteListEnabled == false` ist. Ein Invite-Eintrag wird ueber seine konkrete `searchResultID` dedupliziert. Dungeonname und Map-Kontext duerfen nur aus eindeutig aufgeloesten Activity-IDs entstehen; Keystufe, Kommentar und Rolle duerfen nur aus expliziten Blizzard-LFG-Feldern oder aus der bereits etablierten Blizzard-Titel-Markup-/Titel-Level-Auswertung stammen. Fehlt eine Quelle, bleibt das Feld leer. `Accept` und `Decline` muessen die konkrete `searchResultID` des angeklickten Eintrags verwenden; nach erfolgreichem `Accept` wird die offene Invite-Liste geschlossen, nach erfolgreichem `Decline` nur der betroffene Eintrag entfernt.
+- Zusammenfassung: Die experimentelle LFG-Invite-Liste bleibt deaktiviert. Es gibt kein Settings-Control, kein SavedVariable-Feld und kein Runtime-Wiring. `LFG_LIST_APPLICATION_STATUS_UPDATED` darf keine Invite-Listenverarbeitung ausloesen; die bestehende LFGDetect-/Queue-Verarbeitung fuer sichtbare, positive Status-Events bleibt davon unberuehrt.
 - Erforderliche Tests:
-  - Invites list adds one verified LFG invite from invited status
-  - Invites list orders multiple open invites chronologically
-  - Invites list deduplicates duplicate invited events by searchResultID
-  - Invites list removes only the declined invite
-  - Invites list clears all open invites after accepting one invite
-  - Invites list decline button path removes the selected invite
-  - Invites list rehydrates invited applications after reload
-  - Invites list keeps missing role and unresolved dungeon empty instead of guessing
-  - Invite list UI stays hidden while the settings toggle is disabled
+  - DBSchema.Sanitize fills all defaults on an empty db
+  - DBSchema.GetKnownFieldNames includes core persistent fields
+  - Settings panel keeps the disabled LFG invite list out of the UI
+  - ConfigBuilders hidden gate keeps LFG status blocked
+  - APPLICATION_STATUS_UPDATED does not forward disabled invite-list handling
+
+### RULE-RURU-KYRILLISCHER-UI-FONT
+- Regelnummer: 62
+- Status: aktiv
+- Zusammenfassung: Bei aktivierter Addon-Sprache `ruRU` muessen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen WoW-Font verwenden, damit russische Strings auch auf nicht-russischen Clients nicht als Platzhalterkaestchen gerendert werden. Nicht ueberschriebene Locales duerfen ihren bestehenden Font unveraendert behalten.
+- Erforderliche Tests:
+  - UICommon.ApplyLocaleFont uses Cyrillic-capable font for ruRU addon locale
+  - UICommon.ApplyLocaleFont leaves non-overridden locales unchanged
+  - RosterLayout SetFlatButtonText uses ruRU font override before fitting Cyrillic labels

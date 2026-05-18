@@ -43,7 +43,7 @@ Zuletzt aktualisiert: `2026-05-18`
 | UC-19 | (reserviert / nicht vergeben) | Nummer ausgelassen; nicht neu belegen, damit bereits referenzierte Test-/Commit-Querverweise stabil bleiben |
 | UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
-| UC-22 | LFG-Invite-Liste | Mehrere offene Premade-LFG-Invites werden gleichzeitig als klickbare Liste angezeigt |
+| UC-22 | LFG-Invite-Liste deaktiviert | Die experimentelle offene Premade-LFG-Invite-Liste bleibt ohne Settings, SavedVariable und Runtime-Wiring deaktiviert |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -157,7 +157,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
 7. Ergebnis B: Blizzard Settings zeigen — gruppiert in sechs Sektionen plus Reset und Beta-Hinweis:
    - **General**: Sprache, `Default UI on Open`, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Show Timeways Navigator`.
-   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `LFG invite list`, `Accepted-invite notice`.
+   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
    - **Nameplates**: 3-Modi-Selector `Off / Tooltip / Nameplate` fuer den M+-Forces-Overlay, plus `Show percentage`, `Show remaining needed`, `Font size`, `Position`, `X offset`, `Y offset` und ein Live-Preview.
    - **Behavior**: `Addon Sync`, `Lock main frame position`, `Fade out in Combat (M2 only)`, gefolgt vom Auto-Show/Hide-Block mit Erklaerung (`Show on Login / Reload`, `Auto-Open on M+ Queue`, `Auto-Open on Key End`, `Auto-close when key starts`, `Auto-close when leaving the group`), und einem statischen Raid-Behavior-Hinweis statt einem 1-Optionen-Selector.
    - **Sounds**: `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res`, `Sound: Bloodlust`.
@@ -165,7 +165,8 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
    - **Debug**: `Queue Debug Log (resets on reload)`, `Clear Queue Debug Log`, `Runtime Log (resets on reload)`, `Clear Runtime Log`, `Column Guides`.
    - **Reset All Settings** plus Beta-Hinweis mit Issue-Tracker-Link.
 8. Regel: Settings-Controls spiegeln live Blizzard-CVars und SavedVariables und wenden Aenderungen sofort an, ohne dass das Main-Addon-Fenster sichtbar sein muss; eine Aenderung von `Background Opacity` aktualisiert live den Main-Frame, die optionalen `Esc`-Tooling- und Travel-Strips und den Settings-Canvas. Der neue `Lock main frame position`-Schalter, der Top-right-Lock-Button sowie die Slash-Commands `/isilive lock`, `/isilive unlock` und `/isilive resetui` spiegeln denselben gespeicherten Lock-State und verhindern unabsichtliches Verschieben der Haupt-UI; `resetui` setzt Position, UI-Skalierung und Hintergrund-Deckkraft wieder auf ihre Default-Werte zurueck und zeigt den Default-Hinweis als separate Textzeile unter dem Button, bevor eine Reset-Bestaetigung abgefragt wird. Hidden Legacy-Controls (`Name Length`, `Teleport Grid Columns`, `Show DPS Column`, `Markers: Leader Only`) bleiben aus der Settings-UI draussen und nutzen derzeit feste Runtime-Defaults: `DPS` an, Marker fuer alle sichtbar, feste Namenstrunkierung und Legacy-`Travel`-Layout mit 2 Spalten.
-9. Erfolgskriterium: Beide Einstiegspunkte bleiben lokalisiert, deterministisch und spiegeln den aktuellen Config- und Runtime-State.
+9. Regel: Wenn die Addon-Sprache `ruRU` aktiv ist, nutzen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen Font, damit russische Zeichen auch auf nicht-russischen WoW-Clients nicht als Platzhalterkaestchen erscheinen.
+10. Erfolgskriterium: Beide Einstiegspunkte bleiben lokalisiert, deterministisch und spiegeln den aktuellen Config- und Runtime-State.
 
 ## UC-14 Combat-Utility-Tracker
 
@@ -271,20 +272,16 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 9. Bekannter Constraint: Demonology Warlock Inner Demons (Felguard + Felhunter parallel, beide casten ihren eigenen Interrupt-Spell) wird aktuell **nicht** als Multi-Kick gehandhabt, weil `Spell Lock 19647` in `SPEC_DATA[266].spells` als alternativer Primary fuer den Pet-Switch-Fall (Felhunter ohne Felguard) gelistet ist. Den Array auf einen Spell zu reduzieren wuerde den Pet-Switch-Pfad brechen. Dokumentiert als Future-Work.
 10. Erfolgskriterium: Im aktiven Mythic+-Run zeigt der Roster-Hover-Tooltip eines Prot Paladin mit Avenger's-Shield-Talent zwei separate Cooldowns (Rebuke in der `Kick`-Spalte und Avenger's Shield im Tooltip-Extras-Block) ohne dass der primary-Cooldown durch den Avenger's-Shield-Cast gestoert wird; Peers ohne Talent-Kick sehen weder Header noch Extras-Zeilen.
 
-## UC-22 LFG-Invite-Liste
+## UC-22 LFG-Invite-Liste deaktiviert
 
-Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro Invite eine gezielte Entscheidung erlauben.
+Ziel: Die experimentelle offene Premade-LFG-Invite-Liste bleibt deaktiviert, bis eine belastbare Live-Quelle fuer parallele Blizzard-LFG-Invites nachgewiesen ist.
 
-1. Trigger: `LFG_LIST_APPLICATION_STATUS_UPDATED` meldet fuer eine konkrete `searchResultID` den Status `invited`.
-2. Verarbeitung: Das Invite-Modul liest die zugehoerigen Blizzard-LFG-Daten ueber `C_LFGList.GetSearchResultInfo()` und speichert genau einen offenen Eintrag pro `searchResultID`.
-3. Anzeige: Die Invite-Liste wird unter dem sichtbaren Blizzard-Invite-Popup verankert, solange `inviteListEnabled` nicht ausgeschaltet ist; wenn kein Popup auffindbar ist, nutzt sie eine feste UIParent-Position.
-4. Anzeige: Dungeonname, Keystufe, Gruppentitel, Lead-Kommentar und Rolle werden nur angezeigt, wenn sie aus den LFG-Daten eindeutig stammen.
-5. Regel: Fehlende oder mehrdeutige Dungeon-, Keystufen- oder Rolleninformationen bleiben leer und werden nicht durch Namen, Spielerrolle oder andere Runtime-Daten geraten.
-6. Benutzeraktion: `Annehmen` ruft die Accept-Aktion fuer die konkrete `searchResultID` der angeklickten Zeile auf und schliesst nach erfolgreicher Ausfuehrung die offene Invite-Liste.
-7. Benutzeraktion: `Ablehnen` ruft die Decline-Aktion fuer die konkrete `searchResultID` der angeklickten Zeile auf und entfernt nach erfolgreicher Ausfuehrung nur diesen Eintrag.
-8. Reload-Verhalten: Bei `PLAYER_LOGIN` rehydriert das Modul offene Invite-Eintraege aus `C_LFGList.GetApplications()` und `C_LFGList.GetApplicationInfo()`.
-9. Abgrenzung: Klassische Nicht-LFG-Party-Invites bleiben Blizzard-Domain und werden nicht in diese Liste aufgenommen.
-10. Erfolgskriterium: Mehrere parallele Invites bleiben gleichzeitig sichtbar, deduplizieren stabil ueber `searchResultID` und fuehren Accept/Decline nur auf der angeklickten Zeile aus.
+1. Settings: Es gibt kein sichtbares Settings-Control fuer eine LFG-Invite-Liste.
+2. Persistenz: `inviteListEnabled` ist kein bekanntes SavedVariable-Schemafeld und wird bei frischer DB nicht als Default erzeugt.
+3. Runtime-Wiring: Die Factory erzeugt keinen Invite-Listen-Controller und kein Invite-Listen-UI-Wiring.
+4. Event-Verhalten: `LFG_LIST_APPLICATION_STATUS_UPDATED` wird nicht an einen Invite-Listenpfad weitergeleitet; die bestehende sichtbare LFGDetect-/Queue-Verarbeitung fuer positive Status-Events bleibt aktiv.
+5. Hidden-Verhalten: Hidden bleibt `LFG_LIST_APPLICATION_STATUS_UPDATED` fuer Queue- und Invite-Listenverarbeitung blockiert.
+6. Erfolgskriterium: User sehen keine experimentelle Extra-Liste, koennen sie nicht aktivieren, und fehlende oder mehrdeutige LFG-Invite-Daten erzeugen keinen neuen UI-Pfad.
 
 ## Nichtfunktionale Regeln
 
@@ -309,7 +306,7 @@ Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro In
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1764` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1771` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -321,7 +318,7 @@ Aktuelle Validator-Baseline: `1764` Szenarien ueber die in `tools/usecase_scenar
 8. UC-10: Raid-Size-Zero-Process-Verhalten, hidden UI-Suppression und kein Raid-Notice-Output.
 9. UC-11 und UC-12: Secure-World-Marker-Button-Konfiguration fuer M+Marker und Compact-Layout-Visibility-Logik fuer M/V/H.
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
-11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering, M+-Killtracker-Live-Refresh und gesyncte Interrupt-Cooldown-Anzeige.
+11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-Strips, Lokalisierung inklusive ruRU-Font-Override, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering, M+-Killtracker-Live-Refresh und gesyncte Interrupt-Cooldown-Anzeige.
 12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, konkrete lokale LFG-Map-Prioritaet und Highlight-Dispatch.
 13. UC-16: BR-/Lust-Self-Cast-Filter gegen 12.0-Secret-Value-Spam, 3s-`sourceGUID|spellID`-Dedup, Toggle-Gating, ChatThrottleLib-Routing via `BRLUST`-Addon-Message, Receiver-Dispatch in lokalisierten Template-Zeilen und Drop-On-Unknown-Kind.
 14. UC-17: Mob-Tooltip-Forces-Rendering nur bei aktiver Challenge-Map-ID mit passendem NPC-Dataset, Per-Tooltip-Dedup gegen `TooltipDataProcessor`-Rerender und `SetEnabled(false)`-Gate.
@@ -331,7 +328,7 @@ Aktuelle Validator-Baseline: `1764` Szenarien ueber die in `tools/usecase_scenar
 | Thema | Dateien |
 |---|---|
 | Queue-Erkennung und Target-Capture | `isiLive_queue.lua`, `isiLive_event_handlers_queue.lua` |
-| LFG-Detektion, Chat-Hinweise, offene Invite-Liste und Highlight-Dispatch | `isiLive_lfg_detect.lua`, `isiLive_invites.lua`, `isiLive_invite_list.lua`, `isiLive_factory_controllers.lua`, `isiLive_texts.lua`, `isiLive_teleport_ui.lua` |
+| LFG-Detektion, Chat-Hinweise, deaktivierte Invite-Liste und Highlight-Dispatch | `isiLive_lfg_detect.lua`, `isiLive_invites.lua`, `isiLive_invite_list.lua`, `isiLive_factory_controllers.lua`, `isiLive_texts.lua`, `isiLive_teleport_ui.lua` |
 | Highlight-Aufloesung und Inside-Dungeon-Suppression | `isiLive_highlight.lua` |
 | Teleport-Spell-Mapping und Cooldown-Verhalten | `isiLive_teleport.lua`, `isiLive_spell_utils.lua`, `isiLive_teleport_ui.lua` |
 | Gruppen-Lifecycle, Leader-State-Mirroring und Roster-Rebuild | `isiLive_group.lua`, `isiLive_roster.lua` |

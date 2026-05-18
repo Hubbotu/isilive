@@ -19,6 +19,8 @@ return function(test, ctx)
       runtimeTraces = {},
       statusUpdates = 0,
       scheduled = {},
+      inviteEvents = {},
+      lfgEvents = {},
     }
   end
 
@@ -80,6 +82,9 @@ return function(test, ctx)
       end,
       updateStatusLine = function()
         counters.statusUpdates = counters.statusUpdates + 1
+      end,
+      handleLFGDetectEvent = function(event, ...)
+        counters.lfgEvents[#counters.lfgEvents + 1] = { event, ... }
       end,
       timerAfter = function(delay, fn)
         counters.scheduled[#counters.scheduled + 1] = { delay = delay, fn = fn }
@@ -154,6 +159,16 @@ return function(test, ctx)
     })
     handlers.LFG_LIST_APPLICATION_STATUS_UPDATED(nil, 7, "applied")
     Assert.Equal(counters.exits, 1, "test-all mode must be exited")
+  end)
+
+  test("APPLICATION_STATUS_UPDATED does not forward disabled invite-list handling", function()
+    local handlers, counters = LoadHandlers()
+
+    handlers.LFG_LIST_APPLICATION_STATUS_UPDATED(nil, 7, "invited")
+
+    Assert.Equal(#counters.inviteEvents, 0, "disabled invite-list feature must not receive status events")
+    Assert.Equal(#counters.lfgEvents, 1, "regular LFGDetect handling must stay active")
+    Assert.Equal(counters.captures, 1, "regular queue capture must stay active for positive statuses")
   end)
 
   test(

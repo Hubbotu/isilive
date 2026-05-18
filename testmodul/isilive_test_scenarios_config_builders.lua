@@ -162,6 +162,26 @@ return function(test, ctx)
     Assert.True(result.allowWhenHidden.ROLE_CHANGED_INFORM == true, "must allow ROLE_CHANGED_INFORM when hidden")
   end)
 
+  test("ConfigBuilders hidden gate keeps LFG status blocked", function()
+    local builders = LoadBuilders()
+    local opts = builders.BuildGateOpts({
+      events = "ev",
+      onEvent = "disp",
+      onDispatchError = nil,
+      isStopped = false,
+      isPaused = false,
+      isTestMode = false,
+      isInCombat = false,
+      isMainFrameShown = false,
+    })
+
+    Assert.Nil(
+      opts.allowWhenHidden.LFG_LIST_APPLICATION_STATUS_UPDATED,
+      "hidden LFG status must stay blocked while invite-list feature is disabled"
+    )
+    Assert.Nil(opts.shouldAllowWhenHidden, "disabled invite-list feature must not install a hidden gate callback")
+  end)
+
   test("ConfigBuilders BuildGateOpts does not leak extra ctx fields", function()
     local builders = LoadBuilders()
     local ctx_input = {

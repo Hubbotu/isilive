@@ -29,12 +29,19 @@ Russian locale update.
 - The ruRU locale now uses Cyrillic translations for the addon UI strings and
   localized language display names instead of transliterated placeholders.
   Thanks to ZamestoTV / Hubbotu for contributing the Russian translation.
+- When the addon language is set to `ruRU`, main-window labels and fitted
+  roster/action buttons now switch to a Cyrillic-capable WoW font so Russian
+  text renders correctly even on non-Russian WoW clients.
 - Flat roster/action button labels now refit their font size to the fixed
   button width, restoring the base font before every text update and shrinking
   only as far as the minimum readable size when needed.
-- The new open LFG invite-list window now has its own default-on Settings
-  toggle (`LFG invite list`) so users can hide that extra UI surface while
-  keeping the underlying LFG invite handling intact.
+- The experimental open LFG invite-list window is no longer exposed or wired
+  at runtime. Its Settings toggle and SavedVariables field were removed after
+  live testing did not show a reliable Blizzard-supported multi-invite list
+  surface.
+- Hidden main-window state now keeps `LFG_LIST_APPLICATION_STATUS_UPDATED`
+  blocked for queue and invite-list processing; visible positive status events
+  still follow the regular LFGDetect and queue-capture path.
 
 ### Tests
 
@@ -45,10 +52,11 @@ Russian locale update.
 
 - Replaced the legacy 14-character locale gate for full-width action buttons
   with key-presence coverage plus deterministic font-fit scenarios for short,
-  long, and post-shrink labels.
+  long, post-shrink, and ruRU Cyrillic-font labels.
 - Added regression coverage for mixed-version KICK suffix ordering and
-  verified TARGET `levelText` propagation, plus Settings/UI coverage for the
-  LFG invite-list toggle. Usecase count is now 1764.
+  verified TARGET `levelText` propagation, plus Settings, DB-schema, gate, and
+  event-handler coverage that keeps the experimental LFG invite-list disabled.
+  Usecase count is now 1771.
 
 ## 2026-05-16 - Version 0.9.247 (patch)
 

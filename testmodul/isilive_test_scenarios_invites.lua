@@ -72,6 +72,34 @@ return function(test, ctx)
     Assert.Equal(invites[1].role, "DAMAGER", "explicit invite role must be preserved")
   end)
 
+  test("Invites list keeps a sparse invited row when Blizzard search details are delayed", function()
+    local controller = CreateController(LoadAddonModules, {})
+
+    Assert.True(controller.HandleApplicationStatus(102, "invited"), "invited event with ID is a valid source")
+    local invites = controller.GetOpenInvites()
+
+    Assert.Equal(#invites, 1, "sparse invite row must still be listed")
+    Assert.Equal(invites[1].searchResultID, 102, "searchResultID must be enough for accept/decline targeting")
+    Assert.Nil(invites[1].dungeonName, "missing search-result details must not guess dungeon")
+    Assert.Nil(invites[1].level, "missing search-result details must not guess level")
+    Assert.Nil(invites[1].role, "missing search-result details must not guess role")
+  end)
+
+  test("Invites list enriches a sparse row when Blizzard search details arrive later", function()
+    local searchResults = {}
+    local controller = CreateController(LoadAddonModules, searchResults)
+
+    controller.HandleApplicationStatus(103, "invited")
+    searchResults[103] = { activityID = 1542, name = "+13 late", role = "HEALER" }
+    controller.HandleApplicationStatus(103, "invited")
+    local invites = controller.GetOpenInvites()
+
+    Assert.Equal(#invites, 1, "late details must update the existing row instead of duplicating it")
+    Assert.Equal(invites[1].dungeonName, "Windrunner Spire", "late activity map must fill dungeon name")
+    Assert.Equal(invites[1].level, 13, "late title must fill numeric level")
+    Assert.Equal(invites[1].role, "HEALER", "late role must fill role")
+  end)
+
   test("Invites list orders multiple open invites chronologically", function()
     local controller = CreateController(LoadAddonModules, {
       [201] = { activityID = 1542, name = "+10 first" },
@@ -190,7 +218,7 @@ return function(test, ctx)
     Assert.False(controller.HandleApplicationStatus(901, ""), "blank status must be rejected")
     Assert.False(controller.HandleApplicationStatus(901, "applied"), "non-invite status must be ignored")
     Assert.False(controller.HandleApplicationStatus(0, "invited"), "invalid searchResultID must be rejected")
-    Assert.False(controller.HandleApplicationStatus(902, "invited"), "missing search result must not create an invite")
+    Assert.True(controller.HandleApplicationStatus(902, "invited"), "valid invited status may create a sparse row")
     Assert.False(controller.RehydrateFromBlizzard(), "wrong-type application list must fail closed")
     Assert.False(controller.Accept(nil), "accept without searchResultID must fail")
     Assert.False(controller.Decline(nil), "decline without searchResultID must fail")

@@ -165,7 +165,9 @@ end
 local function BuildEntryFromSearchResult(searchResultID, info, opts)
   opts = opts or {}
   if type(info) ~= "table" then
-    return nil
+    return {
+      searchResultID = searchResultID,
+    }
   end
   local mapID = ResolveSearchResultMapID(info, opts.resolveMapIDByActivityID)
   local groupName = type(info.name) == "string" and info.name ~= "" and info.name or nil

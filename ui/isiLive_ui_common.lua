@@ -6,6 +6,9 @@ local UICommon = {}
 addonTable.UICommon = UICommon
 
 UICommon.DEFAULT_BG_ALPHA = 0.50
+UICommon.LOCALE_FONT_OVERRIDES = {
+  ruRU = "Fonts\\ARIALN.TTF",
+}
 
 UICommon.Colors = {
   BG_PRIMARY = { 0.08, 0.08, 0.12, UICommon.DEFAULT_BG_ALPHA },
@@ -39,6 +42,54 @@ function UICommon.GetLocalizedText(key, fallback)
   end
 
   return fallback or ""
+end
+
+local function ResolveActiveLocale(localeTag)
+  if type(localeTag) == "string" and localeTag ~= "" then
+    return localeTag
+  end
+
+  local db = rawget(_G, "IsiLiveDB")
+  if type(db) == "table" and type(db.locale) == "string" and db.locale ~= "" then
+    return db.locale
+  end
+
+  local getLocale = rawget(_G, "GetLocale")
+  if type(getLocale) == "function" then
+    local ok, locale = pcall(getLocale)
+    if ok and type(locale) == "string" and locale ~= "" then
+      return locale
+    end
+  end
+
+  return "enUS"
+end
+
+function UICommon.GetLocaleFontPath(localeTag)
+  return UICommon.LOCALE_FONT_OVERRIDES[ResolveActiveLocale(localeTag)]
+end
+
+function UICommon.ApplyLocaleFont(fontString, localeTag)
+  if
+    type(fontString) ~= "table"
+    or type(fontString.GetFont) ~= "function"
+    or type(fontString.SetFont) ~= "function"
+  then
+    return false
+  end
+
+  local fontPath = UICommon.GetLocaleFontPath(localeTag)
+  if type(fontPath) ~= "string" or fontPath == "" then
+    return false
+  end
+
+  local _, fontSize, fontFlags = fontString:GetFont()
+  if type(fontSize) ~= "number" then
+    return false
+  end
+
+  fontString:SetFont(fontPath, fontSize, fontFlags)
+  return true
 end
 
 function UICommon.GetBackgroundAlpha()

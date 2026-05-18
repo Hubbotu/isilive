@@ -17,7 +17,12 @@ local function ApplyFontStringSize(fontString, size)
     return
   end
 
-  fontString:SetFont(fontPath, size, fontFlags)
+  local uiCommon = addonTable and addonTable.UICommon
+  local localeFontPath = type(uiCommon) == "table"
+      and type(uiCommon.GetLocaleFontPath) == "function"
+      and uiCommon.GetLocaleFontPath()
+    or nil
+  fontString:SetFont(localeFontPath or fontPath, size, fontFlags)
 end
 
 local function FormatMplusTime(seconds)

@@ -820,7 +820,6 @@ local function ResolveSettingsOptions(opts)
     onClearQueueDebugLog = opts.onClearQueueDebugLog,
     onLfgFlagsToggle = opts.onLfgFlagsToggle,
     onTooltipFlagsToggle = opts.onTooltipFlagsToggle,
-    onInviteListToggle = opts.onInviteListToggle,
     onMplusForcesToggle = opts.onMplusForcesToggle,
     onMobNameplateChange = opts.onMobNameplateChange,
     onResetDB = opts.onResetDB,
@@ -1199,24 +1198,6 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
       db.inviteHintEnabled = checked
     end,
     "SETTINGS_INVITE_HINT_ENABLED"
-  )
-
-  controls.inviteList, yOffset = CreateSettingsCheckbox(
-    canvas,
-    yOffset,
-    labels.SETTINGS_INVITE_LIST_ENABLED or "LFG invite list",
-    function()
-      local db = config.getDB()
-      return db.inviteListEnabled ~= false
-    end,
-    function(checked)
-      local db = config.getDB()
-      db.inviteListEnabled = checked
-      if type(config.onInviteListToggle) == "function" then
-        config.onInviteListToggle(checked)
-      end
-    end,
-    "SETTINGS_INVITE_LIST_ENABLED"
   )
 
   controls.acceptedInviteNotice, yOffset = CreateSettingsCheckbox(
@@ -2372,10 +2353,6 @@ local function RefreshSettingsControls(controls, config)
   if controls.inviteHint then
     controls.inviteHint.label:SetText(freshL.SETTINGS_INVITE_HINT_ENABLED or "LFG invite hint")
     controls.inviteHint.check:SetChecked(db.inviteHintEnabled ~= false)
-  end
-  if controls.inviteList then
-    controls.inviteList.label:SetText(freshL.SETTINGS_INVITE_LIST_ENABLED or "LFG invite list")
-    controls.inviteList.check:SetChecked(db.inviteListEnabled ~= false)
   end
   if controls.acceptedInviteNotice then
     controls.acceptedInviteNotice.label:SetText(

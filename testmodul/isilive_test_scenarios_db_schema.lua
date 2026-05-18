@@ -25,6 +25,7 @@ return function(test, ctx)
     Assert.Equal(db.lockMainFramePosition, true, "lockMainFramePosition default true")
     Assert.Equal(db.syncEnabled, true, "syncEnabled default true")
     Assert.Equal(db.locale, "enUS", "locale default")
+    Assert.Nil(db.inviteListEnabled, "disabled invite-list feature must not create a DB default")
   end)
 
   test("DBSchema.Sanitize stamps __schemaVersion on first run", function()
@@ -279,6 +280,7 @@ return function(test, ctx)
     -- Runtime-only fields are intentionally excluded.
     Assert.Equal(known.queueDebug, nil, "queueDebug is runtime-only, must NOT be in schema")
     Assert.Equal(known.runtimeLogEnabled, nil, "runtimeLogEnabled is runtime-only, must NOT be in schema")
+    Assert.Equal(known.inviteListEnabled, nil, "disabled invite-list setting must NOT be in schema")
   end)
 
   test("DBSchema.GetSchemaVersion returns the current LATEST_SCHEMA_VERSION", function()

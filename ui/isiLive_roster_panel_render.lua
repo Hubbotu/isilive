@@ -3,6 +3,7 @@ local _, addonTable = ...
 addonTable = addonTable or {}
 addonTable._RosterInternal = addonTable._RosterInternal or {}
 local RI = addonTable._RosterInternal
+local UICommon = addonTable.UICommon or {}
 
 local CreateFrame = rawget(_G, "CreateFrame")
 
@@ -228,6 +229,17 @@ local function CreateMemberRow(mainFrame, index, rosterTooltip, getL)
   row.realm:SetWidth(SERVER_COL_WIDTH)
   row.realm:SetJustifyH("LEFT")
   DisableFontStringWrapping(row.realm)
+
+  if type(UICommon.ApplyLocaleFont) == "function" then
+    UICommon.ApplyLocaleFont(row.spec)
+    UICommon.ApplyLocaleFont(row.name)
+    UICommon.ApplyLocaleFont(row.ilvl)
+    UICommon.ApplyLocaleFont(row.key)
+    UICommon.ApplyLocaleFont(row.rio)
+    UICommon.ApplyLocaleFont(row.dps)
+    UICommon.ApplyLocaleFont(row.kick)
+    UICommon.ApplyLocaleFont(row.realm)
+  end
 
   return row
 end

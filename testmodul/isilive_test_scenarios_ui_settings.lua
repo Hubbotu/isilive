@@ -932,10 +932,9 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
     end)
   end)
 
-  test("Settings panel defaults the LFG invite list to enabled and lets the user turn it off", function()
+  test("Settings panel keeps the disabled LFG invite list out of the UI", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
-    local callbackStates = {}
 
     WithGlobals({
       UIParent = {},
@@ -972,7 +971,6 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
             SETTINGS_DEFAULT_OPEN_UI_V = "V",
             SETTINGS_DEFAULT_OPEN_UI_H = "H",
             SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
-            SETTINGS_INVITE_LIST_ENABLED = "Invite List",
             SETTINGS_QUEUE_DEBUG = "Queue Debug",
             SETTINGS_RUNTIME_LOG = "Runtime Log",
           }
@@ -984,13 +982,10 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         getDB = function()
           return db
         end,
-        onInviteListToggle = function(enabled)
-          callbackStates[#callbackStates + 1] = enabled and true or false
-        end,
       })
 
       Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
-      Assert.Nil(db.inviteListEnabled, "invite list should stay unset until the user chooses")
+      Assert.Nil(db.inviteListEnabled, "disabled invite list must not create a saved value")
 
       local inviteListCheck = nil
       for _, frame in ipairs(createdFrames) do
@@ -1000,21 +995,9 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
         end
       end
 
-      inviteListCheck = Assert.NotNil(inviteListCheck, "settings panel should create an invite-list checkbox")
-      ---@diagnostic disable: undefined-field
-      Assert.True(inviteListCheck:GetChecked(), "invite list should default to enabled")
-
-      local onClick = inviteListCheck._scripts and inviteListCheck._scripts.OnClick or nil
-      onClick = Assert.NotNil(onClick, "invite-list checkbox should define OnClick")
-
-      inviteListCheck:SetChecked(false)
-      onClick(inviteListCheck)
-      Assert.False(db.inviteListEnabled, "disabling the checkbox should persist false")
-      Assert.Equal(callbackStates[1], false, "disabling the checkbox should notify the callback")
-
+      Assert.Nil(inviteListCheck, "disabled invite-list feature must not create a settings checkbox")
       panel.Refresh()
-      Assert.False(inviteListCheck:GetChecked(), "refresh should keep the disabled checkbox state")
-      ---@diagnostic enable: undefined-field
+      Assert.Nil(db.inviteListEnabled, "refresh must not create disabled invite-list setting")
     end)
   end)
 
@@ -1454,10 +1437,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        30,
+        29,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, combat-fade, nameplate-subtoggle, invite-list,"
+          .. " chat-announce, combat-fade, nameplate-subtoggle,"
           .. " accepted-invite-notice, and the two auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
@@ -1466,10 +1449,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
-        30,
+        29,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " invite-list, accepted-invite-notice, and the two auto-close split checkboxes"
+          .. " accepted-invite-notice, and the two auto-close split checkboxes"
       )
     end)
   end)

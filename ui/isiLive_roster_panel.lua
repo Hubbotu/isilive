@@ -30,6 +30,7 @@ end
 -- gracefully rather than with a nil-dereference crash.
 local RI = addonTable._RosterInternal or {}
 local ContextHelpers = addonTable.ContextHelpers or {}
+local UICommon = addonTable.UICommon or {}
 
 local function GetDB()
   return rawget(_G, "IsiLiveDB")
@@ -720,6 +721,11 @@ function RosterPanel.CreateController(opts)
 
   function controller.ApplyLocalization()
     local L = getL()
+    local function ApplyLocaleFont(fontString)
+      if type(UICommon.ApplyLocaleFont) == "function" then
+        UICommon.ApplyLocaleFont(fontString)
+      end
+    end
     local titleName = tostring(L.TITLE or "isiLive")
     local addonVer = rawget(_G, "C_AddOns")
         and type(C_AddOns.GetAddOnMetadata) == "function"
@@ -727,12 +733,25 @@ function RosterPanel.CreateController(opts)
       or nil
     local titleVer = addonVer and ("v" .. addonVer) or ""
     ui.title:SetText(titleName)
+    ApplyLocaleFont(ui.title)
     if ui.titleVersion then
       ui.titleVersion:SetText(titleVer)
+      ApplyLocaleFont(ui.titleVersion)
     end
     if ui.titleHint then
       ui.titleHint:SetText(tostring(L.TITLE_HINT or ""))
+      ApplyLocaleFont(ui.titleHint)
     end
+    ApplyLocaleFont(ui.specHeader)
+    ApplyLocaleFont(ui.nameHeader)
+    ApplyLocaleFont(ui.serverHeader)
+    ApplyLocaleFont(ui.keyHeader)
+    ApplyLocaleFont(ui.ilvlHeader)
+    ApplyLocaleFont(ui.rioHeader)
+    ApplyLocaleFont(ui.dpsHeader)
+    ApplyLocaleFont(ui.kickHeader)
+    ApplyLocaleFont(ui.leadOptionsHeader)
+    ApplyLocaleFont(ui.mplusManagementHeader)
     ui.specHeader:SetText(L.COL_SPEC)
     ui.nameHeader:SetText(L.COL_NAME)
     ui.serverHeader:SetText(L.COL_LANGUAGE)
@@ -762,6 +781,8 @@ function RosterPanel.CreateController(opts)
     )
     SetFlatButtonText(refreshButton, refreshButton._fullText)
     SetFlatButtonText(shareKeysButton, shareKeysButton._fullText)
+    ApplyLocaleFont(ui.advancedCombatLoggingToggle.label)
+    ApplyLocaleFont(ui.damageMeterResetToggle.label)
     ui.advancedCombatLoggingToggle.label:SetText(L.OPT_ADVANCED_COMBAT_LOGGING)
     ui.damageMeterResetToggle.label:SetText(L.OPT_DAMAGE_METER_RESET)
     LayoutSystemOptionToggles(ui)

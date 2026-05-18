@@ -4,6 +4,7 @@ addonTable = addonTable or {}
 
 local RI = addonTable._RosterInternal or {}
 addonTable._RosterInternal = RI
+local UICommon = addonTable.UICommon or {}
 
 -- Layout Konstanten
 local LAYOUT_MODE_EXPANDED = "expanded"
@@ -383,6 +384,10 @@ local function CaptureFlatButtonBaseFont(label)
   if type(fontPath) ~= "string" or fontPath == "" or type(fontSize) ~= "number" then
     return nil
   end
+  local localeFontPath = type(UICommon.GetLocaleFontPath) == "function" and UICommon.GetLocaleFontPath() or nil
+  if type(localeFontPath) == "string" and localeFontPath ~= "" then
+    fontPath = localeFontPath
+  end
 
   label._isiLiveFlatButtonBaseFont = {
     path = fontPath,
@@ -449,6 +454,9 @@ local function SetFlatButtonText(btn, text)
     end
     if type(label.SetNonSpaceWrap) == "function" then
       label:SetNonSpaceWrap(false)
+    end
+    if type(UICommon.ApplyLocaleFont) == "function" and UICommon.ApplyLocaleFont(label) then
+      label._isiLiveFlatButtonBaseFont = nil
     end
     FitFlatButtonLabel(btn, label)
   end

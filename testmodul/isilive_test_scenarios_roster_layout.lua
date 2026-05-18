@@ -2,9 +2,14 @@
 return function(test, ctx)
   local Assert = ctx.assert
   local LoadAddonModules = ctx.load_modules
+  local WithGlobals = ctx.with_globals
 
   local function loadRI()
     return LoadAddonModules({ "isiLive_roster_layout.lua" })._RosterInternal
+  end
+
+  local function loadRIWithUICommon()
+    return LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_roster_layout.lua" })._RosterInternal
   end
 
   -- NormalizeLayoutMode
@@ -258,5 +263,19 @@ return function(test, ctx)
 
     RI.SetFlatButtonText(button, "OK")
     Assert.Equal(getSize(), 12, "short follow-up labels should restore the base font size")
+  end)
+
+  test("RosterLayout SetFlatButtonText uses ruRU font override before fitting Cyrillic labels", function()
+    WithGlobals({
+      IsiLiveDB = { locale = "ruRU" },
+    }, function()
+      local RI = loadRIWithUICommon()
+      local button, _, fontCalls = NewFlatButtonFitStub(120, 12)
+
+      RI.SetFlatButtonText(button, "Готовность")
+
+      Assert.True(#fontCalls > 0, "font fitting must call SetFont")
+      Assert.Equal(fontCalls[1].path, "Fonts\\ARIALN.TTF", "first fit pass must use the ruRU override font")
+    end)
   end)
 end

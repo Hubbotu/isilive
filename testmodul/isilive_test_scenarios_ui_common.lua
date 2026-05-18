@@ -179,6 +179,48 @@ return function(test, ctx)
     Assert.Equal(UICommon.GetLocalizedText("KEY", "fb"), "fb", "missing Texts module must fall back")
   end)
 
+  test("UICommon.ApplyLocaleFont uses Cyrillic-capable font for ruRU addon locale", function()
+    WithGlobals({
+      IsiLiveDB = { locale = "ruRU" },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua" })
+      local captured
+      local fontString = {
+        GetFont = function()
+          return "Fonts\\FRIZQT__.TTF", 12, "OUTLINE"
+        end,
+        SetFont = function(_, path, size, flags)
+          captured = { path = path, size = size, flags = flags }
+        end,
+      }
+
+      Assert.True(addon.UICommon.ApplyLocaleFont(fontString), "ruRU locale must apply a font override")
+      Assert.Equal(captured.path, "Fonts\\ARIALN.TTF", "ruRU must use a Cyrillic-capable WoW font")
+      Assert.Equal(captured.size, 12, "font size must be preserved")
+      Assert.Equal(captured.flags, "OUTLINE", "font flags must be preserved")
+    end)
+  end)
+
+  test("UICommon.ApplyLocaleFont leaves non-overridden locales unchanged", function()
+    WithGlobals({
+      IsiLiveDB = { locale = "enUS" },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua" })
+      local setCalls = 0
+      local fontString = {
+        GetFont = function()
+          return "Fonts\\FRIZQT__.TTF", 12, "OUTLINE"
+        end,
+        SetFont = function()
+          setCalls = setCalls + 1
+        end,
+      }
+
+      Assert.False(addon.UICommon.ApplyLocaleFont(fontString), "enUS must not apply a locale font override")
+      Assert.Equal(setCalls, 0, "non-overridden locale must not rewrite font")
+    end)
+  end)
+
   -- GetBackgroundAlpha ---------------------------------------------------------
 
   test("UICommon.GetBackgroundAlpha reads the configured value from IsiLiveDB", function()
