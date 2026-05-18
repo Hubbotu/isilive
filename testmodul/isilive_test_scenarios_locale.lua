@@ -260,12 +260,12 @@ return function(test, ctx)
     end
   end)
 
-  test("Full-width action button labels stay within 14 characters", function()
+  test("Full-width action button labels exist for fitted rendering", function()
     local addon = LoadAddonModules({ "isiLive_texts.lua" })
     local locales = addon.Texts.GetLocaleTables()
 
-    -- Per CLAUDE.md: action buttons in the main UI are 120x24px and labels
-    -- must stay <= 14 characters to avoid visual truncation.
+    -- Long localized labels are accepted here because SetFlatButtonText fits
+    -- flat-button labels to their fixed button width at render time.
     local fullWidthActionButtonKeys = {
       "BTN_READYCHECK",
       "BTN_COUNTDOWN10",
@@ -280,12 +280,10 @@ return function(test, ctx)
       if localeTable then
         for _, key in ipairs(fullWidthActionButtonKeys) do
           local value = localeTable[key]
-          if type(value) == "string" then
-            Assert.True(
-              #value <= 14,
-              localeName .. "." .. key .. " must be <= 14 chars (is " .. tostring(#value) .. '): "' .. value .. '"'
-            )
-          end
+          Assert.True(
+            type(value) == "string" and value ~= "",
+            localeName .. "." .. key .. " must be a non-empty string"
+          )
         end
       end
     end

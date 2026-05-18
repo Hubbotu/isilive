@@ -643,7 +643,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     -- payload broadcast to peers matches the local announce: LFG-title hint
     -- (authoritative) wins over the roster-owner key level.
     local lfgDetect = addonTable.LFGDetect
-    local targetLevel = ResolveActiveInviteLevelHint(lfgDetect)
+    local targetLevel, targetLevelText = ResolveActiveInviteLevelHint(lfgDetect)
 
     if
       (not targetLevel or targetLevel <= 0)
@@ -660,6 +660,9 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       local roster = ctx.GetRoster()
       if ownerUnit and type(roster[ownerUnit]) == "table" then
         targetLevel = tonumber(roster[ownerUnit].keyLevel)
+        if targetLevel and targetLevel > 0 then
+          targetLevelText = nil
+        end
       end
     end
 
@@ -669,6 +672,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       allowHidden = (allowHidden and true or false) or not isVisible,
       mapID = targetMapID,
       level = targetLevel,
+      levelText = targetLevelText,
       source = source,
     })
   end

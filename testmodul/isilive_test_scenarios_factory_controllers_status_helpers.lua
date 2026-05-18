@@ -1069,6 +1069,47 @@ return function(test, ctx)
     Assert.Equal(sent.level, 13, "LFG title-level (+13) must win over roster owner +14")
   end)
 
+  test(
+    "factory_controllers.status: SendOwnTargetSnapshot carries LFG level markup when numeric level is unresolved",
+    function()
+      local addon = Load()
+      local rs = BuildRuntimeStateStub({ latestQueueMapID = 2649 })
+      local sent
+      local mods = BuildModulesStub({
+        sync = {
+          NormalizePlayerKey = function(n, r)
+            return (n or "") .. "-" .. (r or "")
+          end,
+          SendTarget = function(payload)
+            sent = payload
+          end,
+        },
+      })
+      addon.LFGDetect = {
+        GetActiveInviteTitleLevel = function()
+          return nil
+        end,
+        GetActiveInviteTitleLevelText = function()
+          return "|Kk584|k"
+        end,
+      }
+      local c = BuildCtx(rs, mods, {
+        mainFrame = {
+          IsShown = function()
+            return true
+          end,
+        },
+      })
+      WithGlobals({}, function()
+        Init(addon, c)
+        c.SendOwnTargetSnapshot(true, "level-text", false)
+      end)
+      Assert.Equal(sent.mapID, 2649)
+      Assert.Nil(sent.level, "opaque Blizzard markup must not become a synthetic numeric level")
+      Assert.Equal(sent.levelText, "|Kk584|k", "exact Blizzard keystone markup must be sent to peers")
+    end
+  )
+
   test("factory_controllers.status: SendOwnTargetSnapshot marks allowHidden when frame is hidden", function()
     local addon = Load()
     local rs = BuildRuntimeStateStub()

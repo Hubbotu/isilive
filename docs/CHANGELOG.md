@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-05-18 - Version 0.9.248 (patch)
+
+Allows longer localized main-button labels without forcing translators to
+over-abbreviate every full-width action, and folds in the contributed
+Russian locale update.
+
+### Sync
+
+[logic/isiLive_sync.lua](logic/isiLive_sync.lua),
+[factory/isiLive_factory_controllers.lua](factory/isiLive_factory_controllers.lua):
+
+- KICK payloads with both multi-kick extras and a primary spell ID now keep
+  `:E:` before `:S:`, preserving mixed-version compatibility for older peers
+  that read extras from `parts[4]/parts[5]`.
+- TARGET sync now carries verified opaque Blizzard keystone level markup as an
+  optional `:LT:` suffix when no numeric level exists. Free-form title text is
+  still dropped instead of becoming a guessed level.
+
+### Locale UI
+
+[locale/isiLive_texts.lua](locale/isiLive_texts.lua),
+[locale/isiLive_locale.lua](locale/isiLive_locale.lua),
+[ui/isiLive_roster_layout.lua](ui/isiLive_roster_layout.lua):
+
+- The ruRU locale now uses Cyrillic translations for the addon UI strings and
+  localized language display names instead of transliterated placeholders.
+  Thanks to ZamestoTV / Hubbotu for contributing the Russian translation.
+- Flat roster/action button labels now refit their font size to the fixed
+  button width, restoring the base font before every text update and shrinking
+  only as far as the minimum readable size when needed.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_locale.lua](testmodul/isilive_test_scenarios_locale.lua),
+[testmodul/isilive_test_scenarios_roster_layout.lua](testmodul/isilive_test_scenarios_roster_layout.lua),
+[testmodul/isilive_test_scenarios_sync.lua](testmodul/isilive_test_scenarios_sync.lua),
+[testmodul/isilive_test_scenarios_factory_controllers_status_helpers.lua](testmodul/isilive_test_scenarios_factory_controllers_status_helpers.lua):
+
+- Replaced the legacy 14-character locale gate for full-width action buttons
+  with key-presence coverage plus deterministic font-fit scenarios for short,
+  long, and post-shrink labels.
+- Added regression coverage for mixed-version KICK suffix ordering and
+  verified TARGET `levelText` propagation. Usecase count is now 1762.
+
 ## 2026-05-16 - Version 0.9.247 (patch)
 
 Cleans up the M+ killtracker pre-key level cell, repositions the

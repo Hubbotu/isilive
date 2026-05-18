@@ -9,6 +9,7 @@ desktop.ini
 .claude/*
 !.claude/README.md
 !.claude/settings.example.json
+.agents/
 .idea/
 *.code-workspace
 .luarc.json

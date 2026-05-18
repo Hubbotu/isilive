@@ -36,6 +36,16 @@ local OVERRIDES = {
   -- ui/isiLive_teleport_ui.lua, NOT as a button label. Tooltips are wide
   -- enough that 30 chars still renders without clipping.
   BTN_TELEPORT_LOCKED = 30,
+  -- ruRU labels are intentionally longer than the old hard cap. The fixed
+  -- roster/action buttons now use SetFlatButtonText font fitting, and the
+  -- regression coverage pins short, long, and post-shrink refits.
+  BTN_COUNTDOWN_CANCEL_SHORT = 9,
+  BTN_GAMEMENU_RELOADUI = 15,
+  BTN_GAMEMENU_SPELLBOOK = 16,
+  BTN_READYCHECK = 19,
+  BTN_REFRESH = 15,
+  BTN_SECOND_HEARTHSTONE = 18,
+  BTN_SHARE_KEYS = 18,
 }
 
 local function utf8len(s)

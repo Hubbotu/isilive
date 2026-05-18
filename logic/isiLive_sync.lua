@@ -449,30 +449,45 @@ local function NormalizeLocPayload(mapID, capturedAt, source)
     normalizedSource
 end
 
-local function NormalizeTargetPayload(mapID, level, capturedAt, source)
+local function NormalizeTargetLevelText(levelText, numericLevel)
+  if numericLevel ~= nil then
+    return nil
+  end
+  if type(levelText) == "string" and levelText:match("^|Kk%d+|k$") then
+    return levelText
+  end
+  return nil
+end
+
+local function NormalizeTargetPayload(mapID, level, capturedAt, source, levelText)
   local numericMapID = tonumber(mapID)
   local numericLevel = tonumber(level)
   local normalizedCapturedAt, normalizedSource = NormalizeCapturedAtAndSource(capturedAt, source)
+  local normalizedLevelText = nil
   if not numericMapID or numericMapID <= 0 then
     return string.format("TARGET:0:0:%d:%s", normalizedCapturedAt, normalizedSource),
       nil,
       nil,
       normalizedCapturedAt,
-      normalizedSource
+      normalizedSource,
+      nil
   end
 
   numericMapID = math.floor(numericMapID)
   if not numericLevel or numericLevel <= 0 then
     numericLevel = nil
+    normalizedLevelText = NormalizeTargetLevelText(levelText, nil)
   else
     numericLevel = math.floor(numericLevel)
   end
 
-  return string.format("TARGET:%d:%d:%d:%s", numericMapID, numericLevel or 0, normalizedCapturedAt, normalizedSource),
-    numericMapID,
-    numericLevel,
-    normalizedCapturedAt,
-    normalizedSource
+  local payload =
+    string.format("TARGET:%d:%d:%d:%s", numericMapID, numericLevel or 0, normalizedCapturedAt, normalizedSource)
+  if normalizedLevelText then
+    payload = payload .. ":LT:" .. normalizedLevelText
+  end
+
+  return payload, numericMapID, numericLevel, normalizedCapturedAt, normalizedSource, normalizedLevelText
 end
 
 --- Records that a player has sent at least one sync message this session.
@@ -1014,15 +1029,16 @@ end
 -- @param level number|nil Target key level (nil when unknown).
 -- @param capturedAt number|nil Timestamp from the payload.
 -- @param source string|nil Sync source label.
+-- @param levelText string|nil Verified opaque Blizzard keystone level markup.
 -- @return boolean true if stored target changed; false if deduplicated or cleared unchanged.
-function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
+function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source, levelText)
   local key = Sync.NormalizePlayerKey(name, realm)
   if StringUtils.IsBlank(key) then
     return false
   end
 
-  local _, numericMapID, numericLevel, normalizedCapturedAt, normalizedSource =
-    NormalizeTargetPayload(mapID, level, capturedAt, source)
+  local _, numericMapID, numericLevel, normalizedCapturedAt, normalizedSource, normalizedLevelText =
+    NormalizeTargetPayload(mapID, level, capturedAt, source, levelText)
   local previous = targetInfoByPlayerKey[key]
   local previousStamp = GetEntrySyncStamp(previous)
   if not numericMapID then
@@ -1031,7 +1047,12 @@ function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
     return hadValue
   end
 
-  if previous and previous.mapID == numericMapID and previous.level == numericLevel then
+  if
+    previous
+    and previous.mapID == numericMapID
+    and previous.level == numericLevel
+    and previous.levelText == normalizedLevelText
+  then
     previous.capturedAt = normalizedCapturedAt
     previous.source = normalizedSource
     previous.receivedAt = GetSyncTimestamp()
@@ -1042,6 +1063,7 @@ function Sync.SetPlayerTargetInfo(name, realm, mapID, level, capturedAt, source)
   local nextValue = {
     mapID = numericMapID,
     level = numericLevel,
+    levelText = normalizedLevelText,
     capturedAt = normalizedCapturedAt,
     source = normalizedSource,
     receivedAt = GetSyncTimestamp(),
@@ -1054,7 +1076,7 @@ end
 --- Returns stored target info for a peer, or nil if none received.
 -- @param name string Player name.
 -- @param realm string|nil Realm name.
--- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
+-- @return table|nil {mapID, level, levelText, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerTargetInfo(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
   if StringUtils.IsBlank(key) then
@@ -1389,9 +1411,9 @@ function Sync.SendKick(opts)
   if encodedHasKick and cooldownRemain then
     remain = math.ceil(cooldownRemain)
   end
-  local spellSuffix = EncodeKickSpellSuffix(opts.spellID, encodedHasKick)
   local extrasSuffix = EncodeKickExtrasSuffix(opts.extras)
-  local payload = string.format("KICK:%d:%d%s%s", encodedOnCooldown, remain, spellSuffix, extrasSuffix)
+  local spellSuffix = EncodeKickSpellSuffix(opts.spellID, encodedHasKick)
+  local payload = string.format("KICK:%d:%d%s%s", encodedOnCooldown, remain, extrasSuffix, spellSuffix)
   local blocked, now = IsBlockedBySendGate(opts, lastKickPayloadSent, lastIsiLiveKickAt, payload, 1, nil)
   if blocked then
     return false
@@ -1440,7 +1462,7 @@ end
 
 --- Broadcasts the local player's target keystone (desired dungeon/level) to the group.
 -- Deduplicated and rate-limited by ISILIVE_TARGET_COOLDOWN (5 s).
--- @param opts table {mapID:number, level:number, capturedAt:number, source:string,
+-- @param opts table {mapID:number, level:number, levelText:string, capturedAt:number, source:string,
 --   isVisible:boolean, allowHidden:boolean, force:boolean}
 function Sync.SendTarget(opts)
   opts = opts or {}
@@ -1449,9 +1471,14 @@ function Sync.SendTarget(opts)
     return
   end
 
-  local payload, numericMapID, numericLevel =
-    NormalizeTargetPayload(opts.mapID, opts.level, opts.capturedAt, opts.source)
-  local dedupePayload = string.format("TARGET:%d:%d", tonumber(numericMapID) or 0, tonumber(numericLevel) or 0)
+  local payload, numericMapID, numericLevel, _, _, normalizedLevelText =
+    NormalizeTargetPayload(opts.mapID, opts.level, opts.capturedAt, opts.source, opts.levelText)
+  local dedupePayload = string.format(
+    "TARGET:%d:%d:%s",
+    tonumber(numericMapID) or 0,
+    tonumber(numericLevel) or 0,
+    normalizedLevelText or ""
+  )
   local blocked, now =
     IsBlockedBySendGate(opts, lastTargetPayloadSent, lastIsiLiveTargetAt, dedupePayload, ISILIVE_TARGET_COOLDOWN, nil)
   if blocked then
@@ -1463,9 +1490,10 @@ function Sync.SendTarget(opts)
   local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, payload, channel, "NORMAL")
   SyncLog(
     "send_target",
-    "mapID=%s level=%s channel=%s sent=%s",
+    "mapID=%s level=%s levelText=%s channel=%s sent=%s",
     tostring(numericMapID),
     tostring(numericLevel),
+    tostring(normalizedLevelText),
     tostring(channel),
     tostring(sent)
   )
@@ -1779,8 +1807,19 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
   elseif bucket == "LOC" and parts[2] then
     locUpdated = Sync.SetPlayerLocInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), parts[4])
   elseif bucket == "TARGET" and parts[2] and parts[3] then
-    targetUpdated =
-      Sync.SetPlayerTargetInfo(sender, nil, tonumber(parts[2]), tonumber(parts[3]), tonumber(parts[4]), parts[5])
+    local levelText = nil
+    if parts[6] == "LT" and type(parts[7]) == "string" then
+      levelText = parts[7]
+    end
+    targetUpdated = Sync.SetPlayerTargetInfo(
+      sender,
+      nil,
+      tonumber(parts[2]),
+      tonumber(parts[3]),
+      tonumber(parts[4]),
+      parts[5],
+      levelText
+    )
   elseif bucket == "KICK" then
     local parsedKick = ParseKickPayload(message)
     if parsedKick then

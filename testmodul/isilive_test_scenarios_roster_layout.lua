@@ -177,4 +177,86 @@ return function(test, ctx)
     local RI = loadRI()
     Assert.Equal(RI.GetFrameHeightForLayoutMode(RI.LAYOUT_MODE_EXPANDED, 400), 400)
   end)
+
+  local function NewFlatButtonFitStub(width, baseSize)
+    local label = {}
+    local button = { _flatLabel = label }
+    local currentText = ""
+    local currentSize = baseSize or 12
+    local fontCalls = {}
+
+    function button:GetWidth()
+      return width
+    end
+
+    function button:SetText(text)
+      self.buttonText = tostring(text or "")
+    end
+
+    function label:SetText(text)
+      currentText = tostring(text or "")
+    end
+
+    function label:SetWidth(nextWidth)
+      self.width = nextWidth
+    end
+
+    function label:SetWordWrap(value)
+      self.wordWrap = value
+    end
+
+    function label:SetNonSpaceWrap(value)
+      self.nonSpaceWrap = value
+    end
+
+    function label:GetFont()
+      return "Fonts\\FRIZQT__.TTF", currentSize, "OUTLINE"
+    end
+
+    function label:SetFont(path, size, flags)
+      currentSize = size
+      fontCalls[#fontCalls + 1] = { path = path, size = size, flags = flags }
+    end
+
+    function label:GetStringWidth()
+      return #currentText * currentSize
+    end
+
+    return button, label, fontCalls, function()
+      return currentSize
+    end
+  end
+
+  test("RosterLayout SetFlatButtonText keeps short labels at the base font size", function()
+    local RI = loadRI()
+    local button, label, _, getSize = NewFlatButtonFitStub(120, 12)
+
+    RI.SetFlatButtonText(button, "Ready")
+
+    Assert.Equal(label.width, 116, "label width should match button width minus padding")
+    Assert.Equal(getSize(), 12, "short labels should stay at the base font size")
+    Assert.False(label.wordWrap, "flat button labels must not word-wrap")
+    Assert.False(label.nonSpaceWrap, "flat button labels must not non-space-wrap")
+    Assert.Equal(button.buttonText, "Ready", "native button text mirrors the visible label")
+  end)
+
+  test("RosterLayout SetFlatButtonText shrinks long labels down to the minimum fit size", function()
+    local RI = loadRI()
+    local button, _, _, getSize = NewFlatButtonFitStub(100, 12)
+
+    RI.SetFlatButtonText(button, "Поделиться ключами")
+
+    Assert.Equal(getSize(), 8, "long labels should shrink to the minimum readable fit size")
+  end)
+
+  test("RosterLayout SetFlatButtonText resets a previously shrunken label before refitting", function()
+    local RI = loadRI()
+    local button, _, _, getSize = NewFlatButtonFitStub(100, 12)
+
+    RI.SetFlatButtonText(button, "Поделиться ключами")
+    Assert.Equal(getSize(), 8, "setup should shrink the long label")
+
+    RI.SetFlatButtonText(button, "OK")
+    Assert.Equal(getSize(), 12, "short follow-up labels should restore the base font size")
+  end)
 end

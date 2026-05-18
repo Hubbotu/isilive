@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.247`
-Zuletzt aktualisiert: `2026-05-16`
+Versionsbasis: `0.9.248`
+Zuletzt aktualisiert: `2026-05-18`
 
 ## Akteure
 
@@ -264,7 +264,7 @@ Ziel: Klassen mit mehreren Interrupt-Spells (Prot Paladin via Avenger's-Shield-T
 2. Voraussetzung: Die Klasse muss in `CLASS_INTERRUPT_LIST` gelistet sein. Aktuell unterstuetzt: `PALADIN = {96231, 31935}` (Rebuke + Avenger's Shield) und `WARLOCK = {19647, 119914}` (Spell Lock + Axe Toss). Andere Klassen erhalten Spec-Switches via `RefreshSpec` auf `PLAYER_SPECIALIZATION_CHANGED` und brauchen keine dynamische Multi-Kick-Erkennung.
 3. Verarbeitung: Bei einem extras-Match wird `extras[spellID] = {cd, cdEnd}` gesetzt, ohne den primary-Cooldown anzuruehren. Die CD kommt aus `EXTRA_KICK_CD` (z.B. `[31935] = 30` fuer Avenger's Shield) oder via Cross-Spec-Lookup in `SPEC_DATA` als Fallback. `Scan()` raeumt expirierte Eintraege automatisch beim 0.5-Sekunden-Ticker auf.
 4. Verarbeitung: `GetKickInfo()` liefert jetzt zusaetzlich `extras = {[spellID] = {onCooldown, cooldownRemain, cd}}`. Der Factory-KickTracker reicht das direkt durch zu `Sync.SendKick({extras=...})` und parallel zu `Sync.SetPlayerKickInfo(self, ..., extras)`, sodass die lokale UI die eigenen extras ohne Round-Trip ueber den Addon-Channel sieht.
-5. Sync: Der `KICK:`-Payload wird auf `KICK:<state>:<remain>:E:<spellID,remain>;<spellID,remain>` erweitert, wenn extras vorhanden sind. Das `:E:`-Suffix ist optional und backwards-compatible: aeltere isiLive-Peers parsen `parts[4]/parts[5]` nicht und ignorieren das Suffix; sie sehen den primary normal. Empty-Extras-Map fuegt das Suffix nicht an, damit der Common-Single-Kick-Case keine Bytes verschwendet. Sortierung der Pieces via `table.sort` macht das Payload deterministisch fuer die `IsBlockedBySendGate`-Dedup.
+5. Sync: Der `KICK:`-Payload wird auf `KICK:<state>:<remain>:E:<spellID,remain>;<spellID,remain>` erweitert, wenn extras vorhanden sind; wenn zusaetzlich ein primary `spellID` synchronisiert wird, bleibt `:E:` vor `:S:<spellID>`, damit aeltere isiLive-Peers `parts[4]/parts[5]` weiterhin als Extras lesen koennen. Das `:E:`-Suffix ist optional und backwards-compatible: aeltere isiLive-Peers ignorieren unbekannte spaetere Felder und sehen den primary normal. Empty-Extras-Map fuegt das Suffix nicht an, damit der Common-Single-Kick-Case keine Bytes verschwendet. Sortierung der Pieces via `table.sort` macht das Payload deterministisch fuer die `IsBlockedBySendGate`-Dedup.
 6. Receive: `Sync.ProcessAddonMessage` erkennt `parts[4] == "E"` und parsed `parts[5]` via `gmatch("[^;]+")` fuer einzelne `<spellID>,<remain>`-Paare. Sanitize-Logic in `Sync.SetPlayerKickInfo` filtert non-numerische oder negative Werte raus.
 7. Peer-Propagation: `KeySync.ApplyKnownKeyToRosterEntry` interpoliert die extras analog zum primary-Remain (subtract elapsed time von `receivedAtGetTime`), filtert expirierte Eintraege raus und persistiert die Map als `info.syncKickExtras` auf dem Roster-Entry. Drift-Detection (Schwellenwert 0.6s) triggert nur dann ein UI-Refresh, wenn sich tatsaechlich was aendert.
 8. Render: `ShowRosterInfoTooltip` (Roster-Hover) zeigt direkt nach der Rio-Zeile einen lokalisierten "Extra kicks:"-Header (Locale-Key `TOOLTIP_KICK_EXTRAS_HEADER` in 8 Sprachen) gefolgt von einer eingerueckten Zeile pro extra: `  <SpellName>: <remain>s`. SpellName kommt aus `C_Spell.GetSpellName(spellID)` (pcall-guarded), Fallback auf `Spell <ID>`.
@@ -309,7 +309,7 @@ Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro In
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1752` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1762` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

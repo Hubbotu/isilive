@@ -1641,6 +1641,34 @@ local function RegisterDpsLocSyncTests(test, Assert, WithGlobals, LoadAddonModul
         "TARGET:2441:0:106:local",
         "missing level must serialize as exact map without guess"
       )
+
+      now = 112
+      addon.Sync.SendTarget({
+        isVisible = true,
+        mapID = 2441,
+        level = nil,
+        levelText = "|Kk584|k",
+      })
+      Assert.Equal(#sentMessages, 3, "verified Blizzard level markup must publish as changed target detail")
+      Assert.Equal(
+        sentMessages[3].message,
+        "TARGET:2441:0:112:local:LT:|Kk584|k",
+        "levelText must serialize only as verified opaque Blizzard keystone markup"
+      )
+
+      now = 118
+      addon.Sync.SendTarget({
+        isVisible = true,
+        mapID = 2441,
+        level = nil,
+        levelText = "+14 freeform",
+      })
+      Assert.Equal(#sentMessages, 4, "dropping invalid levelText must still publish the changed target detail")
+      Assert.Equal(
+        sentMessages[4].message,
+        "TARGET:2441:0:118:local",
+        "free-form levelText must not be serialized into TARGET sync"
+      )
     end)
   end)
 end
@@ -1832,10 +1860,11 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
 
   test("Sync SendKick appends primary spell suffix when spellID is explicit", function()
     local sentMessages = {}
+    local now = 100
 
     WithGlobals({
       GetTime = function()
-        return 100
+        return now
       end,
       IsInGroup = function(_category)
         return true
@@ -1861,6 +1890,24 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
 
       Assert.Equal(#sentMessages, 1, "kick with explicit spellID must publish")
       Assert.Equal(sentMessages[1].message, "KICK:0:0:S:119914", "spell suffix must use ':S:<spellID>'")
+
+      now = 101
+      addon.Sync.SendKick({
+        hasKick = true,
+        onCooldown = false,
+        cooldownRemain = 0,
+        spellID = 119914,
+        extras = {
+          [31935] = { cooldownRemain = 22 },
+        },
+      })
+
+      Assert.Equal(#sentMessages, 2, "kick with explicit spellID and extras must publish")
+      Assert.Equal(
+        sentMessages[2].message,
+        "KICK:0:0:E:31935,22:S:119914",
+        "extras suffix must stay before spell suffix so older peers still parse parts[4]/parts[5]"
+      )
     end)
   end)
 
@@ -1906,6 +1953,13 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
       stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
       Assert.Equal(stored.spellID, 119914, "primary spell suffix must be stored on peer kick info")
       Assert.NotNil(stored.extras[31935], "extras after spell suffix must still be stored")
+
+      local compatOrderResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0:E:31935,21:S:119914", "Peer-Realm", "Me", "Realm")
+      Assert.True(compatOrderResult.kickUpdated, "KICK with extras before spell suffix must update peer kick state")
+      stored = addon.Sync.GetPlayerKickInfo("Peer", "Realm")
+      Assert.Equal(stored.spellID, 119914, "primary spell suffix must be stored when it follows extras")
+      Assert.Equal(stored.extras[31935].cooldownRemain, 21, "extras before spell suffix must still be stored")
 
       -- Peer with NO extras suffix must clear stored extras (backwards compat).
       addon.Sync.ProcessAddonMessage("ISILIVE", "KICK:0:0", "Peer-Realm", "Me", "Realm")
@@ -2102,6 +2156,20 @@ local function RegisterKickSyncTests(test, Assert, WithGlobals, LoadAddonModules
 
       local dupResult = addon.Sync.ProcessAddonMessage("ISILIVE", "TARGET:2441:14", "Peer-Realm", "Me", "Realm")
       Assert.False(dupResult.targetUpdated, "duplicate TARGET must not report update")
+
+      local levelTextResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "TARGET:2441:0:100:remote:LT:|Kk584|k", "Peer-Realm", "Me", "Realm")
+      Assert.True(levelTextResult.targetUpdated, "TARGET with verified levelText must update peer target info")
+      targetInfo = addon.Sync.GetPlayerTargetInfo("Peer", "Realm")
+      Assert.Equal(targetInfo.mapID, 2441, "levelText TARGET must keep mapID")
+      Assert.Nil(targetInfo.level, "levelText TARGET must not synthesize a numeric level")
+      Assert.Equal(targetInfo.levelText, "|Kk584|k", "verified Blizzard keystone markup must be stored")
+
+      local invalidLevelTextResult =
+        addon.Sync.ProcessAddonMessage("ISILIVE", "TARGET:2441:0:101:remote:LT:+14", "Peer-Realm", "Me", "Realm")
+      Assert.True(invalidLevelTextResult.targetUpdated, "dropping invalid levelText must update stored target detail")
+      targetInfo = addon.Sync.GetPlayerTargetInfo("Peer", "Realm")
+      Assert.Nil(targetInfo.levelText, "free-form target levelText must not be stored")
     end)
   end)
 

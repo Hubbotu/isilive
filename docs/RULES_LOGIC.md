@@ -656,7 +656,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-NO-GUESS-LAUFZEITAUFLOESUNG
 - Regelnummer: 54
 - Status: aktiv
-- Zusammenfassung: Wenn fuer eine Runtime-Aufloesung keine eindeutige, belastbare Quelle vorliegt, muss das Ergebnis unresolved bleiben. Fehlende oder mehrdeutige Laufzeitdaten duerfen nicht durch spekulative Fallbacks, Namens-/Token-Raten, heuristische Standardwerte oder synthetische Cooldown-/Map-Zustaende ersetzt werden. Eindeutige Aufloesungen duerfen nur aus beobachteten Live-Daten, explizit persistierten verifizierten Daten oder eindeutig bestimmten Runtime-Zusammenhaengen entstehen.
+- Zusammenfassung: Wenn fuer eine Runtime-Aufloesung keine eindeutige, belastbare Quelle vorliegt, muss das Ergebnis unresolved bleiben. Fehlende oder mehrdeutige Laufzeitdaten duerfen nicht durch spekulative Fallbacks, Namens-/Token-Raten, heuristische Standardwerte oder synthetische Cooldown-/Map-Zustaende ersetzt werden. Eindeutige Aufloesungen duerfen nur aus beobachteten Live-Daten, explizit persistierten verifizierten Daten oder eindeutig bestimmten Runtime-Zusammenhaengen entstehen. Opaque Blizzard-Keystone-Markup darf nur dann als Target-Level-Text weitergegeben werden, wenn es exakt dem verifizierten `|Kk<number>|k`-Format entspricht; freier Titeltext bleibt unresolved.
 - Erforderliche Tests:
   - Factory target dungeon stays unresolved without queue or joined-key map context
   - Factory target dungeon resolves from synced exact target context
@@ -672,6 +672,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - LFGDetect inviteaccepted refreshes incomplete invited listing before direct-push
   - LFGDetect direct-push carries exact Blizzard keystone level markup
   - factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved
+  - factory_controllers.status: SendOwnTargetSnapshot carries LFG level markup when numeric level is unresolved
   - AcceptedInviteNotice does not replay after challenge start
   - AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE recovery after ClearAllState
 

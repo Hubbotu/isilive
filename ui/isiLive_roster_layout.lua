@@ -357,6 +357,81 @@ local function AttachSystemOptionToggleWatcher(mainFrame, ui)
 end
 RI.AttachSystemOptionToggleWatcher = AttachSystemOptionToggleWatcher
 
+local FLAT_BUTTON_LABEL_HORIZONTAL_PADDING = 4
+local FLAT_BUTTON_LABEL_MIN_FONT_SIZE = 8
+
+local function GetFlatButtonLabelWidth(btn)
+  if type(btn) ~= "table" or type(btn.GetWidth) ~= "function" then
+    return nil
+  end
+  local width = tonumber(btn:GetWidth())
+  if not width or width <= FLAT_BUTTON_LABEL_HORIZONTAL_PADDING then
+    return nil
+  end
+  return width - FLAT_BUTTON_LABEL_HORIZONTAL_PADDING
+end
+
+local function CaptureFlatButtonBaseFont(label)
+  if type(label) ~= "table" or type(label.GetFont) ~= "function" then
+    return nil
+  end
+  if type(label._isiLiveFlatButtonBaseFont) == "table" then
+    return label._isiLiveFlatButtonBaseFont
+  end
+
+  local fontPath, fontSize, fontFlags = label:GetFont()
+  if type(fontPath) ~= "string" or fontPath == "" or type(fontSize) ~= "number" then
+    return nil
+  end
+
+  label._isiLiveFlatButtonBaseFont = {
+    path = fontPath,
+    size = fontSize,
+    flags = fontFlags,
+  }
+  return label._isiLiveFlatButtonBaseFont
+end
+
+local function SetFlatButtonLabelFont(label, baseFont, size)
+  if type(label) ~= "table" or type(label.SetFont) ~= "function" or type(baseFont) ~= "table" then
+    return
+  end
+  if type(baseFont.path) ~= "string" or baseFont.path == "" then
+    return
+  end
+  local nextSize = tonumber(size)
+  if not nextSize then
+    return
+  end
+  label:SetFont(baseFont.path, nextSize, baseFont.flags)
+end
+
+local function FitFlatButtonLabel(btn, label)
+  if type(label) ~= "table" or type(label.GetStringWidth) ~= "function" then
+    return
+  end
+
+  local targetWidth = GetFlatButtonLabelWidth(btn)
+  local baseFont = CaptureFlatButtonBaseFont(label)
+  if not targetWidth or not baseFont then
+    return
+  end
+
+  local baseSize = math.floor(tonumber(baseFont.size) or 0)
+  if baseSize <= 0 then
+    return
+  end
+
+  local minSize = math.min(baseSize, FLAT_BUTTON_LABEL_MIN_FONT_SIZE)
+  for size = baseSize, minSize, -1 do
+    SetFlatButtonLabelFont(label, baseFont, size)
+    local stringWidth = tonumber(label:GetStringWidth())
+    if not stringWidth or stringWidth <= targetWidth then
+      return
+    end
+  end
+end
+
 -- Shared small utility also used by UpdateCollapseState
 local function SetFlatButtonText(btn, text)
   if type(btn) == "table" and btn._flatLabel and btn._flatLabel.SetText then
@@ -375,6 +450,7 @@ local function SetFlatButtonText(btn, text)
     if type(label.SetNonSpaceWrap) == "function" then
       label:SetNonSpaceWrap(false)
     end
+    FitFlatButtonLabel(btn, label)
   end
   if type(btn) == "table" and type(btn.SetText) == "function" then
     btn:SetText(tostring(text or ""))
