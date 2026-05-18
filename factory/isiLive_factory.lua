@@ -244,6 +244,16 @@ local function FinalizeFactorySettings(ctx)
           rosterInternal.SetTooltipFlagsEnabled(enabled)
         end
       end,
+      onInviteListToggle = function(enabled)
+        if
+          ctx.inviteList
+          and type(ctx.inviteList.Render) == "function"
+          and ctx.invitesController
+          and type(ctx.invitesController.GetOpenInvites) == "function"
+        then
+          ctx.inviteList.Render(enabled and ctx.invitesController.GetOpenInvites() or {})
+        end
+      end,
       onMplusForcesToggle = function(enabled)
         local mobTooltip = ctx.addonTable and ctx.addonTable.MobTooltip
         if type(mobTooltip) == "table" and type(mobTooltip.SetEnabled) == "function" then

@@ -22,6 +22,8 @@ Russian locale update.
 
 [locale/isiLive_texts.lua](locale/isiLive_texts.lua),
 [locale/isiLive_locale.lua](locale/isiLive_locale.lua),
+[ui/isiLive_settings.lua](ui/isiLive_settings.lua),
+[ui/isiLive_invite_list.lua](ui/isiLive_invite_list.lua),
 [ui/isiLive_roster_layout.lua](ui/isiLive_roster_layout.lua):
 
 - The ruRU locale now uses Cyrillic translations for the addon UI strings and
@@ -30,6 +32,9 @@ Russian locale update.
 - Flat roster/action button labels now refit their font size to the fixed
   button width, restoring the base font before every text update and shrinking
   only as far as the minimum readable size when needed.
+- The new open LFG invite-list window now has its own default-on Settings
+  toggle (`LFG invite list`) so users can hide that extra UI surface while
+  keeping the underlying LFG invite handling intact.
 
 ### Tests
 
@@ -42,7 +47,8 @@ Russian locale update.
   with key-presence coverage plus deterministic font-fit scenarios for short,
   long, and post-shrink labels.
 - Added regression coverage for mixed-version KICK suffix ordering and
-  verified TARGET `levelText` propagation. Usecase count is now 1762.
+  verified TARGET `levelText` propagation, plus Settings/UI coverage for the
+  LFG invite-list toggle. Usecase count is now 1764.
 
 ## 2026-05-16 - Version 0.9.247 (patch)
 

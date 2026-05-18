@@ -157,7 +157,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
 7. Ergebnis B: Blizzard Settings zeigen — gruppiert in sechs Sektionen plus Reset und Beta-Hinweis:
    - **General**: Sprache, `Default UI on Open`, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Show Timeways Navigator`.
-   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
+   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `LFG invite list`, `Accepted-invite notice`.
    - **Nameplates**: 3-Modi-Selector `Off / Tooltip / Nameplate` fuer den M+-Forces-Overlay, plus `Show percentage`, `Show remaining needed`, `Font size`, `Position`, `X offset`, `Y offset` und ein Live-Preview.
    - **Behavior**: `Addon Sync`, `Lock main frame position`, `Fade out in Combat (M2 only)`, gefolgt vom Auto-Show/Hide-Block mit Erklaerung (`Show on Login / Reload`, `Auto-Open on M+ Queue`, `Auto-Open on Key End`, `Auto-close when key starts`, `Auto-close when leaving the group`), und einem statischen Raid-Behavior-Hinweis statt einem 1-Optionen-Selector.
    - **Sounds**: `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res`, `Sound: Bloodlust`.
@@ -277,7 +277,7 @@ Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro In
 
 1. Trigger: `LFG_LIST_APPLICATION_STATUS_UPDATED` meldet fuer eine konkrete `searchResultID` den Status `invited`.
 2. Verarbeitung: Das Invite-Modul liest die zugehoerigen Blizzard-LFG-Daten ueber `C_LFGList.GetSearchResultInfo()` und speichert genau einen offenen Eintrag pro `searchResultID`.
-3. Anzeige: Die Invite-Liste wird unter dem sichtbaren Blizzard-Invite-Popup verankert; wenn kein Popup auffindbar ist, nutzt sie eine feste UIParent-Position.
+3. Anzeige: Die Invite-Liste wird unter dem sichtbaren Blizzard-Invite-Popup verankert, solange `inviteListEnabled` nicht ausgeschaltet ist; wenn kein Popup auffindbar ist, nutzt sie eine feste UIParent-Position.
 4. Anzeige: Dungeonname, Keystufe, Gruppentitel, Lead-Kommentar und Rolle werden nur angezeigt, wenn sie aus den LFG-Daten eindeutig stammen.
 5. Regel: Fehlende oder mehrdeutige Dungeon-, Keystufen- oder Rolleninformationen bleiben leer und werden nicht durch Namen, Spielerrolle oder andere Runtime-Daten geraten.
 6. Benutzeraktion: `Annehmen` ruft die Accept-Aktion fuer die konkrete `searchResultID` der angeklickten Zeile auf und schliesst nach erfolgreicher Ausfuehrung die offene Invite-Liste.
@@ -309,7 +309,7 @@ Ziel: Mehrere offene Premade-LFG-Invites gleichzeitig sichtbar machen und pro In
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1762` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1764` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

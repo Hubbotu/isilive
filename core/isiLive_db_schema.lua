@@ -129,6 +129,7 @@ local SCHEMA = {
   lfgFlagsEnabled = { type = "boolean", default = true },
   tooltipFlagsEnabled = { type = "boolean", default = true },
   inviteHintEnabled = { type = "boolean", default = true },
+  inviteListEnabled = { type = "boolean", default = true },
   acceptedInviteNoticeEnabled = { type = "boolean", default = true },
 
   -- Mob nameplate / forces overlay.

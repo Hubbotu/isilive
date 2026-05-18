@@ -1022,6 +1022,10 @@ local function InitializeInviteControllers(ctx, modules)
     ctx.inviteList = modules.inviteList.Create({
       parent = UIParent,
       getL = ctx.GetL,
+      isEnabled = function()
+        local db = rawget(_G, "IsiLiveDB")
+        return not (type(db) == "table" and db.inviteListEnabled == false)
+      end,
       onAccept = function(searchResultID)
         ctx.invitesController.Accept(searchResultID)
       end,

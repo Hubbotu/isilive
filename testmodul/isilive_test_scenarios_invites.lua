@@ -362,6 +362,32 @@ return function(test, ctx)
     end)
   end)
 
+  test("Invite list UI stays hidden while the settings toggle is disabled", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local parent = { _name = "UIParent" }
+    local enabled = false
+
+    ctx.with_globals({
+      CreateFrame = createFrameStub,
+      UIParent = parent,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_invite_list.lua" })
+      local view = addon.InviteList.Create({
+        parent = parent,
+        isEnabled = function()
+          return enabled
+        end,
+      })
+
+      view.Render({ { searchResultID = 1001, dungeonName = "Windrunner Spire" } })
+      Assert.False(view.frame:IsShown(), "disabled invite-list setting must keep the window hidden")
+
+      enabled = true
+      view.Render({ { searchResultID = 1001, dungeonName = "Windrunner Spire" } })
+      Assert.True(view.frame:IsShown(), "re-enabled invite-list setting should render open invites")
+    end)
+  end)
+
   test("Invite list UI anchors to visible Blizzard invite surfaces and repositions on update", function()
     local createFrameStub = BuildCreateFrameStub()
     local parent = { _name = "UIParent" }

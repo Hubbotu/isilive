@@ -139,6 +139,9 @@ function InviteList.Create(opts)
   local getL = type(opts.getL) == "function" and opts.getL or function()
     return {}
   end
+  local isEnabled = type(opts.isEnabled) == "function" and opts.isEnabled or function()
+    return true
+  end
   local frame = CreateFrame("Frame", "isiLiveInviteListFrame", parent, "BackdropTemplate")
   frame:SetSize(FRAME_WIDTH, 46 + (MAX_ROWS * (ROW_HEIGHT + 4)))
   frame:SetFrameStrata("DIALOG")
@@ -172,6 +175,10 @@ function InviteList.Create(opts)
 
   local function Render(invites)
     state.invites = invites or {}
+    if isEnabled() == false then
+      frame:Hide()
+      return
+    end
     local L = getL() or {}
     title:SetText(L.INVITE_LIST_TITLE or "Open LFG invites")
     for index, row in ipairs(rows) do

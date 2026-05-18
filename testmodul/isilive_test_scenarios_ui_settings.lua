@@ -932,6 +932,92 @@ local function RegisterSettingsPanelAdvancedTests(test, Assert, WithGlobals, Loa
     end)
   end)
 
+  test("Settings panel defaults the LFG invite list to enabled and lets the user turn it off", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = {}
+    local callbackStates = {}
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_SECTION_DISPLAY = "Display",
+            SETTINGS_SECTION_BEHAVIOR = "Behavior",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Language",
+            SETTINGS_COMBAT_LOGGING = "Combat Logging",
+            SETTINGS_DM_RESET = "DM Reset",
+            SETTINGS_ESC_PANEL = "ESC Panel",
+            SETTINGS_BG_ALPHA = "Background Opacity",
+            SETTINGS_UI_SCALE = "UI Scale",
+            SETTINGS_MINIMAP_BUTTON = "Minimap Button",
+            SETTINGS_SYNC_ENABLED = "Addon Sync",
+            SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
+            SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
+            SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
+            SETTINGS_DEFAULT_OPEN_UI_V = "V",
+            SETTINGS_DEFAULT_OPEN_UI_H = "H",
+            SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
+            SETTINGS_INVITE_LIST_ENABLED = "Invite List",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+        onInviteListToggle = function(enabled)
+          callbackStates[#callbackStates + 1] = enabled and true or false
+        end,
+      })
+
+      Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+      Assert.Nil(db.inviteListEnabled, "invite list should stay unset until the user chooses")
+
+      local inviteListCheck = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_INVITE_LIST_ENABLED" then
+          inviteListCheck = frame
+          break
+        end
+      end
+
+      inviteListCheck = Assert.NotNil(inviteListCheck, "settings panel should create an invite-list checkbox")
+      ---@diagnostic disable: undefined-field
+      Assert.True(inviteListCheck:GetChecked(), "invite list should default to enabled")
+
+      local onClick = inviteListCheck._scripts and inviteListCheck._scripts.OnClick or nil
+      onClick = Assert.NotNil(onClick, "invite-list checkbox should define OnClick")
+
+      inviteListCheck:SetChecked(false)
+      onClick(inviteListCheck)
+      Assert.False(db.inviteListEnabled, "disabling the checkbox should persist false")
+      Assert.Equal(callbackStates[1], false, "disabling the checkbox should notify the callback")
+
+      panel.Refresh()
+      Assert.False(inviteListCheck:GetChecked(), "refresh should keep the disabled checkbox state")
+      ---@diagnostic enable: undefined-field
+    end)
+  end)
+
   test("Settings panel renders raid behavior as a status note instead of a single-option selector", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
@@ -1368,11 +1454,11 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        29,
+        30,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
-          .. " chat-announce, combat-fade, nameplate-subtoggle, accepted-invite-notice, and the two"
-          .. " auto-close split checkboxes visible"
+          .. " chat-announce, combat-fade, nameplate-subtoggle, invite-list,"
+          .. " accepted-invite-notice, and the two auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
@@ -1380,10 +1466,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
       Assert.Equal(
         checkboxCount,
-        29,
+        30,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, and the two auto-close split checkboxes"
+          .. " invite-list, accepted-invite-notice, and the two auto-close split checkboxes"
       )
     end)
   end)

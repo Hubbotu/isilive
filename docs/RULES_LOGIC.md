@@ -81,7 +81,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 58. Nach `CHALLENGE_MODE_COMPLETED` bleibt der M+-Timer-Snapshot eingefroren bis zum naechsten `PLAYER_ENTERING_WORLD`; dieser muss den Snapshot vollstaendig wegraeumen, damit die Timer-Box ueber Reload/Relog/neuen Key hinweg nicht mit veralteten Werten stehen bleibt. Ein PEW waehrend eines laufenden Keys darf den Timer nicht stoppen.
 59. Der untere M+-Killtracker zeigt vor Key-Start verifizierte Ziel-Dungeon-Daten aus der Target-Dungeon-Aufloesung rechtsbuendig an; eine Keystufe wird nur bei positiver numerischer Aufloesung ergaenzt. Ab Key-Start wechselt er zur Prozentanzeige zurueck; waehrend aktiver Prozentdaten darf der verifizierte Dungeonname linksbuendig als helles Outline-Label mit dunkler Hinterlegung auf dem Prozentbalken sichtbar bleiben.
 60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
-61. Die LFG-Invite-Liste zeigt nur offene Premade-LFG-Invites aus Blizzard-LFG-Daten an; Dungeon, Keystufe, Kommentar und Rolle duerfen nicht geraten werden, und Accept/Decline-Aktionen muessen auf die konkrete `searchResultID` zielen.
+61. Die LFG-Invite-Liste zeigt nur offene Premade-LFG-Invites aus Blizzard-LFG-Daten an, wenn die Settings-Option `inviteListEnabled` aktiv ist; Dungeon, Keystufe, Kommentar und Rolle duerfen nicht geraten werden, und Accept/Decline-Aktionen muessen auf die konkrete `searchResultID` zielen.
 
 ## Regelbloecke
 
@@ -752,7 +752,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-LFG-INVITE-LISTE-KEIN-GUESSING
 - Regelnummer: 61
 - Status: aktiv
-- Zusammenfassung: Die LFG-Invite-Liste darf nur offene Premade-LFG-Invites anzeigen, die aus `LFG_LIST_APPLICATION_STATUS_UPDATED` oder `C_LFGList.GetApplications()` plus `C_LFGList.GetApplicationInfo()` und `C_LFGList.GetSearchResultInfo()` stammen. Ein Invite-Eintrag wird ueber seine konkrete `searchResultID` dedupliziert. Dungeonname und Map-Kontext duerfen nur aus eindeutig aufgeloesten Activity-IDs entstehen; Keystufe, Kommentar und Rolle duerfen nur aus expliziten Blizzard-LFG-Feldern oder aus der bereits etablierten Blizzard-Titel-Markup-/Titel-Level-Auswertung stammen. Fehlt eine Quelle, bleibt das Feld leer. `Accept` und `Decline` muessen die konkrete `searchResultID` des angeklickten Eintrags verwenden; nach erfolgreichem `Accept` wird die offene Invite-Liste geschlossen, nach erfolgreichem `Decline` nur der betroffene Eintrag entfernt.
+- Zusammenfassung: Die LFG-Invite-Liste darf nur offene Premade-LFG-Invites anzeigen, die aus `LFG_LIST_APPLICATION_STATUS_UPDATED` oder `C_LFGList.GetApplications()` plus `C_LFGList.GetApplicationInfo()` und `C_LFGList.GetSearchResultInfo()` stammen, und sie muss vollstaendig verborgen bleiben, wenn `inviteListEnabled == false` ist. Ein Invite-Eintrag wird ueber seine konkrete `searchResultID` dedupliziert. Dungeonname und Map-Kontext duerfen nur aus eindeutig aufgeloesten Activity-IDs entstehen; Keystufe, Kommentar und Rolle duerfen nur aus expliziten Blizzard-LFG-Feldern oder aus der bereits etablierten Blizzard-Titel-Markup-/Titel-Level-Auswertung stammen. Fehlt eine Quelle, bleibt das Feld leer. `Accept` und `Decline` muessen die konkrete `searchResultID` des angeklickten Eintrags verwenden; nach erfolgreichem `Accept` wird die offene Invite-Liste geschlossen, nach erfolgreichem `Decline` nur der betroffene Eintrag entfernt.
 - Erforderliche Tests:
   - Invites list adds one verified LFG invite from invited status
   - Invites list orders multiple open invites chronologically
@@ -762,3 +762,4 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Invites list decline button path removes the selected invite
   - Invites list rehydrates invited applications after reload
   - Invites list keeps missing role and unresolved dungeon empty instead of guessing
+  - Invite list UI stays hidden while the settings toggle is disabled
