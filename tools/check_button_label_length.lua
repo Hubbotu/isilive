@@ -12,9 +12,9 @@
 -- Two-tier limits:
 --   * BTN_*_SHORT / BTN_*_hModeText / BTN_*_LOCKED -> SHORT_LIMIT
 --   * any other BTN_*                              -> LONG_LIMIT
--- The character count uses utf8.len when available (Lua 5.3+) so multi-byte
--- characters (cyrillic, umlauts) count as one character each. Falls back to
--- byte count on Lua 5.1, which over-counts non-ASCII -- conservative.
+-- The character count uses utf8.len when available (Lua 5.3+) and falls back
+-- to a small UTF-8 codepoint counter on Lua 5.1 so multi-byte characters
+-- (cyrillic, umlauts) count consistently across local and CI toolchains.
 --
 -- Override via the OVERRIDES table below. Use sparingly: every entry is a
 -- visual regression waiting to happen.
@@ -49,10 +49,9 @@ local OVERRIDES = {
 }
 
 local function utf8len(s)
-  -- Standard library presence varies. Newer Lua versions expose `utf8.len`
-  -- which counts codepoints; on 5.1 we fall back to byte count, which is
-  -- a strict over-count for any non-ASCII text and therefore stays on the
-  -- safe side of the contract.
+  -- Standard library presence varies. Newer Lua versions expose `utf8.len`.
+  -- Lua 5.1 on GitHub Actions does not, so count UTF-8 leading bytes there:
+  -- continuation bytes are 0x80..0xBF, every other byte starts a codepoint.
   local utf8 = rawget(_G, "utf8")
   if type(utf8) == "table" and type(utf8.len) == "function" then
     local n = utf8.len(s)
@@ -60,7 +59,14 @@ local function utf8len(s)
       return n
     end
   end
-  return #s
+  local n = 0
+  for i = 1, #s do
+    local byte = s:byte(i)
+    if byte < 128 or byte >= 192 then
+      n = n + 1
+    end
+  end
+  return n
 end
 
 local function fail(code, message)
