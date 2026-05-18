@@ -151,6 +151,7 @@ local function CreateTeleportUIController(ctx)
     getTeleportCooldownRemaining = ctx.getTeleportCooldownRemaining,
     formatCooldownSeconds = ctx.formatCooldownSeconds,
     getSpellCooldownSafe = ctx.getSpellCooldownSafe,
+    getCooldownFrameStartForRemaining = ctx.getCooldownFrameStartForRemaining,
     applyCooldownFrameSafe = ctx.applyCooldownFrameSafe,
     getSpellTexture = ctx.getSpellTexture,
     getDungeonShortCode = ctx.getDungeonShortCode,

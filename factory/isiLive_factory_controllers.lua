@@ -1041,6 +1041,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
     getTeleportCooldownRemaining = ctx.GetTeleportCooldownRemaining,
     formatCooldownSeconds = ctx.FormatCooldownSeconds,
     getSpellCooldownSafe = ctx.GetSpellCooldownSafe,
+    getCooldownFrameStartForRemaining = ctx.GetCooldownFrameStartForRemaining,
     applyCooldownFrameSafe = ctx.ApplyCooldownFrameSafe,
     getSpellTexture = function(spellID)
       if spellID and C_Spell and C_Spell.GetSpellTexture then

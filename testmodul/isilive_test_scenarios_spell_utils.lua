@@ -103,6 +103,34 @@ local function RegisterSpellKnownAndCooldownTests(test, Assert, WithGlobals, Loa
       Assert.Equal(remaining, 0, "global cooldown must not count as a teleport cooldown")
     end)
   end)
+
+  test("SpellUtils.GetTeleportCooldownRemaining normalizes wrapped portal cooldown start times", function()
+    WithGlobals({
+      C_Spell = {
+        GetSpellCooldown = function(_spellID)
+          return {
+            startTime = 4402120,
+            duration = 28800,
+            isEnabled = true,
+          }
+        end,
+      },
+      GetTime = function()
+        return 100000
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
+      local remaining = addon.SpellUtils.GetTeleportCooldownRemaining(777)
+      Assert.Equal(remaining, 10920, "wrapped portal cooldown must keep only the current 8h-cycle remainder")
+      Assert.Equal(addon.SpellUtils.FormatCooldownSeconds(remaining), "03:02", "wrapped portal cooldown must format the normalized remainder")
+      local start, duration = addon.SpellUtils.GetSpellCooldownSafe(777)
+      Assert.Equal(duration, 28800, "duration must remain the observed portal cooldown duration")
+      Assert.Equal(start, 4402120, "raw cooldown lookup must preserve the observed Blizzard start time")
+      local frameStart, frameDuration = addon.SpellUtils.GetCooldownFrameStartForRemaining(remaining)
+      Assert.Equal(frameStart, 100000, "cooldown frame start must use the current session time")
+      Assert.Equal(frameDuration, 10920, "cooldown frame duration must use the normalized remaining time")
+    end)
+  end)
 end
 
 local function RegisterCooldownFrameApplyTests(test, Assert, WithGlobals, LoadAddonModules)

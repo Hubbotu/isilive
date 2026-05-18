@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.250`
+- **Current version:** `0.9.251`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -107,7 +107,7 @@ A bottom bar that shows your kill-count percentage:
 All 8 season dungeon portals in one place:
 
 - **Icon + short code** when ready (e.g. `MT`, `DAWN`)
-- **Cooldown timer** when on cooldown
+- **Cooldown timer** when on cooldown, normalized to the current portal cooldown cycle
 - **Highlight** when a portal becomes available
 - **Highlight + gold border** on the right portal when you accept an LFG invite or create your own LFG listing for a dungeon
 

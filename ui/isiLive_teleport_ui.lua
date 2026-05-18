@@ -358,6 +358,7 @@ function TeleportUI.CreateController(opts)
     getSpellCooldownSafe = opts.getSpellCooldownSafe or function(_spellID)
       return 0, 0, true
     end,
+    getCooldownFrameStartForRemaining = opts.getCooldownFrameStartForRemaining,
     applyCooldownFrameSafe = opts.applyCooldownFrameSafe or function(_frame, _start, _duration, _enabled) end,
     getSpellTexture = opts.getSpellTexture or function(_spellID)
       return nil
@@ -601,8 +602,11 @@ function TeleportUI.CreateController(opts)
       end
 
       if button.cooldownRemainingSeconds > 0 then
-        local start, duration, enabled = deps.getSpellCooldownSafe(button.spellID)
-        deps.applyCooldownFrameSafe(button.cooldown, start, duration, enabled)
+        local start, duration = 0, button.cooldownRemainingSeconds
+        if type(deps.getCooldownFrameStartForRemaining) == "function" then
+          start, duration = deps.getCooldownFrameStartForRemaining(button.cooldownRemainingSeconds)
+        end
+        deps.applyCooldownFrameSafe(button.cooldown, start, duration, true)
       else
         deps.applyCooldownFrameSafe(button.cooldown, 0, 0, false)
       end

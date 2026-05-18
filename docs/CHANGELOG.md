@@ -1,5 +1,46 @@
 # Changelog
 
+## 2026-05-18 - Version 0.9.251 (patch)
+
+Fixes wrapped dungeon-portal cooldown displays and tightens no-guess wording
+around runtime resolution.
+
+### Teleport Cooldowns
+
+[game/isiLive_spell_utils.lua](../game/isiLive_spell_utils.lua):
+
+- Teleport cooldown start times that imply multiple complete 8-hour portal
+  windows are now normalized to the current cooldown-cycle remainder before
+  formatting. The visible cooldown frame is anchored at the current session time
+  with that verified remainder, so short client sessions do not collapse the
+  display to ready. This turns wrapped values such as `1195:02` into the
+  current-cycle remainder (`03:02`) instead of showing an impossible value, a
+  misleading full `08:00`, or no cooldown at all.
+
+### No-Guess Contract
+
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[game/isiLive_lfg_detect.lua](../game/isiLive_lfg_detect.lua),
+[logic/isiLive_keysync.lua](../logic/isiLive_keysync.lua):
+
+- Clarified that an explicitly parseable `+N` in the LFG group title is an
+  accepted listing source for the key level, while free-form title text without
+  that marker remains unresolved.
+- Renamed peer-kick remaining-time helpers from interpolation terminology to
+  deterministic decay terminology; the runtime still only subtracts elapsed
+  time from a received, verified peer cooldown payload.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_spell_utils.lua](../testmodul/isilive_test_scenarios_spell_utils.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Added deterministic coverage for wrapped teleport cooldown start times being
+  normalized to the current cooldown cycle and for the Teleport UI applying the
+  visible cooldown frame from that normalized remainder. Both are attached to
+  the active no-guess rule.
+  Usecase count is now 1774.
+
 ## 2026-05-18 - Version 0.9.250 (patch)
 
 Fixes Russian roster column headers after the `ruRU` locale rollout.

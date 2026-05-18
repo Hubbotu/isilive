@@ -6,6 +6,29 @@ local SpellUtils = {}
 addonTable.SpellUtils = SpellUtils
 local TELEPORT_MEANINGFUL_COOLDOWN_MIN_SECONDS = 2
 
+function SpellUtils.NormalizeTeleportCooldownRemaining(remaining, duration)
+  if type(remaining) ~= "number" or type(duration) ~= "number" then
+    return remaining
+  end
+  if duration <= TELEPORT_MEANINGFUL_COOLDOWN_MIN_SECONDS then
+    return remaining
+  end
+  if remaining <= duration then
+    return remaining
+  end
+  local normalizedRemaining = remaining % duration
+  if normalizedRemaining <= 0 then
+    normalizedRemaining = duration
+  end
+  return normalizedRemaining
+end
+
+function SpellUtils.GetCooldownFrameStartForRemaining(remaining)
+  local getTimeFn = rawget(_G, "GetTime")
+  local now = type(getTimeFn) == "function" and getTimeFn() or 0
+  return now, remaining
+end
+
 function SpellUtils.GetSpellCooldownSafe(spellID)
   local cSpell = rawget(_G, "C_Spell")
   if not spellID or type(cSpell) ~= "table" or type(cSpell.GetSpellCooldown) ~= "function" then
@@ -135,6 +158,7 @@ function SpellUtils.GetTeleportCooldownRemaining(spellID)
   if remaining < 0 then
     remaining = 0
   end
+  remaining = SpellUtils.NormalizeTeleportCooldownRemaining(remaining, duration)
   return remaining
 end
 

@@ -660,6 +660,101 @@ local function RegisterTeleportUIVisualTests(test, Assert, WithGlobals, LoadAddo
     end)
   end)
 
+  test("TeleportUI applies visible cooldown frame from normalized remaining time", function()
+    local createFrameStub = BuildTeleportUICreateFrameStub()
+    local appliedCooldowns = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+    }, function()
+      local addon = LoadAddonModules({
+        "isiLive_ui_common.lua",
+        "isiLive_teleport_ui.lua",
+      })
+
+      local controller = addon.TeleportUI.CreateController({
+        mainFrame = {
+          GetFrameLevel = function()
+            return 10
+          end,
+          GetFrameStrata = function()
+            return "MEDIUM"
+          end,
+          CreateFontString = function()
+            return {
+              SetPoint = function() end,
+              SetWidth = function() end,
+              SetJustifyH = function() end,
+              SetTextColor = function() end,
+              SetWordWrap = function() end,
+              SetNonSpaceWrap = function() end,
+              SetText = function() end,
+              Hide = function() end,
+              Show = function() end,
+            }
+          end,
+        },
+        layoutMode = "compact_main_horizontal",
+        applySecureSpellToButton = function()
+          return true
+        end,
+        getEntries = function()
+          return {
+            { spellID = 12345, mapID = 558, slotIndex = 1 },
+          }
+        end,
+        getEmptyStateText = function()
+          return nil
+        end,
+        getL = function()
+          return {}
+        end,
+        isSpellKnown = function()
+          return true
+        end,
+        getTeleportCooldownRemaining = function()
+          return 10920
+        end,
+        formatCooldownSeconds = function()
+          return "03:02"
+        end,
+        getSpellCooldownSafe = function()
+          return 4402120, 28800, true
+        end,
+        getCooldownFrameStartForRemaining = function(remaining)
+          return 100000, remaining
+        end,
+        applyCooldownFrameSafe = function(_frame, start, duration, enabled)
+          table.insert(appliedCooldowns, {
+            start = start,
+            duration = duration,
+            enabled = enabled,
+          })
+        end,
+        getSpellTexture = function()
+          return nil
+        end,
+        getDungeonShortCode = function(mapID)
+          if mapID == 558 then
+            return "MT"
+          end
+          return nil
+        end,
+        isInCombat = function()
+          return false
+        end,
+      })
+
+      controller.BuildButtons()
+      controller.UpdateButtons(nil)
+
+      Assert.Equal(#appliedCooldowns, 1, "button update should apply one visible cooldown frame")
+      Assert.Equal(appliedCooldowns[1].start, 100000, "cooldown frame must anchor at current session time")
+      Assert.Equal(appliedCooldowns[1].duration, 10920, "cooldown frame must use normalized remaining seconds")
+      Assert.True(appliedCooldowns[1].enabled, "normalized active cooldown must keep the frame enabled")
+    end)
+  end)
+
   test("TeleportUI keeps active-target refreshes silent because summon sound owns Portal.ogg", function()
     local createFrameStub = BuildTeleportUICreateFrameStub()
     local soundCalls = 0

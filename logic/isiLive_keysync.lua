@@ -409,7 +409,7 @@ local function ResolveElapsedSinceReceived(receivedAtGetTime)
   return getTime() - receivedAtGetTime
 end
 
-local function InterpolateKickRemain(kickInfo)
+local function DecayKickRemain(kickInfo)
   if not (kickInfo.onCooldown and kickInfo.receivedAtGetTime) then
     return kickInfo.cooldownRemain
   end
@@ -417,9 +417,9 @@ local function InterpolateKickRemain(kickInfo)
   return math.max(0, kickInfo.cooldownRemain - elapsed)
 end
 
--- Interpolate extras the same way: subtract elapsed time off each entry's
--- remain. Drop entries whose remain has expired.
-local function InterpolateKickExtras(kickInfo)
+-- Decay extras the same way: subtract elapsed time off each entry's remain.
+-- Drop entries whose remain has expired.
+local function DecayKickExtras(kickInfo)
   if type(kickInfo.extras) ~= "table" then
     return nil
   end
@@ -510,17 +510,17 @@ local function IsKickInfoStale(kickInfo)
 end
 
 local function ApplyActiveKick(info, kickInfo)
-  local interpolatedRemain = InterpolateKickRemain(kickInfo)
-  local interpolatedExtras = InterpolateKickExtras(kickInfo)
+  local decayedRemain = DecayKickRemain(kickInfo)
+  local decayedExtras = DecayKickExtras(kickInfo)
   local spellID = tonumber(kickInfo.spellID)
   if spellID and spellID <= 0 then
     spellID = nil
   end
-  local extrasChanged = DidExtrasChange(info.syncKickExtras, interpolatedExtras)
+  local extrasChanged = DidExtrasChange(info.syncKickExtras, decayedExtras)
   if
     info.syncHasKick == true
     and info.syncKickOnCooldown == kickInfo.onCooldown
-    and math.abs((info.syncKickRemain or 0) - interpolatedRemain) <= 0.05
+    and math.abs((info.syncKickRemain or 0) - decayedRemain) <= 0.05
     and info.syncKickSpellID == spellID
     and not extrasChanged
   then
@@ -528,9 +528,9 @@ local function ApplyActiveKick(info, kickInfo)
   end
   info.syncHasKick = true
   info.syncKickOnCooldown = kickInfo.onCooldown
-  info.syncKickRemain = interpolatedRemain
+  info.syncKickRemain = decayedRemain
   info.syncKickSpellID = spellID
-  info.syncKickExtras = interpolatedExtras
+  info.syncKickExtras = decayedExtras
   return true
 end
 
@@ -705,7 +705,7 @@ local function ResolveActiveKeyOwnerUnit(roster, activeJoinedKeyMapID, preferred
   --   * Hint present + hint not found in roster (boost case): the listing
   --     owner is not in the roster at all (the applicant got accepted onto
   --     a leader who is no longer the group leader, weird relistings, etc.).
-  --     Falling through to a single-match search is the correct best-effort
+  --     Falling through to a single-match search is the documented deterministic
   --     answer here.
   --
   --   * Hint absent (preferredOwnerName == nil): both the LFG-leader source

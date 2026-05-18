@@ -392,7 +392,7 @@ end
 -- Invite detection
 -- ---------------------------------------------------------------------------
 
--- Best-effort parser that pulls a key-level hint out of an LFG group title.
+-- Deterministic parser that pulls a key-level hint out of an LFG group title.
 -- LFG leaders by convention encode the level as "+N", "+N something", "(+N)",
 -- "N+" etc. We pick the highest plausible match (1..40) so descriptive prefixes
 -- like "+12 / +13 swap" still resolve to the actual played level. nil = no hint.
@@ -675,7 +675,7 @@ local function MaybeShowInviteHint(entry, searchResultID)
   inviteHintCallback(headline .. "\n" .. subline, 8, searchResultID)
 end
 
--- Best-effort recovery of the listing "+N" when entry.titleLevel is nil but
+-- Deterministic recovery of the listing "+N" when entry.titleLevel is nil but
 -- entry.groupName still encodes it. Real-world races (the group title gets
 -- finalised between LFG_LIST_SEARCH_RESULT_RECEIVED and the
 -- inviteaccepted dispatch, premade-finder vs. M+ tab differences, partial
@@ -1273,7 +1273,7 @@ end
 -- state. Used by post-challenge cleanup and by the leader-change path: in
 -- both cases the previous listing identity has stopped being authoritative,
 -- so downstream consumers (status target-dungeon resolver, owner resolver)
--- should fall back to UnitIsGroupLeader / roster heuristics instead.
+-- should use the UnitIsGroupLeader / roster resolver instead.
 local function ClearAcceptedInviteListingIdentity(reason)
   if
     detectedMapID == nil

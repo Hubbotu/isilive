@@ -166,6 +166,7 @@ local function CreateFactoryContext(addonName, tbl)
   ctx.ApplyCooldownFrameSafe = modules.spellUtils.ApplyCooldownFrameSafe
   ctx.IsSpellKnownSafe = modules.spellUtils.IsSpellKnownSafe
   ctx.GetTeleportCooldownRemaining = modules.spellUtils.GetTeleportCooldownRemaining
+  ctx.GetCooldownFrameStartForRemaining = modules.spellUtils.GetCooldownFrameStartForRemaining
   ctx.FormatCooldownSeconds = modules.spellUtils.FormatCooldownSeconds
   ctx.IsNegativeApplicationStatusEvent = modules.eventUtils.IsNegativeApplicationStatusEvent
   ctx.IsPlayerLeader = function()
