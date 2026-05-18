@@ -122,7 +122,11 @@ local function RegisterSpellKnownAndCooldownTests(test, Assert, WithGlobals, Loa
       local addon = LoadAddonModules({ "isiLive_spell_utils.lua" })
       local remaining = addon.SpellUtils.GetTeleportCooldownRemaining(777)
       Assert.Equal(remaining, 10920, "wrapped portal cooldown must keep only the current 8h-cycle remainder")
-      Assert.Equal(addon.SpellUtils.FormatCooldownSeconds(remaining), "03:02", "wrapped portal cooldown must format the normalized remainder")
+      Assert.Equal(
+        addon.SpellUtils.FormatCooldownSeconds(remaining),
+        "03:02",
+        "wrapped portal cooldown must format the normalized remainder"
+      )
       local start, duration = addon.SpellUtils.GetSpellCooldownSafe(777)
       Assert.Equal(duration, 28800, "duration must remain the observed portal cooldown duration")
       Assert.Equal(start, 4402120, "raw cooldown lookup must preserve the observed Blizzard start time")
