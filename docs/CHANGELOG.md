@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-05-18 - Version 0.9.248 (patch)
+## 2026-05-18 - Version 0.9.249 (patch)
 
 Allows longer localized main-button labels without forcing translators to
 over-abbreviate every full-width action, and folds in the contributed
