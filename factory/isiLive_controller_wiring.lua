@@ -120,10 +120,9 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
     sendOwnKeySnapshot = RequireFunction(deps.sendOwnKeySnapshot, "sendOwnKeySnapshot"),
     sendIsiLiveHello = RequireFunction(deps.sendIsiLiveHello, "sendIsiLiveHello"),
     sendRefreshRequest = RequireFunction(deps.sendRefreshRequest, "sendRefreshRequest"),
-    getReloadRosterMirror = type(deps.getReloadRosterMirror) == "function" and deps.getReloadRosterMirror
-      or function()
-        return nil
-      end,
+    getReloadRosterMirror = type(deps.getReloadRosterMirror) == "function" and deps.getReloadRosterMirror or function()
+      return nil
+    end,
     setReloadRosterMirror = type(deps.setReloadRosterMirror) == "function" and deps.setReloadRosterMirror
       or function() end,
     clearReloadRosterMirror = type(deps.clearReloadRosterMirror) == "function" and deps.clearReloadRosterMirror

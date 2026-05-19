@@ -785,8 +785,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       if type(ctx.logRuntimeTracef) == "function" then
         ctx.logRuntimeTracef("[SHAREKEYS] received sender=%s", tostring(syncResult.sender or sender))
       end
-      local didShareOwnKey = type(ctx.sendOwnKeystoneToChat) == "function"
-        and ctx.sendOwnKeystoneToChat() == true
+      local didShareOwnKey = type(ctx.sendOwnKeystoneToChat) == "function" and ctx.sendOwnKeystoneToChat() == true
       if type(ctx.logRuntimeTracef) == "function" then
         ctx.logRuntimeTracef(
           "[SHAREKEYS] reply_result sender=%s sent=%s",
