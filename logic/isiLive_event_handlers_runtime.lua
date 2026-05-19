@@ -475,6 +475,23 @@ local function BuildSpellCooldownCoalescer(ctx, isRaidActive)
   return HandleCooldown, HandleCharges
 end
 
+local function HandleShareKeysRequest(ctx, syncResult, sender)
+  local resolvedSender = tostring(syncResult.sender or sender)
+  if type(ctx.logRuntimeTracef) == "function" then
+    ctx.logRuntimeTracef("[SHAREKEYS] received sender=%s", resolvedSender)
+  end
+  local didShareOwnKey = type(ctx.sendOwnKeystoneToChat) == "function" and ctx.sendOwnKeystoneToChat() == true
+  if type(ctx.logRuntimeTracef) == "function" then
+    ctx.logRuntimeTracef("[SHAREKEYS] reply_result sender=%s sent=%s", resolvedSender, tostring(didShareOwnKey))
+  end
+  if didShareOwnKey and type(ctx.triggerShareKeysCooldown) == "function" then
+    ctx.triggerShareKeysCooldown()
+    if type(ctx.logRuntimeTracef) == "function" then
+      ctx.logRuntimeTracef("[SHAREKEYS] cooldown_triggered sender=%s", resolvedSender)
+    end
+  end
+end
+
 function RuntimeLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
     or function(_event, ...) end
@@ -782,23 +799,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       ctx.sendOwnKickState()
     end
     if syncResult.shouldShareKeys then
-      if type(ctx.logRuntimeTracef) == "function" then
-        ctx.logRuntimeTracef("[SHAREKEYS] received sender=%s", tostring(syncResult.sender or sender))
-      end
-      local didShareOwnKey = type(ctx.sendOwnKeystoneToChat) == "function" and ctx.sendOwnKeystoneToChat() == true
-      if type(ctx.logRuntimeTracef) == "function" then
-        ctx.logRuntimeTracef(
-          "[SHAREKEYS] reply_result sender=%s sent=%s",
-          tostring(syncResult.sender or sender),
-          tostring(didShareOwnKey)
-        )
-      end
-      if didShareOwnKey and type(ctx.triggerShareKeysCooldown) == "function" then
-        ctx.triggerShareKeysCooldown()
-        if type(ctx.logRuntimeTracef) == "function" then
-          ctx.logRuntimeTracef("[SHAREKEYS] cooldown_triggered sender=%s", tostring(syncResult.sender or sender))
-        end
-      end
+      HandleShareKeysRequest(ctx, syncResult, sender)
     end
     if syncResult.combatAnnounce then
       ctx.showCombatAnnounce(syncResult.combatAnnounce)
