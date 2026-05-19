@@ -1876,10 +1876,11 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     or kickUpdated
     or shouldAck
     or shouldRequestRefresh
+    or shouldShareKeys
   local logFn = anyFlag and SyncLog or SyncLogDeep
   logFn(
     "message_applied",
-    "sender=%s key=%s stats=%s dps=%s loc=%s target=%s kick=%s ack=%s reqsync=%s",
+    "sender=%s key=%s stats=%s dps=%s loc=%s target=%s kick=%s ack=%s reqsync=%s sharekeys=%s",
     tostring(sender),
     tostring(keyUpdated),
     tostring(statsUpdated),
@@ -1888,7 +1889,8 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
     tostring(targetUpdated),
     tostring(kickUpdated),
     tostring(shouldAck),
-    tostring(shouldRequestRefresh)
+    tostring(shouldRequestRefresh),
+    tostring(shouldShareKeys)
   )
   return {
     shouldAck = shouldAck and true or false,

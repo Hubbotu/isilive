@@ -171,6 +171,9 @@ local function NewRecordedFrame(createdFrames, createdFontStrings, frameType, na
     return self._attributes[key]
   end
   function frame.EnableMouse(_self) end
+  function frame:SetMouseClickEnabled(value)
+    self.mouseClickEnabled = value
+  end
   function frame.RegisterForClicks(_self) end
   function frame:SetFrameLevel(value)
     self._frameLevel = value
@@ -387,9 +390,13 @@ local function RegisterNativeWorldMarkerButtonTests(test, Assert, WithGlobals, L
     ---@diagnostic disable-next-line: undefined-field
     Assert.Equal(readyCheckButton.pointX, -145, "M+Managment buttons should align with the expanded management column")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("marker1"), 1, "Blue Square uses world marker 1")
+    Assert.Equal(tankHelperButtons[1]:GetAttribute("type"), "worldmarker", "world marker button uses native type")
+    Assert.Equal(tankHelperButtons[1]:GetAttribute("marker"), 1, "world marker button uses native marker")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("action1"), "set", "left click must place marker")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("marker2"), 1, "Blue Square clears same marker")
     Assert.Equal(tankHelperButtons[1]:GetAttribute("action2"), "clear", "right click must clear marker")
+    Assert.True(tankHelperButtons[1].mouseClickEnabled, "world marker button must explicitly enable mouse clicks")
+    Assert.Equal(tankHelperButtons[1]._frameLevel, 11, "world marker button must sit above sibling overlays")
     Assert.Equal(tankHelperButtons[8]:GetAttribute("marker1"), 8, "Skull uses world marker 8")
   end)
 end

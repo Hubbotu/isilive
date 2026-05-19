@@ -718,6 +718,7 @@ local function RegisterHiddenFrameShareKeysAndReqSyncTests(test, Assert, LoadAdd
     local counters = { uiUpdates = 0, refreshResponses = 0 }
     local keystoneChatShares = 0
     local cooldownTriggers = 0
+    local logs = {}
 
     local function WithSyncGlobals(fn)
       local previous = {
@@ -774,6 +775,9 @@ local function RegisterHiddenFrameShareKeysAndReqSyncTests(test, Assert, LoadAdd
         triggerShareKeysCooldown = function()
           cooldownTriggers = cooldownTriggers + 1
         end,
+        logRuntimeTracef = function(formatText, ...)
+          logs[#logs + 1] = string.format(formatText, ...)
+        end,
       })
 
       controller:Dispatch("CHAT_MSG_ADDON", addon.Sync.GetPrefix(), "SHAREKEYS", "PARTY", "OtherPlayer-OtherRealm")
@@ -783,6 +787,21 @@ local function RegisterHiddenFrameShareKeysAndReqSyncTests(test, Assert, LoadAdd
     Assert.Equal(cooldownTriggers, 1, "real SHAREKEYS sync must lock the local share-keys button")
     Assert.Equal(counters.refreshResponses, 0, "real SHAREKEYS sync must not trigger a refresh response")
     Assert.Equal(counters.uiUpdates, 0, "real SHAREKEYS sync must not force a UI redraw by itself")
+    Assert.Equal(
+      logs[1],
+      "[SHAREKEYS] received sender=OtherPlayer-OtherRealm",
+      "real SHAREKEYS sync must log the triggering sender"
+    )
+    Assert.Equal(
+      logs[2],
+      "[SHAREKEYS] reply_result sender=OtherPlayer-OtherRealm sent=true",
+      "real SHAREKEYS sync must log the local reply result"
+    )
+    Assert.Equal(
+      logs[3],
+      "[SHAREKEYS] cooldown_triggered sender=OtherPlayer-OtherRealm",
+      "real SHAREKEYS sync must log the cooldown side effect"
+    )
   end)
 
   test("Event handlers process REQSYNC through the real sync parser and answer hidden refreshes", function()

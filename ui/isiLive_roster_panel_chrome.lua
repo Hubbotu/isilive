@@ -494,17 +494,25 @@ local function CreateTankHelperButtons(mainFrame, tooltipFrame, getL)
     btn._verticalY = startY - ((i - 1) * (size + gap))
     btn:SetPoint("TOPRIGHT", xPos, btn._verticalY)
     btn._markerIndex = i
+    if btn.SetFrameLevel and mainFrame.GetFrameLevel then
+      btn:SetFrameLevel((mainFrame:GetFrameLevel() or 1) + 10)
+    end
 
     if btn.SetNormalTexture then
       btn:SetNormalTexture(marker.icon)
     end
     if btn.SetAttribute then
-      btn:SetAttribute("type1", "worldmarker") -- Left click: setzen
+      btn:SetAttribute("type", "worldmarker")
+      btn:SetAttribute("marker", marker.id)
+      btn:SetAttribute("type1", "worldmarker") -- Left click: set
       btn:SetAttribute("marker1", marker.id)
       btn:SetAttribute("action1", "set")
-      btn:SetAttribute("type2", "worldmarker") -- Right click: remove
+      btn:SetAttribute("type2", "worldmarker") -- Right click: clear
       btn:SetAttribute("marker2", marker.id)
       btn:SetAttribute("action2", "clear")
+    end
+    if btn.SetMouseClickEnabled then
+      btn:SetMouseClickEnabled(true)
     end
     if btn.RegisterForClicks then
       btn:RegisterForClicks("AnyUp", "AnyDown")

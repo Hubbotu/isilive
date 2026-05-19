@@ -569,6 +569,22 @@ local function FinalizeFactoryRuntime(ctx)
     sendRefreshResponse = ctx.SendRefreshResponse,
     sendIsiLiveHello = ctx.SendIsiLiveHello,
     sendLibKeystonePartyData = ctx.SendLibKeystonePartyData,
+    getReloadRosterMirror = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      return type(dbRef) == "table" and dbRef.reloadRosterMirror or nil
+    end,
+    setReloadRosterMirror = function(snapshot)
+      local dbRef = rawget(_G, "IsiLiveDB")
+      if type(dbRef) == "table" then
+        dbRef.reloadRosterMirror = snapshot
+      end
+    end,
+    clearReloadRosterMirror = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      if type(dbRef) == "table" then
+        dbRef.reloadRosterMirror = {}
+      end
+    end,
     shouldAutoCloseOnKeyStart = function()
       local dbRef = rawget(_G, "IsiLiveDB")
       return ResolveAutoCloseOnKeyStartEnabled(dbRef)

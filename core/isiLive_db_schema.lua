@@ -184,6 +184,13 @@ local SCHEMA = {
       },
     },
   },
+  reloadRosterMirror = {
+    type = "table",
+    default = function()
+      return {}
+    end,
+    maxMapEntries = 5000,
+  },
 
   -- Error-log ring buffer (always-on, capped by ErrorLog module's hard
   -- limit). Schema declaration ensures the field exists with a table

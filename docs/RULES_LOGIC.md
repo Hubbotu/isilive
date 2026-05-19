@@ -83,6 +83,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 60. Der M+-Killtracker muss den sichtbaren Gesamtfortschritt am Kampfende und ueber seinen aktiven Refresh-Ticker aus den Live-Scenario-Daten aktualisieren, damit abgeschlossene Pulls nicht erst beim naechsten Kampf sichtbar werden.
 61. Die experimentelle LFG-Invite-Liste bleibt deaktiviert: Es gibt kein Settings-Control, kein SavedVariable-Feld und kein Runtime-Wiring; `LFG_LIST_APPLICATION_STATUS_UPDATED` darf keine Invite-Listenverarbeitung ausloesen.
 62. Bei aktivierter Addon-Sprache `ruRU` muessen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen Font verwenden, unabhaengig vom WoW-Client-Locale.
+63. Die M+Marker-Leiste muss native SecureActionButton-Worldmarker-Attribute verwenden, ihre sicheren Klickflaechen ueber konkurrierenden UI-Sibling-Frames halten und darf keine geschuetzten Marker-APIs direkt aufrufen.
+64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
 
 ## Regelbloecke
 
@@ -652,7 +654,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Roster panel share keys button locks on remote SHAREKEYS signal
   - Sync SendShareKeysRequest returns false without an addon sync channel
   - Sync SendShareKeysRequest returns false when addon message dispatch fails
+  - Sync ProcessAddonMessage handles SHAREKEYS payloads
   - Event handlers answer SHAREKEYS requests while frame is hidden
+  - Event handlers process SHAREKEYS through the real sync parser and trigger cooldown
   - Event handlers skip SHAREKEYS cooldown when no own key chat share was posted
 
 ### RULE-NO-GUESS-LAUFZEITAUFLOESUNG
@@ -776,3 +780,20 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UICommon.ApplyLocaleFont leaves non-overridden locales unchanged
   - RosterLayout SetFlatButtonText uses ruRU font override before fitting Cyrillic labels
   - RosterLayout SetPanelHeaderText fits ruRU headers to fixed roster columns
+
+### RULE-MPLUS-MARKER-SECURE-WORLDMARKER
+- Regelnummer: 63
+- Status: aktiv
+- Zusammenfassung: Die M+Marker-Leiste muss ihre Buttons als `SecureActionButtonTemplate` mit nativen Worldmarker-Attributen konfigurieren: `type="worldmarker"` und `marker=<id>` muessen auf dem Button selbst gesetzt sein, `action1="set"` setzt per Linksklick und `action2="clear"` loescht per Rechtsklick. Die sicheren Klickflaechen muessen per Frame-Level ueber konkurrierenden UI-Sibling-Frames liegen. Die Runtime darf dafuer keine geschuetzten Marker-APIs direkt aufrufen.
+- Erforderliche Tests:
+  - M+Marker buttons use native world-marker secure attributes
+  - TAINT: M+Marker buttons stay secure world-marker buttons and touch no protected globals
+
+### RULE-RELOAD-ROSTER-MIRROR-SIGNATUR
+- Regelnummer: 64
+- Status: aktiv
+- Zusammenfassung: Der Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nach `/reload` nur dann in den Runtime-Roster vorbefuellen, wenn die aktuelle Gruppensignatur aus den konkret lesbaren `player`/`partyN`-Mitgliedern exakt der gespeicherten Signatur entspricht. Bei fehlender, unvollstaendiger oder abweichender Signatur muss der gespeicherte Mirror verworfen werden. Kick-Zustaende duerfen nicht aus dem Reload-Roster-Mirror wiederhergestellt werden. Nach einer erfolgreichen Vorbefuellung muss der normale Live-Sync-Refresh weiter angefordert werden.
+- Erforderliche Tests:
+  - Reload roster mirror restores verified data when group signature matches
+  - Reload roster mirror is discarded when group signature differs
+  - DBSchema.Sanitize gives each db an isolated reload roster mirror

@@ -24,6 +24,9 @@ local function BuildGroupState(overrides)
     teleportUpdates = overrides.teleportUpdates or 0,
     autoCloseCalls = 0,
     mainFrameVisibleCalls = {},
+    reloadRosterMirror = overrides.reloadRosterMirror,
+    reloadMirrorWrites = 0,
+    reloadMirrorClears = 0,
   }
 end
 
@@ -132,10 +135,10 @@ local function BuildGroupControllerOptions(state, overrides)
     unitIsGroupLeader = overrides.unitIsGroupLeader or function(_unit)
       return false
     end,
-    unitHasIsiLive = function(_unit)
+    unitHasIsiLive = overrides.unitHasIsiLive or function(_unit)
       return false
     end,
-    applyKnownKeyToRosterEntry = function(_info)
+    applyKnownKeyToRosterEntry = overrides.applyKnownKeyToRosterEntry or function(_info)
       return false
     end,
     sendOwnKeySnapshot = overrides.sendOwnKeySnapshot or function(force, source)
@@ -157,6 +160,17 @@ local function BuildGroupControllerOptions(state, overrides)
       table.insert(state.refreshRequestArgs, {
         force = force == true,
       })
+    end,
+    getReloadRosterMirror = overrides.getReloadRosterMirror or function()
+      return state.reloadRosterMirror
+    end,
+    setReloadRosterMirror = overrides.setReloadRosterMirror or function(snapshot)
+      state.reloadRosterMirror = snapshot
+      state.reloadMirrorWrites = state.reloadMirrorWrites + 1
+    end,
+    clearReloadRosterMirror = overrides.clearReloadRosterMirror or function()
+      state.reloadRosterMirror = {}
+      state.reloadMirrorClears = state.reloadMirrorClears + 1
     end,
     onGroupJoined = overrides.onGroupJoined or function()
       state.groupJoinedCalls = state.groupJoinedCalls + 1
@@ -1216,6 +1230,116 @@ local function RegisterGroupRosterCoreTests(test, Assert, LoadAddonModules)
     Assert.Equal(state.announced, 0, "reload-in-key must not announce a queued group join")
     Assert.Equal(state.groupJoinedCalls, 0, "reload-in-key must not fire onGroupJoined")
     Assert.Equal(#state.mainFrameVisibleCalls, 0, "reload-in-key must not auto-show or auto-hide the main frame")
+  end)
+
+  test("Reload roster mirror restores verified data when group signature matches", function()
+    local mirror = {
+      signature = "Member-Realm|TestPlayer-TestRealm",
+      members = {
+        ["TestPlayer-TestRealm"] = {
+          name = "TestPlayer",
+          realm = "TestRealm",
+          class = "WARRIOR",
+          spec = "Arms",
+          ilvl = 631,
+          rio = 3500,
+          hasIsiLive = true,
+          keyMapID = 2649,
+          keyLevel = 15,
+          syncHasKick = true,
+        },
+        ["Member-Realm"] = {
+          name = "Member",
+          realm = "Realm",
+          class = "MAGE",
+          spec = "Frost",
+          ilvl = 629,
+          rio = 3210,
+          hasIsiLive = true,
+          keyMapID = 2650,
+          keyLevel = 16,
+          syncDps = 450000,
+          syncLocMapID = 2650,
+          syncHasKick = false,
+        },
+      },
+    }
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      wasInGroup = false,
+      reloadRosterMirror = mirror,
+      getNumGroupMembers = function()
+        return 2
+      end,
+      getUnitNameAndRealm = function(unit)
+        if unit == "player" then
+          return "TestPlayer", "TestRealm"
+        end
+        if unit == "party1" then
+          return "Member", "Realm"
+        end
+        return nil, nil
+      end,
+      unitHasIsiLive = function()
+        return false
+      end,
+      applyKnownKeyToRosterEntry = function(info)
+        info.keyMapID = nil
+        info.keyLevel = nil
+        return true
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Equal(state.roster.party1.spec, "Frost", "matching mirror must restore peer spec")
+    Assert.Equal(state.roster.party1.ilvl, 629, "matching mirror must restore peer ilvl")
+    Assert.Equal(state.roster.party1.rio, 3210, "matching mirror must restore peer RIO")
+    Assert.Equal(state.roster.party1.keyMapID, 2650, "matching mirror must preserve peer key before live sync")
+    Assert.Equal(state.roster.party1.keyLevel, 16, "matching mirror must preserve peer key level before live sync")
+    Assert.Equal(state.roster.party1.syncDps, 450000, "matching mirror must restore peer DPS fallback")
+    Assert.Equal(state.roster.party1.hasIsiLive, true, "matching mirror must restore known isiLive marker")
+    Assert.Nil(state.roster.party1.syncHasKick, "kick state must not be restored from the reload mirror")
+    Assert.Equal(state.refreshRequests, 1, "restore path must still request live peer refresh on join")
+    Assert.True(state.reloadMirrorWrites > 0, "restored roster must be mirrored again after the update")
+  end)
+
+  test("Reload roster mirror is discarded when group signature differs", function()
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      wasInGroup = false,
+      reloadRosterMirror = {
+        signature = "Other-Realm|TestPlayer-TestRealm",
+        members = {
+          ["TestPlayer-TestRealm"] = {
+            name = "TestPlayer",
+            realm = "TestRealm",
+          },
+          ["Other-Realm"] = {
+            name = "Other",
+            realm = "Realm",
+            spec = "Frost",
+            ilvl = 629,
+          },
+        },
+      },
+      getNumGroupMembers = function()
+        return 2
+      end,
+      getUnitNameAndRealm = function(unit)
+        if unit == "player" then
+          return "TestPlayer", "TestRealm"
+        end
+        if unit == "party1" then
+          return "Member", "Realm"
+        end
+        return nil, nil
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.Nil(state.roster.party1.spec, "mismatched mirror must not restore peer spec")
+    Assert.Nil(state.roster.party1.ilvl, "mismatched mirror must not restore peer ilvl")
+    Assert.True(state.reloadMirrorClears > 0, "mismatched mirror must be cleared")
   end)
 
   test("Hidden grouped roster updates keep pre-rendered UI fresh", function()

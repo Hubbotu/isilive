@@ -221,6 +221,15 @@ return function(test, ctx)
     Assert.Equal(db2.rioBaseline["Player-Realm"], nil, "mutating db1 baseline must not bleed into db2")
   end)
 
+  test("DBSchema.Sanitize gives each db an isolated reload roster mirror", function()
+    local DBSchema = LoadSchema()
+    local db1, db2 = {}, {}
+    DBSchema.Sanitize(db1)
+    DBSchema.Sanitize(db2)
+    db1.reloadRosterMirror.signature = "Player-Realm"
+    Assert.Nil(db2.reloadRosterMirror.signature, "mutating db1 reload mirror must not bleed into db2")
+  end)
+
   -- ----------------------------------------------------------------------
   -- Correction logging
   -- ----------------------------------------------------------------------

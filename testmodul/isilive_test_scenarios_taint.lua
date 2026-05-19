@@ -953,6 +953,11 @@ local function RegisterRosterPanelCombatTaintTests(test, Assert, WithGlobals, Lo
       local _, createdFrames = BuildRosterPanelController(WithGlobals, LoadAddonModules)
       local tankButtons = FindTankHelperButtons(createdFrames)
       Assert.Equal(#tankButtons, 8, "M+Marker should expose eight secure world-marker buttons")
+      Assert.Equal(tankButtons[1]:GetAttribute("type"), "worldmarker", "M+Marker must set the native worldmarker type")
+      Assert.Equal(tankButtons[1]:GetAttribute("marker"), 1, "M+Marker must set the native marker attribute")
+      Assert.Equal(tankButtons[1]:GetAttribute("action1"), "set", "left click must set the world marker")
+      Assert.Equal(tankButtons[1]:GetAttribute("action2"), "clear", "right click must clear the world marker")
+      Assert.Equal(tankButtons[1]._frameLevel, 11, "M+Marker secure buttons must sit above sibling overlays")
     end)
 
     cleanupTraps()

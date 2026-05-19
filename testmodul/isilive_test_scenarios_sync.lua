@@ -946,6 +946,10 @@ local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, Loa
       end,
     }, function()
       local addon = LoadAddonModules({ "isiLive_sync.lua" })
+      local logs = {}
+      addon.Sync.SetLogger(function(message)
+        logs[#logs + 1] = message
+      end)
 
       local shareKeysResult =
         addon.Sync.ProcessAddonMessage("ISILIVE", "SHAREKEYS", "OtherPlayer-OtherRealm", "MyPlayer", "Realm")
@@ -956,6 +960,11 @@ local function RegisterProcessMessageReceiveTests(test, Assert, WithGlobals, Loa
         "SHAREKEYS from different player must request a key-share announcement"
       )
       Assert.False(shareKeysResult.shouldRequestRefresh, "SHAREKEYS must not request a refresh response")
+      Assert.True(
+        logs[#logs] and logs[#logs]:find("sharekeys=true", 1, true) ~= nil,
+        "SHAREKEYS message_applied trace must expose sharekeys=true"
+      )
+      addon.Sync.SetLogger(nil)
     end)
   end)
 

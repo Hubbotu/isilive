@@ -120,6 +120,14 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
     sendOwnKeySnapshot = RequireFunction(deps.sendOwnKeySnapshot, "sendOwnKeySnapshot"),
     sendIsiLiveHello = RequireFunction(deps.sendIsiLiveHello, "sendIsiLiveHello"),
     sendRefreshRequest = RequireFunction(deps.sendRefreshRequest, "sendRefreshRequest"),
+    getReloadRosterMirror = type(deps.getReloadRosterMirror) == "function" and deps.getReloadRosterMirror
+      or function()
+        return nil
+      end,
+    setReloadRosterMirror = type(deps.setReloadRosterMirror) == "function" and deps.setReloadRosterMirror
+      or function() end,
+    clearReloadRosterMirror = type(deps.clearReloadRosterMirror) == "function" and deps.clearReloadRosterMirror
+      or function() end,
     getRaidTransitionBehavior = deps.getRaidTransitionBehavior or function()
       return "hide"
     end,
@@ -190,6 +198,9 @@ local function BuildGroupControllerDepsFromContext(ctx)
     sendOwnKeySnapshot = ctx.sendOwnKeySnapshot,
     sendIsiLiveHello = ctx.sendIsiLiveHello,
     sendRefreshRequest = ctx.sendRefreshRequest,
+    getReloadRosterMirror = ctx.getReloadRosterMirror,
+    setReloadRosterMirror = ctx.setReloadRosterMirror,
+    clearReloadRosterMirror = ctx.clearReloadRosterMirror,
     timerAfter = BuildTimerAfter(),
     onGroupJoined = function() end,
     getRaidTransitionBehavior = ctx.getRaidTransitionBehavior,
@@ -221,6 +232,11 @@ local function BuildEventHandlersBaseConfig(deps, state, refs, controllers, call
     exitTestMode = RequireFunction(callbacks.exitTestMode, "callbacks.exitTestMode"),
     handleGroupRosterUpdate = function()
       controllers.group.HandleGroupRosterUpdate()
+    end,
+    saveReloadRosterMirror = function()
+      if controllers.group and type(controllers.group.SaveReloadRosterMirror) == "function" then
+        controllers.group.SaveReloadRosterMirror()
+      end
     end,
     isInChallengeMode = RequireFunction(deps.isInChallengeMode, "isInChallengeMode"),
     isNegativeApplicationStatusEvent = RequireFunction(

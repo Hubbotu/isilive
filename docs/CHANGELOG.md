@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-05-19 - Version 0.9.252 (patch)
+
+Improves reload roster restoration, fixes secure M+Marker worldmarker actions,
+and adds explicit SHAREKEYS runtime tracing.
+
+### Reload Roster Mirror
+
+[core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua),
+[logic/isiLive_group.lua](../logic/isiLive_group.lua),
+[factory/isiLive_controller_wiring.lua](../factory/isiLive_controller_wiring.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua),
+[logic/isiLive_event_handlers.lua](../logic/isiLive_event_handlers.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua):
+
+- Reload roster snapshots now persist verified group display data separately
+  from volatile runtime state and restore it only when the current player group
+  signature matches the saved signature.
+- Incomplete or mismatched reload mirrors are cleared fail-closed instead of
+  being used as guessed roster state. Kick state remains excluded from the
+  reload mirror.
+
+### SHAREKEYS Runtime Trace
+
+[logic/isiLive_sync.lua](../logic/isiLive_sync.lua),
+[logic/isiLive_event_handlers.lua](../logic/isiLive_event_handlers.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua):
+
+- Applied sync messages now log whether a `SHAREKEYS` request was detected.
+- Runtime handling now emits explicit `[SHAREKEYS]` receive, reply-result, and
+  cooldown-trigger traces when a peer asks for key sharing.
+
+### M+Marker
+
+[ui/isiLive_roster_panel_chrome.lua](../ui/isiLive_roster_panel_chrome.lua):
+
+- M+Marker buttons now set the native `worldmarker` secure-action attributes
+  directly on each button (`type` and `marker`) and keep left/right click
+  behavior in `action1` / `action2`. This matches the secure WorldMarker path
+  instead of relying only on button-suffixed marker attributes.
+- M+Marker secure buttons are now lifted above sibling overlay frames, matching
+  the defensive layering already used for tank/healer role-marker buttons.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_tank_helper.lua](../testmodul/isilive_test_scenarios_tank_helper.lua),
+[testmodul/isilive_test_scenarios_taint.lua](../testmodul/isilive_test_scenarios_taint.lua),
+[testmodul/isilive_test_scenarios_db_schema.lua](../testmodul/isilive_test_scenarios_db_schema.lua),
+[testmodul/isilive_test_scenarios_group.lua](../testmodul/isilive_test_scenarios_group.lua),
+[testmodul/isilive_test_scenarios_sync.lua](../testmodul/isilive_test_scenarios_sync.lua),
+[testmodul/isilive_test_scenarios_event_handlers_hidden_sync.lua](../testmodul/isilive_test_scenarios_event_handlers_hidden_sync.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Tightened deterministic coverage for M+Marker secure attributes and attached
+  it to the active M+Marker WorldMarker rule.
+- Added deterministic coverage for reload roster mirror validation and
+  fail-closed clearing.
+- Added deterministic coverage for `SHAREKEYS` sync detection and runtime trace
+  handling.
+
 ## 2026-05-18 - Version 0.9.251 (patch)
 
 Fixes wrapped dungeon-portal cooldown displays and tightens no-guess wording

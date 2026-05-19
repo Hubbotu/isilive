@@ -83,6 +83,11 @@ local function BuildDeps(opts)
     sendOwnKeySnapshot = opts.sendOwnKeySnapshot or emptyfn,
     sendIsiLiveHello = opts.sendIsiLiveHello or emptyfn,
     sendRefreshRequest = opts.sendRefreshRequest or emptyfn,
+    getReloadRosterMirror = opts.getReloadRosterMirror or function()
+      return nil
+    end,
+    setReloadRosterMirror = opts.setReloadRosterMirror or emptyfn,
+    clearReloadRosterMirror = opts.clearReloadRosterMirror or emptyfn,
     onGroupJoined = opts.onGroupJoined or function() end,
     onMemberJoinedGroup = opts.onMemberJoinedGroup or emptyfn,
     timerAfter = opts.timerAfter or function(_, cb)
@@ -104,6 +109,178 @@ local function MemberKey(name, realm)
   return (name or "Unknown") .. "-" .. (realm or "")
 end
 
+local function IsConcreteMemberName(name)
+  return type(name) == "string" and name ~= "" and name ~= "Unknown"
+end
+
+local function ReadCurrentGroupMembers(deps)
+  if deps.isInGroup() ~= true then
+    return nil
+  end
+  local members = deps.getNumGroupMembers()
+  if type(members) ~= "number" or members <= 0 or members > 5 then
+    return nil
+  end
+
+  local current = {}
+  local playerName, playerRealm = deps.getUnitNameAndRealm("player")
+  if not IsConcreteMemberName(playerName) then
+    return nil
+  end
+  current[#current + 1] = {
+    unit = "player",
+    key = MemberKey(playerName, playerRealm),
+    name = playerName,
+    realm = playerRealm,
+  }
+
+  for i = 1, members - 1 do
+    local unit = "party" .. i
+    local name, realm = deps.getUnitNameAndRealm(unit)
+    if not IsConcreteMemberName(name) then
+      return nil
+    end
+    current[#current + 1] = {
+      unit = unit,
+      key = MemberKey(name, realm),
+      name = name,
+      realm = realm,
+    }
+  end
+
+  return current
+end
+
+local function BuildGroupSignatureFromMembers(members)
+  if type(members) ~= "table" or #members == 0 then
+    return nil
+  end
+  local keys = {}
+  for _, member in ipairs(members) do
+    if type(member) ~= "table" or type(member.key) ~= "string" or member.key == "" then
+      return nil
+    end
+    keys[#keys + 1] = member.key
+  end
+  table.sort(keys)
+  return table.concat(keys, "|")
+end
+
+local function CopyMirrorValue(value)
+  local valueType = type(value)
+  if valueType == "string" or valueType == "number" or valueType == "boolean" then
+    return value
+  end
+  return nil
+end
+
+local MIRROR_ENTRY_FIELDS = {
+  "name",
+  "realm",
+  "language",
+  "class",
+  "role",
+  "isLeader",
+  "spec",
+  "ilvl",
+  "rio",
+  "hasIsiLive",
+  "keyMapID",
+  "keyLevel",
+  "syncDps",
+  "syncLocMapID",
+  "syncTargetMapID",
+  "syncTargetLevel",
+}
+
+local function CloneRosterEntryForMirror(info)
+  if type(info) ~= "table" or info.isGhost == true or not IsConcreteMemberName(info.name) then
+    return nil
+  end
+  local entry = {}
+  for _, field in ipairs(MIRROR_ENTRY_FIELDS) do
+    local copied = CopyMirrorValue(info[field])
+    if copied ~= nil then
+      entry[field] = copied
+    end
+  end
+  if not IsConcreteMemberName(entry.name) then
+    return nil
+  end
+  entry.realm = type(entry.realm) == "string" and entry.realm or nil
+  entry.isGhost = false
+  entry._reloadMirrorRestored = true
+  return entry
+end
+
+local function SaveReloadRosterMirror(deps, roster)
+  local members = ReadCurrentGroupMembers(deps)
+  local signature = BuildGroupSignatureFromMembers(members)
+  if not signature then
+    deps.clearReloadRosterMirror()
+    return false
+  end
+
+  local byKey = {}
+  for _, info in pairs(roster or {}) do
+    local entry = CloneRosterEntryForMirror(info)
+    if entry then
+      byKey[MemberKey(entry.name, entry.realm)] = entry
+    end
+  end
+
+  for _, member in ipairs(members) do
+    if type(byKey[member.key]) ~= "table" then
+      deps.clearReloadRosterMirror()
+      return false
+    end
+  end
+
+  deps.setReloadRosterMirror({
+    signature = signature,
+    members = byKey,
+  })
+  return true
+end
+
+local function TryRestoreReloadRosterMirror(deps)
+  local mirror = deps.getReloadRosterMirror()
+  if type(mirror) ~= "table" or type(mirror.members) ~= "table" or type(mirror.signature) ~= "string" then
+    deps.clearReloadRosterMirror()
+    return false
+  end
+
+  local members = ReadCurrentGroupMembers(deps)
+  local signature = BuildGroupSignatureFromMembers(members)
+  if not signature or signature ~= mirror.signature then
+    deps.clearReloadRosterMirror()
+    return false
+  end
+
+  local restored = {}
+  for _, member in ipairs(members) do
+    local source = mirror.members[member.key]
+    if type(source) ~= "table" then
+      deps.clearReloadRosterMirror()
+      return false
+    end
+    local entry = CloneRosterEntryForMirror(source)
+    if not entry then
+      deps.clearReloadRosterMirror()
+      return false
+    end
+    entry.name = member.name
+    entry.realm = member.realm
+    entry.isGhost = false
+    entry._reloadMirrorRestored = true
+    restored[member.unit] = entry
+  end
+
+  deps.setRoster(restored)
+  deps.logRuntimeTracef("[ROSTER] reload_mirror_restored members=%s", tostring(#members))
+  return true
+end
+
 local function GhostKey(name, realm)
   return GHOST_KEY_PREFIX .. MemberKey(name, realm)
 end
@@ -122,6 +299,7 @@ local function HandleNoGroup(deps, wasInGroupBefore)
   deps.setWasRaidGroup(false)
   deps.clearRioBaselineSnapshot()
   if leftGroupNow then
+    deps.clearReloadRosterMirror()
     deps.clearLatestQueueTarget()
     deps.clearKnownUsers()
 
@@ -214,7 +392,12 @@ UpdatePlayerEntry = function(deps, playerEntry, preserveIlvl)
   if ownIlvl then
     playerEntry.ilvl = ownIlvl
     playerEntry._localIlvlFresh = true
-  elseif not playerEntry._refreshQueued and not preserveIlvl and not playerEntry._localIlvlFresh then
+  elseif
+    not playerEntry._refreshQueued
+    and not preserveIlvl
+    and not playerEntry._localIlvlFresh
+    and not playerEntry._reloadMirrorRestored
+  then
     playerEntry.ilvl = nil
   end
 
@@ -314,6 +497,10 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
       local localIlvlFresh = existing and existing._localIlvlFresh
       local localRioFresh = existing and existing._localRioFresh
       local localDpsFresh = existing and existing._localDpsFresh
+      local syncDps = existing and existing.syncDps
+      local syncLocMapID = existing and existing.syncLocMapID
+      local syncTargetMapID = existing and existing.syncTargetMapID
+      local syncTargetLevel = existing and existing.syncTargetLevel
 
       roster[unit] = {
         name = memberName,
@@ -325,15 +512,20 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
         spec = spec,
         ilvl = ilvl,
         rio = rio,
-        hasIsiLive = deps.unitHasIsiLive(unit),
+        hasIsiLive = deps.unitHasIsiLive(unit) or (existing and existing.hasIsiLive == true),
         keyMapID = keyMapID,
         keyLevel = keyLevel,
+        syncDps = syncDps,
+        syncLocMapID = syncLocMapID,
+        syncTargetMapID = syncTargetMapID,
+        syncTargetLevel = syncTargetLevel,
         isGhost = false,
         _refreshQueued = refreshQueued,
         _localSpecFresh = localSpecFresh,
         _localIlvlFresh = localIlvlFresh,
         _localRioFresh = localRioFresh,
         _localDpsFresh = localDpsFresh,
+        _reloadMirrorRestored = existing and existing._reloadMirrorRestored or nil,
       }
 
       -- Fire the join sound once when a genuine join makes the 5-player group complete.
@@ -360,7 +552,9 @@ local function UpdatePartyMembersInRoster(deps, roster, callbacks)
         roster[ghostKey] = nil
       end
 
-      deps.applyKnownKeyToRosterEntry(roster[unit])
+      if not roster[unit]._reloadMirrorRestored then
+        deps.applyKnownKeyToRosterEntry(roster[unit])
+      end
       deps.enqueueInspect(unit)
     end
   end
@@ -387,8 +581,12 @@ local function HandleGroupRosterUpdate(deps)
     -- case during an active key (no one joins a group mid-dungeon).
     if joinedNow then
       local roster = deps.getRoster()
+      if TryRestoreReloadRosterMirror(deps) then
+        roster = deps.getRoster()
+      end
       AddPlayerToRoster(deps, roster)
       UpdatePartyMembersInRoster(deps, roster, nil)
+      SaveReloadRosterMirror(deps, roster)
     end
     deps.updateUI()
     deps.updateLeaderButtons()
@@ -410,6 +608,7 @@ local function HandleGroupRosterUpdate(deps)
       deps.resetInspectAll()
       deps.resetInspectQueues()
       deps.setRoster({})
+      deps.clearReloadRosterMirror()
     end
     deps.setWasRaidGroup(true)
     deps.setMainFrameVisible(false, {
@@ -425,6 +624,7 @@ local function HandleGroupRosterUpdate(deps)
   end
   if joinedNow then
     deps.setRoster({})
+    TryRestoreReloadRosterMirror(deps)
     deps.setMainFrameVisible(true, {
       reason = "queue",
       skipShowCallbacks = true,
@@ -446,6 +646,7 @@ local function HandleGroupRosterUpdate(deps)
   UpdatePartyMembersInRoster(deps, roster, joinedNow and nil or deps)
 
   deps.sendOwnKeySnapshot(joinedNow, "group")
+  SaveReloadRosterMirror(deps, roster)
   deps.updateUI()
   deps.updateMPlusTeleportButton()
   deps.updateLeaderButtons()
@@ -465,6 +666,10 @@ function Group.CreateController(opts)
 
   function controller.HandleGroupRosterUpdate()
     HandleGroupRosterUpdate(deps)
+  end
+
+  function controller.SaveReloadRosterMirror()
+    return SaveReloadRosterMirror(deps, deps.getRoster())
   end
 
   return controller

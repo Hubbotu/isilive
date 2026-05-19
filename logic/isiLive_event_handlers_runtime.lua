@@ -748,6 +748,9 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
 
     if ctx.onInspectReady(guid) then
+      if type(ctx.saveReloadRosterMirror) == "function" then
+        ctx.saveReloadRosterMirror()
+      end
       ctx.updateUI()
     end
   end
@@ -779,9 +782,23 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       ctx.sendOwnKickState()
     end
     if syncResult.shouldShareKeys then
-      local didShareOwnKey = ctx.sendOwnKeystoneToChat() == true
+      if type(ctx.logRuntimeTracef) == "function" then
+        ctx.logRuntimeTracef("[SHAREKEYS] received sender=%s", tostring(syncResult.sender or sender))
+      end
+      local didShareOwnKey = type(ctx.sendOwnKeystoneToChat) == "function"
+        and ctx.sendOwnKeystoneToChat() == true
+      if type(ctx.logRuntimeTracef) == "function" then
+        ctx.logRuntimeTracef(
+          "[SHAREKEYS] reply_result sender=%s sent=%s",
+          tostring(syncResult.sender or sender),
+          tostring(didShareOwnKey)
+        )
+      end
       if didShareOwnKey and type(ctx.triggerShareKeysCooldown) == "function" then
         ctx.triggerShareKeysCooldown()
+        if type(ctx.logRuntimeTracef) == "function" then
+          ctx.logRuntimeTracef("[SHAREKEYS] cooldown_triggered sender=%s", tostring(syncResult.sender or sender))
+        end
       end
     end
     if syncResult.combatAnnounce then
@@ -801,6 +818,9 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if changed then
       ctx.updateStatusLine()
       ctx.updateMPlusTeleportButton()
+      if type(ctx.saveReloadRosterMirror) == "function" then
+        ctx.saveReloadRosterMirror()
+      end
       ctx.updateUI()
     end
   end
