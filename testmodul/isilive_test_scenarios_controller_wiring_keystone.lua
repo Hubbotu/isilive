@@ -255,6 +255,122 @@ return function(test, ctx)
     Assert.Equal(sentLines[1], "[KEY] PSF +12", "line must be forwarded to SendPartyChatMessage")
   end)
 
+  test("ControllerWiring SHAREKEYS send and receive paths use the same real payload", function()
+    local sentLines = {}
+    local addonMessages = {}
+    local cooldownTriggers = 0
+    local logs = {}
+    WithGlobals({
+      GetTime = function()
+        return 7000
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+      IsInRaid = function()
+        return false
+      end,
+      IsInGroup = function()
+        return true
+      end,
+      IsiLiveDB = { syncEnabled = true },
+      C_ChatInfo = {
+        SendAddonMessage = function(prefix, message, channel)
+          table.insert(addonMessages, {
+            prefix = prefix,
+            message = message,
+            channel = channel,
+          })
+          return true
+        end,
+      },
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+    }, function()
+      local addon =
+        LoadAddonModules({ "isiLive_sync.lua", "isiLive_event_handlers.lua", "isiLive_controller_wiring.lua" })
+      addon.ContextHelpers.BuildOwnKeystoneAnnounceLine = function()
+        return "[KEY] PSF +12"
+      end
+      addon.ContextHelpers.SendPartyChatMessage = function(line)
+        table.insert(sentLines, line)
+        return true
+      end
+
+      local controllerCtx = BuildKeystoneCtx({
+        sync = addon.Sync,
+        isInGroup = function()
+          return true
+        end,
+        getUnitNameAndRealm = function(unit)
+          if unit == "player" then
+            return "Me", "Realm"
+          end
+          return nil, nil
+        end,
+        TriggerShareKeysCooldown = function()
+          cooldownTriggers = cooldownTriggers + 1
+        end,
+        runtimeLogController = {
+          Log = function(message)
+            table.insert(logs, message)
+          end,
+          Logf = function(formatText, ...)
+            table.insert(logs, string.format(formatText, ...))
+          end,
+          TraceDeep = function(buildMessage)
+            table.insert(logs, buildMessage())
+          end,
+        },
+      })
+      local controller =
+        addon.ControllerWiring.CreateEventHandlersControllerFromContext(addon.EventHandlers, controllerCtx)
+
+      local requestSent = addon.Sync.SendShareKeysRequest()
+
+      Assert.True(requestSent, "send side must report that the SHAREKEYS addon message was sent")
+      Assert.Equal(#addonMessages, 1, "send side must publish one addon message")
+      Assert.Equal(addonMessages[1].prefix, addon.Sync.GetPrefix(), "send side must use the receiver prefix")
+      Assert.Equal(addonMessages[1].message, "SHAREKEYS", "send side must use the receiver payload")
+      Assert.Equal(addonMessages[1].channel, "PARTY", "send side must use the active party sync channel")
+
+      controller:Dispatch(
+        "CHAT_MSG_ADDON",
+        addonMessages[1].prefix,
+        addonMessages[1].message,
+        addonMessages[1].channel,
+        "Other-Realm"
+      )
+    end)
+
+    Assert.Equal(sentLines[1], "[KEY] PSF +12", "wired receiver must answer the real SHAREKEYS payload in party chat")
+    Assert.Equal(cooldownTriggers, 1, "wired receiver must trigger the share-keys cooldown after party send")
+    Assert.NotNil(logs[1], "wired receiver must emit runtime trace logs")
+    local sawShareKeysReply = false
+    local sawKeyShareTriggered = false
+    local sawCooldown = false
+    for _, line in ipairs(logs) do
+      if line == "[SHAREKEYS] reply_result sender=Other-Realm sent=true" then
+        sawShareKeysReply = true
+      elseif line == "[KEYSTONE] share_triggered isInGroup=true" then
+        sawKeyShareTriggered = true
+      elseif line == "[SHAREKEYS] cooldown_triggered sender=Other-Realm" then
+        sawCooldown = true
+      end
+    end
+    Assert.True(sawShareKeysReply, "wired receiver must log the successful reply")
+    Assert.True(sawKeyShareTriggered, "wired receiver must enter the own-key share closure")
+    Assert.True(sawCooldown, "wired receiver must log the cooldown trigger")
+  end)
+
   -- In-group failure path: SendPartyChatMessage returns false -> log + return false
 
   test("sendOwnKeystoneToChat logs send_failed when ContextHelpers.SendPartyChatMessage returns false", function()

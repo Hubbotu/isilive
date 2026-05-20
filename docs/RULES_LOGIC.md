@@ -657,6 +657,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Sync SendShareKeysRequest returns false without an addon sync channel
   - Sync SendShareKeysRequest returns false when addon message dispatch fails
   - Sync ProcessAddonMessage handles SHAREKEYS payloads
+  - ControllerWiring SHAREKEYS send and receive paths use the same real payload
   - Event handlers answer SHAREKEYS requests while frame is hidden
   - Event handlers process SHAREKEYS through the real sync parser and trigger cooldown
   - Event handlers skip SHAREKEYS cooldown when no own key chat share was posted

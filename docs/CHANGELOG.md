@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.254 (patch)
+
+Fixes the wired `SHAREKEYS` receive path so remote key-share requests use the
+same runtime dependencies as the local button flow.
+
+### Share Keys Wiring
+
+[factory/isiLive_controller_wiring.lua](../factory/isiLive_controller_wiring.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua):
+
+- The event-handler config now receives the wired own-keystone chat sender,
+  runtime trace hooks, and share-keys cooldown trigger from controller wiring.
+- Remote `SHAREKEYS` addon messages now call the same own-key party-chat
+  closure as the local share-key flow instead of falling back to a no-op.
+- Receiving clients only trigger the 30 second button lock after that own-key
+  party post succeeds, preserving the fail-closed spam-protection contract.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_controller_wiring_keystone.lua](../testmodul/isilive_test_scenarios_controller_wiring_keystone.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Added deterministic coverage that `Sync.SendShareKeysRequest()` produces the
+  real `SHAREKEYS` addon payload and that the wired receive path processes
+  exactly that prefix, payload, and channel.
+- Updated the active share-keys spam-protection rule mapping for the new
+  send/receive alignment test.
+- Usecase count is now 1794.
+
 ## 2026-05-20 - Version 0.9.253 (patch)
 
 Adds an optional standalone player stats box and prevents movable isiLive

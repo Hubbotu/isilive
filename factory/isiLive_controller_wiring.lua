@@ -300,6 +300,8 @@ local function BuildEventHandlersBaseConfig(deps, state, refs, controllers, call
       or function() end,
     setRuntimeLogEnabled = type(deps.setRuntimeLogEnabled) == "function" and deps.setRuntimeLogEnabled
       or function(_enabled) end,
+    logRuntimeTrace = type(deps.logRuntimeTrace) == "function" and deps.logRuntimeTrace or function(_message) end,
+    logRuntimeTracef = type(deps.logRuntimeTracef) == "function" and deps.logRuntimeTracef or function(_formatText) end,
     getMainFrame = function()
       return refs.mainFrame
     end,
@@ -424,6 +426,12 @@ local function ExtendEventHandlersConfig(config, deps, state, refs, controllers,
     pcall(chatInfo.SendAddonMessage, modules.sync.GetPrefix(), "ACK:" .. deps.getAddonVersionRaw(), "WHISPER", sender)
   end
   config.sendRefreshResponse = RequireFunction(deps.sendRefreshResponse, "sendRefreshResponse")
+  config.sendOwnKeystoneToChat = type(deps.sendOwnKeystoneToChat) == "function" and deps.sendOwnKeystoneToChat
+    or function()
+      return false
+    end
+  config.triggerShareKeysCooldown = type(deps.triggerShareKeysCooldown) == "function" and deps.triggerShareKeysCooldown
+    or function() end
   config.forEachRosterInfo = function(visitor)
     for _, info in pairs(state.getRoster()) do
       visitor(info)
