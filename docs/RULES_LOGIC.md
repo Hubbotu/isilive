@@ -381,6 +381,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Existing grouped roster updates do not re-open a manually hidden frame
   - Event handlers do not auto-hide main frame on challenge start by default
   - Event handlers auto-hide main frame on challenge start when auto-close is enabled
+  - DBSchema.Sanitize migrates legacy autoCloseMainFrame into split auto-close fields
   - Event handlers forward challenge start to LFGDetect
   - Event handlers auto-show main frame on challenge completion while grouped
   - Event handlers skip auto-show on challenge completion when key-end setting is disabled
@@ -514,6 +515,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Settings panel defaults Auto-Close on Key Start / Solo to disabled until the user turns it on
   - Factory key-start and solo-change auto-close resolvers default to disabled
+  - DBSchema.Sanitize migrates legacy autoCloseMainFrame into split auto-close fields
   - Event handlers auto-hide main frame on challenge start when auto-close is enabled
   - Group leave auto-close hides frame when option is enabled
 

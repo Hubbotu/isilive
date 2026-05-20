@@ -14,12 +14,10 @@ local InitializeFactoryRefreshAndStatusControllers = FI.InitializeFactoryRefresh
 local InitializeFactorySecondaryControllers = FI.InitializeFactorySecondaryControllers
 local CreateFactoryMinimapButton = FI.CreateFactoryMinimapButton
 
--- Auto-close when the M+ keystone starts. Default ON: the addon UI gets out
--- of the way during a pull unless the user explicitly turns the option off
--- in Settings. Matches the same "default true, opt-out via explicit false"
--- pattern as ResolveAutoShowMainFrameOnStartupEnabled below.
+-- Auto-close when the M+ keystone starts. Default OFF: only an explicit
+-- user-enabled boolean true may close the main UI on key start.
 local function ResolveAutoCloseOnKeyStartEnabled(dbRef)
-  return not (type(dbRef) == "table" and dbRef.autoCloseOnKeyStart == false)
+  return type(dbRef) == "table" and dbRef.autoCloseOnKeyStart == true
 end
 
 local function ResolveAutoCloseOnSoloChangeEnabled(dbRef)
@@ -328,16 +326,9 @@ local function FinalizeFactorySettings(ctx)
         db.mobNameplateEnabled = false
       end
 
-      -- Legacy split: autoCloseMainFrame was one toggle for two distinct
-      -- triggers (key start + going solo). After the split, the UI only
-      -- writes autoCloseOnKeyStart / autoCloseOnSoloChange, never the old
-      -- field. So autoCloseMainFrame=true plus both new fields still unset
-      -- (nil) is uniquely the pre-split persisted state. Clear the old field
-      -- after migrating so the condition does not refire when the user later
-      -- toggles either new setting back off. The nil checks here are not a
-      -- read pattern for default-resolution — the resolver above
-      -- (ResolveAutoCloseOnKeyStartEnabled, default-ON) is the authoritative
-      -- read site.
+      -- Fallback for callers that exercise ApplyDBSettings without the
+      -- ADDON_LOADED schema pass. Production migration runs in DBSchema
+      -- before default values fill the split fields.
       if db.autoCloseMainFrame == true and db.autoCloseOnKeyStart == nil and db.autoCloseOnSoloChange == nil then
         db.autoCloseOnKeyStart = true
         db.autoCloseOnSoloChange = true

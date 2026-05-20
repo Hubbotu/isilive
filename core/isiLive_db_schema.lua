@@ -28,7 +28,7 @@ local DBSchema = {}
 addonTable.DBSchema = DBSchema
 
 -- Bump every time MIGRATIONS gains a new step.
-local LATEST_SCHEMA_VERSION = 1
+local LATEST_SCHEMA_VERSION = 2
 
 -- Migrations transform db FROM version (key-1) TO version (key). Only steps
 -- with key > db.__schemaVersion run. Each step is responsible for ONE atomic
@@ -40,6 +40,7 @@ local LATEST_SCHEMA_VERSION = 1
 -- Step signature:
 --   function(db, log)
 --     -- mutate db; call log("...message...") for each correction.
+--     -- return true when the migration changed the db.
 --   end
 local MIGRATIONS = {
   -- [2] = function(db, log)
@@ -47,8 +48,23 @@ local MIGRATIONS = {
   --     db.showDpsBar = db.showDpsColumn == true
   --     db.showDpsColumn = nil
   --     log("migrated showDpsColumn -> showDpsBar")
+  --     return true
   --   end
   -- end,
+  [2] = function(db, log)
+    if
+      db.autoCloseMainFrame == true
+      and rawget(db, "autoCloseOnKeyStart") == nil
+      and rawget(db, "autoCloseOnSoloChange") == nil
+    then
+      db.autoCloseOnKeyStart = true
+      db.autoCloseOnSoloChange = true
+      db.autoCloseMainFrame = false
+      log("migrated autoCloseMainFrame -> autoCloseOnKeyStart/autoCloseOnSoloChange")
+      return true
+    end
+    return false
+  end,
 }
 
 -- ----------------------------------------------------------------------
@@ -107,9 +123,9 @@ local SCHEMA = {
   -- Auto-show / auto-close behaviour.
   autoShowMainFrameOnStartup = { type = "boolean", default = true },
   -- Legacy single-toggle; superseded by the two split fields below. Kept in
-  -- the schema so the legacy migration in ApplyDBSettings can detect it.
+  -- the schema so versioned migrations can detect and clear old saves.
   autoCloseMainFrame = { type = "boolean", default = false },
-  autoCloseOnKeyStart = { type = "boolean", default = true },
+  autoCloseOnKeyStart = { type = "boolean", default = false },
   autoCloseOnSoloChange = { type = "boolean", default = false },
   autoOpenMainFrameOnKeyEnd = { type = "boolean", default = true },
   autoOpenOnQueue = { type = "boolean", default = true },
@@ -328,8 +344,9 @@ local function ApplyMigrations(db, log)
   for v = from + 1, LATEST_SCHEMA_VERSION do
     local migration = MIGRATIONS[v]
     if type(migration) == "function" then
-      migration(db, log)
-      applied = applied + 1
+      if migration(db, log) == true then
+        applied = applied + 1
+      end
     end
   end
   db.__schemaVersion = LATEST_SCHEMA_VERSION

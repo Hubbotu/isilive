@@ -21,6 +21,7 @@ local SLIDER_WIDTH = 180
 local SLIDER_HEIGHT = 16
 local SETTINGS_SCROLL_STEP = 32
 local SETTINGS_CONTENT_WIDTH = 700
+local SLIDER_LABEL_WIDTH = 150
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
 local SHOW_NAME_MAX_CHARS_SETTING = false
 local SHOW_TELEPORT_COLUMNS_SETTING = false
@@ -326,6 +327,15 @@ local function CreateSettingsSlider(
   label:SetTextColor(tn[1], tn[2], tn[3], 1)
   label:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset - 3)
   label:SetText(labelText or "")
+  if type(label.SetWidth) == "function" then
+    label:SetWidth(SLIDER_LABEL_WIDTH)
+  end
+  if type(label.SetJustifyH) == "function" then
+    label:SetJustifyH("LEFT")
+  end
+  if type(label.SetWordWrap) == "function" then
+    label:SetWordWrap(true)
+  end
 
   local slider = CreateFrame("Slider", nil, parent, "BackdropTemplate")
   slider:SetSize(SLIDER_WIDTH, SLIDER_HEIGHT)
@@ -398,6 +408,14 @@ local function CreateSettingsSlider(
     end
   end)
 
+  local rowHeight = LINE_HEIGHT
+  if type(label.GetStringHeight) == "function" then
+    local textHeight = tonumber(label:GetStringHeight()) or 0
+    if textHeight > 0 then
+      rowHeight = math.max(rowHeight, math.ceil(textHeight) + 8)
+    end
+  end
+
   return {
     label = label,
     slider = slider,
@@ -405,7 +423,7 @@ local function CreateSettingsSlider(
     UpdateValueLabel = UpdateValueLabel,
     SetValueSilently = SetValueSilently,
   },
-    yOffset - LINE_HEIGHT
+    yOffset - rowHeight
 end
 
 local function CreateSettingsActionButton(parent, yOffset, labelText, width, onClick, settingKey, subtitleText)
@@ -1529,7 +1547,7 @@ local function BuildNameplatesSettingsSection(canvas, yOffset, labels, config, c
     yOffset,
     labels.SETTINGS_NAMEPLATE_FONT_SIZE or "Font size",
     8,
-    24,
+    28,
     1,
     function()
       return tonumber(config.getDB().mobNameplateFontSize) or 14
@@ -1894,11 +1912,7 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     labels.SETTINGS_AUTO_CLOSE_ON_KEY_START or "Auto-close when key starts",
     function()
       local db = config.getDB()
-      -- Default-ON since 0.9.238: only an explicit `false` keeps the box
-      -- unchecked. nil / true / any non-false value renders as checked so
-      -- the UI matches the resolver behaviour
-      -- (ResolveAutoCloseOnKeyStartEnabled in factory/isiLive_factory.lua).
-      return db.autoCloseOnKeyStart ~= false
+      return db.autoCloseOnKeyStart == true
     end,
     function(checked)
       local db = config.getDB()
@@ -2461,7 +2475,7 @@ local function RefreshSettingsControls(controls, config)
   controls.minimapBtn.check:SetChecked(db.showMinimapButton == true)
   controls.sync.check:SetChecked(db.syncEnabled ~= false)
   controls.autoOpen.check:SetChecked(db.autoOpenOnQueue ~= false)
-  controls.autoCloseOnKeyStart.check:SetChecked(db.autoCloseOnKeyStart ~= false)
+  controls.autoCloseOnKeyStart.check:SetChecked(db.autoCloseOnKeyStart == true)
   controls.autoCloseOnSoloChange.check:SetChecked(db.autoCloseOnSoloChange == true)
   controls.lockMainFramePosition.check:SetChecked(db.lockMainFramePosition ~= false)
   controls.combatFadeMM.check:SetChecked(db.combatFadeMM == true)

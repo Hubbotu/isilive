@@ -416,12 +416,13 @@ local function Run()
     "Pattern A: read site `db.inviteHintEnabled ~= false` returns false after toggle-OFF + reload"
   )
 
-  -- Pattern B on a fresh DB: autoCloseOnSoloChange is unset; production read
-  -- `db.autoCloseOnSoloChange == true` must yield false (default-OFF works).
-  -- (autoCloseOnKeyStart switched to default-ON in 0.9.238, so the default-OFF
-  -- demonstration moved to autoCloseOnSoloChange which still uses the
-  -- opt-in-via-explicit-true pattern.)
+  -- Pattern B on a fresh DB: auto-close split fields are unset; production
+  -- reads using `db.<field> == true` must yield false (default-OFF works).
   local patternBSession = BuildPanelSession({})
+  Check(
+    (patternBSession.db.autoCloseOnKeyStart == true) == false,
+    "Pattern B fresh DB: read `db.autoCloseOnKeyStart == true` is false (default-OFF read pattern works pre-toggle)"
+  )
   Check(
     (patternBSession.db.autoCloseOnSoloChange == true) == false,
     "Pattern B fresh DB: read `db.autoCloseOnSoloChange == true` is false (default-OFF read pattern works pre-toggle)"

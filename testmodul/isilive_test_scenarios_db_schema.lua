@@ -31,6 +31,8 @@ return function(test, ctx)
     Assert.Equal(db.statsBoxFontSizeOffset, 0, "statsBoxFontSizeOffset default zero")
     Assert.Equal(db.lockMainFramePosition, true, "lockMainFramePosition default true")
     Assert.Equal(db.syncEnabled, true, "syncEnabled default true")
+    Assert.Equal(db.autoCloseOnKeyStart, false, "key-start auto-close default false")
+    Assert.Equal(db.autoCloseOnSoloChange, false, "solo-change auto-close default false")
     Assert.Equal(db.locale, "enUS", "locale default")
     Assert.Nil(db.inviteListEnabled, "disabled invite-list feature must not create a DB default")
   end)
@@ -175,13 +177,27 @@ return function(test, ctx)
     local DBSchema = LoadSchema()
     local db = {
       syncEnabled = false,
-      autoCloseMainFrame = true,
+      autoCloseOnKeyStart = true,
       mobNameplateEnabled = false,
     }
     DBSchema.Sanitize(db)
     Assert.Equal(db.syncEnabled, false, "user-disabled syncEnabled stays false")
-    Assert.Equal(db.autoCloseMainFrame, true, "user-enabled autoCloseMainFrame stays true")
+    Assert.Equal(db.autoCloseOnKeyStart, true, "user-enabled autoCloseOnKeyStart stays true")
     Assert.Equal(db.mobNameplateEnabled, false, "user-disabled mobNameplateEnabled stays false")
+  end)
+
+  test("DBSchema.Sanitize migrates legacy autoCloseMainFrame into split auto-close fields", function()
+    local DBSchema = LoadSchema()
+    local db = {
+      autoCloseMainFrame = true,
+      __schemaVersion = 1,
+    }
+    local corrections, migrations = DBSchema.Sanitize(db)
+    Assert.Equal(migrations, 1, "legacy auto-close split migration must report one applied migration")
+    Assert.True(corrections > 0, "legacy auto-close split migration must log a correction")
+    Assert.Equal(db.autoCloseMainFrame, false, "legacy autoCloseMainFrame must be cleared after migration")
+    Assert.Equal(db.autoCloseOnKeyStart, true, "legacy auto-close must enable key-start auto-close explicitly")
+    Assert.Equal(db.autoCloseOnSoloChange, true, "legacy auto-close must enable solo-change auto-close explicitly")
   end)
 
   test("DBSchema.Sanitize preserves valid user-set table contents", function()

@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.256 (patch)
+
+Fixes Settings audit findings around exposed numeric ranges and long localized
+slider labels.
+
+### Settings Audit
+
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua):
+
+- Aligned the Nameplate font-size Settings slider with the DB schema range:
+  the UI now exposes the full valid `8..28` range instead of stopping at `24`.
+- Added deterministic coverage that the upper schema value `28` persists
+  through Settings refresh and remains visible on the slider.
+- Width-constrained Settings slider labels and enabled word wrapping so long
+  localized labels stay in the left label column instead of overlapping the
+  slider track.
+- Added a layout regression test for long slider-label text.
+
+Tests: Settings default-pattern, SavedVariables reload, live-apply,
+combat-lockdown, locale, hardcoded-string, TOC, architecture-rule, and full
+usecase gates pass. Usecase count is now 1796.
+
+## 2026-05-21 - Version 0.9.255 (patch)
+
+Restores the default-off auto-close contract and migrates legacy combined
+auto-close settings without guessing from ambiguous SavedVariables.
+
+### Auto-Close Default and Legacy Migration
+
+[core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua):
+
+- Restored the active default-off contract for `autoCloseOnKeyStart`: fresh
+  installs and untouched SavedVariables now only close the main UI on key
+  start when the split field is explicitly `true`.
+- Added schema migration version 2 for pre-split legacy saves with
+  `autoCloseMainFrame=true` and no split fields. Those saves now migrate to
+  explicit `autoCloseOnKeyStart=true` and `autoCloseOnSoloChange=true`, then
+  clear the old combined field.
+- Kept ambiguous saves fail-closed: if split fields already exist, the
+  runtime treats them as the authoritative persisted choice instead of
+  guessing from the old legacy field.
+
+Tests: added `DBSchema.Sanitize migrates legacy autoCloseMainFrame into split
+auto-close fields`, updated the active auto-close rule mappings, and kept the
+settings/default-pattern and SavedVariables reload simulators aligned. Usecase
+count is now 1795.
+
 ## 2026-05-21 - Version 0.9.254 (patch)
 
 Fixes the wired `SHAREKEYS` receive path so remote key-share requests use the

@@ -615,18 +615,14 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
 
       autoCloseCheck = Assert.NotNil(autoCloseCheck, "settings panel should create a key-start auto-close checkbox")
       ---@diagnostic disable: undefined-field
-      -- 0.9.238: default flipped to ON so the addon UI gets out of the way
-      -- during a pull unless the user explicitly opts out. The Settings
-      -- checkbox renders checked when `db.autoCloseOnKeyStart` is nil so
-      -- the user sees the active behaviour at a glance.
-      Assert.True(
+      Assert.False(
         autoCloseCheck:GetChecked(),
-        "key-start auto-close should default to ENABLED when no saved value exists (0.9.238)"
+        "key-start auto-close should default to disabled when no saved value exists"
       )
 
       db.autoCloseOnKeyStart = false
       panel.Refresh()
-      Assert.False(autoCloseCheck:GetChecked(), "refresh should honor an explicit false opt-out")
+      Assert.False(autoCloseCheck:GetChecked(), "refresh should honor an explicit false value")
 
       db.autoCloseOnKeyStart = true
       panel.Refresh()
@@ -1415,6 +1411,72 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
     )
   end)
 
+  test("Settings slider labels are width-constrained so long locale text cannot overlap the slider", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local db = {}
+    local longSliderLabel = "Very long background opacity label that must wrap before the slider track"
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_SECTION_DISPLAY = "Display",
+            SETTINGS_SECTION_BEHAVIOR = "Behavior",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Language",
+            SETTINGS_COMBAT_LOGGING = "Combat Logging",
+            SETTINGS_DM_RESET = "DM Reset",
+            SETTINGS_ESC_PANEL = "ESC Panel",
+            SETTINGS_BG_ALPHA = longSliderLabel,
+            SETTINGS_UI_SCALE = "UI Scale",
+            SETTINGS_MINIMAP_BUTTON = "Minimap Button",
+            SETTINGS_SYNC_ENABLED = "Addon Sync",
+            SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
+            SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
+            SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
+            SETTINGS_RAID_TRANSITION_BEHAVIOR = "Raid Behavior",
+            SETTINGS_RAID_TRANSITION_BEHAVIOR_HIDE = "Raid Off",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+
+      local matched = 0
+      for _, fontString in ipairs(RequireValue(panel, "settings panel should exist").content._fontStrings or {}) do
+        if fontString:GetText() == longSliderLabel then
+          matched = matched + 1
+          Assert.Equal(fontString._width, 150, "slider label should reserve only the left label column")
+          Assert.Equal(fontString._justifyH, "LEFT", "slider label should stay left-aligned inside its column")
+          Assert.True(fontString._wordWrap, "slider label should wrap instead of drawing into the slider")
+        end
+      end
+
+      Assert.Equal(matched, 1, "test must find the localized slider label")
+    end)
+  end)
+
   test("Settings panel hides disabled legacy display and behavior controls", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {
@@ -1816,11 +1878,12 @@ local function RegisterSettingsPanelNameplateRoundtripTests(test, Assert, WithGl
         Assert.NotNil(FindFrame(createdFrames, "Slider", "SETTINGS_NAMEPLATE_FONT_SIZE"), "font-size slider must exist")
       ---@diagnostic disable: undefined-field
       local onValueChanged = Assert.NotNil(slider._scripts.OnValueChanged, "slider must define OnValueChanged")
-      onValueChanged(slider, 22)
-      Assert.Equal(db.mobNameplateFontSize, 22, "slider drag must persist fontSize=22 to DB")
+      Assert.Equal(slider._maxValue, 28, "font-size slider max must match the DB schema max")
+      onValueChanged(slider, 28)
+      Assert.Equal(db.mobNameplateFontSize, 28, "slider drag must persist fontSize=28 to DB")
       panel.Refresh()
-      Assert.Equal(db.mobNameplateFontSize, 22, "Refresh must NOT overwrite the user-set fontSize")
-      Assert.Equal(slider:GetValue(), 22, "Refresh must restore the slider's visible value to the DB value")
+      Assert.Equal(db.mobNameplateFontSize, 28, "Refresh must NOT overwrite the user-set fontSize")
+      Assert.Equal(slider:GetValue(), 28, "Refresh must restore the slider's visible value to the DB value")
       ---@diagnostic enable: undefined-field
     end)
   end)
