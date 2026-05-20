@@ -162,6 +162,30 @@ local function FinalizeFactorySettings(ctx)
           }, val)
         end
       end,
+      onStatsBoxToggle = function(enabled)
+        local statsBox = ctx.addonTable and ctx.addonTable.StatsBox
+        if type(statsBox) == "table" and type(statsBox.SetEnabled) == "function" then
+          statsBox.SetEnabled(enabled)
+        end
+      end,
+      onStatsBoxLockToggle = function(locked)
+        local statsBox = ctx.addonTable and ctx.addonTable.StatsBox
+        if type(statsBox) == "table" and type(statsBox.SetLocked) == "function" then
+          statsBox.SetLocked(locked)
+        end
+      end,
+      onStatsBoxBgAlphaChange = function(val)
+        local statsBox = ctx.addonTable and ctx.addonTable.StatsBox
+        if type(statsBox) == "table" and type(statsBox.SetBackgroundAlpha) == "function" then
+          statsBox.SetBackgroundAlpha(val)
+        end
+      end,
+      onStatsBoxFontSizeOffsetChange = function(offset)
+        local statsBox = ctx.addonTable and ctx.addonTable.StatsBox
+        if type(statsBox) == "table" and type(statsBox.SetFontSizeOffset) == "function" then
+          statsBox.SetFontSizeOffset(offset)
+        end
+      end,
       onUiScaleChange = function(val)
         local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
         if logf then
@@ -406,6 +430,11 @@ local function FinalizeFactorySettings(ctx)
         if type(mobNameplate.SetEnabled) == "function" then
           mobNameplate.SetEnabled(db.mobNameplateEnabled == true)
         end
+      end
+
+      local statsBox = ctx.addonTable and ctx.addonTable.StatsBox
+      if type(statsBox) == "table" and type(statsBox.ApplySettings) == "function" then
+        statsBox.ApplySettings()
       end
     end
 

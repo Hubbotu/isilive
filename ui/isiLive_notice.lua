@@ -27,6 +27,18 @@ local function CurrentTime()
   return type(getTimeFn) == "function" and getTimeFn() or 0
 end
 
+local function ClampMovableFrameToScreen(frame)
+  if type(frame) ~= "table" then
+    return
+  end
+  if type(frame.SetClampedToScreen) == "function" then
+    frame:SetClampedToScreen(true)
+  end
+  if type(frame.SetClampRectInsets) == "function" then
+    frame:SetClampRectInsets(0, 0, 0, 0)
+  end
+end
+
 local function BuildCenterNoticeConfig(opts)
   opts = opts or {}
   local frameName = type(opts.frameName) == "string" and opts.frameName ~= "" and opts.frameName
@@ -103,6 +115,7 @@ local function CreateCenterNoticeFrame(config)
   frame:SetSize(680, config.minHeight)
   frame:SetPoint("CENTER", config.parent, "CENTER", 0, 0)
   frame:SetMovable(true)
+  ClampMovableFrameToScreen(frame)
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")
   frame:Hide()
@@ -130,6 +143,7 @@ local function CreatePortalNavigatorFrame(config)
   frame:SetPoint("CENTER", config.parent, "CENTER", 0, config.yOffset)
   frame:SetFrameStrata("DIALOG")
   frame:SetMovable(true)
+  ClampMovableFrameToScreen(frame)
   frame:EnableMouse(true)
   frame:RegisterForDrag("LeftButton")
   frame:Hide()

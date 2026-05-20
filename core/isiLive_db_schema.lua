@@ -80,9 +80,25 @@ local SCHEMA = {
       y = { type = "number", default = 0 },
     },
   },
+  statsBoxPosition = {
+    type = "table",
+    default = function()
+      return { point = "CENTER", relativePoint = "CENTER", x = 320, y = 120 }
+    end,
+    fields = {
+      point = { type = "string", default = "CENTER" },
+      relativePoint = { type = "string", default = "CENTER" },
+      x = { type = "number", default = 320 },
+      y = { type = "number", default = 120 },
+    },
+  },
   uiScale = { type = "number", default = 1.0, min = 0.5, max = 2.0 },
   bgAlpha = { type = "number", default = 0.5, min = 0.0, max = 1.0 },
   lockMainFramePosition = { type = "boolean", default = true },
+  statsBoxEnabled = { type = "boolean", default = false },
+  statsBoxLocked = { type = "boolean", default = false },
+  statsBoxBgAlpha = { type = "number", default = 0.0, min = 0.0, max = 1.0 },
+  statsBoxFontSizeOffset = { type = "number", default = 0, min = -3, max = 3 },
 
   -- Locale + addon-level toggles.
   locale = { type = "string", default = "enUS" },

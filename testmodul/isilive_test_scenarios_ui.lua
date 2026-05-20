@@ -319,6 +319,32 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
 end
 
 local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("UI main frame is clamped to the WoW screen while movable", function()
+    WithGlobals({
+      UIParent = {},
+      CreateFrame = BuildCreateFrameStub(),
+      IsiLiveDB = {},
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local mainUI = UI.CreateMainFrame({
+        parent = UIParent,
+        isInCombat = function()
+          return false
+        end,
+        isDragLocked = function()
+          return false
+        end,
+      })
+
+      Assert.True(mainUI.frame._clampedToScreen, "main frame must be clamped to the WoW screen")
+      Assert.Equal(mainUI.frame._clampRectInsets[1], 0, "main frame left clamp inset must stay at the edge")
+      Assert.Equal(mainUI.frame._clampRectInsets[2], 0, "main frame right clamp inset must stay at the edge")
+      Assert.Equal(mainUI.frame._clampRectInsets[3], 0, "main frame top clamp inset must stay at the edge")
+      Assert.Equal(mainUI.frame._clampRectInsets[4], 0, "main frame bottom clamp inset must stay at the edge")
+    end)
+  end)
+
   test("UI drag start/stop remains available during combat", function()
     local inCombat = true
 

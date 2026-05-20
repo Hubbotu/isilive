@@ -22,6 +22,7 @@ end
 
 local function CreateFontStringStub(fontObject)
   local fontSize = 14
+  local fontFlags = ""
   return {
     _fontObject = fontObject,
     SetPoint = function(self, point, relativeTo, relativePoint, x, y)
@@ -37,7 +38,9 @@ local function CreateFontStringStub(fontObject)
       end
       return p[1], p[2], p[3], p[4], p[5]
     end,
-    SetJustifyH = function() end,
+    SetJustifyH = function(self, value)
+      self._justifyH = value
+    end,
     SetJustifyV = function() end,
     SetWordWrap = function(self, value)
       self._wordWrap = value == true
@@ -78,10 +81,17 @@ local function CreateFontStringStub(fontObject)
       return lineCount * 16
     end,
     GetFont = function()
-      return "Fonts\\FRIZQT__.TTF", fontSize, ""
+      return "Fonts\\FRIZQT__.TTF", fontSize, fontFlags
     end,
-    SetFont = function(_self, _path, size, _flags)
+    SetFont = function(_self, _path, size, flags)
       fontSize = tonumber(size) or fontSize
+      fontFlags = flags
+    end,
+    SetShadowColor = function(self, r, g, b, a)
+      self._shadowColor = { r, g, b, a }
+    end,
+    SetShadowOffset = function(self, x, y)
+      self._shadowOffset = { x, y }
     end,
     Hide = function() end,
     Show = function() end,
@@ -165,7 +175,15 @@ local function ApplyFrameMethods(frame)
     end
     self._point = nil
   end
-  frame.SetMovable = function() end
+  frame.SetMovable = function(self, enabled)
+    self._movable = enabled == true
+  end
+  frame.SetClampedToScreen = function(self, enabled)
+    self._clampedToScreen = enabled == true
+  end
+  frame.SetClampRectInsets = function(self, left, right, top, bottom)
+    self._clampRectInsets = { left, right, top, bottom }
+  end
   frame.EnableMouse = function(self, enabled)
     if self._simulateProtectedFrames and self._isProtected and self._isInCombat() then
       error("ADDON_ACTION_BLOCKED: protected frame mouse enable blocked in combat")

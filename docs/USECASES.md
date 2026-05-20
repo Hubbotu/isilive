@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.252`
-Zuletzt aktualisiert: `2026-05-19`
+Versionsbasis: `0.9.253`
+Zuletzt aktualisiert: `2026-05-20`
 
 ## Akteure
 
@@ -44,6 +44,7 @@ Zuletzt aktualisiert: `2026-05-19`
 | UC-20 | Clear-Log-Buttons im Settings-Debug | Zwei dedizierte Action-Buttons in Settings -> Debug leeren Runtime-Log und Queue-Debug-Log ohne Slash-Command |
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
 | UC-22 | LFG-Invite-Liste deaktiviert | Die experimentelle offene Premade-LFG-Invite-Liste bleibt ohne Settings, SavedVariable und Runtime-Wiring deaktiviert |
+| UC-23 | Spieler-Stats-Box | Eine optionale, eigenstaendige Stats-Box zeigt live gelesene Spielerwerte ohne Guessing und bleibt unabhaengig von den Main-UI-Layouts verschiebbar |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -157,7 +158,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
 7. Ergebnis B: Blizzard Settings zeigen — gruppiert in sechs Sektionen plus Reset und Beta-Hinweis:
    - **General**: Sprache, `Default UI on Open`, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Show Timeways Navigator`.
-   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
+   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, Spieler-Stats-Box mit Enable-, Lock-, Hintergrund-Deckkraft- und Schriftgroessen-Offset-Control, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
    - **Nameplates**: 3-Modi-Selector `Off / Tooltip / Nameplate` fuer den M+-Forces-Overlay, plus `Show percentage`, `Show remaining needed`, `Font size`, `Position`, `X offset`, `Y offset` und ein Live-Preview.
    - **Behavior**: `Addon Sync`, `Lock main frame position`, `Fade out in Combat (M2 only)`, gefolgt vom Auto-Show/Hide-Block mit Erklaerung (`Show on Login / Reload`, `Auto-Open on M+ Queue`, `Auto-Open on Key End`, `Auto-close when key starts`, `Auto-close when leaving the group`), und einem statischen Raid-Behavior-Hinweis statt einem 1-Optionen-Selector.
    - **Sounds**: `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res`, `Sound: Bloodlust`.
@@ -283,6 +284,21 @@ Ziel: Die experimentelle offene Premade-LFG-Invite-Liste bleibt deaktiviert, bis
 5. Hidden-Verhalten: Hidden bleibt `LFG_LIST_APPLICATION_STATUS_UPDATED` fuer Queue- und Invite-Listenverarbeitung blockiert.
 6. Erfolgskriterium: User sehen keine experimentelle Extra-Liste, koennen sie nicht aktivieren, und fehlende oder mehrdeutige LFG-Invite-Daten erzeugen keinen neuen UI-Pfad.
 
+## UC-23 Spieler-Stats-Box
+
+Ziel: Eine optionale, eigenstaendige Spieler-Stats-Box zeigt live gelesene Primär- und Sekundaerwerte, ohne vom aktuellen Main-UI-Layout abzuhaengen.
+
+1. Trigger: Das Addon ist geladen und der User aktiviert die Stats-Box in den Settings (`statsBoxEnabled=true`).
+2. Voraussetzung: Die Stats-Box startet fuer neue oder sanitizte DBs deaktiviert; ohne explizites Enable bleibt sie unsichtbar.
+3. Verarbeitung: Die Box liest Attribute ueber `UnitStat`, Combat-Ratings ueber die verfuegbaren Rating-APIs und Prozentwerte ueber direkt verfuegbare Blizzard-Live-APIs. Fehlende Werte erzeugen keine Zeile.
+4. Regel: Secret Values duerfen fuer die Anzeige nur direkt via `string.format` in Text gewandelt werden; Lua-Arithmetik, `tonumber` oder Vergleiche auf diesen Werten sind verboten.
+5. Regel: Klassen mit eindeutigem Primärstat nutzen den live gelesenen Klassentoken; Hybridklassen zeigen den Primärstat nur, wenn die Spezialisierungs-ID exakt live gelesen wurde. Ohne belastbare Quelle bleibt die Primärstat-Zeile unsichtbar.
+6. Darstellung: Sichtbare Labels sind feste englische Kurzlabels (`Str`, `Agi`, `Int`, `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, `Speed`). Labels, Werte und Prozentwerte sind rechtsbuendig, nutzen feste Blizzard-like Farben und einen dunklen Textschatten ohne Outline.
+7. Settings: Der User kann die Box ein-/ausschalten, sperren, die Hintergrund-Deckkraft separat setzen und die Schriftgroesse inklusive Box-Geometrie ueber einen relativen Offset von `-3` bis `+3` anpassen.
+8. Position: Die Box speichert ihre Position in `statsBoxPosition` und aendert die Main-UI-Position nicht.
+9. Screen-Clamp: Beim Ziehen bleibt die Stats-Box wie Main-UI, Center-Notice und Portal-Navigator am WoW-Sichtbereich geklemmt; der Fensterrand kann nicht ausserhalb des WoW-Fensters verschwinden.
+10. Erfolgskriterium: Die Box zeigt nur verifizierte Live-Werte, bleibt layout-unabhaengig bedienbar und kann nicht ausserhalb des WoW-Fensters gezogen werden.
+
 ## Nichtfunktionale Regeln
 
 1. Kein spekulatives Verhalten: unresolved oder mehrdeutiger Map-Kontext bleibt unresolved; kein Name-/Token-Fallback-Guessing.
@@ -306,7 +322,7 @@ Ziel: Die experimentelle offene Premade-LFG-Invite-Liste bleibt deaktiviert, bis
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1772` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1793` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

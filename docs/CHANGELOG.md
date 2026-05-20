@@ -1,5 +1,60 @@
 # Changelog
 
+## 2026-05-20 - Version 0.9.253 (patch)
+
+Adds an optional standalone player stats box and prevents movable isiLive
+windows from being dragged outside the WoW screen.
+
+### Player Stats Box
+
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua),
+[isiLive.toc](../isiLive.toc):
+
+- Added a separate player stats box that is independent from the M+, H, and V
+  main UI layouts.
+- The box starts disabled by default and can be enabled in Settings.
+- The primary stat uses exact class/spec resolution only: fixed-primary
+  classes use the live class token, while hybrid classes require an exact live
+  specialization ID.
+- Visible labels are fixed short English labels (`Str`, `Agi`, `Int`, `Crit`,
+  `Haste`, `Mast`, `Vers`, `Leech`, `Speed`) without locale variants.
+- Values and percentages are right-aligned, use a fixed Blizzard-like color
+  palette, and keep a dark contrast shadow without an outline.
+- Settings now include independent controls for enable/disable, lock,
+  background opacity, and a relative font-size slider from `-3` to `+3`.
+- The box stores its own position in `statsBoxPosition` and never mutates the
+  main-window position.
+
+### Movable UI Clamp
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[ui/isiLive_notice.lua](../ui/isiLive_notice.lua),
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua):
+
+- Main UI, Center Notice, Portal Navigator, and Stats Box now clamp their
+  movable frames to the WoW screen edge, so users cannot drag those windows
+  outside the game view.
+- The minimap button remains on its existing minimap-circle drag logic instead
+  of being treated as a normal movable window.
+
+### Tests
+
+[testmodul/isilive_test_scenarios_stats_box.lua](../testmodul/isilive_test_scenarios_stats_box.lua),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua),
+[testmodul/isilive_test_scenarios_ui_center_notice.lua](../testmodul/isilive_test_scenarios_ui_center_notice.lua),
+[testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Added deterministic coverage for live-only Stats Box values, secret-value
+  formatting safety, fixed labels, alignment, color palette, font scaling,
+  locking, default-off behavior, and independent saved position.
+- Added deterministic coverage that every free movable isiLive window is
+  screen-clamped.
+- Usecase count is now 1793.
+
 ## 2026-05-19 - Version 0.9.252 (patch)
 
 Improves reload roster restoration, fixes secure M+Marker worldmarker actions,

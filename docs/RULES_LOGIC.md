@@ -85,6 +85,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 62. Bei aktivierter Addon-Sprache `ruRU` muessen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen Font verwenden, unabhaengig vom WoW-Client-Locale.
 63. Die M+Marker-Leiste muss native SecureActionButton-Worldmarker-Attribute verwenden, ihre sicheren Klickflaechen ueber konkurrierenden UI-Sibling-Frames halten und darf keine geschuetzten Marker-APIs direkt aufrufen.
 64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
+65. Die eigenstaendige Spieler-Stats-Box zeigt den Primärstat klassen- beziehungsweise spezialisierungsgenau, zeigt nur direkt aus Blizzard-Live-APIs gelesene Werte, ist rahmenlos, standardmaessig aus, ueber Settings einschaltbar und gegen Positions-Drag sperrbar, und speichert ihre Position getrennt von der Main-UI.
+66. Alle frei verschiebbaren isiLive-Fenster muessen an den WoW-Sichtbereich geklemmt sein, sodass ihre Raender beim Ziehen nicht ausserhalb des WoW-Fensters verschwinden.
 
 ## Regelbloecke
 
@@ -797,3 +799,31 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Reload roster mirror restores verified data when group signature matches
   - Reload roster mirror is discarded when group signature differs
   - DBSchema.Sanitize gives each db an isolated reload roster mirror
+
+### RULE-STATS-BOX-LIVE-QUELLE
+- Regelnummer: 65
+- Status: aktiv
+- Zusammenfassung: Die eigenstaendige Spieler-Stats-Box darf Attribute, Combat-Ratings und Prozentwerte nur anzeigen, wenn der jeweilige Wert direkt aus einer erfolgreichen Blizzard-Live-API-Lesung stammt; fehlende API-Werte bleiben unsichtbar und werden nicht durch Default-, Cache- oder Guess-Werte ersetzt. Als Secret Value markierte API-Werte duerfen fuer die Anzeige nur direkt per `string.format` in Text gewandelt werden; Lua-Arithmetik, `tonumber` oder Vergleiche auf diesen Secret Values sind verboten. Bei Klassen mit eindeutigem Primärstat wird dieser ueber den live gelesenen Klassentoken bestimmt; bei Hybridklassen wird der Primärstat nur bei exakt gelesener Spezialisierungs-ID angezeigt. Sichtbare Stat-Labels sind feste englische Kurzlabels ohne Locale-Varianten. Stat-Labels, Werte und Prozentwerte stehen rechtsbuendig, sichtbare Stats nutzen eine feste Blizzard-like Farbpalette, und alle sichtbaren Texte nutzen einen kontrastreichen dunklen Schatten ohne Outline. Die Box ist rahmenlos, standardmaessig aus, nur bei `statsBoxEnabled=true` sichtbar, ueber `statsBoxLocked` gegen Positions-Drag sperrbar, ihre Hintergrund-Deckkraft ist ueber `statsBoxBgAlpha` separat steuerbar, ihre Schriftgroesse und Box-Geometrie sind ueber `statsBoxFontSizeOffset` von `-3` bis `+3` relativ zum Default `0` gemeinsam steuerbar, und ihre gespeicherte Position liegt in `statsBoxPosition` ohne die Main-UI-Position zu veraendern.
+- Erforderliche Tests:
+  - StatsBox renders class primary stat and directly observed secondary values
+  - StatsBox resolves hybrid primary stat only from exact specialization
+  - StatsBox uses fixed English short labels without locale variants
+  - StatsBox restores and saves its own position independently
+  - StatsBox lock blocks dragging without changing its saved position
+  - Settings panel exposes stats box position lock toggle
+  - StatsBox applies enabled toggle and background opacity without a border
+  - StatsBox applies font size offset from settings
+  - StatsBox applies high contrast text shadow
+  - StatsBox renders labels and values right-aligned
+  - StatsBox reads haste percent from player spell haste
+  - StatsBox applies Blizzard-like fixed stat colors
+  - StatsBox formats secret API values without arithmetic
+
+### RULE-MOVABLE-UI-SCREEN-CLAMP
+- Regelnummer: 66
+- Status: aktiv
+- Zusammenfassung: Alle frei verschiebbaren isiLive-Fenster muessen per Screen-Clamp an den WoW-Sichtbereich gebunden sein; beim Ziehen duerfen die Fensterraender nicht ausserhalb des WoW-Fensters verschwinden. Dies gilt fuer Main-UI, Stats-Box, Center-Notice und Portal-Navigator; der Minimap-Button bleibt an seine eigene Minimap-Kreis-Draglogik gebunden.
+- Erforderliche Tests:
+  - UI main frame is clamped to the WoW screen while movable
+  - StatsBox clamps its movable frame to the screen
+  - Notice movable frames are clamped to the WoW screen

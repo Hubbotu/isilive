@@ -151,7 +151,15 @@ local function ApplyFrameMethods(frame)
     end
     self._point = nil
   end
-  frame.SetMovable = function() end
+  frame.SetMovable = function(self, enabled)
+    self._movable = enabled == true
+  end
+  frame.SetClampedToScreen = function(self, enabled)
+    self._clampedToScreen = enabled == true
+  end
+  frame.SetClampRectInsets = function(self, left, right, top, bottom)
+    self._clampRectInsets = { left, right, top, bottom }
+  end
   frame.EnableMouse = function(self, enabled)
     if self._simulateProtectedFrames and self._isProtected and self._isInCombat() then
       error("ADDON_ACTION_BLOCKED: protected frame mouse enable blocked in combat")
@@ -845,6 +853,49 @@ local function RegisterCenterNoticeDragResetTest(test, Assert, WithGlobals, Load
       Assert.Equal(relativePoint, "CENTER", "reopened center notice should use CENTER relativePoint")
       Assert.Equal(x, 0, "reopened center notice should reset x offset")
       Assert.Equal(y, 0, "reopened center notice should reset y offset")
+    end)
+  end)
+
+  test("Notice movable frames are clamped to the WoW screen", function()
+    WithGlobals({
+      UIParent = {},
+      CreateFrame = BuildCreateFrameStub(),
+      IsiLiveDB = {},
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_notice.lua" })
+      local Notice = RequireValue(addon.Notice, "Notice module should load")
+      local centerNotice = Notice.CreateCenterNotice({
+        parent = UIParent,
+        isInCombat = function()
+          return false
+        end,
+      })
+      local portalNotice = Notice.CreatePortalNavigatorNotice({
+        parent = UIParent,
+        isInCombat = function()
+          return false
+        end,
+      })
+
+      Assert.True(centerNotice.frame._clampedToScreen, "center notice must be clamped to the WoW screen")
+      Assert.Equal(centerNotice.frame._clampRectInsets[1], 0, "center notice left clamp inset must stay at the edge")
+      Assert.Equal(centerNotice.frame._clampRectInsets[2], 0, "center notice right clamp inset must stay at the edge")
+      Assert.Equal(centerNotice.frame._clampRectInsets[3], 0, "center notice top clamp inset must stay at the edge")
+      Assert.Equal(centerNotice.frame._clampRectInsets[4], 0, "center notice bottom clamp inset must stay at the edge")
+
+      Assert.True(portalNotice.frame._clampedToScreen, "portal navigator must be clamped to the WoW screen")
+      Assert.Equal(portalNotice.frame._clampRectInsets[1], 0, "portal navigator left clamp inset must stay at the edge")
+      Assert.Equal(
+        portalNotice.frame._clampRectInsets[2],
+        0,
+        "portal navigator right clamp inset must stay at the edge"
+      )
+      Assert.Equal(portalNotice.frame._clampRectInsets[3], 0, "portal navigator top clamp inset must stay at the edge")
+      Assert.Equal(
+        portalNotice.frame._clampRectInsets[4],
+        0,
+        "portal navigator bottom clamp inset must stay at the edge"
+      )
     end)
   end)
 

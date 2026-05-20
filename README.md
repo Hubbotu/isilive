@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.252`
+- **Current version:** `0.9.253`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -21,6 +21,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Forces percentage with a live pull-prediction bar and combat-end refresh so completed pulls are reflected immediately
 - Default-on **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus the verified remaining count needed to finish enemy forces
 - Forces info on the **mouseover tooltip** for any mob in a key
+- Optional independent **player stats box** with live primary/secondary stats, short English labels, and separate opacity/font/lock controls
 
 Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
 
@@ -42,7 +43,7 @@ The window opens automatically when you join a group and closes when you leave. 
 - **`Ctrl + F9`** — toggle the window
 - **Red X** in the top-right corner — close it
 - **Lock icon** in the top-right — prevents dragging so the window doesn't move by accident
-- Drag the title bar to move the window. The position is remembered.
+- Drag the title bar to move the window. The position is remembered, and the window stops at the WoW screen edge instead of being draggable outside the game view.
 
 ### Layouts
 
@@ -159,6 +160,16 @@ Default-on text over every hostile unit's nameplate during a key; Settings -> Na
 
 Configurable: percent toggle, font size 8-24, position around the nameplate (LEFT/RIGHT/TOP/BOTTOM). Same DB-based source as the tooltip — deterministic mob contribution, never the cumulative progress.
 
+### Player stats box
+
+An optional standalone stats box can be enabled in Settings. It is independent from the M+, H, and V layouts and can be moved separately.
+
+- Shows the class-appropriate primary stat (`Str`, `Agi`, or `Int`) plus `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, and `Speed` when Blizzard's live APIs provide those values
+- Uses short English labels only
+- Values and percentages are right-aligned for compact scanning
+- Can be locked, hidden, moved, and configured with separate background opacity and relative font size
+- Starts disabled by default
+
 Plater / Platynator users: a soft warning is shown in Settings if either is loaded — both addons can already display M+ forces on nameplates via their own scripts, so you can disable isiLive's overlay there if you prefer to avoid duplication.
 
 ### Battle Res / Bloodlust chat announce
@@ -208,7 +219,7 @@ If the group breaks up or someone disconnects, their data stays visible as a gre
 Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 
 - **General** — language, startup auto-show, minimap button
-- **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, reset UI
+- **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, player stats box controls, reset UI
 - **Behavior** — addon sync, auto-show/hide triggers (show on login, auto-open on M+ queue, auto-open on key end, auto-close on key start, auto-close on leaving the group), lock main frame position, fade in combat, raid behavior status
 - **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust
 - **Nameplates** — enable forces overlay, font size, position, percent toggle

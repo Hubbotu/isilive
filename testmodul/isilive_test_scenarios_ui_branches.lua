@@ -177,7 +177,12 @@ local function CreateFrameStub(_frameType, _name, parent, _template)
   function frame:GetAlpha()
     return self._alpha
   end
-  function frame:SetClampedToScreen() end
+  function frame:SetClampedToScreen(enabled)
+    self._clampedToScreen = enabled == true
+  end
+  function frame:SetClampRectInsets(left, right, top, bottom)
+    self._clampRectInsets = { left, right, top, bottom }
+  end
   function frame:SetIgnoreParentAlpha() end
   function frame:SetBackdrop() end
   function frame:SetBackdropColor() end

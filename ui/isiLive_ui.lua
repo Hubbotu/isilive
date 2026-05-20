@@ -1437,6 +1437,18 @@ local function SavePosition(target)
   db.position = { point = point, relativePoint = relativePoint, x = x, y = y }
 end
 
+local function ClampMovableFrameToScreen(frame)
+  if type(frame) ~= "table" then
+    return
+  end
+  if type(frame.SetClampedToScreen) == "function" then
+    frame:SetClampedToScreen(true)
+  end
+  if type(frame.SetClampRectInsets) == "function" then
+    frame:SetClampRectInsets(0, 0, 0, 0)
+  end
+end
+
 local function CreateDragHandle(frame, isDragLocked, beginDrag, endDrag)
   local dragHandle = CreateFrame("Frame", nil, frame)
   dragHandle._grips = {}
@@ -1676,6 +1688,7 @@ function UI.CreateMainFrame(opts)
   frame:SetSize(755, minHeight)
   frame:SetPoint("CENTER")
   frame:SetMovable(true)
+  ClampMovableFrameToScreen(frame)
   frame:EnableMouse(true)
   frame:Hide()
 

@@ -24,6 +24,20 @@ local SETTINGS_CONTENT_WIDTH = 700
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
 local SHOW_NAME_MAX_CHARS_SETTING = false
 local SHOW_TELEPORT_COLUMNS_SETTING = false
+local STATS_BOX_SETTING_LABELS = {
+  enUS = {
+    enabled = "Show player stats box",
+    locked = "Lock player stats box position",
+    alpha = "Stats box background opacity",
+    fontSize = "Stats box font size",
+  },
+  deDE = {
+    enabled = "Spieler-Stats-Box anzeigen",
+    locked = "Spieler-Stats-Box-Position sperren",
+    alpha = "Stats-Box-Hintergrund-Deckkraft",
+    fontSize = "Stats-Box-Schriftgroesse",
+  },
+}
 -- Brand title with the `isi` prefix as plain text and only `Live` colored
 -- in dodgerblue (`#1e90ff`). The plain `isi` prefix serves two purposes:
 --
@@ -796,6 +810,10 @@ local function ResolveSettingsOptions(opts)
     end,
     onEscPanelToggle = opts.onEscPanelToggle,
     onBgAlphaChange = opts.onBgAlphaChange,
+    onStatsBoxToggle = opts.onStatsBoxToggle,
+    onStatsBoxLockToggle = opts.onStatsBoxLockToggle,
+    onStatsBoxBgAlphaChange = opts.onStatsBoxBgAlphaChange,
+    onStatsBoxFontSizeOffsetChange = opts.onStatsBoxFontSizeOffsetChange,
     onUiScaleChange = opts.onUiScaleChange,
     onSyncToggle = opts.onSyncToggle,
     onMinimapButtonToggle = opts.onMinimapButtonToggle,
@@ -825,6 +843,25 @@ local function ResolveSettingsOptions(opts)
     onResetDB = opts.onResetDB,
     onResetMainFramePosition = opts.onResetMainFramePosition,
   }
+end
+
+local function ResolveSettingsLocale(config)
+  local db = type(config.getDB) == "function" and config.getDB() or nil
+  if type(db) == "table" and STATS_BOX_SETTING_LABELS[db.locale] then
+    return db.locale
+  end
+  if type(config.getCurrentLocale) == "function" then
+    local locale = config.getCurrentLocale()
+    if STATS_BOX_SETTING_LABELS[locale] then
+      return locale
+    end
+  end
+  return "enUS"
+end
+
+local function GetStatsBoxSettingLabel(config, key)
+  local labels = STATS_BOX_SETTING_LABELS[ResolveSettingsLocale(config)] or STATS_BOX_SETTING_LABELS.enUS
+  return labels[key] or STATS_BOX_SETTING_LABELS.enUS[key] or key
 end
 
 local function GetCVarEnabled(name)
@@ -1042,6 +1079,94 @@ local function BuildDisplaySettingsSection(canvas, yOffset, labels, config, cont
       return string.format("%.0f%%", val * 100)
     end,
     "SETTINGS_BG_ALPHA"
+  )
+
+  controls.statsBoxEnabled, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    GetStatsBoxSettingLabel(config, "enabled"),
+    function()
+      local db = config.getDB()
+      return db.statsBoxEnabled == true
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.statsBoxEnabled = checked
+      if type(config.onStatsBoxToggle) == "function" then
+        config.onStatsBoxToggle(checked)
+      end
+    end,
+    "SETTINGS_STATS_BOX_ENABLED"
+  )
+
+  controls.statsBoxLocked, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    GetStatsBoxSettingLabel(config, "locked"),
+    function()
+      local db = config.getDB()
+      return db.statsBoxLocked == true
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.statsBoxLocked = checked == true
+      if type(config.onStatsBoxLockToggle) == "function" then
+        config.onStatsBoxLockToggle(db.statsBoxLocked)
+      end
+    end,
+    "SETTINGS_STATS_BOX_LOCKED"
+  )
+
+  controls.statsBoxBgAlpha, yOffset = CreateSettingsSlider(
+    canvas,
+    yOffset,
+    GetStatsBoxSettingLabel(config, "alpha"),
+    0.0,
+    1.0,
+    0.05,
+    function()
+      local db = config.getDB()
+      return type(db.statsBoxBgAlpha) == "number" and db.statsBoxBgAlpha or 0
+    end,
+    function(val)
+      local db = config.getDB()
+      db.statsBoxBgAlpha = val
+      if type(config.onStatsBoxBgAlphaChange) == "function" then
+        config.onStatsBoxBgAlphaChange(val)
+      end
+    end,
+    function(val)
+      return string.format("%.0f%%", val * 100)
+    end,
+    "SETTINGS_STATS_BOX_BG_ALPHA"
+  )
+
+  controls.statsBoxFontSizeOffset, yOffset = CreateSettingsSlider(
+    canvas,
+    yOffset,
+    GetStatsBoxSettingLabel(config, "fontSize"),
+    -3,
+    3,
+    1,
+    function()
+      local db = config.getDB()
+      return type(db.statsBoxFontSizeOffset) == "number" and db.statsBoxFontSizeOffset or 0
+    end,
+    function(val)
+      local db = config.getDB()
+      db.statsBoxFontSizeOffset = math.floor((tonumber(val) or 0) + 0.5)
+      if type(config.onStatsBoxFontSizeOffsetChange) == "function" then
+        config.onStatsBoxFontSizeOffsetChange(db.statsBoxFontSizeOffset)
+      end
+    end,
+    function(val)
+      val = tonumber(val) or 0
+      if val > 0 then
+        return string.format("+%d", val)
+      end
+      return tostring(math.floor(val + 0.5))
+    end,
+    "SETTINGS_STATS_BOX_FONT_SIZE_OFFSET"
   )
 
   controls.resetUiBtn, yOffset = CreateSettingsActionButton(
@@ -2227,6 +2352,18 @@ local function RefreshSettingsControls(controls, config)
   controls.dmReset.label:SetText(freshL.SETTINGS_DM_RESET or "Reset Blizzard Damage Meter on dungeon entry")
   controls.escPanel.label:SetText(freshL.SETTINGS_ESC_PANEL or "Show ESC Menu Shortcuts")
   controls.bgAlpha.label:SetText(freshL.SETTINGS_BG_ALPHA or "Background Opacity")
+  if controls.statsBoxEnabled and controls.statsBoxEnabled.label then
+    controls.statsBoxEnabled.label:SetText(GetStatsBoxSettingLabel(config, "enabled")) -- i18n-ok
+  end
+  if controls.statsBoxLocked and controls.statsBoxLocked.label then
+    controls.statsBoxLocked.label:SetText(GetStatsBoxSettingLabel(config, "locked")) -- i18n-ok
+  end
+  if controls.statsBoxBgAlpha and controls.statsBoxBgAlpha.label then
+    controls.statsBoxBgAlpha.label:SetText(GetStatsBoxSettingLabel(config, "alpha")) -- i18n-ok
+  end
+  if controls.statsBoxFontSizeOffset and controls.statsBoxFontSizeOffset.label then
+    controls.statsBoxFontSizeOffset.label:SetText(GetStatsBoxSettingLabel(config, "fontSize")) -- i18n-ok
+  end
   controls.uiScale.label:SetText(freshL.SETTINGS_UI_SCALE or "UI Scale")
   if controls.resetUiBtn then
     controls.resetUiBtn.label:SetText(freshL.SETTINGS_RESET_UI_POSITION or "/isilive resetui")
@@ -2306,6 +2443,20 @@ local function RefreshSettingsControls(controls, config)
   controls.dmReset.check:SetChecked(GetCVarEnabled("damageMeterResetOnNewInstance"))
   controls.escPanel.check:SetChecked(db.showEscPanel ~= false)
   controls.bgAlpha.SetValueSilently(type(db.bgAlpha) == "number" and db.bgAlpha or DEFAULT_BG_ALPHA)
+  if controls.statsBoxEnabled then
+    controls.statsBoxEnabled.check:SetChecked(db.statsBoxEnabled == true)
+  end
+  if controls.statsBoxLocked then
+    controls.statsBoxLocked.check:SetChecked(db.statsBoxLocked == true)
+  end
+  if controls.statsBoxBgAlpha then
+    controls.statsBoxBgAlpha.SetValueSilently(type(db.statsBoxBgAlpha) == "number" and db.statsBoxBgAlpha or 0)
+  end
+  if controls.statsBoxFontSizeOffset then
+    controls.statsBoxFontSizeOffset.SetValueSilently(
+      type(db.statsBoxFontSizeOffset) == "number" and db.statsBoxFontSizeOffset or 0
+    )
+  end
   controls.uiScale.SetValueSilently(type(db.uiScale) == "number" and db.uiScale or 1.0)
   controls.minimapBtn.check:SetChecked(db.showMinimapButton == true)
   controls.sync.check:SetChecked(db.syncEnabled ~= false)

@@ -264,6 +264,79 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
 
   RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, LoadAddonModules)
 
+  test("Settings panel exposes stats box position lock toggle", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { statsBoxLocked = false }
+    local lockCalls = 0
+    local lastLocked = nil
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_SECTION_DISPLAY = "Display",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Language",
+            SETTINGS_COMBAT_LOGGING = "Combat Logging",
+            SETTINGS_DM_RESET = "DM Reset",
+            SETTINGS_ESC_PANEL = "ESC Panel",
+            SETTINGS_BG_ALPHA = "Background Opacity",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+        onStatsBoxLockToggle = function(locked)
+          lockCalls = lockCalls + 1
+          lastLocked = locked
+        end,
+      })
+
+      Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+
+      local lockCheck = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._frameType == "CheckButton" and frame._settingKey == "SETTINGS_STATS_BOX_LOCKED" then
+          lockCheck = frame
+          break
+        end
+      end
+      lockCheck = Assert.NotNil(lockCheck, "settings panel should create a stats-box lock checkbox")
+
+      ---@diagnostic disable: undefined-field
+      Assert.False(lockCheck:GetChecked(), "stats-box lock checkbox should reflect the unlocked default")
+      lockCheck:SetChecked(true)
+      local onClick = Assert.NotNil(lockCheck._scripts.OnClick, "stats-box lock checkbox should define OnClick")
+      onClick(lockCheck)
+      ---@diagnostic enable: undefined-field
+
+      Assert.True(db.statsBoxLocked, "checking stats-box lock should persist true to DB")
+      Assert.Equal(lockCalls, 1, "checking stats-box lock should invoke live callback once")
+      Assert.Equal(lastLocked, true, "stats-box lock callback should receive true")
+
+      panel.Refresh()
+      Assert.True(lockCheck:GetChecked(), "refresh should keep stats-box lock visually checked")
+    end)
+  end)
+
   test("Settings panel lets the user choose the default layout on open", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
@@ -1431,28 +1504,28 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(scrollFrameCount, 1, "settings should allocate exactly one content scroll frame")
       Assert.Equal(
         sliderCount,
-        5,
-        "settings should expose bg-alpha, UI-scale, nameplate font-size,"
-          .. " nameplate X-offset, and nameplate Y-offset sliders"
+        7,
+        "settings should expose bg-alpha, UI-scale, stats-box alpha, stats-box font-size,"
+          .. " nameplate font-size, nameplate X-offset, and nameplate Y-offset sliders"
       )
       Assert.Equal(
         checkboxCount,
-        29,
+        31,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
           .. " chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, and the two auto-close split checkboxes visible"
+          .. " accepted-invite-notice, stats-box toggles, and the two auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
       panel.Refresh()
-      Assert.Equal(sliderCount, 5, "refresh should keep the nameplate font-size and offset sliders visible")
+      Assert.Equal(sliderCount, 7, "refresh should keep the stats-box and nameplate sliders visible")
       Assert.Equal(
         checkboxCount,
-        29,
+        31,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, and the two auto-close split checkboxes"
+          .. " accepted-invite-notice, stats-box toggles, and the two auto-close split checkboxes"
       )
     end)
   end)
