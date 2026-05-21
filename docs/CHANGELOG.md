@@ -43,6 +43,8 @@ visibility.
 - Clicking a shortcut loads the target addon first and only then invokes its
   registered slash alias; failed loads or missing slash aliases remain
   fail-closed.
+- The isiLive shortcut now opens the isiLive Settings panel through the direct
+  Settings opener instead of trying to self-load or depending on slash dispatch.
 - Updated the active ESC addon panel rule and deterministic rule-to-test mapping
   to match the installed-and-enabled visibility contract.
 

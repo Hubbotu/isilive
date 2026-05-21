@@ -41,6 +41,7 @@ function Bootstrap.RegisterSlashCommands(opts)
     assert(opts.runtimeLogController, "isiLive: Bootstrap.RegisterSlashCommands requires runtimeLogController")
   local traceChatFrameController = opts.traceChatFrameController
   local resetDB = RequireFunction(opts.resetDB, "resetDB")
+  local openSettings = type(opts.openSettings) == "function" and opts.openSettings or nil
   local toggleNameplateTestMode = type(opts.toggleNameplateTestMode) == "function" and opts.toggleNameplateTestMode
     or function()
       return false
@@ -84,6 +85,7 @@ function Bootstrap.RegisterSlashCommands(opts)
     isTraceChatFrameOpen = traceChatFrameController and traceChatFrameController.IsOpen or nil,
     addTraceChatFrameMessage = traceChatFrameController and traceChatFrameController.AddMessage or nil,
     resetDB = resetDB,
+    openSettings = openSettings,
     toggleNameplateTestMode = toggleNameplateTestMode,
     dumpNameplateState = dumpNameplateState,
     logRuntimeTracef = runtimeLogController.Logf,

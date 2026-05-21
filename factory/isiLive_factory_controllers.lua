@@ -1517,6 +1517,19 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
           return not IsiLiveDB or IsiLiveDB.showEscPanel ~= false
         end,
         secondPanelState = ctx.secondPanelUI,
+        panelActions = {
+          isilive = function()
+            local blizzardSettings = rawget(_G, "Settings")
+            if type(blizzardSettings) ~= "table" or type(blizzardSettings.OpenToCategory) ~= "function" then
+              return false
+            end
+            if ctx.settingsPanel and ctx.settingsPanel.category then
+              blizzardSettings.OpenToCategory(ctx.settingsPanel.category.ID)
+              return true
+            end
+            return false
+          end,
+        },
       })
     end
     ctx.rosterPanelController.ApplyLocalization()

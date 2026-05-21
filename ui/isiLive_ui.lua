@@ -92,6 +92,15 @@ local PANEL_UI_ENTRIES = {
 }
 local ADDON_PANEL_UI_ENTRIES = {
   {
+    id = "isilive",
+    labelKey = "BTN_ADDON_ISILIVE",
+    fallbackText = "isiLive",
+    addonNames = { "isiLive" },
+    slashText = "/isilive settings",
+    icon = "Interface\\Icons\\INV_Misc_Gear_01",
+    skipLoadCheck = true,
+  },
+  {
     id = "mdt",
     labelKey = "BTN_ADDON_MDT",
     fallbackText = "MDT",
@@ -976,7 +985,7 @@ local function MergePanelUIActions(isInCombat, overrides)
   return actions
 end
 
-local function BuildAddonPanelUIActions()
+local function BuildAddonPanelUIActions(overrides)
   local actions = {}
   for _, entry in ipairs(ADDON_PANEL_UI_ENTRIES) do
     actions[entry.id] = function()
@@ -984,10 +993,17 @@ local function BuildAddonPanelUIActions()
       if not addOnName then
         return false
       end
-      if not EnsureAddOnLoaded(addOnName) then
+      if entry.skipLoadCheck ~= true and not EnsureAddOnLoaded(addOnName) then
         return false
       end
       return RunSlashText(ResolveLocaleSlashText(entry))
+    end
+  end
+  if type(overrides) == "table" then
+    for key, value in pairs(overrides) do
+      if type(value) == "function" then
+        actions[key] = value
+      end
     end
   end
   return actions
@@ -1690,6 +1706,7 @@ function UI.EnsureThirdPanelUI(opts)
     thirdPanelUIState.isEnabled = opts.isEnabled
     thirdPanelUIState.isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil
     thirdPanelUIState.positionAnchorFrame = secondPanelState.panelFrame
+    thirdPanelUIState.actions = BuildAddonPanelUIActions(opts.panelActions)
     ApplyPanelUISecureState(thirdPanelUIState)
     ApplyPanelUILocalization(thirdPanelUIState)
     return thirdPanelUIState
@@ -1704,7 +1721,7 @@ function UI.EnsureThirdPanelUI(opts)
     getL = type(opts.getL) == "function" and opts.getL or function()
       return {}
     end,
-    actions = BuildAddonPanelUIActions(),
+    actions = BuildAddonPanelUIActions(opts.panelActions),
     isEnabled = opts.isEnabled,
     isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil,
     positionAnchorFrame = secondPanelState.panelFrame,

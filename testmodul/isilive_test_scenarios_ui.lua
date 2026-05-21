@@ -1157,6 +1157,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
     local installed = {
+      isiLive = true,
       MythicDungeonTools = true,
       ["DBM-Core"] = true,
       BigWigs = true,
@@ -1165,6 +1166,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       Platynator = true,
     }
     local enabled = {
+      isiLive = true,
       MythicDungeonTools = true,
       ["DBM-Core"] = true,
       BigWigs = true,
@@ -1173,6 +1175,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       Platynator = true,
     }
     local loaded = {
+      isiLive = true,
       MythicDungeonTools = true,
       ["DBM-Core"] = true,
       BigWigs = true,
@@ -1201,6 +1204,9 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         LoadAddOn = function() end,
       },
       SlashCmdList = {
+        ISILIVE = function()
+          slashCalls[#slashCalls + 1] = "ISILIVE"
+        end,
         MYTHICDUNGEONTOOLS = function()
           slashCalls[#slashCalls + 1] = "MDT"
         end,
@@ -1217,6 +1223,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
           slashCalls[#slashCalls + 1] = "PLATYNATOR"
         end,
       },
+      SLASH_ISILIVE1 = "/isilive",
       SLASH_MYTHICDUNGEONTOOLS2 = "/mdt",
       SLASH_DEADLYBOSSMODS1 = "/dbm",
       SLASH_BigWigs2 = "/bigwigs",
@@ -1241,6 +1248,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         getL = function()
           return {
             PANEL_HEADER_ADDONS = "Addons",
+            BTN_ADDON_ISILIVE = "isiLive",
             BTN_ADDON_MDT = "MDT",
             BTN_ADDON_DBM = "DBM",
             BTN_ADDON_BIGWIGS = "BigWigs",
@@ -1252,6 +1260,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       })
 
       addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist when supported addons are loaded")
+      Assert.NotNil(addonStrip.buttonsById.isilive, "enabled isiLive must create a shortcut button")
       Assert.NotNil(addonStrip.buttonsById.mdt, "loaded MDT must create a shortcut button")
       Assert.NotNil(addonStrip.buttonsById.dbm, "loaded DBM must create a shortcut button")
       Assert.NotNil(addonStrip.buttonsById.bigwigs, "loaded BigWigs must create a shortcut button")
@@ -1343,12 +1352,79 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI third game-menu isiLive shortcut can use direct settings action without self-load", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local loadCalls = {}
+    local openSettingsCalls = 0
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "isiLive" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return addOnName == "isiLive" and 2 or 0
+        end,
+        IsAddOnLoaded = function()
+          return false
+        end,
+        LoadAddOn = function(addOnName)
+          loadCalls[#loadCalls + 1] = addOnName
+        end,
+      },
+      SlashCmdList = {
+        ISILIVE = function(msg)
+          slashCalls[#slashCalls + 1] = msg
+        end,
+      },
+      SLASH_ISILIVE1 = "/isilive",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+        panelActions = {
+          isilive = function()
+            openSettingsCalls = openSettingsCalls + 1
+            return true
+          end,
+        },
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist for enabled isiLive")
+
+      local isiLiveButton = RequireValue(addonStrip.buttonsById.isilive, "isiLive shortcut button should exist")
+      local onClick = isiLiveButton._scripts and isiLiveButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "isiLive shortcut must define OnClick")
+      onClick(isiLiveButton, "LeftButton")
+
+      Assert.Equal(#loadCalls, 0, "isiLive shortcut must not try to load its own already-running addon")
+      Assert.Equal(openSettingsCalls, 1, "isiLive shortcut must call the direct settings opener")
+      Assert.Equal(#slashCalls, 0, "direct isiLive settings action must not depend on slash dispatch")
+    end)
+  end)
+
   test("UI third game-menu addon shortcuts resolve registered slash aliases and arguments", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
     local installed = {
+      isiLive = true,
       MRT = true,
       ["DBM-Core"] = true,
       BigWigs = true,
@@ -1380,6 +1456,9 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         LoadAddOn = function() end,
       },
       SlashCmdList = {
+        ISILIVE = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "isilive", msg = msg }
+        end,
         mrtSlash = function(msg)
           slashCalls[#slashCalls + 1] = { id = "mrt", msg = msg }
         end,
@@ -1399,6 +1478,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
           slashCalls[#slashCalls + 1] = { id = "platynator", msg = msg }
         end,
       },
+      SLASH_ISILIVE1 = "/isilive",
       SLASH_mrtSlash6 = "/mrt",
       SLASH_DEADLYBOSSMODS1 = "/dbm",
       SLASH_BigWigs2 = "/bigwigs",
@@ -1419,7 +1499,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       })
       addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist")
 
-      local ids = { "mrt", "dbm", "bigwigs", "details", "simc", "platynator" }
+      local ids = { "isilive", "mrt", "dbm", "bigwigs", "details", "simc", "platynator" }
       for _, id in ipairs(ids) do
         local button = RequireValue(addonStrip.buttonsById[id], id .. " shortcut button should exist")
         local onClick = button._scripts and button._scripts.OnClick
@@ -1427,18 +1507,20 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         onClick(button, "LeftButton")
       end
 
-      Assert.Equal(slashCalls[1].id, "mrt", "MRT shortcut must resolve the mixed-case mrtSlash alias")
-      Assert.Equal(slashCalls[1].msg, "", "MRT shortcut should pass no arguments")
-      Assert.Equal(slashCalls[2].id, "dbm", "DBM shortcut must resolve /dbm")
-      Assert.Equal(slashCalls[2].msg, "", "DBM shortcut should pass no arguments")
-      Assert.Equal(slashCalls[3].id, "bigwigs", "BigWigs shortcut must resolve /bigwigs")
-      Assert.Equal(slashCalls[3].msg, "", "BigWigs shortcut should pass no arguments")
-      Assert.Equal(slashCalls[4].id, "details", "Details shortcut must resolve /details")
-      Assert.Equal(slashCalls[4].msg, "optionen", "German Details shortcut must pass the localized options argument")
-      Assert.Equal(slashCalls[5].id, "simc", "SimC shortcut must resolve AceConsole's registered /simc alias")
-      Assert.Equal(slashCalls[5].msg, "", "SimC shortcut should pass no arguments")
-      Assert.Equal(slashCalls[6].id, "platynator", "Platynator shortcut must resolve the mixed-case alias")
-      Assert.Equal(slashCalls[6].msg, "", "Platynator shortcut should pass no arguments")
+      Assert.Equal(slashCalls[1].id, "isilive", "isiLive shortcut must resolve /isilive")
+      Assert.Equal(slashCalls[1].msg, "settings", "isiLive shortcut must pass the settings argument")
+      Assert.Equal(slashCalls[2].id, "mrt", "MRT shortcut must resolve the mixed-case mrtSlash alias")
+      Assert.Equal(slashCalls[2].msg, "", "MRT shortcut should pass no arguments")
+      Assert.Equal(slashCalls[3].id, "dbm", "DBM shortcut must resolve /dbm")
+      Assert.Equal(slashCalls[3].msg, "", "DBM shortcut should pass no arguments")
+      Assert.Equal(slashCalls[4].id, "bigwigs", "BigWigs shortcut must resolve /bigwigs")
+      Assert.Equal(slashCalls[4].msg, "", "BigWigs shortcut should pass no arguments")
+      Assert.Equal(slashCalls[5].id, "details", "Details shortcut must resolve /details")
+      Assert.Equal(slashCalls[5].msg, "optionen", "German Details shortcut must pass the localized options argument")
+      Assert.Equal(slashCalls[6].id, "simc", "SimC shortcut must resolve AceConsole's registered /simc alias")
+      Assert.Equal(slashCalls[6].msg, "", "SimC shortcut should pass no arguments")
+      Assert.Equal(slashCalls[7].id, "platynator", "Platynator shortcut must resolve the mixed-case alias")
+      Assert.Equal(slashCalls[7].msg, "", "Platynator shortcut should pass no arguments")
     end)
   end)
 

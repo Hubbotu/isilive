@@ -270,20 +270,31 @@ return function(test, ctx)
       CreateFrame = createFrameStub,
     }, function()
       local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_stats_box.lua" })
-      local box = Assert.NotNil(addon.StatsBox.instance, "stats box should create an instance")
+      local box = Assert.NotNil(
+        addon.StatsBox.Create({
+          parent = UIParent,
+          collectStats = function()
+            return {
+              { key = "strength", label = "Str", value = 2000 },
+              { key = "haste", label = "Haste", value = 500, percent = 17.03 },
+            }
+          end,
+        }),
+        "stats box should create an instance"
+      )
       local _, size = box.lines[1].label:GetFont()
       Assert.Equal(size, 16, "font size should apply default 14 plus saved offset")
-      Assert.Equal(box.frame._width, 270, "positive font offset should enlarge the full stats box")
-      Assert.Equal(box.frame._height, 181, "positive font offset should enlarge the full stats box height")
-      Assert.Equal(box.lines[1].label._width, 114, "positive font offset should enlarge the label column")
+      Assert.Equal(box.frame._width, 170, "positive font offset should enlarge the fitted stats box")
+      Assert.Equal(box.frame._height, 50, "positive font offset should enlarge the fitted stats box height")
+      Assert.Equal(box.lines[1].label._width, 40, "positive font offset should enlarge the fitted label column")
 
-      addon.StatsBox.SetFontSizeOffset(-3)
+      box.SetFontSizeOffset(-3)
       _, size = box.lines[1].value:GetFont()
       Assert.Equal(db.statsBoxFontSizeOffset, -3, "font offset setter should persist to db")
       Assert.Equal(size, 11, "font size should apply default 14 plus negative offset")
-      Assert.Equal(box.frame._width, 185, "negative font offset should shrink the full stats box")
-      Assert.Equal(box.frame._height, 124, "negative font offset should shrink the full stats box height")
-      Assert.Equal(box.lines[1].label._width, 79, "negative font offset should shrink the label column")
+      Assert.Equal(box.frame._width, 108, "negative font offset should shrink the fitted stats box")
+      Assert.Equal(box.frame._height, 36, "negative font offset should shrink the fitted stats box height")
+      Assert.Equal(box.lines[1].label._width, 25, "negative font offset should shrink the fitted label column")
     end)
   end)
 
@@ -386,6 +397,19 @@ return function(test, ctx)
       Assert.Equal(box.lines[1].label._point[4], 8, "label text should start at the fitted left padding")
       Assert.Equal(box.lines[1].value._point[4], 51, "value text should start after fitted labels and gap")
       Assert.Equal(box.lines[2].percent._point[4], 85, "percent text should start after fitted values and gap")
+
+      local sizeWrites = {}
+      local originalSetSize = box.frame.SetSize
+      box.frame.SetSize = function(self, width, height)
+        sizeWrites[#sizeWrites + 1] = { width = width, height = height }
+        return originalSetSize(self, width, height)
+      end
+      box.SetBackgroundAlpha(0.6)
+
+      Assert.Equal(box.frame._width, 149, "settings refresh should keep the background fitted to rendered text width")
+      Assert.Equal(box.frame._height, 124, "settings refresh should keep the background fitted to rendered text height")
+      Assert.Equal(#sizeWrites, 1, "settings refresh should apply only the fitted content size")
+      Assert.Equal(sizeWrites[1].width, 149, "settings refresh must not write the wide default frame first")
     end)
   end)
 

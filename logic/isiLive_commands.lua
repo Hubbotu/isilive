@@ -74,6 +74,9 @@ local function BuildDeps(opts)
         return false
       end,
     dumpNameplateState = type(opts.dumpNameplateState) == "function" and opts.dumpNameplateState or function() end,
+    openSettings = type(opts.openSettings) == "function" and opts.openSettings or function()
+      return false
+    end,
     logRuntimeTrace = type(opts.logRuntimeTrace) == "function" and opts.logRuntimeTrace or nil,
     logRuntimeTracef = type(opts.logRuntimeTracef) == "function" and opts.logRuntimeTracef or nil,
     -- Always-on Lua-error capture (see core/isiLive_error_log.lua).
@@ -106,6 +109,7 @@ local HELP_KEYS = {
   "HELP_LOCK",
   "HELP_UNLOCK",
   "HELP_RESETUI",
+  "HELP_SETTINGS",
   "HELP_BINDCHECK",
   "HELP_PAUSE",
   "HELP_RESUME",
@@ -485,6 +489,11 @@ local function TryHandleInfoCommands(ctx, L, cmd)
 end
 
 local function TryHandleUtilityCommands(ctx, cmd)
+  if cmd == "settings" then
+    ctx.openSettings()
+    return true
+  end
+
   if cmd == "tptest" then
     ctx.forceTeleportTestTarget()
     return true

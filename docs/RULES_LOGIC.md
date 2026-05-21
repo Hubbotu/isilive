@@ -87,7 +87,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten und den verifizierten aktuellen Gruppen-Ziel-Key nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
 65. Die eigenstaendige Spieler-Stats-Box zeigt den Primärstat klassen- beziehungsweise spezialisierungsgenau, zeigt nur direkt aus Blizzard-Live-APIs gelesene Werte, ist rahmenlos, standardmaessig aus, ueber Settings einschaltbar und gegen Positions-Drag sperrbar, und speichert ihre Position getrennt von der Main-UI.
 66. Alle frei verschiebbaren isiLive-Fenster muessen an den WoW-Sichtbereich geklemmt sein, sodass ihre Raender beim Ziehen nicht ausserhalb des WoW-Fensters verschwinden.
-67. Das ESC-Addons-Panel darf Shortcut-Buttons fuer Addons anzeigen, die installiert und aktiviert sind; beim Klick muss ein noch nicht geladenes Ziel-Addon verifiziert geladen werden, bevor dessen registrierter Slash-Alias ausgefuehrt wird.
+67. Das ESC-Addons-Panel darf Shortcut-Buttons fuer Addons anzeigen, die installiert und aktiviert sind; beim Klick muss ein noch nicht geladenes externes Ziel-Addon verifiziert geladen werden, bevor dessen registrierter Slash-Alias ausgefuehrt wird. Der isiLive-eigene Shortcut darf stattdessen direkt die isiLive-Settings oeffnen und darf keinen Self-Load versuchen.
 
 ## Regelbloecke
 
@@ -840,8 +840,11 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-ESC-ADDON-PANEL-NUR-AKTIVIERTE-ADDONS
 - Regelnummer: 67
 - Status: aktiv
-- Zusammenfassung: Das ESC-Addons-Panel darf einen Shortcut-Button anzeigen, wenn das Ziel-Addon installiert und aktiviert ist. Ist das Ziel-Addon beim Klick noch nicht geladen, muss der Klickpfad das Addon verifiziert laden und erst danach dessen registrierten Slash-Alias ausfuehren. Wenn das Laden fehlschlaegt oder kein registrierter Slash-Alias existiert, bleibt der Klick wirkungslos.
+- Zusammenfassung: Das ESC-Addons-Panel darf einen Shortcut-Button anzeigen, wenn das Ziel-Addon installiert und aktiviert ist. Ist ein externes Ziel-Addon beim Klick noch nicht geladen, muss der Klickpfad das Addon verifiziert laden und erst danach dessen registrierten Slash-Alias ausfuehren. Wenn das Laden fehlschlaegt oder kein registrierter Slash-Alias existiert, bleibt der Klick wirkungslos. Der isiLive-eigene Shortcut darf stattdessen direkt die isiLive-Settings oeffnen und darf keinen Self-Load versuchen.
 - Erforderliche Tests:
   - UI third game-menu addon panel shows installed and enabled addon shortcuts
   - UI third game-menu addon shortcut loads enabled addon before running slash
+  - UI third game-menu isiLive shortcut can use direct settings action without self-load
+  - UI third game-menu addon shortcuts resolve registered slash aliases and arguments
+  - Commands settings opens the settings panel
   - UI third game-menu addon panel stays hidden when no supported addon is enabled

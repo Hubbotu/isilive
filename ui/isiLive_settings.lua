@@ -1990,7 +1990,7 @@ local function BuildBehaviorSettingsSection(canvas, yOffset, labels, config, con
     labels.SETTINGS_RAID_TRANSITION_NOTE or "Raid: main window hides automatically while in a raid group."
   )
   if controls.raidBehaviorNote then
-    controls.raidBehaviorNote._sectionKey = "SETTINGS_RAID_TRANSITION_BEHAVIOR"
+    controls.raidBehaviorNote._sectionKey = "SETTINGS_RAID_TRANSITION_NOTE"
   end
 
   return yOffset
@@ -2334,66 +2334,60 @@ end
 local function RefreshSettingsControls(controls, config)
   local freshL = config.getL()
   local db = config.getDB()
+  local function SetLocalizedText(control, key, fallback)
+    if control and type(control.SetText) == "function" then
+      control:SetText(freshL[key] or fallback)
+    end
+  end
 
-  if controls.introText then
-    controls.introText:SetText(
-      freshL.SETTINGS_PAGE_HINT or "Use the sections below to tune layout, behavior, and audio cues."
-    )
-  end
+  SetLocalizedText(
+    controls.introText,
+    "SETTINGS_PAGE_HINT",
+    "Use the sections below to tune layout, behavior, and audio cues."
+  )
   controls.generalHeader:SetText(freshL.SETTINGS_SECTION_GENERAL or "General")
-  if controls.generalHint then
-    controls.generalHint:SetText(
-      freshL.SETTINGS_SECTION_GENERAL_HINT or "Language, startup behavior, and utility links."
-    )
-  end
+  SetLocalizedText(
+    controls.generalHint,
+    "SETTINGS_SECTION_GENERAL_HINT",
+    "Language, startup behavior, and utility links."
+  )
   controls.displayHeader:SetText(freshL.SETTINGS_SECTION_DISPLAY or "Display")
-  if controls.displayHint then
-    controls.displayHint:SetText(freshL.SETTINGS_SECTION_DISPLAY_HINT or "Scale, opacity, and UI recovery tools.")
-  end
-  if controls.nameplatesHeader then
-    controls.nameplatesHeader:SetText(freshL.SETTINGS_SECTION_NAMEPLATES or "Nameplates")
-  end
-  if controls.nameplatesHint then
-    controls.nameplatesHint:SetText(
-      freshL.SETTINGS_SECTION_NAMEPLATES_HINT or "Enemy forces overlay on Mythic+ nameplates."
-    )
-  end
-  if controls.nameplatesExternalWarn then
-    controls.nameplatesExternalWarn:SetText(
-      freshL.SETTINGS_NAMEPLATE_EXTERNAL_WARN
-        or "Plater or Platynator detected: if that addon already shows M+ count, leave this off."
-    )
-  end
+  SetLocalizedText(controls.displayHint, "SETTINGS_SECTION_DISPLAY_HINT", "Scale, opacity, and UI recovery tools.")
+  SetLocalizedText(controls.nameplatesHeader, "SETTINGS_SECTION_NAMEPLATES", "Nameplates")
+  SetLocalizedText(
+    controls.nameplatesHint,
+    "SETTINGS_SECTION_NAMEPLATES_HINT",
+    "Enemy forces overlay on Mythic+ nameplates."
+  )
+  SetLocalizedText(
+    controls.nameplatesExternalWarn,
+    "SETTINGS_NAMEPLATE_EXTERNAL_WARN",
+    "Plater or Platynator detected: if that addon already shows M+ count, leave this off."
+  )
   controls.behaviorHeader:SetText(freshL.SETTINGS_SECTION_BEHAVIOR or "Behavior")
-  if controls.behaviorHint then
-    controls.behaviorHint:SetText(
-      freshL.SETTINGS_SECTION_BEHAVIOR_HINT or "Sync, auto-open, combat, and raid handling."
-    )
-  end
-  if controls.autoTriggersNote then
-    controls.autoTriggersNote:SetText(
-      freshL.SETTINGS_AUTO_TRIGGERS_NOTE or "Automatic show/hide: each trigger below is independent."
-    )
-  end
-  if controls.raidBehaviorNote then
-    controls.raidBehaviorNote:SetText(
-      freshL.SETTINGS_RAID_TRANSITION_NOTE or "Raid: main window hides automatically while in a raid group."
-    )
-  end
-  if controls.soundHeader then
-    controls.soundHeader:SetText(freshL.SETTINGS_SECTION_SOUNDS or "Sounds")
-  end
-  if controls.soundHint then
-    controls.soundHint:SetText(freshL.SETTINGS_SECTION_SOUNDS_HINT or "Toggle the built-in audio cues.")
-  end
-  if controls.chatHeader then
-    controls.chatHeader:SetText(freshL.SETTINGS_SECTION_CHAT or "Chat Announcements")
-  end
-  if controls.chatHint then
-    controls.chatHint:SetText(
-      freshL.SETTINGS_SECTION_CHAT_HINT or "Toggle automatic chat messages during Mythic+ runs."
-    )
-  end
+  SetLocalizedText(
+    controls.behaviorHint,
+    "SETTINGS_SECTION_BEHAVIOR_HINT",
+    "Sync, auto-open, combat, and raid handling."
+  )
+  SetLocalizedText(
+    controls.autoTriggersNote,
+    "SETTINGS_AUTO_TRIGGERS_NOTE",
+    "Automatic show/hide: each trigger below is independent."
+  )
+  SetLocalizedText(
+    controls.raidBehaviorNote,
+    "SETTINGS_RAID_TRANSITION_NOTE",
+    "Raid: main window hides automatically while in a raid group."
+  )
+  SetLocalizedText(controls.soundHeader, "SETTINGS_SECTION_SOUNDS", "Sounds")
+  SetLocalizedText(controls.soundHint, "SETTINGS_SECTION_SOUNDS_HINT", "Toggle the built-in audio cues.")
+  SetLocalizedText(controls.chatHeader, "SETTINGS_SECTION_CHAT", "Chat Announcements")
+  SetLocalizedText(
+    controls.chatHint,
+    "SETTINGS_SECTION_CHAT_HINT",
+    "Toggle automatic chat messages during Mythic+ runs."
+  )
   if controls.chatAnnounceBR and controls.chatAnnounceBR.label then
     controls.chatAnnounceBR.label:SetText(freshL.SETTINGS_CHAT_BR_ANNOUNCE or "Chat: Announce Battle Res usage in M+")
     controls.chatAnnounceBR.check:SetChecked(db.chatAnnounceBR ~= false)

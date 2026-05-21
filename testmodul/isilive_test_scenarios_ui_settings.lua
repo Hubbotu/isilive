@@ -812,40 +812,6 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
   test("Settings panel refresh localizes behavior auto and raid notes", function()
     local createFrameStub = BuildCreateFrameStub()
     local db = {}
-    local localeTexts = {
-      enUS = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Automatic show/hide: each trigger below is independent.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Raid: main window hides automatically while in a raid group.",
-      },
-      deDE = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Automatisches Anzeigen/Schliessen: jeder Trigger unten ist unabhaengig.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Raid: das Hauptfenster wird in Raid-Gruppen automatisch ausgeblendet.",
-      },
-      frFR = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Affichage/fermeture auto : chaque declencheur ci-dessous est independant.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Raid : la fenetre principale est masquee automatiquement en groupe de raid.",
-      },
-      esES = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostrar/cerrar automatico: cada disparador siguiente es independiente.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Banda: la ventana principal se oculta automaticamente en grupos de banda.",
-      },
-      ptBR = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostrar/fechar automatico: cada gatilho abaixo e independente.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Raide: a janela principal e ocultada automaticamente em grupos de raide.",
-      },
-      itIT = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostra/chiudi automatico: ogni innesco di seguito e indipendente.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Raid: la finestra principale viene nascosta automaticamente nei gruppi raid.",
-      },
-      ruRU = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "RU auto note",
-        SETTINGS_RAID_TRANSITION_NOTE = "RU raid note",
-      },
-      trTR = {
-        SETTINGS_AUTO_TRIGGERS_NOTE = "Otomatik goster/kapat: asagidaki her tetikleyici bagimsiz calisir.",
-        SETTINGS_RAID_TRANSITION_NOTE = "Akin: ana pencere akin grubunda otomatik olarak gizlenir.",
-      },
-    }
     local activeLocale = "enUS"
 
     WithGlobals({
@@ -859,38 +825,11 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
         RegisterAddOnCategory = function() end,
       },
     }, function()
-      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local addon = LoadAddonModules({ "isiLive_texts.lua", "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local localeTexts = addon.Texts.GetLocaleTables()
       local panel = addon.SettingsPanel.Create({
         getL = function()
-          local texts = localeTexts[activeLocale] or localeTexts.enUS
-          return {
-            SETTINGS_SECTION_GENERAL = "General",
-            SETTINGS_SECTION_DISPLAY = "Display",
-            SETTINGS_SECTION_BEHAVIOR = "Behavior",
-            SETTINGS_SECTION_DEBUG = "Debug",
-            SETTINGS_LANGUAGE = "Language",
-            SETTINGS_COMBAT_LOGGING = "Combat Logging",
-            SETTINGS_DM_RESET = "DM Reset",
-            SETTINGS_ESC_PANEL = "ESC Panel",
-            SETTINGS_BG_ALPHA = "Background Opacity",
-            SETTINGS_UI_SCALE = "UI Scale",
-            SETTINGS_MINIMAP_BUTTON = "Minimap Button",
-            SETTINGS_SYNC_ENABLED = "Addon Sync",
-            SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
-            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
-            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
-            SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
-            SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
-            SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
-            SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
-            SETTINGS_DEFAULT_OPEN_UI_V = "V",
-            SETTINGS_DEFAULT_OPEN_UI_H = "H",
-            SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
-            SETTINGS_QUEUE_DEBUG = "Queue Debug",
-            SETTINGS_RUNTIME_LOG = "Runtime Log",
-            SETTINGS_AUTO_TRIGGERS_NOTE = texts.SETTINGS_AUTO_TRIGGERS_NOTE,
-            SETTINGS_RAID_TRANSITION_NOTE = texts.SETTINGS_RAID_TRANSITION_NOTE,
-          }
+          return localeTexts[activeLocale] or localeTexts.enUS
         end,
         getCurrentLocale = function()
           return activeLocale
@@ -914,6 +853,8 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       end
       autoNote = Assert.NotNil(autoNote, "settings panel should create the auto-trigger note")
       raidNote = Assert.NotNil(raidNote, "settings panel should create the raid behavior note")
+      Assert.Equal(autoNote._sectionKey, "SETTINGS_AUTO_TRIGGERS_NOTE", "auto-trigger note should keep its locale key")
+      Assert.Equal(raidNote._sectionKey, "SETTINGS_RAID_TRANSITION_NOTE", "raid note should keep its locale key")
 
       for locale, texts in pairs(localeTexts) do
         activeLocale = locale

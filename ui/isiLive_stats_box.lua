@@ -339,7 +339,7 @@ local function BuildPrimaryStatRow(opts)
   end
   return {
     key = primaryKey,
-    label = ResolveLabel(primaryKey, opts),
+    label = ResolveLabel(primaryKey),
     value = value,
   }
 end
@@ -355,37 +355,37 @@ function StatsBox.CollectPlayerStats(opts)
   local secondaryRows = {
     {
       key = "crit",
-      label = ResolveLabel("crit", opts),
+      label = ResolveLabel("crit"),
       value = ReadCombatRating("CR_CRIT_MELEE", opts),
       percent = ReadNoArgNumber("GetCritChance", opts),
     },
     {
       key = "haste",
-      label = ResolveLabel("haste", opts),
+      label = ResolveLabel("haste"),
       value = ReadCombatRating("CR_HASTE_MELEE", opts),
       percent = ReadPlayerSpellHaste(opts),
     },
     {
       key = "mastery",
-      label = ResolveLabel("mastery", opts),
+      label = ResolveLabel("mastery"),
       value = ReadCombatRating("CR_MASTERY", opts),
       percent = ReadNoArgNumber("GetMasteryEffect", opts),
     },
     {
       key = "versatility",
-      label = ResolveLabel("versatility", opts),
+      label = ResolveLabel("versatility"),
       value = ReadCombatRating("CR_VERSATILITY_DAMAGE_DONE", opts),
       percent = ReadCombatRatingBonus("CR_VERSATILITY_DAMAGE_DONE", opts),
     },
     {
       key = "leech",
-      label = ResolveLabel("leech", opts),
+      label = ResolveLabel("leech"),
       value = ReadCombatRating("CR_LIFESTEAL", opts),
       percent = ReadCombatRatingBonus("CR_LIFESTEAL", opts),
     },
     {
       key = "speed",
-      label = ResolveLabel("speed", opts),
+      label = ResolveLabel("speed"),
       value = ReadCombatRating("CR_SPEED", opts),
       percent = ReadCombatRatingBonus("CR_SPEED", opts),
     },
@@ -443,9 +443,15 @@ local function ResolveContentFitLayout(baseLayout, lines, visibleCount)
     end
   end
 
-  labelWidth = labelWidth > 0 and labelWidth or baseLayout.labelWidth
-  valueWidth = valueWidth > 0 and valueWidth or baseLayout.valueWidth
-  percentWidth = percentWidth > 0 and percentWidth or (hasPercent and baseLayout.percentWidth or 0)
+  if visibleCount <= 0 then
+    labelWidth = 0
+    valueWidth = 0
+    percentWidth = 0
+  else
+    labelWidth = labelWidth > 0 and labelWidth or baseLayout.labelWidth
+    valueWidth = valueWidth > 0 and valueWidth or baseLayout.valueWidth
+    percentWidth = percentWidth > 0 and percentWidth or (hasPercent and baseLayout.percentWidth or 0)
+  end
 
   local width = baseLayout.leftPadding
     + labelWidth
@@ -505,7 +511,7 @@ end
 local ApplyLayout
 
 local function RenderRows(state, rows)
-  local layout = state.layout or ResolveLayout()
+  local layout = state.baseLayout or ResolveLayout()
   local visibleCount = 0
   for index, rowFrame in ipairs(state.lines) do
     local row = rows[index]
@@ -661,16 +667,15 @@ function StatsBox.Create(opts)
     if type(frame.SetMovable) == "function" then
       frame:SetMovable(not ResolveLocked())
     end
-    local layout = ResolveLayout()
-    ApplyLayout(state, layout)
+    state.baseLayout = ResolveLayout()
     for _, rowFrame in ipairs(state.lines) do
       for _, line in ipairs({ rowFrame.label, rowFrame.value, rowFrame.percent }) do
-        ApplyLineTextStyle(line, layout.fontSize)
+        ApplyLineTextStyle(line, state.baseLayout.fontSize)
       end
     end
+    Refresh()
     if ResolveEnabled() then
       frame:Show()
-      Refresh()
     else
       frame:Hide()
     end

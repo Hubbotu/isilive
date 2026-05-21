@@ -13,6 +13,7 @@ local function BuildCommandLocale()
     HELP_LOCK = "/isilive lock",
     HELP_UNLOCK = "/isilive unlock",
     HELP_RESETUI = "/isilive resetui",
+    HELP_SETTINGS = "/isilive settings",
     HELP_BINDCHECK = "/isilive bindcheck",
     HELP_LANG = "/isilive lang [en|de|fr|es|pt]",
     HELP_PAUSE = "/isilive pause",
@@ -54,6 +55,7 @@ local function BuildCommandState(overrides)
     uiScale = 1.25,
     bgAlpha = 0.73,
     resetMainFramePositionCalls = 0,
+    openSettingsCalls = 0,
     tpTestCalls = 0,
     tpDebugCalls = 0,
     _overrides = overrides or {},
@@ -184,6 +186,10 @@ local function BuildCommandDeps(state, L)
     clearErrorLog = function()
       state.errorLogEntries = {}
       state.errorLogClearCalls = (state.errorLogClearCalls or 0) + 1
+    end,
+    openSettings = function()
+      state.openSettingsCalls = state.openSettingsCalls + 1
+      return true
     end,
   }
 end
@@ -429,6 +435,7 @@ local function RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddon
       "/isilive lock",
       "/isilive unlock",
       "/isilive resetui",
+      "/isilive settings",
       "/isilive bindcheck",
       "/isilive pause",
       "/isilive resume",
@@ -454,6 +461,12 @@ local function RegisterCommandExtendedTests(test, Assert, WithGlobals, LoadAddon
       end
     end
     Assert.True(foundHeader, "empty command must print help header")
+  end)
+
+  test("Commands settings opens the settings panel", function()
+    local state = BuildCommandExecutor(WithGlobals, LoadAddonModules)
+    state._execute("settings")
+    Assert.Equal(state.openSettingsCalls, 1, "settings command must call the settings opener")
   end)
 
   test("Commands pause while stopped prints error", function()

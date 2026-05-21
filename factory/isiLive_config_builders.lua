@@ -211,6 +211,17 @@ function ConfigBuilders.BuildSlashCommandsOpts(ctx)
         errorLog.Clear()
       end
     end,
+    openSettings = function()
+      local blizzardSettings = rawget(_G, "Settings")
+      if type(blizzardSettings) ~= "table" or type(blizzardSettings.OpenToCategory) ~= "function" then
+        return false
+      end
+      if ctx.settingsPanel and ctx.settingsPanel.category then
+        blizzardSettings.OpenToCategory(ctx.settingsPanel.category.ID)
+        return true
+      end
+      return false
+    end,
     resetDB = ctx.resetDB,
     toggleNameplateTestMode = function(arg)
       local mobNameplate = addonTable.MobNameplate
