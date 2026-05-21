@@ -6,9 +6,9 @@ local _, addonTable = ...
 
 addonTable.MPlusForces = {
   season = "midnight_s1",
-  mdtVersion = "6.1.2",
-  generatedAt = "2026-05-14",
-  expiresAt = "2026-05-29",
+  mdtVersion = "6.1.4",
+  generatedAt = "2026-05-21",
+  expiresAt = "2026-06-05",
   dungeonCount = 8,
   npcCount = 128,
 
