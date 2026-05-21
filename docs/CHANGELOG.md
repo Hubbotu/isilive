@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.267 (patch)
+
+Adds verified mount shortcuts to the ESC menu.
+
+### ESC Mounts Panel
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua),
+[factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua):
+
+- Added a localized `Mounts` panel below the existing `Travel` ESC panel.
+- Added secure macro shortcuts for favorite mount, auction-house Brutosaur, and
+  repair Yak; buttons are shown only when the mount/favorite availability is
+  verified through `C_MountJournal` and the localized spell name is verified
+  through Blizzard spell APIs.
+- The favorite shortcut now casts a verified favorite mount's own spell instead
+  of relying on the global random-favorite spell name.
+- Corrected the auction-house mount shortcut icon to the verified
+  `inv_misc_food_lunchbox_devilsaur` FileDataID.
+- Kept the panel mounted as a `GameMenuFrame` child and covered the placement,
+  fail-closed visibility, and combat-open behavior with deterministic tests.
+
 ## 2026-05-21 - Version 0.9.266 (patch)
 
 Fixes the standalone Stats Box under tainted secret width measurements and

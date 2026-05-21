@@ -108,6 +108,9 @@ local function FinalizeFactorySettings(ctx)
         if ctx.secondPanelUI and type(ctx.secondPanelUI.SyncVisibility) == "function" then
           ctx.secondPanelUI.SyncVisibility()
         end
+        if ctx.mountPanelUI and type(ctx.mountPanelUI.SyncVisibility) == "function" then
+          ctx.mountPanelUI.SyncVisibility()
+        end
         if ctx.thirdPanelUI and type(ctx.thirdPanelUI.SyncVisibility) == "function" then
           ctx.thirdPanelUI.SyncVisibility()
         end

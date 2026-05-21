@@ -1509,6 +1509,16 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
         firstPanelState = ctx.panelUI,
       })
     end
+    if modules.ui and type(modules.ui.EnsureMountPanelUI) == "function" then
+      ctx.mountPanelUI = modules.ui.EnsureMountPanelUI({
+        getL = ctx.GetL,
+        isInCombat = ctx.IsInCombat,
+        isEnabled = function()
+          return not IsiLiveDB or IsiLiveDB.showEscPanel ~= false
+        end,
+        travelPanelState = ctx.secondPanelUI,
+      })
+    end
     if modules.ui and type(modules.ui.EnsureThirdPanelUI) == "function" then
       ctx.thirdPanelUI = modules.ui.EnsureThirdPanelUI({
         getL = ctx.GetL,

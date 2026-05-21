@@ -7,7 +7,9 @@ local function CreateTextureStub()
     SetSize = function() end,
     SetPoint = function() end,
     SetColorTexture = function() end,
-    SetTexture = function() end,
+    SetTexture = function(self, texture)
+      self._texture = texture
+    end,
     SetTexCoord = function() end,
     SetBlendMode = function() end,
     SetVertexColor = function() end,

@@ -67,7 +67,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 44. Alle Center-Meldungen starten mit derselben Portal-Navigator-Basistypografie fuer Body-Text, Schriftgroesse und Standardfarbe.
 45. Beim Login oder UI-Reload wird die Main-UI standardmaessig eingeblendet, ausser im Raidmodus; die Startup-Option kann diesen Auto-Show-Pfad weiterhin abschalten.
 46. Manuelle Layout-Umschaltungen der Main-UI duerfen auch im Kampf angefordert werden, ausser im Raidmodus; direkte Mutationen an Secure-Kindern bleiben dabei ausgesetzt und werden spaetestens bei `PLAYER_REGEN_ENABLED` ueber den sichtbaren UI-Refresh nachgezogen.
-47. Die ESC-Panel-Overlays muessen im Kampf als bereits gemountete `GameMenuFrame`-Kinder sichtbar bleiben; waehrend Kampf-Lockdown sind an ihnen keine Show/Hide- oder Layout-Mutationen erlaubt, unsichere Shortcuts bleiben sichtbar, duerfen ihre Aktion aber erst ausserhalb des Kampfes ausfuehren.
+47. Die ESC-Panel-Overlays muessen im Kampf als bereits gemountete `GameMenuFrame`-Kinder sichtbar bleiben; waehrend Kampf-Lockdown sind an ihnen keine Show/Hide- oder Layout-Mutationen erlaubt, unsichere Shortcuts bleiben sichtbar, duerfen ihre Aktion aber erst ausserhalb des Kampfes ausfuehren, und sichere Mount-Shortcuts muessen als Secure-Macro-Buttons mit verifiziertem Spellnamen vorkonfiguriert sein; wenn Mount-Daten beim Initialisieren noch nicht verifizierbar sind, bleibt das Mount-Panel als gemountetes Kind vorhanden und aktualisiert seine sichtbaren Shortcuts beim naechsten ESC-Menue-Oeffnen ausserhalb des Kampfes.
 48. Der isiLive-Last-Run-Sync transportiert nur den belastbar verifizierten `DPS`-Wert eines Snapshots; das Roster nutzt `syncDps` nur als Fallback, wenn lokal kein Last-Run-DPS vorliegt.
 49. Der Kick-Tracker bildet den aktuell verfuegbaren Interrupt der aktuellen Spezialisierung ab; Heal-Specs ohne Interrupt (Holy Paladin, Mistweaver Monk, Restoration Druid, Discipline / Holy Priest) melden `hasKick=false`, Devourer Demon Hunter nutzt `Disrupt`, und verfuegbare pet-basierte Warlock-Interrupts zaehlen als eigener Kick.
 50. Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an; der kompakte `SYNC_KICK_READY_SHORT`-Marker ist gruen, laufende Cooldowns zeigen rote Restsekunden, `-` steht fuer keinen verfuegbaren Kick oder fehlenden isiLive-Sync, und aktive Kick-Statusaenderungen werden spaetestens einmal pro Sekunde synchronisiert.
@@ -560,13 +560,18 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-ESC-PANEL-COMBAT-MOUNT
 - Regelnummer: 47
 - Status: aktiv
-- Zusammenfassung: Die ESC-Panel-Overlays muessen als direkte, vorab erzeugte Kinder von `GameMenuFrame` gemountet bleiben. Waehrend Kampf-Lockdown duerfen weder `OnShow` noch nachgelagerte Callback-Pfade an diesen Overlays `Show`, `Hide`, `ClearAllPoints`, `SetPoint`, `SetSize`, `EnableMouse` oder `SetAlpha` ausfuehren. Unsichere ESC-Shortcuts bleiben sichtbar, duerfen ihre Aktion im Kampf aber nicht ausfuehren; Secure-Button-Refreshes bleiben bis `PLAYER_REGEN_ENABLED` verzoegert.
+- Zusammenfassung: Die ESC-Panel-Overlays muessen als direkte, vorab erzeugte Kinder von `GameMenuFrame` gemountet bleiben. Waehrend Kampf-Lockdown duerfen weder `OnShow` noch nachgelagerte Callback-Pfade an diesen Overlays `Show`, `Hide`, `ClearAllPoints`, `SetPoint`, `SetSize`, `EnableMouse` oder `SetAlpha` ausfuehren. Unsichere ESC-Shortcuts bleiben sichtbar, duerfen ihre Aktion im Kampf aber nicht ausfuehren; Secure-Button-Refreshes bleiben bis `PLAYER_REGEN_ENABLED` verzoegert. Das Mounts-Panel sitzt unter dem Travel-Panel und darf Mount-Aktionen nur als sichere Macro-Buttons fuer verifizierte Favoriten-/Mount-Verfuegbarkeit und verifizierte Spellnamen anzeigen; der Favoriten-Shortcut muss einen konkret verifizierten favorisierten Mount-Spell casten. Wenn Mount-Daten oder Spellnamen beim ersten Initialisieren noch nicht verifizierbar sind, bleibt das Panel als `GameMenuFrame`-Kind gemountet, aber verborgen, und aktualisiert beim naechsten `GameMenuFrame`-`OnShow` ausserhalb des Kampfes seine sichtbaren Shortcuts.
 - Erforderliche Tests:
   - UI game-menu panel stays mounted as GameMenuFrame child while reload button remains secure
   - UI game-menu panels rely on parent visibility instead of deferred host callbacks
   - UI game-menu first combat open keeps mounted panel visible while insecure shortcuts are combat-blocked
   - UI second game-menu panel also stays visible during combat
   - UI third game-menu addon panel also stays visible during combat
+  - UI mount game-menu panel shows verified mount shortcuts under travel panel
+  - UI mount game-menu panel stays hidden when no verified mount shortcut is available
+  - UI mount game-menu panel stays hidden when spell names cannot be verified
+  - UI mount game-menu panel refreshes mounted shortcuts when verified spell names become available
+  - UI mount game-menu panel also stays visible during combat
   - UI game-menu secure button updates are deferred during combat and applied after regen
 
 ### RULE-SYNC-LAST-RUN-METRIKEN

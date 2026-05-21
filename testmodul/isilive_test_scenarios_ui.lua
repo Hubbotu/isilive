@@ -1618,7 +1618,374 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       Assert.Nil(addonStrip, "addon shortcut panel must not render when no supported addon is enabled")
     end)
   end)
+end
 
+local function RegisterGameMenuMountPanelTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("UI mount game-menu panel shows verified mount shortcuts under travel panel", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local spellToMount = {
+      [465235] = 2001,
+      [122708] = 2002,
+    }
+    local mountInfo = {
+      [1001] = { spellID = 999001, favorite = true, collected = true },
+      [2001] = { spellID = 465235, favorite = false, collected = true },
+      [2002] = { spellID = 122708, favorite = false, collected = true },
+    }
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_MountJournal = {
+        GetMountIDs = function()
+          return { 1001, 2001, 2002 }
+        end,
+        GetMountFromSpell = function(spellID)
+          return spellToMount[spellID]
+        end,
+        GetMountInfoByID = function(mountID)
+          local info = mountInfo[mountID]
+          if not info then
+            return nil
+          end
+          return "Mount", info.spellID, nil, false, true, nil, info.favorite, false, nil, false, info.collected
+        end,
+      },
+      C_Spell = {
+        GetSpellName = function(spellID)
+          local names = {
+            [999001] = "Favorite Drake",
+            [465235] = "Gilded Trader's Brutosaur",
+            [122708] = "Grand Expedition Yak",
+          }
+          return names[spellID]
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+        getL = function()
+          return {
+            PANEL_HEADER_MOUNTS = "Mounts",
+            BTN_MOUNT_FAVORITE = "Favorite Mount",
+            BTN_MOUNT_AH = "AH Mount",
+            BTN_MOUNT_REPAIR = "Repair Mount",
+          }
+        end,
+      })
+
+      mountStrip = Assert.NotNil(mountStrip, "mount shortcut panel should exist when verified mounts are available")
+      Assert.NotNil(mountStrip.buttonsById.favorite_mount, "favorite mount shortcut must be visible")
+      Assert.NotNil(mountStrip.buttonsById.auction_house_mount, "AH mount shortcut must be visible")
+      Assert.NotNil(mountStrip.buttonsById.repair_mount, "repair mount shortcut must be visible")
+      Assert.Equal(mountStrip.shortcutsHeader:GetText(), "Mounts", "mount panel header must be localized")
+
+      local point, relativeTo, relativePoint = mountStrip.panelFrame:GetPoint()
+      Assert.Equal(point, "TOPLEFT", "mount panel must use a below-panel top-left anchor")
+      Assert.Equal(relativeTo, travelStrip.panelFrame, "mount panel must anchor below the travel panel")
+      Assert.Equal(relativePoint, "BOTTOMLEFT", "mount panel must attach to the travel panel bottom-left")
+
+      local favoriteButton = mountStrip.buttonsById.favorite_mount
+      Assert.Equal(favoriteButton:GetAttribute("type"), "macro", "favorite shortcut must be a secure macro button")
+      Assert.Equal(
+        favoriteButton:GetAttribute("macrotext"),
+        "/click GameMenuButtonContinue\n/cast Favorite Drake",
+        "favorite shortcut must close the game menu and cast a verified favorite mount spell"
+      )
+      Assert.Equal(
+        mountStrip.buttonsById.auction_house_mount:GetAttribute("macrotext"),
+        "/click GameMenuButtonContinue\n/cast Gilded Trader's Brutosaur",
+        "AH shortcut must cast the verified Brutosaur spell by localized spell name"
+      )
+      Assert.Equal(
+        mountStrip.buttonsById.auction_house_mount._panelIcon._texture,
+        1529269,
+        "AH shortcut must use the verified devilsaur lunchbox icon file ID"
+      )
+      Assert.Equal(
+        mountStrip.buttonsById.repair_mount:GetAttribute("macrotext"),
+        "/click GameMenuButtonContinue\n/cast Grand Expedition Yak",
+        "repair shortcut must cast the verified Expedition Yak spell by localized spell name"
+      )
+    end)
+  end)
+
+  test("UI mount game-menu panel stays hidden when spell names cannot be verified", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_MountJournal = {
+        GetMountIDs = function()
+          return { 1001 }
+        end,
+        GetMountFromSpell = function(spellID)
+          return spellID == 122708 and 1001 or nil
+        end,
+        GetMountInfoByID = function(mountID)
+          if mountID ~= 1001 then
+            return nil
+          end
+          return "Mount", 122708, nil, false, true, nil, false, false, nil, false, true
+        end,
+      },
+      C_Spell = {
+        GetSpellName = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+      })
+      mountStrip = Assert.NotNil(mountStrip, "mount shortcut panel should stay mounted without a verified spell name")
+      Assert.False(
+        mountStrip.panelFrame:IsShown(),
+        "mount shortcut panel must stay hidden without a verified spell name"
+      )
+      Assert.False(mountStrip.buttonsById.repair_mount:IsShown(), "unverified mount shortcut must stay hidden")
+    end)
+  end)
+
+  test("UI mount game-menu panel refreshes mounted shortcuts when verified spell names become available", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local spellNameAvailable = false
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_MountJournal = {
+        GetMountIDs = function()
+          return { 1001 }
+        end,
+        GetMountFromSpell = function(spellID)
+          return spellID == 122708 and 1001 or nil
+        end,
+        GetMountInfoByID = function(mountID)
+          if mountID ~= 1001 then
+            return nil
+          end
+          return "Mount", 122708, nil, false, true, nil, false, false, nil, false, true
+        end,
+      },
+      C_Spell = {
+        GetSpellName = function(spellID)
+          if spellNameAvailable and spellID == 122708 then
+            return "Grand Expedition Yak"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+        getL = function()
+          return {
+            PANEL_HEADER_MOUNTS = "Mounts",
+            BTN_MOUNT_REPAIR = "Repair Mount",
+          }
+        end,
+      })
+      mountStrip = Assert.NotNil(mountStrip, "mount panel should be mounted before spell names are verified")
+      Assert.False(
+        mountStrip.panelFrame:IsShown(),
+        "initial mount panel should stay hidden without verified spell names"
+      )
+      Assert.False(mountStrip.buttonsById.repair_mount:IsShown(), "initial repair mount shortcut should stay hidden")
+
+      local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
+      onShow = Assert.NotNil(onShow, "mount panel should share the GameMenuFrame OnShow refresh")
+      spellNameAvailable = true
+      onShow(gameMenuFrame)
+
+      mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+      })
+      mountStrip = Assert.NotNil(mountStrip, "mount panel should be reused after deferred spell verification")
+      Assert.True(mountStrip.panelFrame:IsShown(), "mount panel should show after spell verification")
+      Assert.True(
+        mountStrip.buttonsById.repair_mount:IsShown(),
+        "repair mount shortcut should appear after spell verification"
+      )
+      Assert.Equal(
+        mountStrip.buttonsById.repair_mount:GetAttribute("macrotext"),
+        "/click GameMenuButtonContinue\n/cast Grand Expedition Yak",
+        "refreshed shortcut must use the verified spell name"
+      )
+    end)
+  end)
+
+  test("UI mount game-menu panel stays hidden when no verified mount shortcut is available", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_MountJournal = {
+        GetMountIDs = function()
+          return {}
+        end,
+        GetMountFromSpell = function()
+          return nil
+        end,
+        GetMountInfoByID = function()
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+      })
+      mountStrip =
+        Assert.NotNil(mountStrip, "mount shortcut panel should stay mounted without verified available mounts")
+      Assert.False(
+        mountStrip.panelFrame:IsShown(),
+        "mount shortcut panel must stay hidden without verified available mounts"
+      )
+      Assert.False(mountStrip.buttonsById.favorite_mount:IsShown(), "favorite mount shortcut must stay hidden")
+      Assert.False(mountStrip.buttonsById.auction_house_mount:IsShown(), "AH mount shortcut must stay hidden")
+      Assert.False(mountStrip.buttonsById.repair_mount:IsShown(), "repair mount shortcut must stay hidden")
+    end)
+  end)
+
+  test("UI mount game-menu panel also stays visible during combat", function()
+    local inCombat = false
+    local createFrameStub, createdFrames = BuildCreateFrameStub({
+      simulateProtectedFrames = true,
+      isInCombat = function()
+        return inCombat
+      end,
+    })
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    gameMenuFrame._isProtected = true
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_MountJournal = {
+        GetMountIDs = function()
+          return { 1001 }
+        end,
+        GetMountFromSpell = function()
+          return nil
+        end,
+        GetMountInfoByID = function(mountID)
+          if mountID ~= 1001 then
+            return nil
+          end
+          return "Mount", 999001, nil, false, true, nil, true, false, nil, false, true
+        end,
+      },
+      C_Spell = {
+        GetSpellName = function(spellID)
+          if spellID == 999001 then
+            return "Favorite Drake"
+          end
+          return nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({
+        gameMenuFrame = gameMenuFrame,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      local mountStrip = UI.EnsureMountPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        travelPanelState = travelStrip,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      mountStrip = Assert.NotNil(mountStrip, "mount shortcut panel should exist")
+      local mountPanel = RequireValue(mountStrip.panelFrame, "mount panel frame should exist")
+      local favoriteButton = RequireValue(mountStrip.buttonsById.favorite_mount, "favorite button should exist")
+      gameMenuFrame:Hide()
+
+      local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
+      onShow = Assert.NotNil(onShow, "game menu should register a shared OnShow hook")
+
+      inCombat = true
+      gameMenuFrame._shown = true
+      local okShow, errShow = pcall(function()
+        onShow(gameMenuFrame)
+      end)
+
+      Assert.True(okShow, "combat game-menu OnShow should keep the mount panel mounted: " .. tostring(errShow))
+      Assert.True(mountPanel:IsShown(), "mount panel should remain visible through the combat open")
+      Assert.True(favoriteButton:IsShown(), "mount-panel secure button should stay visible during combat")
+
+      local retryFrame = FindCombatRetryFrame(createdFrames)
+      Assert.NotNil(retryFrame, "combat mount-panel show should rely on the regen retry frame")
+
+      inCombat = false
+      retryFrame = RequireValue(retryFrame, "combat mount-panel show should rely on the regen retry frame")
+      retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
+
+      Assert.True(mountPanel:IsShown(), "mount panel should remain visible after regen")
+    end)
+  end)
+end
+
+local function RegisterGameMenuSecondPanelBehaviorTests(test, Assert, WithGlobals, LoadAddonModules)
   test("UI second game-menu hearthstone button picks an owned toy and re-rolls on PreClick", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
@@ -2267,6 +2634,8 @@ end
 local function RegisterGameMenuMicroButtonTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterGameMenuMountPanelTests(test, Assert, WithGlobals, LoadAddonModules)
+  RegisterGameMenuSecondPanelBehaviorTests(test, Assert, WithGlobals, LoadAddonModules)
   RegisterGameMenuDefaultOpenerTests(test, Assert, WithGlobals, LoadAddonModules)
 end
 

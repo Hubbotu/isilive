@@ -90,6 +90,9 @@ local PANEL_UI_ENTRIES = {
     secureMacroText = "/click GameMenuButtonContinue\n/reload",
   },
 }
+local RANDOM_FAVORITE_MOUNT_SPELL_ID = 150544
+local AH_MOUNT_SPELL_ID = 465235
+local REPAIR_MOUNT_SPELL_ID = 122708
 local ADDON_PANEL_UI_ENTRIES = {
   {
     id = "isilive",
@@ -158,6 +161,30 @@ local ADDON_PANEL_UI_ENTRIES = {
     addonNames = { "Platynator" },
     slashText = "/platynator",
     icon = "Interface\\Icons\\INV_Misc_EngGizmos_30",
+  },
+}
+local MOUNT_PANEL_UI_ENTRIES = {
+  {
+    id = "favorite_mount",
+    labelKey = "BTN_MOUNT_FAVORITE",
+    fallbackText = "Favorite Mount",
+    icon = 213588,
+    spellID = RANDOM_FAVORITE_MOUNT_SPELL_ID,
+    requiresFavorite = true,
+  },
+  {
+    id = "auction_house_mount",
+    labelKey = "BTN_MOUNT_AH",
+    fallbackText = "AH Mount",
+    icon = 1529269,
+    spellID = AH_MOUNT_SPELL_ID,
+  },
+  {
+    id = "repair_mount",
+    labelKey = "BTN_MOUNT_REPAIR",
+    fallbackText = "Repair Mount",
+    icon = "Interface\\Icons\\Ability_Mount_TravellersYakMount",
+    spellID = REPAIR_MOUNT_SPELL_ID,
   },
 }
 -- Hearthstone toy item IDs (collected from the WoW item database).
@@ -270,6 +297,7 @@ local SECOND_PANEL_UI_ENTRIES = {
 local panelUIState = nil
 local secondPanelUIState = nil
 local thirdPanelUIState = nil
+local mountPanelUIState = nil
 local PositionPanelUIButtons
 local ApplyPanelUISecureState
 local panelUISecureRetryFrame
@@ -638,13 +666,16 @@ local function IsPanelUIEnabled(state)
 end
 
 local function RefreshPanelUISecureButton(button)
-  if type(button) ~= "table" or not IsPanelUISecureMacroButton(button) or type(button.SetAttribute) ~= "function" then
+  if type(button) ~= "table" or type(button.SetAttribute) ~= "function" then
     return
   end
 
   local clickBinding, useOnKeyDown = ResolveSecureClickBinding()
   if type(button.RegisterForClicks) == "function" then
     button:RegisterForClicks(clickBinding)
+  end
+  if not IsPanelUISecureMacroButton(button) then
+    return
   end
   button:SetAttribute("type", "macro")
   button:SetAttribute("type1", "macro")
@@ -688,6 +719,24 @@ local function SyncPanelUIButtonVisibility(button, visible)
   end
 end
 
+local function IsPanelUIButtonAvailable(button)
+  return type(button) == "table" and button._available ~= false
+end
+
+local function GetAvailablePanelButtons(buttons)
+  local available = {}
+  if type(buttons) ~= "table" then
+    return available
+  end
+
+  for _, button in ipairs(buttons) do
+    if IsPanelUIButtonAvailable(button) then
+      available[#available + 1] = button
+    end
+  end
+  return available
+end
+
 local function SyncPanelUISecureButtonVisibility(state)
   if type(state) ~= "table" then
     return
@@ -700,8 +749,8 @@ local function SyncPanelUISecureButtonVisibility(state)
 
   local visible = IsPanelUIEnabled(state)
   for _, button in ipairs(state.buttons or {}) do
-    if IsPanelUISecureMacroButton(button) then
-      SyncPanelUIButtonVisibility(button, visible)
+    if button._isSecurePanelAction == true then
+      SyncPanelUIButtonVisibility(button, visible and IsPanelUIButtonAvailable(button))
     end
   end
 
@@ -1020,6 +1069,250 @@ local function ResolveVisibleAddonPanelEntries()
   return visible
 end
 
+local function GetMountJournal()
+  local mountJournal = rawget(_G, "C_MountJournal")
+  if type(mountJournal) ~= "table" then
+    return nil
+  end
+  return mountJournal
+end
+
+local function ReadMountInfoByID(mountJournal, mountID)
+  if type(mountJournal) ~= "table" or type(mountJournal.GetMountInfoByID) ~= "function" then
+    return nil
+  end
+  if type(mountID) ~= "number" or mountID <= 0 then
+    return nil
+  end
+
+  local results = { pcall(mountJournal.GetMountInfoByID, mountID) }
+  local ok = results[1]
+  local spellID = results[3]
+  local isUsable = results[6]
+  local isFavorite = results[8]
+  local shouldHideOnChar = results[11]
+  local isCollected = results[12]
+  if not ok or type(spellID) ~= "number" then
+    return nil
+  end
+
+  return {
+    mountID = mountID,
+    spellID = spellID,
+    isCollected = isCollected == true,
+    isUsable = isUsable == true,
+    isFavorite = isFavorite == true,
+    shouldHideOnChar = shouldHideOnChar == true,
+  }
+end
+
+local function IsMountUsableByID(mountJournal, mountID, info)
+  if type(mountJournal) == "table" and type(mountJournal.GetMountUsabilityByID) == "function" then
+    local ok, isUsable = pcall(mountJournal.GetMountUsabilityByID, mountID, true)
+    if ok and type(isUsable) == "boolean" then
+      return isUsable
+    end
+  end
+
+  return type(info) == "table" and info.isUsable == true
+end
+
+local function IsCollectedMountSpellAvailable(spellID)
+  local mountJournal = GetMountJournal()
+  if type(mountJournal) ~= "table" or type(mountJournal.GetMountFromSpell) ~= "function" then
+    return false
+  end
+  if type(spellID) ~= "number" then
+    return false
+  end
+
+  local ok, mountID = pcall(mountJournal.GetMountFromSpell, spellID)
+  if not ok or type(mountID) ~= "number" or mountID <= 0 then
+    return false
+  end
+
+  local info = ReadMountInfoByID(mountJournal, mountID)
+  return type(info) == "table"
+    and info.spellID == spellID
+    and info.isCollected == true
+    and info.shouldHideOnChar ~= true
+end
+
+local function HasVerifiedFavoriteMount()
+  local mountJournal = GetMountJournal()
+  if type(mountJournal) ~= "table" or type(mountJournal.GetMountIDs) ~= "function" then
+    return false
+  end
+
+  local ok, mountIDs = pcall(mountJournal.GetMountIDs)
+  if not ok or type(mountIDs) ~= "table" then
+    return false
+  end
+
+  for _, mountID in ipairs(mountIDs) do
+    local info = ReadMountInfoByID(mountJournal, mountID)
+    if
+      type(info) == "table"
+      and info.isCollected == true
+      and info.isFavorite == true
+      and info.shouldHideOnChar ~= true
+    then
+      return true
+    end
+  end
+  return false
+end
+
+local function ResolveFavoriteMountSpellIDs()
+  local mountJournal = GetMountJournal()
+  if type(mountJournal) ~= "table" or type(mountJournal.GetMountIDs) ~= "function" then
+    return {}
+  end
+
+  local ok, mountIDs = pcall(mountJournal.GetMountIDs)
+  if not ok or type(mountIDs) ~= "table" then
+    return {}
+  end
+
+  local spellIDs = {}
+  for _, mountID in ipairs(mountIDs) do
+    local info = ReadMountInfoByID(mountJournal, mountID)
+    if
+      type(info) == "table"
+      and info.isCollected == true
+      and info.isFavorite == true
+      and info.shouldHideOnChar ~= true
+      and IsMountUsableByID(mountJournal, mountID, info)
+    then
+      spellIDs[#spellIDs + 1] = info.spellID
+    end
+  end
+  return spellIDs
+end
+
+local function ResolveSpellNameByID(spellID)
+  if type(spellID) ~= "number" then
+    return nil
+  end
+
+  local cSpell = rawget(_G, "C_Spell")
+  local getSpellName = type(cSpell) == "table" and cSpell.GetSpellName or nil
+  if type(getSpellName) == "function" then
+    local ok, spellName = pcall(getSpellName, spellID)
+    if ok and type(spellName) == "string" and spellName ~= "" then
+      return spellName
+    end
+  end
+
+  local cSpellInfo = type(cSpell) == "table" and cSpell.GetSpellInfo or nil
+  if type(cSpellInfo) == "function" then
+    local ok, spellInfo = pcall(cSpellInfo, spellID)
+    if ok and type(spellInfo) == "table" and type(spellInfo.name) == "string" and spellInfo.name ~= "" then
+      return spellInfo.name
+    end
+  end
+
+  local getSpellInfo = rawget(_G, "GetSpellInfo")
+  if type(getSpellInfo) == "function" then
+    local ok, spellName = pcall(getSpellInfo, spellID)
+    if ok and type(spellName) == "string" and spellName ~= "" then
+      return spellName
+    end
+  end
+
+  return nil
+end
+
+local function ResolveMountMacroText(spellID)
+  local spellName = ResolveSpellNameByID(spellID)
+  if type(spellName) ~= "string" or spellName == "" then
+    return nil
+  end
+  if spellName:find("\n", 1, true) or spellName:find("\r", 1, true) then
+    return nil
+  end
+
+  return "/click GameMenuButtonContinue\n/cast " .. spellName
+end
+
+local function ResolveFavoriteMountMacroText()
+  local spellIDs = ResolveFavoriteMountSpellIDs()
+  if #spellIDs == 0 then
+    return nil
+  end
+
+  local index = #spellIDs == 1 and 1 or math.random(1, #spellIDs)
+  return ResolveMountMacroText(spellIDs[index])
+end
+
+local function CloneMountPanelEntryWithMacro(entry)
+  if type(entry) ~= "table" then
+    return nil
+  end
+
+  local macroText = entry.requiresFavorite == true and ResolveFavoriteMountMacroText()
+    or ResolveMountMacroText(entry.spellID)
+  if type(macroText) ~= "string" or macroText == "" then
+    return nil
+  end
+
+  local clone = {}
+  for key, value in pairs(entry) do
+    clone[key] = value
+  end
+  clone.secureMacroText = macroText
+  return clone
+end
+
+local function ResolveVisibleMountPanelEntries()
+  local visible = {}
+  for _, entry in ipairs(MOUNT_PANEL_UI_ENTRIES) do
+    local isVisible
+    if entry.requiresFavorite == true then
+      isVisible = HasVerifiedFavoriteMount()
+    else
+      isVisible = IsCollectedMountSpellAvailable(entry.spellID)
+    end
+    if isVisible then
+      local visibleEntry = CloneMountPanelEntryWithMacro(entry)
+      if visibleEntry ~= nil then
+        visible[#visible + 1] = visibleEntry
+      end
+    end
+  end
+  return visible
+end
+
+local function RefreshMountPanelEntries(state)
+  if type(state) ~= "table" then
+    return false
+  end
+  if IsPanelUISecureUpdateBlocked(state) then
+    QueuePanelUISecureStateRefresh(state)
+    return false
+  end
+
+  local visibleById = {}
+  for _, entry in ipairs(ResolveVisibleMountPanelEntries()) do
+    if type(entry.id) == "string" then
+      visibleById[entry.id] = entry
+    end
+  end
+
+  for _, button in ipairs(state.buttons or {}) do
+    local entry = visibleById[button._actionId]
+    if type(entry) == "table" then
+      button._available = true
+      button._secureMacroText = entry.secureMacroText
+      RefreshPanelUISecureButton(button)
+    else
+      button._available = false
+      button._secureMacroText = nil
+    end
+  end
+  return true
+end
+
 local function ResolvePanelUICloseAnchor(gameMenuFrame)
   if type(gameMenuFrame) ~= "table" then
     return nil
@@ -1055,16 +1348,26 @@ local function GetPanelUIButtonStackHeight(buttons, buttonHeight)
     return 0
   end
 
-  local resolvedButtonCount = #buttons
+  local resolvedButtonCount = 0
+  for _, button in ipairs(buttons) do
+    if IsPanelUIButtonAvailable(button) then
+      resolvedButtonCount = resolvedButtonCount + 1
+    end
+  end
   if resolvedButtonCount == 0 then
     return 0
   end
 
   local totalHeight = resolvedButtonCount * buttonHeight
-  for index = 2, resolvedButtonCount do
-    local button = buttons[index]
-    local gapBefore = type(button) == "table" and tonumber(button._gapBefore) or nil
-    totalHeight = totalHeight + math.max(0, gapBefore or PANEL_UI_BUTTON_GAP)
+  local visibleIndex = 0
+  for _, button in ipairs(buttons) do
+    if IsPanelUIButtonAvailable(button) then
+      visibleIndex = visibleIndex + 1
+      if visibleIndex >= 2 then
+        local gapBefore = type(button) == "table" and tonumber(button._gapBefore) or nil
+        totalHeight = totalHeight + math.max(0, gapBefore or PANEL_UI_BUTTON_GAP)
+      end
+    end
   end
 
   return totalHeight
@@ -1083,8 +1386,10 @@ PositionPanelUIButtons = function(state, opts)
   end
   local buttonWidth, buttonHeight = ResolvePanelUIButtonSize(gameMenuFrame)
   local buttons = state.buttons or {}
+  local availableButtons = GetAvailablePanelButtons(buttons)
   local hasShortcutsHeader = type(state.shortcutsHeader) == "table"
-  local stackHeight = GetPanelUIButtonStackHeight(buttons, buttonHeight)
+  local stackHeight = GetPanelUIButtonStackHeight(availableButtons, buttonHeight)
+  local hasAvailableButtons = #availableButtons > 0
   if hasShortcutsHeader then
     stackHeight = stackHeight + PANEL_UI_SECTION_HEADER_HEIGHT + PANEL_UI_SECTION_HEADER_GAP
   end
@@ -1105,16 +1410,19 @@ PositionPanelUIButtons = function(state, opts)
 
   local anchorFrame = state.positionAnchorFrame or gameMenuFrame
   local anchorOffsetX = type(state.positionOffsetX) == "number" and state.positionOffsetX or PANEL_UI_OFFSET_X
+  local anchorOffsetY = type(state.positionOffsetY) == "number" and state.positionOffsetY or PANEL_UI_OFFSET_Y
+  local point = type(state.positionPoint) == "string" and state.positionPoint or "TOPRIGHT"
+  local relativePoint = type(state.positionRelativePoint) == "string" and state.positionRelativePoint or "TOPLEFT"
   if type(panelFrame.ClearAllPoints) == "function" then
     panelFrame:ClearAllPoints()
   end
   if type(panelFrame.SetPoint) == "function" then
-    panelFrame:SetPoint("TOPRIGHT", anchorFrame, "TOPLEFT", anchorOffsetX, PANEL_UI_OFFSET_Y)
+    panelFrame:SetPoint(point, anchorFrame, relativePoint, anchorOffsetX, anchorOffsetY)
   end
   if type(panelFrame.SetSize) == "function" then
     panelFrame:SetSize(panelWidth, panelHeight)
   end
-  if IsPanelUIEnabled(state) then
+  if IsPanelUIEnabled(state) and hasAvailableButtons then
     if type(panelFrame.Show) == "function" then
       panelFrame:Show()
     end
@@ -1175,10 +1483,15 @@ PositionPanelUIButtons = function(state, opts)
 
   local previousButton = nil
   for _, button in ipairs(buttons) do
+    local buttonAvailable = IsPanelUIButtonAvailable(button)
     local skipProtectedLayout = secureUpdatesBlocked
       and opts.allowSecureButtonMutations ~= true
       and button._isSecurePanelAction == true
-    if skipProtectedLayout then
+    if not buttonAvailable then
+      if type(button.Hide) == "function" then
+        button:Hide()
+      end
+    elseif skipProtectedLayout then
       needsSecureRetry = true
     else
       if type(button.SetSize) == "function" then
@@ -1196,7 +1509,9 @@ PositionPanelUIButtons = function(state, opts)
       end
     end
 
-    previousButton = button
+    if buttonAvailable then
+      previousButton = button
+    end
   end
 
   if needsSecureRetry then
@@ -1681,6 +1996,143 @@ function UI.EnsureSecondPanelUI(opts)
   end
 
   secondPanelUIState = state
+  ApplyPanelUISecureState(state)
+  ApplyPanelUILocalization(state)
+  return state
+end
+
+function UI.EnsureMountPanelUI(opts)
+  opts = opts or {}
+
+  local gameMenuFrame = opts.gameMenuFrame or rawget(_G, "GameMenuFrame")
+  if type(gameMenuFrame) ~= "table" then
+    return nil
+  end
+
+  local travelPanelState = opts.travelPanelState or opts.secondPanelState
+  if type(travelPanelState) ~= "table" or type(travelPanelState.panelFrame) ~= "table" then
+    return nil
+  end
+
+  if type(mountPanelUIState) == "table" and mountPanelUIState.gameMenuFrame == gameMenuFrame then
+    if type(opts.getL) == "function" then
+      mountPanelUIState.getL = opts.getL
+    end
+    mountPanelUIState.isEnabled = opts.isEnabled
+    mountPanelUIState.isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil
+    mountPanelUIState.positionAnchorFrame = travelPanelState.panelFrame
+    RefreshMountPanelEntries(mountPanelUIState)
+    ApplyPanelUISecureState(mountPanelUIState)
+    ApplyPanelUILocalization(mountPanelUIState)
+    return mountPanelUIState
+  end
+
+  local state = {
+    gameMenuFrame = gameMenuFrame,
+    getL = type(opts.getL) == "function" and opts.getL or function()
+      return {}
+    end,
+    isEnabled = opts.isEnabled,
+    isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil,
+    positionAnchorFrame = travelPanelState.panelFrame,
+    positionOffsetX = 0,
+    positionOffsetY = -SECOND_PANEL_GAP,
+    positionPoint = "TOPLEFT",
+    positionRelativePoint = "BOTTOMLEFT",
+    headerLKey = "PANEL_HEADER_MOUNTS",
+    buttons = {},
+    buttonsById = {},
+    anchor = nil,
+  }
+
+  local frameStrata = type(gameMenuFrame.GetFrameStrata) == "function" and gameMenuFrame:GetFrameStrata() or nil
+  local baseFrameLevel = type(gameMenuFrame.GetFrameLevel) == "function" and gameMenuFrame:GetFrameLevel() or 1
+  state.frameStrata = frameStrata
+  state.baseFrameLevel = baseFrameLevel
+  state.buttonWidth, state.buttonHeight = ResolvePanelUIButtonSize(gameMenuFrame)
+
+  local panelFrame = CreateFrame("Frame", nil, gameMenuFrame, "BackdropTemplate")
+  if frameStrata ~= nil and type(panelFrame.SetFrameStrata) == "function" then
+    panelFrame:SetFrameStrata(frameStrata)
+  end
+  if type(panelFrame.SetFrameLevel) == "function" then
+    panelFrame:SetFrameLevel(baseFrameLevel + 10)
+  end
+  if type(panelFrame.EnableMouse) == "function" then
+    panelFrame:EnableMouse(true)
+  end
+  ApplyPanelUIBackdrop(panelFrame)
+  state.hostFrame = panelFrame
+  state.panelFrame = panelFrame
+
+  if type(gameMenuFrame.HookScript) == "function" then
+    gameMenuFrame:HookScript("OnShow", function()
+      if type(state.isEnabled) == "function" and not state.isEnabled() then
+        return
+      end
+      RefreshMountPanelEntries(state)
+      ApplyPanelUISecureState(state)
+      ApplyPanelUILocalization(state)
+    end)
+  end
+
+  if type(panelFrame.CreateFontString) == "function" then
+    state.shortcutsHeader = panelFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    if type(state.shortcutsHeader.SetTextColor) == "function" then
+      local td = Colors.TEXT_DIM
+      state.shortcutsHeader:SetTextColor(td[1], td[2], td[3], 1)
+    end
+    if type(state.shortcutsHeader.SetJustifyH) == "function" then
+      state.shortcutsHeader:SetJustifyH("LEFT")
+    end
+  end
+
+  if type(panelFrame.CreateTexture) == "function" then
+    state.shortcutsHeaderLine = panelFrame:CreateTexture(nil, "ARTWORK")
+    if type(state.shortcutsHeaderLine.SetHeight) == "function" then
+      state.shortcutsHeaderLine:SetHeight(1)
+    end
+    if type(state.shortcutsHeaderLine.SetColorTexture) == "function" then
+      local ab = Colors.ACCENT_BLUE
+      state.shortcutsHeaderLine:SetColorTexture(ab[1], ab[2], ab[3], 0.3)
+    end
+  end
+
+  for index, entry in ipairs(MOUNT_PANEL_UI_ENTRIES) do
+    local button = CreatePanelUIButton(
+      gameMenuFrame,
+      frameStrata,
+      baseFrameLevel,
+      10 + index,
+      entry.iconAtlas or entry.icon,
+      "SecureActionButtonTemplate,BackdropTemplate",
+      true
+    )
+
+    button._actionId = entry.id
+    button._labelKey = entry.labelKey
+    button._fallbackText = entry.fallbackText
+    button._gapBefore = math.max(0, tonumber(entry.gapBefore) or PANEL_UI_BUTTON_GAP)
+    button._verticalIndex = index
+    button._secureMacroText = nil
+    button._isSecurePanelAction = true
+    button._available = false
+
+    state.buttons[index] = button
+    state.buttonsById[entry.id] = button
+  end
+
+  function state.ApplyLocalization()
+    ApplyPanelUISecureState(state)
+    ApplyPanelUILocalization(state)
+  end
+
+  state.SyncVisibility = function()
+    ApplyPanelUISecureState(state)
+  end
+
+  mountPanelUIState = state
+  RefreshMountPanelEntries(state)
   ApplyPanelUISecureState(state)
   ApplyPanelUILocalization(state)
   return state

@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.256`
+- **Current version:** `0.9.267`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -15,6 +15,7 @@ When you join a group, isiLive opens a single window with everything you want to
 
 - Who is in the group, their spec, item level, Raider.IO rating, and keystone
 - One-click access to all 8 season dungeon portals, with live cooldowns
+- Escape-menu shortcut panels for tools, travel, verified mount shortcuts, and supported addons
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
