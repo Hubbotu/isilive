@@ -92,6 +92,45 @@ function UICommon.ApplyLocaleFont(fontString, localeTag)
   return true
 end
 
+function UICommon.IsSecretValue(value)
+  local isSecretValue = rawget(_G, "issecretvalue")
+  if type(isSecretValue) ~= "function" then
+    return false
+  end
+
+  local ok, result = pcall(isSecretValue, value)
+  return ok and result == true
+end
+
+function UICommon.MeasureFontStringWidthSafe(fontString)
+  if type(fontString) ~= "table" or type(fontString.GetStringWidth) ~= "function" then
+    return nil
+  end
+
+  local ok, width = pcall(fontString.GetStringWidth, fontString)
+  if not ok or width == nil or UICommon.IsSecretValue(width) then
+    return nil
+  end
+
+  local numberOk, numericWidth = pcall(tonumber, width)
+  if not numberOk or numericWidth == nil or UICommon.IsSecretValue(numericWidth) then
+    return nil
+  end
+
+  local positiveOk, isPositive = pcall(function()
+    return numericWidth > 0
+  end)
+  if not positiveOk or not isPositive then
+    return nil
+  end
+
+  local ceilOk, ceiledWidth = pcall(math.ceil, numericWidth)
+  if ceilOk and type(ceiledWidth) == "number" then
+    return ceiledWidth
+  end
+  return nil
+end
+
 function UICommon.GetBackgroundAlpha()
   local db = rawget(_G, "IsiLiveDB")
   if type(db) == "table" and type(db.bgAlpha) == "number" then

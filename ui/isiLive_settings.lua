@@ -8,6 +8,7 @@ addonTable.SettingsPanel = SettingsPanel
 local Colors = addonTable.UICommon and addonTable.UICommon.Colors or {}
 local DEFAULT_BG_ALPHA = addonTable.UICommon and addonTable.UICommon.DEFAULT_BG_ALPHA or 0.50
 local ApplyBackdrop = addonTable.UICommon and addonTable.UICommon.ApplyBackdrop
+local MeasureFontStringWidthSafe = addonTable.UICommon and addonTable.UICommon.MeasureFontStringWidthSafe
 
 local PADDING_X = 16
 local PADDING_TOP = 16
@@ -737,8 +738,8 @@ local function CreateSettingsOptionSelector(
   local function ResolveButtonWidth(button)
     local minWidth = tonumber(button._optionMinWidth) or 40
     local measuredWidth = nil
-    if button.label and type(button.label.GetStringWidth) == "function" then
-      measuredWidth = tonumber(button.label:GetStringWidth())
+    if button.label and type(MeasureFontStringWidthSafe) == "function" then
+      measuredWidth = MeasureFontStringWidthSafe(button.label)
     end
     if measuredWidth and measuredWidth > 0 then
       return math.max(minWidth, math.ceil(measuredWidth) + buttonPadding)

@@ -7,7 +7,7 @@ addonTable.StatsBox = StatsBox
 
 local ApplyBackdrop = addonTable.UICommon and addonTable.UICommon.ApplyBackdrop
 
-local BOX_WIDTH = 236
+local BOX_WIDTH = 170
 local BOX_HEIGHT = 158
 local LINE_HEIGHT = 16
 local UPDATE_INTERVAL = 1
@@ -17,9 +17,9 @@ local FONT_FLAGS = ""
 local TEXT_SHADOW_COLOR = { 0, 0, 0, 0.9 }
 local TEXT_SHADOW_OFFSET_X = 1
 local TEXT_SHADOW_OFFSET_Y = -1
-local LABEL_COLUMN_WIDTH = 100
-local VALUE_COLUMN_WIDTH = 44
-local PERCENT_COLUMN_WIDTH = 74
+local LABEL_COLUMN_WIDTH = 35
+local VALUE_COLUMN_WIDTH = 42
+local PERCENT_COLUMN_WIDTH = 63
 local LEFT_PADDING = 8
 local RIGHT_PADDING = 8
 local TOP_PADDING = 6
@@ -419,14 +419,38 @@ local function MeasureFontStringWidth(fontString)
     return nil
   end
   local ok, width = pcall(fontString.GetStringWidth, fontString)
-  width = ok and tonumber(width) or nil
-  if width and width > 0 then
-    return math.ceil(width)
+  if not ok or width == nil or IsSecretValue(width) then
+    return nil
+  end
+
+  local numberOk, numericWidth = pcall(tonumber, width)
+  if not numberOk or numericWidth == nil or IsSecretValue(numericWidth) then
+    return nil
+  end
+
+  local positiveOk, isPositive = pcall(function()
+    return numericWidth > 0
+  end)
+  if positiveOk and isPositive then
+    local ceilOk, ceiledWidth = pcall(math.ceil, numericWidth)
+    if ceilOk and type(ceiledWidth) == "number" then
+      return ceiledWidth
+    end
   end
   return nil
 end
 
-local function ResolveContentFitLayout(baseLayout, lines, visibleCount)
+local function ResolveFallbackColumnWidth(previousLayout, baseLayout, key)
+  if type(previousLayout) == "table" and previousLayout.fontSize == baseLayout.fontSize then
+    local width = previousLayout[key]
+    if type(width) == "number" and width > 0 then
+      return width
+    end
+  end
+  return baseLayout[key]
+end
+
+local function ResolveContentFitLayout(baseLayout, lines, visibleCount, previousLayout)
   local labelWidth = 0
   local valueWidth = 0
   local percentWidth = 0
@@ -448,9 +472,10 @@ local function ResolveContentFitLayout(baseLayout, lines, visibleCount)
     valueWidth = 0
     percentWidth = 0
   else
-    labelWidth = labelWidth > 0 and labelWidth or baseLayout.labelWidth
-    valueWidth = valueWidth > 0 and valueWidth or baseLayout.valueWidth
-    percentWidth = percentWidth > 0 and percentWidth or (hasPercent and baseLayout.percentWidth or 0)
+    labelWidth = labelWidth > 0 and labelWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "labelWidth")
+    valueWidth = valueWidth > 0 and valueWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "valueWidth")
+    percentWidth = percentWidth > 0 and percentWidth
+      or (hasPercent and ResolveFallbackColumnWidth(previousLayout, baseLayout, "percentWidth") or 0)
   end
 
   local width = baseLayout.leftPadding
@@ -542,7 +567,7 @@ local function RenderRows(state, rows)
       rowFrame.percent:Hide()
     end
   end
-  ApplyLayout(state, ResolveContentFitLayout(layout, state.lines, visibleCount))
+  ApplyLayout(state, ResolveContentFitLayout(layout, state.lines, visibleCount, state.layout))
 end
 
 ApplyLayout = function(state, layout)

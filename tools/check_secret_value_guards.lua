@@ -17,6 +17,7 @@
 --   * UnitGUID, UnitName, UnitFullName
 --   * UnitReaction, UnitClass, UnitIsGroupLeader
 --   * UnitGroupRolesAssigned, UnitIsUnit, UnitIsVisible
+--   * FontString GetStringWidth
 --   * GetActiveChallengeMapID (both bare and via C_ChallengeMode)
 --   * CombatLogGetCurrentEventInfo (also forbidden in 12.0; double-belt)
 --
@@ -43,6 +44,7 @@ local WATCHED_APIS = {
   "CombatLogGetCurrentEventInfo",
   "GetActiveChallengeMapID",
   "UnitFullName",
+  "GetStringWidth",
   "UnitIsUnit",
   "UnitIsVisible",
   "UnitReaction",

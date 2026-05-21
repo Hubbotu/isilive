@@ -13,7 +13,9 @@ end
 local HELPER_BUTTON_SIZE = RI.HELPER_BUTTON_SIZE or 18
 local HELPER_COLUMN_X = RI.HELPER_COLUMN_X or -111
 
-local Colors = addonTable.UICommon and addonTable.UICommon.Colors or {}
+local UICommon = addonTable.UICommon or {}
+local Colors = UICommon.Colors or {}
+local MeasureFontStringWidthSafe = UICommon.MeasureFontStringWidthSafe
 
 -- Column position constants. Shared with isiLive_roster_panel.lua via RI so
 -- both the header row creation here and the member row rendering there stay
@@ -126,7 +128,11 @@ local function FitHeaderFontString(fontString)
   end
 
   local nextSize = fontSize
-  while nextSize > HEADER_MIN_FONT_SIZE and (tonumber(fontString:GetStringWidth()) or 0) > width do
+  while nextSize > HEADER_MIN_FONT_SIZE do
+    local stringWidth = type(MeasureFontStringWidthSafe) == "function" and MeasureFontStringWidthSafe(fontString) or nil
+    if not stringWidth or stringWidth <= width then
+      break
+    end
     nextSize = nextSize - 1
     fontString:SetFont(fontPath, nextSize, fontFlags)
   end
@@ -143,9 +149,9 @@ local function SetPanelHeaderText(fontString, text)
     fontString:SetFont(originalFont.path, originalFont.size, originalFont.flags)
   end
 
-  local UICommon = addonTable and addonTable.UICommon
-  if type(UICommon) == "table" and type(UICommon.ApplyLocaleFont) == "function" then
-    UICommon.ApplyLocaleFont(fontString)
+  local common = addonTable and addonTable.UICommon
+  if type(common) == "table" and type(common.ApplyLocaleFont) == "function" then
+    common.ApplyLocaleFont(fontString)
   end
 
   if type(fontString.SetText) == "function" then
@@ -157,9 +163,9 @@ end
 local function CreateFlatButton(parent, width, height)
   local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
   button:SetSize(width, height)
-  local UICommon = addonTable and addonTable.UICommon
-  if type(UICommon) == "table" and type(UICommon.ApplyBackdrop) == "function" then
-    UICommon.ApplyBackdrop(button, "FLAT_BUTTON")
+  local common = addonTable and addonTable.UICommon
+  if type(common) == "table" and type(common.ApplyBackdrop) == "function" then
+    common.ApplyBackdrop(button, "FLAT_BUTTON")
   end
   if type(button.EnableMouse) == "function" then
     button:EnableMouse(true)

@@ -413,6 +413,75 @@ return function(test, ctx)
     end)
   end)
 
+  test("StatsBox ignores secret text width measurements", function()
+    local secretWidth = {}
+    local secretWidths = false
+    local originalTonumber = tonumber
+    local createFrameStub = BuildCreateFrameStub()
+    local createFrame = function(...)
+      local frame = createFrameStub(...)
+      local originalCreateFontString = frame.CreateFontString
+      frame.CreateFontString = function(self, ...)
+        local fontString = originalCreateFontString(self, ...)
+        local originalGetStringWidth = fontString.GetStringWidth
+        fontString.GetStringWidth = function(widthSelf)
+          if secretWidths then
+            return secretWidth
+          end
+          return originalGetStringWidth(widthSelf)
+        end
+        return fontString
+      end
+      return frame
+    end
+
+    local function CollectSevenRows()
+      return {
+        { key = "strength", label = "Str", value = 1918 },
+        { key = "crit", label = "Crit", value = 923, percent = 25.07 },
+        { key = "haste", label = "Haste", value = 512, percent = 16.10 },
+        { key = "mastery", label = "Mast", value = 911, percent = 50.05 },
+        { key = "versatility", label = "Vers", value = 62, percent = 1.15 },
+        { key = "leech", label = "Leech", value = 0, percent = 0.00 },
+        { key = "speed", label = "Speed", value = 169, percent = 13.76 },
+      }
+    end
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = { statsBoxEnabled = true },
+      CreateFrame = createFrame,
+      issecretvalue = function(value)
+        return value == secretWidth
+      end,
+      tonumber = function(value, base)
+        if value == secretWidth then
+          error("secret width must not be coerced")
+        end
+        return originalTonumber(value, base)
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_stats_box.lua" })
+      local box = addon.StatsBox.Create({
+        parent = UIParent,
+        collectStats = CollectSevenRows,
+      })
+
+      Assert.Equal(box.frame._width, 149, "trusted text measurements should still fit tightly")
+      secretWidths = true
+      local ok, err = pcall(box.SetBackgroundAlpha, 0.6)
+      Assert.True(ok, "secret text-width measurements must not throw: " .. tostring(err))
+      Assert.Equal(box.frame._width, 149, "secret width refresh should keep the last trusted fitted width")
+
+      local firstSecretBox = addon.StatsBox.Create({
+        parent = UIParent,
+        collectStats = CollectSevenRows,
+      })
+      Assert.Equal(firstSecretBox.frame._width, 170, "first secret-width refresh should use compact fallback columns")
+      Assert.Equal(firstSecretBox.frame._height, 124, "secret-width fallback should still fit the visible row count")
+    end)
+  end)
+
   test("StatsBox reads haste percent from player spell haste", function()
     WithGlobals({
       UIParent = {},

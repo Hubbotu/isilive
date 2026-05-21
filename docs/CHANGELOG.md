@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.266 (patch)
+
+Fixes the standalone Stats Box under tainted secret width measurements and
+accepts the Russian locale improvements from pull request #21.
+
+### Stats Box
+
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua),
+[ui/isiLive_ui_common.lua](../ui/isiLive_ui_common.lua),
+[ui/isiLive_roster_layout.lua](../ui/isiLive_roster_layout.lua),
+[ui/isiLive_roster_panel_chrome.lua](../ui/isiLive_roster_panel_chrome.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[testmodul/isilive_test_scenarios_stats_box.lua](../testmodul/isilive_test_scenarios_stats_box.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- FontString width measurements that are masked as Secret Values are now
+  ignored instead of being coerced or compared in Lua.
+- Refreshes keep the last trusted fitted text layout; first-time tainted
+  refreshes use compact fixed fallback columns instead of the old wide box.
+- Other UI text-fitting paths now route through the same guarded width helper,
+  so future direct `GetStringWidth()` arithmetic is caught by the Secret Value
+  gate.
+- Added deterministic coverage and updated the active StatsBox rule mapping for
+  the secret width measurement path.
+
+### Russian Locale
+
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua):
+
+- Accepted pull request #21 from `Hubbotu` with Russian text abbreviations for
+  ESC-menu and Settings labels.
+- Updated the Russian Arkantine, Hearthstone, Spellbook, ReloadUI, and
+  default-layout labels exactly as submitted.
+- Thank you to `Hubbotu` for the contribution.
+
 ## 2026-05-21 - Version 0.9.265 (patch)
 
 Fixes sound cues, Settings layout/localization refresh, and ESC addon shortcut

@@ -6,6 +6,49 @@ local RI = addonTable._RosterInternal or {}
 addonTable._RosterInternal = RI
 local UICommon = addonTable.UICommon or {}
 
+local function IsSecretValue(value)
+  local isSecretValue = rawget(_G, "issecretvalue")
+  if type(isSecretValue) ~= "function" then
+    return false
+  end
+
+  local ok, result = pcall(isSecretValue, value)
+  return ok and result == true
+end
+
+local function MeasureFontStringWidthSafeFallback(fontString)
+  if type(fontString) ~= "table" or type(fontString.GetStringWidth) ~= "function" then
+    return nil
+  end
+
+  local ok, width = pcall(fontString.GetStringWidth, fontString)
+  if not ok or width == nil or IsSecretValue(width) then
+    return nil
+  end
+
+  local numberOk, numericWidth = pcall(tonumber, width)
+  if not numberOk or numericWidth == nil or IsSecretValue(numericWidth) then
+    return nil
+  end
+
+  local positiveOk, isPositive = pcall(function()
+    return numericWidth > 0
+  end)
+  if not positiveOk or not isPositive then
+    return nil
+  end
+
+  local ceilOk, ceiledWidth = pcall(math.ceil, numericWidth)
+  if ceilOk and type(ceiledWidth) == "number" then
+    return ceiledWidth
+  end
+  return nil
+end
+
+local MeasureFontStringWidthSafe = type(UICommon.MeasureFontStringWidthSafe) == "function"
+    and UICommon.MeasureFontStringWidthSafe
+  or MeasureFontStringWidthSafeFallback
+
 -- Layout Konstanten
 local LAYOUT_MODE_EXPANDED = "expanded"
 local LAYOUT_MODE_COMPACT_VERTICAL = "compact_vertical"
@@ -430,7 +473,7 @@ local function FitFlatButtonLabel(btn, label)
   local minSize = math.min(baseSize, FLAT_BUTTON_LABEL_MIN_FONT_SIZE)
   for size = baseSize, minSize, -1 do
     SetFlatButtonLabelFont(label, baseFont, size)
-    local stringWidth = tonumber(label:GetStringWidth())
+    local stringWidth = type(MeasureFontStringWidthSafe) == "function" and MeasureFontStringWidthSafe(label) or nil
     if not stringWidth or stringWidth <= targetWidth then
       return
     end
