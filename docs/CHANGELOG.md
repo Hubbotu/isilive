@@ -2,7 +2,8 @@
 
 ## 2026-05-21 - Version 0.9.265 (patch)
 
-Fixes incoming summon and Bloodlust sound cues.
+Fixes sound cues, Settings layout/localization refresh, and ESC addon shortcut
+visibility.
 
 ### Sound Cues
 
@@ -17,6 +18,33 @@ Fixes incoming summon and Bloodlust sound cues.
   the CombatEvents self-cast announce path is not the source.
 - Added deterministic coverage for the UNIT_AURA sound handoff and the
   one-shot aura-onset playback gate.
+
+### Settings UI
+
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua):
+
+- Default-layout option buttons now fit localized labels such as German
+  `Zuletzt verwendet`, preventing the next V/H/M+ button from overlapping.
+- Behavior-section auto-show/hide and raid notes are refreshed when the addon
+  language changes, so German and other non-English settings no longer retain
+  the previous English text.
+- Added deterministic coverage for localized option-button sizing and behavior
+  note refresh across all supported addon locales.
+
+### ESC Addons Panel
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua):
+
+- Addon shortcut buttons now appear for supported addons that are installed and
+  enabled, even if the target addon is still load-on-demand and not yet loaded.
+- Clicking a shortcut loads the target addon first and only then invokes its
+  registered slash alias; failed loads or missing slash aliases remain
+  fail-closed.
+- Updated the active ESC addon panel rule and deterministic rule-to-test mapping
+  to match the installed-and-enabled visibility contract.
 
 ## 2026-05-21 - Version 0.9.264 (patch)
 

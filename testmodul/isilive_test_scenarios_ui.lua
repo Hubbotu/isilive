@@ -1151,7 +1151,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
-  test("UI third game-menu addon panel shows only installed and loaded addon shortcuts", function()
+  test("UI third game-menu addon panel shows installed and enabled addon shortcuts", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
@@ -1256,7 +1256,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       Assert.NotNil(addonStrip.buttonsById.dbm, "loaded DBM must create a shortcut button")
       Assert.NotNil(addonStrip.buttonsById.bigwigs, "loaded BigWigs must create a shortcut button")
       Assert.Nil(addonStrip.buttonsById.mrt, "missing MRT must not create a shortcut button")
-      Assert.Nil(addonStrip.buttonsById.details, "not-loaded Details must not create a shortcut button")
+      Assert.NotNil(addonStrip.buttonsById.details, "enabled Details must create a shortcut button before it is loaded")
       Assert.NotNil(addonStrip.buttonsById.simc, "loaded SimC must create a shortcut button")
       Assert.NotNil(addonStrip.buttonsById.platynator, "loaded Platynator must create a shortcut button")
       Assert.Equal(addonStrip.shortcutsHeader:GetText(), "Addons", "addon panel header must be localized")
@@ -1268,6 +1268,78 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       onClickSimc = Assert.NotNil(onClickSimc, "SimC shortcut must define OnClick")
       onClickSimc(addonStrip.buttonsById.simc, "LeftButton")
       Assert.Equal(slashCalls[1], "SIMC", "SimC shortcut must call the registered slash handler")
+    end)
+  end)
+
+  test("UI third game-menu addon shortcut loads enabled addon before running slash", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local installed = {
+      Details = true,
+    }
+    local enabled = {
+      Details = true,
+    }
+    local loaded = {
+      Details = false,
+    }
+    local slashCmdList = {}
+    local loadCalls = {}
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      GetLocale = function()
+        return "deDE"
+      end,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if installed[addOnName] then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return enabled[addOnName] and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return loaded[addOnName] == true
+        end,
+        LoadAddOn = function(addOnName)
+          loadCalls[#loadCalls + 1] = addOnName
+          loaded[addOnName] = true
+          slashCmdList.DETAILS = function(msg)
+            slashCalls[#slashCalls + 1] = msg
+          end
+          _G.SLASH_DETAILS1 = "/details"
+        end,
+      },
+      SlashCmdList = slashCmdList,
+      SLASH_DETAILS1 = false,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist for enabled Details")
+
+      local detailsButton = RequireValue(addonStrip.buttonsById.details, "Details shortcut button should exist")
+      local onClick = detailsButton._scripts and detailsButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "Details shortcut must define OnClick")
+      onClick(detailsButton, "LeftButton")
+
+      Assert.Equal(loadCalls[1], "Details", "Details shortcut must load the enabled addon before invoking slash")
+      Assert.Equal(slashCalls[1], "optionen", "Details shortcut must run the localized slash after loading")
     end)
   end)
 
@@ -1429,7 +1501,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
-  test("UI third game-menu addon panel stays hidden when no supported addon is loaded", function()
+  test("UI third game-menu addon panel stays hidden when no supported addon is enabled", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
@@ -1439,14 +1511,11 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       CreateFrame = createFrameStub,
       GameMenuFrame = gameMenuFrame,
       C_AddOns = {
-        GetAddOnInfo = function(addOnName)
-          if addOnName == "Simulationcraft" then
-            return { name = addOnName }
-          end
+        GetAddOnInfo = function()
           return nil
         end,
         GetAddOnEnableState = function()
-          return 2
+          return 0
         end,
         IsAddOnLoaded = function()
           return false
@@ -1464,7 +1533,7 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         gameMenuFrame = gameMenuFrame,
         secondPanelState = travelStrip,
       })
-      Assert.Nil(addonStrip, "addon shortcut panel must not render when no supported addon is loaded")
+      Assert.Nil(addonStrip, "addon shortcut panel must not render when no supported addon is enabled")
     end)
   end)
 

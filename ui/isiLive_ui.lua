@@ -353,6 +353,8 @@ local function SafeCall(fn, ...)
   return ok
 end
 
+local IsAddOnLoaded
+
 local function EnsureAddOnLoaded(addOnName)
   if type(addOnName) ~= "string" or addOnName == "" then
     return false
@@ -369,13 +371,13 @@ local function EnsureAddOnLoaded(addOnName)
       return true
     end
     pcall(cAddOns.LoadAddOn, addOnName)
-    return true
+    return IsAddOnLoaded(addOnName)
   end
 
   local loadAddOn = rawget(_G, "UIParentLoadAddOn")
   if type(loadAddOn) == "function" then
     pcall(loadAddOn, addOnName)
-    return true
+    return IsAddOnLoaded(addOnName)
   end
 
   return false
@@ -434,7 +436,7 @@ local function IsAddOnEnabled(addOnName)
   return false
 end
 
-local function IsAddOnLoaded(addOnName)
+function IsAddOnLoaded(addOnName)
   if type(addOnName) ~= "string" or addOnName == "" then
     return false
   end
@@ -454,13 +456,13 @@ local function IsAddOnLoaded(addOnName)
   return false
 end
 
-local function ResolveStartedAddOnName(addOnNames)
+local function ResolveEnabledAddOnName(addOnNames)
   if type(addOnNames) ~= "table" then
     return nil
   end
 
   for _, addOnName in ipairs(addOnNames) do
-    if IsAddOnInstalled(addOnName) and IsAddOnEnabled(addOnName) and IsAddOnLoaded(addOnName) then
+    if IsAddOnInstalled(addOnName) and IsAddOnEnabled(addOnName) then
       return addOnName
     end
   end
@@ -978,11 +980,13 @@ local function BuildAddonPanelUIActions()
   local actions = {}
   for _, entry in ipairs(ADDON_PANEL_UI_ENTRIES) do
     actions[entry.id] = function()
-      local addOnName = ResolveStartedAddOnName(entry.addonNames)
+      local addOnName = ResolveEnabledAddOnName(entry.addonNames)
       if not addOnName then
         return false
       end
-      EnsureAddOnLoaded(addOnName)
+      if not EnsureAddOnLoaded(addOnName) then
+        return false
+      end
       return RunSlashText(ResolveLocaleSlashText(entry))
     end
   end
@@ -992,7 +996,7 @@ end
 local function ResolveVisibleAddonPanelEntries()
   local visible = {}
   for _, entry in ipairs(ADDON_PANEL_UI_ENTRIES) do
-    local addOnName = ResolveStartedAddOnName(entry.addonNames)
+    local addOnName = ResolveEnabledAddOnName(entry.addonNames)
     if addOnName then
       visible[#visible + 1] = entry
     end

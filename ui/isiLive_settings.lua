@@ -732,6 +732,34 @@ local function CreateSettingsOptionSelector(
   local bgSec = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.7 }
   local acBlue = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
   local borderDefault = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
+  local buttonPadding = 22
+
+  local function ResolveButtonWidth(button)
+    local minWidth = tonumber(button._optionMinWidth) or 40
+    local measuredWidth = nil
+    if button.label and type(button.label.GetStringWidth) == "function" then
+      measuredWidth = tonumber(button.label:GetStringWidth())
+    end
+    if measuredWidth and measuredWidth > 0 then
+      return math.max(minWidth, math.ceil(measuredWidth) + buttonPadding)
+    end
+    return minWidth
+  end
+
+  local function UpdateButtonLayout()
+    local x = labelOnTop and PADDING_X or (PADDING_X + 160)
+    for _, button in ipairs(buttons) do
+      local width = ResolveButtonWidth(button)
+      if type(button.SetSize) == "function" then
+        button:SetSize(width, LANG_BUTTON_HEIGHT)
+      end
+      if type(button.ClearAllPoints) == "function" then
+        button:ClearAllPoints()
+      end
+      button:SetPoint("TOPLEFT", parent, "TOPLEFT", x, buttonYOffset - 1)
+      x = x + width + 4
+    end
+  end
 
   local function ApplyButtonStyle(button, selected)
     if type(button.SetBackdropColor) == "function" then
@@ -772,6 +800,7 @@ local function CreateSettingsOptionSelector(
     button._optionValue = option.value
     button._optionLabelKey = option.labelKey
     button._optionFallback = option.fallback or ""
+    button._optionMinWidth = buttonWidth
 
     button:SetScript("OnClick", function()
       if type(setter) == "function" then
@@ -789,6 +818,7 @@ local function CreateSettingsOptionSelector(
         end
         ApplyButtonStyle(btn, selectedMode == btn._optionValue)
       end
+      UpdateButtonLayout()
     end)
 
     table.insert(buttons, button)
@@ -808,6 +838,7 @@ local function CreateSettingsOptionSelector(
       end
       ApplyButtonStyle(button, selectedMode == button._optionValue)
     end
+    UpdateButtonLayout()
   end
 
   UpdateHighlight()
@@ -2337,6 +2368,16 @@ local function RefreshSettingsControls(controls, config)
   if controls.behaviorHint then
     controls.behaviorHint:SetText(
       freshL.SETTINGS_SECTION_BEHAVIOR_HINT or "Sync, auto-open, combat, and raid handling."
+    )
+  end
+  if controls.autoTriggersNote then
+    controls.autoTriggersNote:SetText(
+      freshL.SETTINGS_AUTO_TRIGGERS_NOTE or "Automatic show/hide: each trigger below is independent."
+    )
+  end
+  if controls.raidBehaviorNote then
+    controls.raidBehaviorNote:SetText(
+      freshL.SETTINGS_RAID_TRANSITION_NOTE or "Raid: main window hides automatically while in a raid group."
     )
   end
   if controls.soundHeader then

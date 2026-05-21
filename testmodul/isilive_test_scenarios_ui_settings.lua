@@ -467,6 +467,85 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
     end)
   end)
 
+  test("Settings panel fits localized default-layout option buttons", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = {}
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "Allgemein",
+            SETTINGS_SECTION_DISPLAY = "Anzeige",
+            SETTINGS_SECTION_BEHAVIOR = "Verhalten",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Sprache",
+            SETTINGS_COMBAT_LOGGING = "Erweiterte Kampfprotokollierung",
+            SETTINGS_DM_RESET = "Schadensmeter zuruecksetzen",
+            SETTINGS_ESC_PANEL = "ESC-Menue-Schnellzugriffe",
+            SETTINGS_BG_ALPHA = "Hintergrund-Deckkraft",
+            SETTINGS_UI_SCALE = "UI-Skalierung",
+            SETTINGS_MINIMAP_BUTTON = "Minimap-Button",
+            SETTINGS_SYNC_ENABLED = "Addon-Sync",
+            SETTINGS_AUTO_OPEN_QUEUE = "Auto-Open bei M+ Queue",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto-Close bei Key-Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto-Close beim Gruppenende",
+            SETTINGS_DEFAULT_OPEN_UI = "Standard-Layout beim Oeffnen",
+            SETTINGS_DEFAULT_OPEN_UI_LAST = "Zuletzt verwendet",
+            SETTINGS_DEFAULT_OPEN_UI_V = "V",
+            SETTINGS_DEFAULT_OPEN_UI_H = "H",
+            SETTINGS_DEFAULT_OPEN_UI_M2 = "M+",
+            SETTINGS_QUEUE_DEBUG = "Queue-Debug",
+            SETTINGS_RUNTIME_LOG = "Runtime-Log",
+          }
+        end,
+        getCurrentLocale = function()
+          return "deDE"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+
+      local lastUsedButton = nil
+      local verticalButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._optionValue == "last_used" and frame._optionLabelKey == "SETTINGS_DEFAULT_OPEN_UI_LAST" then
+          lastUsedButton = frame
+        elseif frame._optionValue == "compact_vertical" and frame._optionLabelKey == "SETTINGS_DEFAULT_OPEN_UI_V" then
+          verticalButton = frame
+        end
+      end
+
+      lastUsedButton = Assert.NotNil(lastUsedButton, "settings panel should create the localized last-used button")
+      verticalButton = Assert.NotNil(verticalButton, "settings panel should create the vertical-layout button")
+
+      local _, _, _, lastX = lastUsedButton:GetPoint()
+      local _, _, _, verticalX = verticalButton:GetPoint()
+      local measuredLastTextWidth = lastUsedButton.label:GetStringWidth()
+      Assert.True(
+        lastUsedButton._width >= measuredLastTextWidth + 22,
+        "localized last-used button must fit its rendered label"
+      )
+      Assert.True(
+        verticalX >= lastX + lastUsedButton._width + 4,
+        "vertical layout button must be anchored after the fitted last-used button"
+      )
+    end)
+  end)
+
   test("Settings panel normalizes persisted expanded default layout to M2", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {
@@ -727,6 +806,125 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
 
       Assert.True(db.combatFadeMM, "user enabling combat fade should be persisted")
       Assert.True(combatFadeCheck:GetChecked(), "user enabling combat fade should keep the checkbox checked")
+    end)
+  end)
+
+  test("Settings panel refresh localizes behavior auto and raid notes", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local db = {}
+    local localeTexts = {
+      enUS = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Automatic show/hide: each trigger below is independent.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Raid: main window hides automatically while in a raid group.",
+      },
+      deDE = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Automatisches Anzeigen/Schliessen: jeder Trigger unten ist unabhaengig.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Raid: das Hauptfenster wird in Raid-Gruppen automatisch ausgeblendet.",
+      },
+      frFR = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Affichage/fermeture auto : chaque declencheur ci-dessous est independant.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Raid : la fenetre principale est masquee automatiquement en groupe de raid.",
+      },
+      esES = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostrar/cerrar automatico: cada disparador siguiente es independiente.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Banda: la ventana principal se oculta automaticamente en grupos de banda.",
+      },
+      ptBR = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostrar/fechar automatico: cada gatilho abaixo e independente.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Raide: a janela principal e ocultada automaticamente em grupos de raide.",
+      },
+      itIT = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Mostra/chiudi automatico: ogni innesco di seguito e indipendente.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Raid: la finestra principale viene nascosta automaticamente nei gruppi raid.",
+      },
+      ruRU = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "RU auto note",
+        SETTINGS_RAID_TRANSITION_NOTE = "RU raid note",
+      },
+      trTR = {
+        SETTINGS_AUTO_TRIGGERS_NOTE = "Otomatik goster/kapat: asagidaki her tetikleyici bagimsiz calisir.",
+        SETTINGS_RAID_TRANSITION_NOTE = "Akin: ana pencere akin grubunda otomatik olarak gizlenir.",
+      },
+    }
+    local activeLocale = "enUS"
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          local texts = localeTexts[activeLocale] or localeTexts.enUS
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_SECTION_DISPLAY = "Display",
+            SETTINGS_SECTION_BEHAVIOR = "Behavior",
+            SETTINGS_SECTION_DEBUG = "Debug",
+            SETTINGS_LANGUAGE = "Language",
+            SETTINGS_COMBAT_LOGGING = "Combat Logging",
+            SETTINGS_DM_RESET = "DM Reset",
+            SETTINGS_ESC_PANEL = "ESC Panel",
+            SETTINGS_BG_ALPHA = "Background Opacity",
+            SETTINGS_UI_SCALE = "UI Scale",
+            SETTINGS_MINIMAP_BUTTON = "Minimap Button",
+            SETTINGS_SYNC_ENABLED = "Addon Sync",
+            SETTINGS_AUTO_OPEN_QUEUE = "Auto Open Queue",
+            SETTINGS_AUTO_CLOSE_ON_KEY_START = "Auto Close On Key Start",
+            SETTINGS_AUTO_CLOSE_ON_SOLO_CHANGE = "Auto Close On Solo Change",
+            SETTINGS_AUTO_SHOW_MAIN_FRAME_ON_STARTUP = "Show on Login / Reload",
+            SETTINGS_AUTO_OPEN_MAIN_FRAME_ON_KEY_END = "Auto Open on Key End",
+            SETTINGS_DEFAULT_OPEN_UI = "Default UI on Open",
+            SETTINGS_DEFAULT_OPEN_UI_LAST = "Last Used",
+            SETTINGS_DEFAULT_OPEN_UI_V = "V",
+            SETTINGS_DEFAULT_OPEN_UI_H = "H",
+            SETTINGS_DEFAULT_OPEN_UI_M2 = "M2",
+            SETTINGS_QUEUE_DEBUG = "Queue Debug",
+            SETTINGS_RUNTIME_LOG = "Runtime Log",
+            SETTINGS_AUTO_TRIGGERS_NOTE = texts.SETTINGS_AUTO_TRIGGERS_NOTE,
+            SETTINGS_RAID_TRANSITION_NOTE = texts.SETTINGS_RAID_TRANSITION_NOTE,
+          }
+        end,
+        getCurrentLocale = function()
+          return activeLocale
+        end,
+        setLanguage = function(locale)
+          activeLocale = locale
+        end,
+        getDB = function()
+          return db
+        end,
+      })
+
+      local autoNote = nil
+      local raidNote = nil
+      for _, fontString in ipairs(panel.content._fontStrings or {}) do
+        if fontString:GetText() == localeTexts.enUS.SETTINGS_AUTO_TRIGGERS_NOTE then
+          autoNote = fontString
+        elseif fontString:GetText() == localeTexts.enUS.SETTINGS_RAID_TRANSITION_NOTE then
+          raidNote = fontString
+        end
+      end
+      autoNote = Assert.NotNil(autoNote, "settings panel should create the auto-trigger note")
+      raidNote = Assert.NotNil(raidNote, "settings panel should create the raid behavior note")
+
+      for locale, texts in pairs(localeTexts) do
+        activeLocale = locale
+        panel.Refresh()
+        Assert.Equal(
+          autoNote:GetText(),
+          texts.SETTINGS_AUTO_TRIGGERS_NOTE,
+          "auto-trigger note must refresh for " .. locale
+        )
+        Assert.Equal(raidNote:GetText(), texts.SETTINGS_RAID_TRANSITION_NOTE, "raid note must refresh for " .. locale)
+      end
     end)
   end)
 

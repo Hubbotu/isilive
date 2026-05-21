@@ -87,7 +87,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten und den verifizierten aktuellen Gruppen-Ziel-Key nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
 65. Die eigenstaendige Spieler-Stats-Box zeigt den Primärstat klassen- beziehungsweise spezialisierungsgenau, zeigt nur direkt aus Blizzard-Live-APIs gelesene Werte, ist rahmenlos, standardmaessig aus, ueber Settings einschaltbar und gegen Positions-Drag sperrbar, und speichert ihre Position getrennt von der Main-UI.
 66. Alle frei verschiebbaren isiLive-Fenster muessen an den WoW-Sichtbereich geklemmt sein, sodass ihre Raender beim Ziehen nicht ausserhalb des WoW-Fensters verschwinden.
-67. Das ESC-Addons-Panel darf Shortcut-Buttons nur fuer Addons anzeigen, die installiert, aktiviert und im aktuellen UI-Lauf bereits geladen sind.
+67. Das ESC-Addons-Panel darf Shortcut-Buttons fuer Addons anzeigen, die installiert und aktiviert sind; beim Klick muss ein noch nicht geladenes Ziel-Addon verifiziert geladen werden, bevor dessen registrierter Slash-Alias ausgefuehrt wird.
 
 ## Regelbloecke
 
@@ -837,10 +837,11 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - StatsBox clamps its movable frame to the screen
   - Notice movable frames are clamped to the WoW screen
 
-### RULE-ESC-ADDON-PANEL-NUR-GELADENE-ADDONS
+### RULE-ESC-ADDON-PANEL-NUR-AKTIVIERTE-ADDONS
 - Regelnummer: 67
 - Status: aktiv
-- Zusammenfassung: Das ESC-Addons-Panel darf einen Shortcut-Button nur anzeigen, wenn das Ziel-Addon installiert, aktiviert und im aktuellen UI-Lauf bereits geladen ist. Installierte und aktivierte, aber noch nicht geladene Addons erzeugen keinen Button.
+- Zusammenfassung: Das ESC-Addons-Panel darf einen Shortcut-Button anzeigen, wenn das Ziel-Addon installiert und aktiviert ist. Ist das Ziel-Addon beim Klick noch nicht geladen, muss der Klickpfad das Addon verifiziert laden und erst danach dessen registrierten Slash-Alias ausfuehren. Wenn das Laden fehlschlaegt oder kein registrierter Slash-Alias existiert, bleibt der Klick wirkungslos.
 - Erforderliche Tests:
-  - UI third game-menu addon panel shows only installed and loaded addon shortcuts
-  - UI third game-menu addon panel stays hidden when no supported addon is loaded
+  - UI third game-menu addon panel shows installed and enabled addon shortcuts
+  - UI third game-menu addon shortcut loads enabled addon before running slash
+  - UI third game-menu addon panel stays hidden when no supported addon is enabled
