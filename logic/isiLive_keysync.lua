@@ -571,6 +571,48 @@ local function ApplyKnownKeyToRosterEntry(sync, info)
   return changed
 end
 
+local function RealmKeyFromPlayerKey(playerKey)
+  if type(playerKey) ~= "string" then
+    return nil
+  end
+  return playerKey:match("%-([^-]+)$")
+end
+
+local function RegisterVerifiedSyncAliasForRoster(sync, roster, sender)
+  if type(sync.RegisterVerifiedAlias) ~= "function" or type(sync.NormalizePlayerKey) ~= "function" then
+    return false
+  end
+  if type(roster) ~= "table" or type(sender) ~= "string" or sender == "" then
+    return false
+  end
+
+  local senderKey = sync.NormalizePlayerKey(sender)
+  local senderRealmKey = RealmKeyFromPlayerKey(senderKey)
+  if not senderRealmKey then
+    return false
+  end
+
+  local candidate = nil
+  local candidateCount = 0
+  for _, info in pairs(roster) do
+    if type(info) == "table" and not info.isDemoEntry then
+      local rosterKey = sync.NormalizePlayerKey(info.name, info.realm)
+      if rosterKey == senderKey then
+        return false
+      end
+      if RealmKeyFromPlayerKey(rosterKey) == senderRealmKey then
+        candidate = info
+        candidateCount = candidateCount + 1
+      end
+    end
+  end
+
+  if candidateCount ~= 1 or type(candidate) ~= "table" then
+    return false
+  end
+  return sync.RegisterVerifiedAlias(sender, nil, candidate.name, candidate.realm)
+end
+
 local function RefreshLocalPlayerKey(sync, roster)
   local playerInfo = roster and roster.player
   if type(playerInfo) ~= "table" then
@@ -858,6 +900,10 @@ function KeySync.CreateController(opts)
       )
     end
     return changed
+  end
+
+  function controller.RegisterVerifiedSyncAliasForRoster(roster, sender)
+    return RegisterVerifiedSyncAliasForRoster(sync, roster, sender)
   end
 
   function controller.RefreshLocalPlayerKey(roster)

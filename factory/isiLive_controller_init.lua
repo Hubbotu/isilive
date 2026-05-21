@@ -51,6 +51,7 @@ local function CreateKeySyncController(ctx)
     sendOwnBackgroundSnapshot = controller.SendOwnBackgroundSnapshot,
     sendRefreshResponse = controller.SendRefreshResponse,
     applyKnownKeyToRosterEntry = controller.ApplyKnownKeyToRosterEntry,
+    registerVerifiedSyncAliasForRoster = controller.RegisterVerifiedSyncAliasForRoster,
   }
 end
 

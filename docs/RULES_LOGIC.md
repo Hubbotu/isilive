@@ -641,6 +641,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Event handlers send sparse background snapshot on hidden zone changes
   - Event handlers send sparse background snapshot only for player-owned state changes
   - KeySync SendOwnBackgroundSnapshot publishes sparse hidden changes without DPS spam
+  - Sync ProcessAddonMessage deep trace exposes raw bucket payloads and sender bytes
   - KeySync SendRefreshResponse can answer hidden refresh requests
   - Architecture kick tracker uses lightweight kick-column refresh hooks
 
@@ -666,6 +667,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Sync SendShareKeysRequest returns false without an addon sync channel
   - Sync SendShareKeysRequest returns false when addon message dispatch fails
   - Sync ProcessAddonMessage handles SHAREKEYS payloads
+  - ControllerWiring sendOwnKeystoneToChat uses ContextHelpers loaded after wiring
   - ControllerWiring SHAREKEYS send and receive paths use the same real payload
   - Event handlers answer SHAREKEYS requests while frame is hidden
   - Event handlers process SHAREKEYS through the real sync parser and trigger cooldown
@@ -695,6 +697,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved
   - factory_controllers.status: SendOwnTargetSnapshot carries LFG level markup when numeric level is unresolved
   - UI third game-menu addon shortcut fails closed without a registered slash alias
+  - Sync RegisterVerifiedAlias exposes exact sender data through a verified roster name
+  - Sync RegisterVerifiedAlias rejects cross-realm and unknown sender aliases
+  - KeySync RegisterVerifiedSyncAliasForRoster maps one same-realm sender to one roster row
+  - KeySync RegisterVerifiedSyncAliasForRoster fails closed for ambiguous same-realm candidates
   - SpellUtils.GetTeleportCooldownRemaining normalizes wrapped portal cooldown start times
   - TeleportUI applies visible cooldown frame from normalized remaining time
   - AcceptedInviteNotice does not replay after challenge start

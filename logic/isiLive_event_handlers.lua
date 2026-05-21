@@ -163,6 +163,9 @@ local function BuildContext(opts)
   ctx.forEachRosterInfo = RequireFunction(opts.forEachRosterInfo, "forEachRosterInfo")
   ctx.isSyncUserKnown = RequireFunction(opts.isSyncUserKnown, "isSyncUserKnown")
   ctx.applyKnownKeyToRosterEntry = RequireFunction(opts.applyKnownKeyToRosterEntry, "applyKnownKeyToRosterEntry")
+  ctx.registerVerifiedSyncAliasForRoster = OptionalFunction(opts.registerVerifiedSyncAliasForRoster, function()
+    return false
+  end)
   ctx.sendOwnKeystoneToChat = OptionalFunction(opts.sendOwnKeystoneToChat, function()
     return false
   end)

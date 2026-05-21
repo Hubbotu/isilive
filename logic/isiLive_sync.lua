@@ -53,6 +53,7 @@ local dpsInfoByPlayerKey = {}
 local locInfoByPlayerKey = {}
 local targetInfoByPlayerKey = {}
 local kickInfoByPlayerKey = {}
+local verifiedAliasByRosterKey = {}
 local syncDebugLog = nil
 local syncDebugTrace = nil
 local syncDebugTraceDeep = nil
@@ -106,6 +107,18 @@ end
 
 local function SyncLogDeep(event, formatText, ...)
   SyncLogInternal(syncDebugTraceDeep, event, formatText, ...)
+end
+
+local function FormatBytes(value)
+  local text = tostring(value or "")
+  if text == "" then
+    return ""
+  end
+  local out = {}
+  for i = 1, #text do
+    out[#out + 1] = string.format("%02X", string.byte(text, i))
+  end
+  return table.concat(out, "-")
 end
 
 local function GetSyncTimestamp()
@@ -506,7 +519,50 @@ end
 -- @return boolean
 function Sync.IsUserKnown(name, realm)
   local key = Sync.NormalizePlayerKey(name, realm)
-  return key and isiLiveUsersByKey[key] == true
+  local aliasKey = key and verifiedAliasByRosterKey[key] or nil
+  return key and (isiLiveUsersByKey[key] == true or (aliasKey and isiLiveUsersByKey[aliasKey] == true)) or false
+end
+
+local function GetRealmKey(playerKey)
+  if type(playerKey) ~= "string" then
+    return nil
+  end
+  return playerKey:match("%-([^-]+)$")
+end
+
+local function ResolveLookupKey(store, name, realm)
+  local key = Sync.NormalizePlayerKey(name, realm)
+  if StringUtils.IsBlank(key) then
+    return nil
+  end
+  if type(store) == "table" and store[key] ~= nil then
+    return key
+  end
+  local aliasKey = verifiedAliasByRosterKey[key]
+  if type(aliasKey) == "string" and aliasKey ~= "" and type(store) == "table" and store[aliasKey] ~= nil then
+    return aliasKey
+  end
+  return key
+end
+
+function Sync.RegisterVerifiedAlias(senderName, senderRealm, rosterName, rosterRealm)
+  local senderKey = Sync.NormalizePlayerKey(senderName, senderRealm)
+  local rosterKey = Sync.NormalizePlayerKey(rosterName, rosterRealm)
+  if StringUtils.IsBlank(senderKey) or StringUtils.IsBlank(rosterKey) or senderKey == rosterKey then
+    return false
+  end
+  if isiLiveUsersByKey[senderKey] ~= true then
+    return false
+  end
+  if GetRealmKey(senderKey) ~= GetRealmKey(rosterKey) then
+    return false
+  end
+  if verifiedAliasByRosterKey[rosterKey] == senderKey then
+    return false
+  end
+  verifiedAliasByRosterKey[rosterKey] = senderKey
+  SyncLogDeep("alias_registered", "sender=%s roster=%s", tostring(senderKey), tostring(rosterKey))
+  return true
 end
 
 --- Returns whether the given WoW unit belongs to a known sync peer.
@@ -533,6 +589,7 @@ function Sync.ClearKnownUsers()
   locInfoByPlayerKey = {}
   targetInfoByPlayerKey = {}
   kickInfoByPlayerKey = {}
+  verifiedAliasByRosterKey = {}
   lastIsiLiveHelloAt = 0
   lastIsiLiveKeyAt = 0
   lastIsiLiveStatsAt = 0
@@ -720,7 +777,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {mapID, level, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerKeyInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(keyInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -784,7 +841,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {specID, ilvl, rio, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerStatsInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(statsInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -837,7 +894,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {dps, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerDpsInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(dpsInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -948,7 +1005,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {hasKick, onCooldown, cooldownRemain, capturedAt, receivedAt, receivedAtGetTime}
 function Sync.GetPlayerKickInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(kickInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -1015,7 +1072,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {mapID, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerLocInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(locInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -1078,7 +1135,7 @@ end
 -- @param realm string|nil Realm name.
 -- @return table|nil {mapID, level, levelText, capturedAt, source, receivedAt, previousSyncStamp}
 function Sync.GetPlayerTargetInfo(name, realm)
-  local key = Sync.NormalizePlayerKey(name, realm)
+  local key = ResolveLookupKey(targetInfoByPlayerKey, name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
@@ -1097,14 +1154,15 @@ function Sync.GetPlayerSyncSummary(name, realm)
   if StringUtils.IsBlank(key) then
     return nil
   end
+  local aliasKey = verifiedAliasByRosterKey[key]
 
   local candidates = {
-    { kind = "hello", data = helloInfoByPlayerKey[key] },
-    { kind = "key", data = keyInfoByPlayerKey[key] },
-    { kind = "stats", data = statsInfoByPlayerKey[key] },
-    { kind = "dps", data = dpsInfoByPlayerKey[key] },
-    { kind = "loc", data = locInfoByPlayerKey[key] },
-    { kind = "target", data = targetInfoByPlayerKey[key] },
+    { kind = "hello", data = helloInfoByPlayerKey[key] or (aliasKey and helloInfoByPlayerKey[aliasKey]) },
+    { kind = "key", data = keyInfoByPlayerKey[key] or (aliasKey and keyInfoByPlayerKey[aliasKey]) },
+    { kind = "stats", data = statsInfoByPlayerKey[key] or (aliasKey and statsInfoByPlayerKey[aliasKey]) },
+    { kind = "dps", data = dpsInfoByPlayerKey[key] or (aliasKey and dpsInfoByPlayerKey[aliasKey]) },
+    { kind = "loc", data = locInfoByPlayerKey[key] or (aliasKey and locInfoByPlayerKey[aliasKey]) },
+    { kind = "target", data = targetInfoByPlayerKey[key] or (aliasKey and targetInfoByPlayerKey[aliasKey]) },
   }
 
   local best = nil
@@ -1788,6 +1846,14 @@ function Sync.ProcessAddonMessage(prefix, message, sender, localName, localRealm
 
   local parts = SplitPayload(message)
   local bucket = parts[1]
+  SyncLogDeep(
+    "message_payload",
+    "sender=%s senderBytes=%s bucket=%s raw=%s",
+    tostring(sender),
+    FormatBytes(sender),
+    tostring(bucket or "unknown"),
+    tostring(message)
+  )
 
   if bucket == "KEY" and parts[2] and parts[3] then
     keyUpdated =

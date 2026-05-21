@@ -805,6 +805,10 @@ function RuntimeLifecycle.BuildHandlers(ctx)
       ctx.showCombatAnnounce(syncResult.combatAnnounce)
     end
 
+    if type(ctx.registerVerifiedSyncAliasForRoster) == "function" then
+      ctx.registerVerifiedSyncAliasForRoster(ctx.getRoster(), syncResult.sender)
+    end
+
     local changed = syncResult.targetUpdated == true or syncResult.kickUpdated == true
     ctx.forEachRosterInfo(function(info)
       if not info.hasIsiLive and ctx.isSyncUserKnown(info.name, info.realm) then

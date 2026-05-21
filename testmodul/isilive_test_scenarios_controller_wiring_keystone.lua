@@ -255,6 +255,56 @@ return function(test, ctx)
     Assert.Equal(sentLines[1], "[KEY] PSF +12", "line must be forwarded to SendPartyChatMessage")
   end)
 
+  test("ControllerWiring sendOwnKeystoneToChat uses ContextHelpers loaded after wiring", function()
+    local addon = {}
+    local validationChunk = assert(loadfile("core/isiLive_validation_helpers.lua"))
+    local wiringChunk = assert(loadfile("factory/isiLive_controller_wiring.lua"))
+    local helpersChunk = assert(loadfile("core/isiLive_context_helpers.lua"))
+    assert(pcall(validationChunk, "isiLive", addon))
+    assert(pcall(wiringChunk, "isiLive", addon))
+    assert(pcall(helpersChunk, "isiLive", addon))
+
+    local sentLines = {}
+    addon.ContextHelpers.SendPartyChatMessage = function(line)
+      table.insert(sentLines, line)
+      return true
+    end
+
+    WithGlobals({
+      GetTime = function()
+        return 5100
+      end,
+      C_MythicPlus = false,
+      C_Container = false,
+      C_ChallengeMode = false,
+    }, function()
+      local module = CaptureEventModule()
+      local controllerCtx = BuildKeystoneCtx({
+        isInGroup = function()
+          return true
+        end,
+        getOwnedKeystoneSnapshot = function()
+          return 239, 17
+        end,
+        getL = function()
+          return { ANNOUNCE_PREFIX = "PartyKeys:" }
+        end,
+      })
+      local capturedDeps
+      local origCreateEH = addon.ControllerWiring.CreateEventHandlersController
+      addon.ControllerWiring.CreateEventHandlersController = function(_module, deps)
+        capturedDeps = deps
+        return { Handle = Noop }
+      end
+      addon.ControllerWiring.CreateEventHandlersControllerFromContext(module, controllerCtx)
+      addon.ControllerWiring.CreateEventHandlersController = origCreateEH
+
+      Assert.True(capturedDeps.sendOwnKeystoneToChat(), "late-loaded ContextHelpers must still build a chat line")
+    end)
+
+    Assert.Equal(sentLines[1], "[isiLive] PartyKeys: [Keystone +17]", "line must be built from the real late-loaded helper")
+  end)
+
   test("ControllerWiring SHAREKEYS send and receive paths use the same real payload", function()
     local sentLines = {}
     local addonMessages = {}

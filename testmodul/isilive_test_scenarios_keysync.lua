@@ -7,17 +7,46 @@ local function BuildMockSync()
   local locStore = {}
   local kickStore = {}
   local knownUsers = {}
+  local aliases = {}
+
+  local function Key(name, realm)
+    local text = tostring(name or "")
+    local resolvedRealm = tostring(realm or "")
+    if resolvedRealm == "" then
+      local splitName, splitRealm = text:match("^(.+)%-([^-]+)$")
+      if splitName and splitRealm then
+        text = splitName
+        resolvedRealm = splitRealm
+      end
+    end
+    return string.lower(text .. "-" .. resolvedRealm)
+  end
+
+  local function Lookup(store, name, realm)
+    local key = Key(name, realm)
+    return store[key] or (aliases[key] and store[aliases[key]]) or nil
+  end
 
   return {
     calls = calls,
     keyStore = keyStore,
     MarkUser = function(name, realm)
       table.insert(calls, { fn = "MarkUser", name = name, realm = realm })
-      knownUsers[tostring(name) .. "-" .. tostring(realm)] = true
+      knownUsers[Key(name, realm)] = true
+    end,
+    NormalizePlayerKey = Key,
+    RegisterVerifiedAlias = function(senderName, senderRealm, rosterName, rosterRealm)
+      local senderKey = Key(senderName, senderRealm)
+      if not knownUsers[senderKey] then
+        return false
+      end
+      aliases[Key(rosterName, rosterRealm)] = senderKey
+      return true
     end,
     IsUnitKnown = function(getUnitNameAndRealm, unit)
       local name, realm = getUnitNameAndRealm(unit)
-      return knownUsers[tostring(name) .. "-" .. tostring(realm)] == true
+      local key = Key(name, realm)
+      return knownUsers[key] == true or (aliases[key] and knownUsers[aliases[key]] == true)
     end,
     RegisterPrefix = function()
       table.insert(calls, { fn = "RegisterPrefix" })
@@ -48,28 +77,28 @@ local function BuildMockSync()
       return true
     end,
     GetPlayerKeyInfo = function(name, realm)
-      return keyStore[tostring(name) .. "-" .. tostring(realm)]
+      return Lookup(keyStore, name, realm)
     end,
     GetPlayerStatsInfo = function(name, realm)
-      return statsStore[tostring(name) .. "-" .. tostring(realm)]
+      return Lookup(statsStore, name, realm)
     end,
     GetPlayerDpsInfo = function(name, realm)
-      return dpsStore[tostring(name) .. "-" .. tostring(realm)]
+      return Lookup(dpsStore, name, realm)
     end,
     GetPlayerLocInfo = function(name, realm)
-      return locStore[tostring(name) .. "-" .. tostring(realm)]
+      return Lookup(locStore, name, realm)
     end,
     GetPlayerKickInfo = function(name, realm)
-      return kickStore[tostring(name) .. "-" .. tostring(realm)]
+      return Lookup(kickStore, name, realm)
     end,
     SetPlayerKeyInfo = function(name, realm, mapID, level)
-      keyStore[tostring(name) .. "-" .. tostring(realm)] = { mapID = mapID, level = level }
+      keyStore[Key(name, realm)] = { mapID = mapID, level = level }
     end,
     SetPlayerStatsInfo = function(name, realm, specID, ilvl, rio)
-      statsStore[tostring(name) .. "-" .. tostring(realm)] = { specID = specID, ilvl = ilvl, rio = rio }
+      statsStore[Key(name, realm)] = { specID = specID, ilvl = ilvl, rio = rio }
     end,
     SetPlayerDpsInfo = function(name, realm, dps)
-      local key = tostring(name) .. "-" .. tostring(realm)
+      local key = Key(name, realm)
       if dps == nil then
         dpsStore[key] = nil
         return
@@ -77,10 +106,10 @@ local function BuildMockSync()
       dpsStore[key] = { dps = dps }
     end,
     SetPlayerLocInfo = function(name, realm, mapID)
-      locStore[tostring(name) .. "-" .. tostring(realm)] = { mapID = mapID }
+      locStore[Key(name, realm)] = { mapID = mapID }
     end,
     SetPlayerKickInfo = function(name, realm, onCooldown, cooldownRemain, _capturedAt, hasKick)
-      kickStore[tostring(name) .. "-" .. tostring(realm)] = {
+      kickStore[Key(name, realm)] = {
         hasKick = hasKick ~= false,
         onCooldown = onCooldown == true,
         cooldownRemain = tonumber(cooldownRemain) or 0,
@@ -1254,6 +1283,47 @@ local function RegisterKeySyncApplyKnownKeyTests(test, Assert, WithGlobals, Load
       Assert.True(info.syncKickOnCooldown, "sync kick cooldown state must be applied")
       Assert.Equal(info.syncKickRemain, 9, "sync kick remaining cooldown must be applied")
     end)
+  end)
+
+  test("KeySync RegisterVerifiedSyncAliasForRoster maps one same-realm sender to one roster row", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    sync.MarkUser("Kørshad-Blackmoore")
+    sync.SetPlayerKeyInfo("Kørshad-Blackmoore", nil, 239, 17)
+
+    local roster = {
+      party1 = { name = "Kürshad", realm = "Blackmoore" },
+    }
+
+    Assert.True(
+      ctrl.RegisterVerifiedSyncAliasForRoster(roster, "Kørshad-Blackmoore"),
+      "unique same-realm sender must register as a verified alias"
+    )
+    local info = roster.party1
+    Assert.True(ctrl.ApplyKnownKeyToRosterEntry(info), "verified alias must allow sync data to backfill the roster row")
+    Assert.Equal(info.keyMapID, 239, "aliased key map must apply")
+    Assert.Equal(info.keyLevel, 17, "aliased key level must apply")
+  end)
+
+  test("KeySync RegisterVerifiedSyncAliasForRoster fails closed for ambiguous same-realm candidates", function()
+    local sync = BuildMockSync()
+    local ctrl = BuildController(LoadAddonModules, sync)
+    sync.MarkUser("Kørshad-Blackmoore")
+    sync.SetPlayerKeyInfo("Kørshad-Blackmoore", nil, 239, 17)
+
+    local roster = {
+      party1 = { name = "Kürshad", realm = "Blackmoore" },
+      party2 = { name = "Kyrshad", realm = "Blackmoore" },
+    }
+
+    Assert.False(
+      ctrl.RegisterVerifiedSyncAliasForRoster(roster, "Kørshad-Blackmoore"),
+      "ambiguous same-realm candidates must not register an alias"
+    )
+    local info = roster.party1
+    Assert.False(ctrl.ApplyKnownKeyToRosterEntry(info), "unverified alias must not backfill roster state")
+    Assert.Nil(info.keyMapID, "ambiguous alias must leave key map unresolved")
+    Assert.Nil(info.keyLevel, "ambiguous alias must leave key level unresolved")
   end)
 
   test("KeySync ApplyKnownKeyToRosterEntry skips when _localSpecFresh is set", function()

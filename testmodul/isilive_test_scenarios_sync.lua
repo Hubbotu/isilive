@@ -204,6 +204,114 @@ local function RegisterSyncRuntimeLogBurstTests(test, Assert, WithGlobals, LoadA
       )
     end)
   end)
+
+  test("Sync ProcessAddonMessage deep trace exposes raw bucket payloads and sender bytes", function()
+    WithGlobals({
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+      local lines = {}
+      addon.Sync.SetDeepTraceLogger(function(builder)
+        table.insert(lines, builder())
+      end)
+
+      addon.Sync.ProcessAddonMessage("ISILIVE", "KEY:2649:17:123:hello", "Kürshad-Blackmoore", "Me", "Realm")
+
+      local sawPayload = false
+      for _, line in ipairs(lines) do
+        if
+          line
+          == "[SYNC] message_payload sender=Kürshad-Blackmoore senderBytes=4B-C3-BC-72-73-68-61-64-2D-42-6C-61-63-6B-6D-6F-6F-72-65 bucket=KEY raw=KEY:2649:17:123:hello"
+        then
+          sawPayload = true
+        end
+      end
+      Assert.True(sawPayload, "deep trace must expose the raw incoming bucket payload")
+    end)
+  end)
+
+  test("Sync RegisterVerifiedAlias exposes exact sender data through a verified roster name", function()
+    WithGlobals({
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      addon.Sync.ProcessAddonMessage("ISILIVE", "KEY:239:17", "Kørshad-Blackmoore", "Me", "Realm")
+
+      Assert.Nil(
+        addon.Sync.GetPlayerKeyInfo("Kürshad", "Blackmoore"),
+        "different unicode names must not match before a verified alias exists"
+      )
+      Assert.True(
+        addon.Sync.RegisterVerifiedAlias("Kørshad-Blackmoore", nil, "Kürshad", "Blackmoore"),
+        "verified same-realm alias must be accepted for a known sync sender"
+      )
+
+      local aliasedInfo = addon.Sync.GetPlayerKeyInfo("Kürshad", "Blackmoore")
+      Assert.NotNil(aliasedInfo, "verified alias must expose sender key data through the roster key")
+      Assert.Equal(aliasedInfo.mapID, 239, "aliased mapID must match sender payload")
+      Assert.Equal(aliasedInfo.level, 17, "aliased level must match sender payload")
+      Assert.True(addon.Sync.IsUserKnown("Kürshad", "Blackmoore"), "verified alias must mark roster name as known")
+    end)
+  end)
+
+  test("Sync RegisterVerifiedAlias rejects cross-realm and unknown sender aliases", function()
+    WithGlobals({
+      strsplit = function(sep, str, max)
+        local pos = str:find(sep, 1, true)
+        if not pos then
+          return str
+        end
+        if max and max >= 2 then
+          return str:sub(1, pos - 1), str:sub(pos + 1)
+        end
+        return str:sub(1, pos - 1)
+      end,
+      GetRealmName = function()
+        return "Realm"
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sync.lua" })
+
+      Assert.False(
+        addon.Sync.RegisterVerifiedAlias("Kørshad-Blackmoore", nil, "Kürshad", "Blackmoore"),
+        "alias must reject senders that have not been observed through sync"
+      )
+      addon.Sync.ProcessAddonMessage("ISILIVE", "KEY:239:17", "Kørshad-Blackmoore", "Me", "Realm")
+      Assert.False(
+        addon.Sync.RegisterVerifiedAlias("Kørshad-Blackmoore", nil, "Kürshad", "Malfurion"),
+        "alias must reject cross-realm mappings"
+      )
+      Assert.Nil(
+        addon.Sync.GetPlayerKeyInfo("Kürshad", "Malfurion"),
+        "rejected cross-realm alias must not expose sender data"
+      )
+    end)
+  end)
 end
 
 local function RegisterStatsSyncTests(test, Assert, WithGlobals, LoadAddonModules)

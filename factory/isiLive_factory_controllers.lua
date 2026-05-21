@@ -1175,6 +1175,7 @@ local function InitializeFactoryPrimaryControllers(ctx)
   ctx.SendOwnBackgroundSnapshot = initResult.sendOwnBackgroundSnapshot
   ctx.SendRefreshResponse = initResult.sendRefreshResponse
   ctx.ApplyKnownKeyToRosterEntry = initResult.applyKnownKeyToRosterEntry
+  ctx.RegisterVerifiedSyncAliasForRoster = initResult.registerVerifiedSyncAliasForRoster
   ctx.RecordRun = initResult.recordRun
   ctx.highlightController = initResult.highlightController
   ctx.rosterPanelController = initResult.rosterPanelController

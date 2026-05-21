@@ -2,7 +2,7 @@ local _, addonTable = ...
 
 addonTable = addonTable or {}
 
-local ContextHelpers = {}
+local ContextHelpers = addonTable.ContextHelpers or {}
 addonTable.ContextHelpers = ContextHelpers
 
 function ContextHelpers.GetAddonVersionRaw(addonName)

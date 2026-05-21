@@ -586,6 +586,7 @@ local function FinalizeFactoryRuntime(ctx)
     getInspectSpecName = ctx.GetInspectSpecName,
     unitHasIsiLive = ctx.UnitHasIsiLive,
     applyKnownKeyToRosterEntry = ctx.ApplyKnownKeyToRosterEntry,
+    registerVerifiedSyncAliasForRoster = ctx.RegisterVerifiedSyncAliasForRoster,
     enqueueInspect = ctx.EnqueueInspect,
     sendOwnKeySnapshot = ctx.SendOwnKeySnapshot,
     sendOwnBackgroundSnapshot = ctx.SendOwnBackgroundSnapshot,
