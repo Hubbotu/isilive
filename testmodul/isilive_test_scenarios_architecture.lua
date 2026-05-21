@@ -789,6 +789,7 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
     local playCalls = 0
     local playedPath = nil
     local playedChannel = nil
+    local playedSoundKit = nil
     local now = 0
     local db = {}
     WithGlobals({
@@ -801,7 +802,11 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         playedPath = path
         playedChannel = channel
       end,
-      PlaySound = function() end,
+      PlaySound = function(id, channel)
+        playCalls = playCalls + 1
+        playedSoundKit = id
+        playedChannel = channel
+      end,
     }, function()
       local addon = LoadAddonModules({ "isiLive_sound_utils.lua" })
       Assert.NotNil(addon.SoundUtils, "sound utils module should load")
@@ -953,6 +958,27 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
         "Interface\\AddOns\\isiLive\\sounds\\BoxingArenaSound.ogg",
         "bloodlust asset should be the last played sound"
       )
+
+      playCalls = 0
+      playedSoundKit = nil
+      _G.SOUNDKIT = {
+        UI_TEST_SOUND = 4242,
+      }
+      now = 10
+      addon.SoundUtils.PlaySoundKit(nil)
+      addon.SoundUtils.PlaySoundKit("UNKNOWN_SOUND")
+      Assert.Equal(playCalls, 0, "missing SoundKit values must fail closed without playback")
+      addon.SoundUtils.PlaySoundKit("UI_TEST_SOUND", "Dialog")
+      Assert.Equal(playCalls, 1, "named SoundKit values must resolve through SOUNDKIT")
+      Assert.Equal(playedSoundKit, 4242, "named SoundKit playback must pass the resolved numeric id")
+      Assert.Equal(playedChannel, "Dialog", "explicit SoundKit channel should be preserved")
+      addon.SoundUtils.PlaySoundKit("UI_TEST_SOUND", "Dialog")
+      Assert.Equal(playCalls, 1, "SoundKit spam protection must suppress duplicate playback")
+      now = 12
+      addon.SoundUtils.PlaySoundKit(7777)
+      Assert.Equal(playCalls, 2, "numeric SoundKit ids must play directly")
+      Assert.Equal(playedSoundKit, 7777, "numeric SoundKit playback must pass the given id")
+      Assert.Equal(playedChannel, "SFX", "SoundKit playback defaults to the SFX channel")
     end)
   end)
 
