@@ -2022,11 +2022,27 @@ local function InitializeFactorySecondaryCdTracker(
   ctx.cdTrackerController = modules.cdTracker.CreateController({
     getTime = getTime,
   })
-  ctx.UpdateCdTracker = function()
+  local lastLustActive = false
+  ctx.UpdateCdTracker = function(opts)
     if IsRaidModeActive() then
       return
     end
     ctx.cdTrackerController.Scan()
+    local lustInfo = type(ctx.cdTrackerController.GetLustInfo) == "function" and ctx.cdTrackerController.GetLustInfo()
+      or nil
+    local lustActive = type(lustInfo) == "table" and tonumber(lustInfo.remain) ~= nil and lustInfo.remain > 0
+    if
+      lustActive
+      and not lastLustActive
+      and type(opts) == "table"
+      and opts.playLustSoundOnStart == true
+      and ctx.addonTable
+      and type(ctx.addonTable.SoundUtils) == "table"
+      and type(ctx.addonTable.SoundUtils.PlayBloodlust) == "function"
+    then
+      ctx.addonTable.SoundUtils.PlayBloodlust()
+    end
+    lastLustActive = lustActive
     if ctx.rosterPanelController and type(ctx.rosterPanelController.RefreshCdTracker) == "function" then
       ctx.rosterPanelController.RefreshCdTracker()
     end

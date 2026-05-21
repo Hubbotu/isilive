@@ -24,9 +24,7 @@ SoundUtils.Registry = {
     defaultChannel = "SFX",
   },
   portal_available = {
-    -- Resolved via SOUNDKIT[name] at play time so the registry entry stays
-    -- portable across patches even if Blizzard renames the constant.
-    soundKit = "UI_GROUP_FINDER_RECEIVE_APPLICATION",
+    file = "Interface\\AddOns\\isiLive\\sounds\\Portal.ogg",
     labelKey = "SETTINGS_SOUND_PORTAL_AVAILABLE",
     settingKey = "soundPortalAvailableEnabled",
     defaultEnabled = true,

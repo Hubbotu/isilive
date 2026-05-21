@@ -846,7 +846,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if not UnitAuraUpdateRequiresCdScan(unitAuraUpdateInfo) then
       return
     end
-    ctx.updateCdTracker()
+    ctx.updateCdTracker({ playLustSoundOnStart = true })
   end
 
   return {

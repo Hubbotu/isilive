@@ -19,13 +19,6 @@ local addonTable = {}
 local fakeDB = {}
 _G.IsiLiveDB = fakeDB
 
--- Mock the SOUNDKIT table with entries the registry might reference. Numeric
--- ids are placeholders — only resolution and dispatch are simulated, not the
--- actual playback.
-_G.SOUNDKIT = {
-  UI_GROUP_FINDER_RECEIVE_APPLICATION = 31337,
-}
-
 local playCalls = {}
 _G.PlaySoundFile = function(path, channel)
   playCalls[#playCalls + 1] = { kind = "file", path = path, channel = channel }

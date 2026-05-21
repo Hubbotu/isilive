@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.265 (patch)
+
+Fixes incoming summon and Bloodlust sound cues.
+
+### Sound Cues
+
+[core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua),
+[factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua):
+
+- Incoming summon now plays the bundled `sounds/Portal.ogg` asset directly
+  instead of depending on a client-specific SoundKit constant.
+- Bloodlust sound now also fires from the observed player Sated/Exhaustion aura
+  onset, so the sound can play when the local player receives Bloodlust even if
+  the CombatEvents self-cast announce path is not the source.
+- Added deterministic coverage for the UNIT_AURA sound handoff and the
+  one-shot aura-onset playback gate.
+
 ## 2026-05-21 - Version 0.9.264 (patch)
 
 Adds an ESC-menu Addons shortcut panel.

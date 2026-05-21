@@ -248,11 +248,13 @@ local function RegisterCombatStartupCVarAndWorldEntryTests(test, Assert, WithGlo
 
   test("Event handlers call updateCdTracker only on Sated-relevant UNIT_AURA payloads", function()
     local cdTrackerCalls = 0
+    local lastOptions = nil
 
     local addon = LoadAddonModules({ "isiLive_event_handlers.lua" })
     local controller = Fixtures.BuildEventHandlersController(addon.EventHandlers, { value = nil }, {}, {
-      updateCdTracker = function()
+      updateCdTracker = function(opts)
         cdTrackerCalls = cdTrackerCalls + 1
+        lastOptions = opts
       end,
     })
 
@@ -272,6 +274,10 @@ local function RegisterCombatStartupCVarAndWorldEntryTests(test, Assert, WithGlo
     -- Added a Sated debuff -> must scan so the lust countdown is picked up.
     controller:Dispatch("UNIT_AURA", "player", { addedAuras = { { spellId = 57723 } } })
     Assert.Equal(cdTrackerCalls, 3, "added Sated debuff must trigger a scan")
+    Assert.True(
+      type(lastOptions) == "table" and lastOptions.playLustSoundOnStart == true,
+      "Sated UNIT_AURA scans must allow the factory to play the Bloodlust onset sound"
+    )
   end)
 
   test("Event handlers ignore UNIT_AURA events for non-player units", function()

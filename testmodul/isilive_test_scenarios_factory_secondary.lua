@@ -245,7 +245,7 @@ local function BuildControllerContext(state, addon, initial)
               return nil
             end,
             GetLustInfo = function()
-              return nil
+              return state.lustInfo
             end,
             SetDemoData = function(data)
               state.cdTrackerDemoData = data
@@ -460,6 +460,11 @@ local function BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModule
       MobNameplate = {
         RefreshAll = function()
           state.mobNameplateRefreshes = (state.mobNameplateRefreshes or 0) + 1
+        end,
+      },
+      SoundUtils = {
+        PlayBloodlust = function()
+          state.bloodlustSoundCalls = (state.bloodlustSoundCalls or 0) + 1
         end,
       },
     })
@@ -798,6 +803,26 @@ return function(test, ctx)
     Assert.Equal(state.cdRefreshes or 0, 1, "event-driven hidden CD refresh must still pre-render the CD row")
     Assert.Equal(state.readyCheckRefreshes or 0, 1, "event-driven hidden CD refresh must keep ready-check rows current")
     Assert.Equal(state.uiUpdates or 0, 1, "event-driven hidden CD refresh must keep the timer display current")
+  end)
+
+  test("Factory UNIT_AURA CD refresh plays Bloodlust sound only on new aura onset", function()
+    local state = BuildFactorySecondaryControllerState(WithGlobals, LoadAddonModules)
+
+    state.ctx.UpdateCdTracker()
+    Assert.Equal(state.bloodlustSoundCalls or 0, 0, "plain CD refresh must not play a Bloodlust sound")
+
+    state.lustInfo = { remain = 39, icon = 132114 }
+    state.ctx.UpdateCdTracker({ playLustSoundOnStart = true })
+    Assert.Equal(state.bloodlustSoundCalls or 0, 1, "Sated aura onset must play the Bloodlust sound")
+
+    state.ctx.UpdateCdTracker({ playLustSoundOnStart = true })
+    Assert.Equal(state.bloodlustSoundCalls or 0, 1, "still-active Sated aura must not replay the Bloodlust sound")
+
+    state.lustInfo = nil
+    state.ctx.UpdateCdTracker({ playLustSoundOnStart = true })
+    state.lustInfo = { remain = 25, icon = 132114 }
+    state.ctx.UpdateCdTracker()
+    Assert.Equal(state.bloodlustSoundCalls or 0, 1, "non-UNIT_AURA refresh must not play a Bloodlust sound")
   end)
 
   test("Factory hidden kick ticker keeps syncing while frame is hidden", function()
