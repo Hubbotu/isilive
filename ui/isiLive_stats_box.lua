@@ -473,7 +473,10 @@ local function ResolveContentFitLayout(baseLayout, lines, visibleCount, previous
     percentWidth = 0
   else
     labelWidth = labelWidth > 0 and labelWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "labelWidth")
-    valueWidth = valueWidth > 0 and valueWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "valueWidth")
+    valueWidth = math.max(
+      valueWidth > 0 and valueWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "valueWidth"),
+      baseLayout.valueWidth
+    )
     percentWidth = percentWidth > 0 and percentWidth
       or (hasPercent and ResolveFallbackColumnWidth(previousLayout, baseLayout, "percentWidth") or 0)
   end

@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.267`
+- **Current version:** `0.9.268`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -167,7 +167,7 @@ An optional standalone stats box can be enabled in Settings. It is independent f
 
 - Shows the class-appropriate primary stat (`Str`, `Agi`, or `Int`) plus `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, and `Speed` when Blizzard's live APIs provide those values
 - Uses short English labels only
-- Values and percentages are right-aligned for compact scanning
+- Values and percentages are right-aligned for compact scanning; the value column keeps a stable compact width for three- and four-digit values
 - Can be locked, hidden, moved, and configured with separate background opacity and relative font size
 - Starts disabled by default
 

@@ -1,6 +1,6 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.267`
+Versionsbasis: `0.9.268`
 Zuletzt aktualisiert: `2026-05-21`
 
 ## Akteure
@@ -293,7 +293,7 @@ Ziel: Eine optionale, eigenstaendige Spieler-Stats-Box zeigt live gelesene Prim√
 3. Verarbeitung: Die Box liest Attribute ueber `UnitStat`, Combat-Ratings ueber die verfuegbaren Rating-APIs und Prozentwerte ueber direkt verfuegbare Blizzard-Live-APIs. Fehlende Werte erzeugen keine Zeile.
 4. Regel: Secret Values duerfen fuer die Anzeige nur direkt via `string.format` in Text gewandelt werden; Lua-Arithmetik, `tonumber` oder Vergleiche auf diesen Werten sind verboten.
 5. Regel: Klassen mit eindeutigem Prim√§rstat nutzen den live gelesenen Klassentoken; Hybridklassen zeigen den Prim√§rstat nur, wenn die Spezialisierungs-ID exakt live gelesen wurde. Ohne belastbare Quelle bleibt die Prim√§rstat-Zeile unsichtbar.
-6. Darstellung: Sichtbare Labels sind feste englische Kurzlabels (`Str`, `Agi`, `Int`, `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, `Speed`). Labels, Werte und Prozentwerte sind rechtsbuendig, nutzen feste Blizzard-like Farben und einen dunklen Textschatten ohne Outline.
+6. Darstellung: Sichtbare Labels sind feste englische Kurzlabels (`Str`, `Agi`, `Int`, `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, `Speed`). Labels, Werte und Prozentwerte sind rechtsbuendig, die Werte-Spalte behaelt fuer drei- und vierstellige Zahlen eine stabile kompakte Mindestbreite, und alle sichtbaren Texte nutzen feste Blizzard-like Farben sowie einen dunklen Textschatten ohne Outline.
 7. Settings: Der User kann die Box ein-/ausschalten, sperren, die Hintergrund-Deckkraft separat setzen und die Schriftgroesse inklusive Box-Geometrie ueber einen relativen Offset von `-3` bis `+3` anpassen.
 8. Position: Die Box speichert ihre Position in `statsBoxPosition` und aendert die Main-UI-Position nicht.
 9. Screen-Clamp: Beim Ziehen bleibt die Stats-Box wie Main-UI, Center-Notice und Portal-Navigator am WoW-Sichtbereich geklemmt; der Fensterrand kann nicht ausserhalb des WoW-Fensters verschwinden.
@@ -322,7 +322,7 @@ Ziel: Eine optionale, eigenstaendige Spieler-Stats-Box zeigt live gelesene Prim√
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1818` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1819` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.

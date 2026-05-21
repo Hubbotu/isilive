@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.268 (patch)
+
+Stabilizes the standalone Stats Box value column for compact stat layouts.
+
+### Stats Box
+
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[docs/USECASES.md](USECASES.md),
+[README.md](../README.md),
+[testmodul/isilive_test_scenarios_stats_box.lua](../testmodul/isilive_test_scenarios_stats_box.lua):
+
+- Kept the values column at its compact minimum width even when current text
+  measurements are narrower, so four-digit primary stats such as `2052` do not
+  force row-specific percent-column shifts.
+- Added deterministic coverage for mixed three- and four-digit stat rows.
+- Updated the active StatsBox rule and user-facing docs to document the stable
+  value-column contract.
+
 ## 2026-05-21 - Version 0.9.267 (patch)
 
 Adds verified mount shortcuts to the ESC menu.
