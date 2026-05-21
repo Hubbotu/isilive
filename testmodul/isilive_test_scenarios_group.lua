@@ -27,6 +27,8 @@ local function BuildGroupState(overrides)
     reloadRosterMirror = overrides.reloadRosterMirror,
     reloadMirrorWrites = 0,
     reloadMirrorClears = 0,
+    reloadRosterTargetSnapshot = overrides.reloadRosterTargetSnapshot,
+    restoredReloadRosterTargetSnapshot = nil,
   }
 end
 
@@ -171,6 +173,12 @@ local function BuildGroupControllerOptions(state, overrides)
     clearReloadRosterMirror = overrides.clearReloadRosterMirror or function()
       state.reloadRosterMirror = {}
       state.reloadMirrorClears = state.reloadMirrorClears + 1
+    end,
+    getReloadRosterTargetSnapshot = overrides.getReloadRosterTargetSnapshot or function()
+      return state.reloadRosterTargetSnapshot
+    end,
+    restoreReloadRosterTargetSnapshot = overrides.restoreReloadRosterTargetSnapshot or function(snapshot)
+      state.restoredReloadRosterTargetSnapshot = snapshot
     end,
     onGroupJoined = overrides.onGroupJoined or function()
       state.groupJoinedCalls = state.groupJoinedCalls + 1
@@ -1300,11 +1308,75 @@ local function RegisterGroupRosterCoreTests(test, Assert, LoadAddonModules)
     Assert.True(state.reloadMirrorWrites > 0, "restored roster must be mirrored again after the update")
   end)
 
+  test("Reload roster mirror restores verified target key when group signature matches", function()
+    local mirror = {
+      signature = "Member-Realm|TestPlayer-TestRealm",
+      targetKey = {
+        mapID = 2441,
+        name = "Tazavesh",
+        level = 12,
+        levelText = "+12",
+      },
+      members = {
+        ["TestPlayer-TestRealm"] = {
+          name = "TestPlayer",
+          realm = "TestRealm",
+          class = "WARRIOR",
+        },
+        ["Member-Realm"] = {
+          name = "Member",
+          realm = "Realm",
+          class = "MAGE",
+        },
+      },
+    }
+    local controller, state = BuildGroupController(LoadAddonModules, {
+      wasInGroup = false,
+      reloadRosterMirror = mirror,
+      getNumGroupMembers = function()
+        return 2
+      end,
+      getUnitNameAndRealm = function(unit)
+        if unit == "player" then
+          return "TestPlayer", "TestRealm"
+        end
+        if unit == "party1" then
+          return "Member", "Realm"
+        end
+        return nil, nil
+      end,
+      getReloadRosterTargetSnapshot = function()
+        return {
+          mapID = 2441,
+          name = "Tazavesh",
+          level = 12,
+          levelText = "+12",
+        }
+      end,
+    })
+
+    controller.HandleGroupRosterUpdate()
+
+    Assert.NotNil(state.restoredReloadRosterTargetSnapshot, "matching mirror must restore target key snapshot")
+    Assert.Equal(state.restoredReloadRosterTargetSnapshot.mapID, 2441, "restored target mapID must match")
+    Assert.Equal(state.restoredReloadRosterTargetSnapshot.name, "Tazavesh", "restored target name must match")
+    Assert.Equal(state.restoredReloadRosterTargetSnapshot.level, 12, "restored target level must match")
+    Assert.Equal(state.restoredReloadRosterTargetSnapshot.levelText, "+12", "restored target level text must match")
+    Assert.NotNil(state.reloadRosterMirror.targetKey, "post-restore mirror write must keep target key snapshot")
+    Assert.Equal(state.reloadRosterMirror.targetKey.mapID, 2441, "saved target mapID must match")
+    Assert.Equal(state.reloadRosterMirror.targetKey.level, 12, "saved target level must match")
+  end)
+
   test("Reload roster mirror is discarded when group signature differs", function()
     local controller, state = BuildGroupController(LoadAddonModules, {
       wasInGroup = false,
       reloadRosterMirror = {
         signature = "Other-Realm|TestPlayer-TestRealm",
+        targetKey = {
+          mapID = 2441,
+          name = "Tazavesh",
+          level = 12,
+        },
         members = {
           ["TestPlayer-TestRealm"] = {
             name = "TestPlayer",
@@ -1336,6 +1408,7 @@ local function RegisterGroupRosterCoreTests(test, Assert, LoadAddonModules)
 
     Assert.Nil(state.roster.party1.spec, "mismatched mirror must not restore peer spec")
     Assert.Nil(state.roster.party1.ilvl, "mismatched mirror must not restore peer ilvl")
+    Assert.Nil(state.restoredReloadRosterTargetSnapshot, "mismatched mirror must not restore target key")
     Assert.True(state.reloadMirrorClears > 0, "mismatched mirror must be cleared")
   end)
 

@@ -414,6 +414,22 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       Assert.Nil(expandedButton, "settings panel should hide the expanded default-layout option")
       m2Button = Assert.NotNil(m2Button, "settings panel should create an M2 default-layout button")
       lastUsedButton = Assert.NotNil(lastUsedButton, "settings panel should create a last-used default-layout button")
+      local defaultLayoutLabel = nil
+      for _, fontString in ipairs(panel.content._fontStrings or {}) do
+        if fontString:GetText() == "Default UI on Open" then
+          defaultLayoutLabel = fontString
+          break
+        end
+      end
+      defaultLayoutLabel = Assert.NotNil(defaultLayoutLabel, "settings panel should create a default-layout label")
+      local _, _, _, _, labelY = defaultLayoutLabel:GetPoint()
+      local _, _, _, _, buttonY = lastUsedButton:GetPoint()
+      Assert.Equal(
+        defaultLayoutLabel._width,
+        668,
+        "top-aligned default-layout label must use the full settings text width"
+      )
+      Assert.True(buttonY <= labelY - 30, "default-layout option buttons must sit on a separate row below the label")
       ---@diagnostic disable: undefined-field
       Assert.Equal(
         m2Button._backdropColor[4],

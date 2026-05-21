@@ -30,6 +30,12 @@ local function BuildRuntimeStateStub(overrides)
   state.GetLatestQueueState = function()
     return state.latestDungeonName, state.latestActivityID, state.latestExtra, state.latestQueueMapID
   end
+  state.SetLatestQueueState = function(dungeonName, activityID, teleportSpellID, mapID)
+    state.latestDungeonName = dungeonName
+    state.latestActivityID = activityID
+    state.latestExtra = teleportSpellID
+    state.latestQueueMapID = mapID
+  end
   state.GetActiveJoinedKeyMapID = function()
     return state.activeJoinedKeyMapID
   end
@@ -913,6 +919,36 @@ return function(test, ctx)
       Init(addon, c)
       local info = c.GetStatusTargetDungeonInfo()
       Assert.Equal(info.level, 12)
+    end)
+  end)
+
+  test("factory_controllers.status: reload roster target snapshot restores target level before roster owner", function()
+    local addon = Load()
+    local rs = BuildRuntimeStateStub()
+    local roster = { party1 = { name = "Bob", realm = "D", keyLevel = 14 } }
+    rs.rosterRef = roster
+    local c = BuildCtx(rs, BuildModulesStub(), {})
+    WithGlobals({}, function()
+      Init(addon, c)
+      local restored = c.RestoreReloadRosterTargetSnapshot({
+        mapID = 2441,
+        name = "Tazavesh",
+        level = 12,
+        levelText = "+12",
+      })
+      Assert.True(restored, "valid reload target snapshot must be accepted")
+      c.ResolveActiveKeyOwnerUnit = function()
+        return "party1"
+      end
+      local info = c.GetStatusTargetDungeonInfo()
+      Assert.Equal(info.name, "Tazavesh")
+      Assert.Equal(info.level, 12, "reload snapshot level must keep accepted key level after reload")
+      Assert.Equal(c.ResolveLocalStatusTargetMapID(), 2441, "restored snapshot must seed local target mapID")
+
+      local saved = c.GetReloadRosterTargetSnapshot()
+      Assert.Equal(saved.mapID, 2441, "saved target snapshot must keep mapID")
+      Assert.Equal(saved.name, "Tazavesh", "saved target snapshot must keep name")
+      Assert.Equal(saved.level, 12, "saved target snapshot must keep level")
     end)
   end)
 

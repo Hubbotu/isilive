@@ -444,6 +444,15 @@ local function InitializeFactoryFrameBridge(ctx)
     formatCooldownSeconds = ctx.FormatCooldownSeconds,
     getDungeonName = ctx.GetDungeonName,
     getL = ctx.GetL,
+    onOpenSettings = function()
+      local blizzardSettings = rawget(_G, "Settings")
+      if type(blizzardSettings) ~= "table" or type(blizzardSettings.OpenToCategory) ~= "function" then
+        return
+      end
+      if ctx.settingsPanel and ctx.settingsPanel.category then
+        blizzardSettings.OpenToCategory(ctx.settingsPanel.category.ID)
+      end
+    end,
   })
 
   ctx.centerNotice = frameBridgeContext.centerNotice

@@ -25,6 +25,7 @@ local function CreateFontStringStub(fontObject)
   local fontFlags = ""
   return {
     _fontObject = fontObject,
+    _shown = true,
     SetPoint = function(self, point, relativeTo, relativePoint, x, y)
       self._point = { point, relativeTo, relativePoint, x or 0, y or 0 }
     end,
@@ -80,6 +81,11 @@ local function CreateFontStringStub(fontObject)
       local lineCount = math.max(1, math.ceil(#text / estimatedCharsPerLine))
       return lineCount * 16
     end,
+    GetStringWidth = function(self)
+      local text = tostring(self._text or "")
+      local size = tonumber(fontSize) or 14
+      return #text * math.max(5, math.floor(size * 0.5))
+    end,
     GetFont = function()
       return "Fonts\\FRIZQT__.TTF", fontSize, fontFlags
     end,
@@ -93,8 +99,17 @@ local function CreateFontStringStub(fontObject)
     SetShadowOffset = function(self, x, y)
       self._shadowOffset = { x, y }
     end,
-    Hide = function() end,
-    Show = function() end,
+    Hide = function(self)
+      self.hidden = true
+      self._shown = false
+    end,
+    Show = function(self)
+      self.hidden = false
+      self._shown = true
+    end,
+    IsShown = function(self)
+      return self._shown == true
+    end,
   }
 end
 

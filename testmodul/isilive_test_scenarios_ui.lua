@@ -316,6 +316,84 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
       Assert.Nil(mainUI.GetPendingVisible(), "no pending state outside combat after close")
     end)
   end)
+
+  test("Frame bridge forwards settings opener to the main frame", function()
+    local forwardedOpenSettings = nil
+    local openSettingsCalls = 0
+
+    WithGlobals({
+      UIParent = {},
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_frame_bridge.lua" })
+      local FrameBridge = RequireValue(addon.FrameBridge, "FrameBridge module should load")
+
+      FrameBridge.CreateContext({
+        createCenterNotice = function()
+          return {
+            frame = {},
+            teleportButton = {},
+            SetVisible = function() end,
+            UpdateTeleportButtonVisual = function() end,
+            Show = function() end,
+          }
+        end,
+        createInviteHint = function()
+          return {
+            Show = function() end,
+          }
+        end,
+        createMainFrame = function(opts)
+          forwardedOpenSettings = opts.onOpenSettings
+          return {
+            frame = {
+              IsShown = function()
+                return false
+              end,
+            },
+            SetVisible = function()
+              return false
+            end,
+            SetHeightSafe = function() end,
+            ToggleVisibility = function() end,
+            GetPendingVisible = function()
+              return nil
+            end,
+          }
+        end,
+        isInGroup = function()
+          return false
+        end,
+        onShownInGroup = function() end,
+        onShownNoGroup = function() end,
+        isInCombat = function()
+          return false
+        end,
+        onOpenSettings = function()
+          openSettingsCalls = openSettingsCalls + 1
+        end,
+        resolveTeleportSpellID = function()
+          return nil
+        end,
+        applySecureSpellToButton = function() end,
+        isSpellKnown = function()
+          return true
+        end,
+        getTeleportCooldownRemaining = function()
+          return nil
+        end,
+        formatCooldownSeconds = function(value)
+          return tostring(value or "")
+        end,
+        getL = function()
+          return {}
+        end,
+      })
+
+      forwardedOpenSettings = Assert.NotNil(forwardedOpenSettings, "main frame should receive the settings opener")
+      forwardedOpenSettings()
+      Assert.Equal(openSettingsCalls, 1, "forwarded settings opener should call the bridge callback")
+    end)
+  end)
 end
 
 local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, LoadAddonModules)
@@ -441,6 +519,41 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       onClick(mainUI.closeButton, "LeftButton")
 
       Assert.False(mainUI.frame:IsShown(), "close button should hide frame")
+    end)
+  end)
+
+  test("UI title bar settings button opens settings beside the lock button", function()
+    WithGlobals({
+      UIParent = {},
+      CreateFrame = BuildCreateFrameStub(),
+    }, function()
+      local settingsOpenCalls = 0
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local mainUI = UI.CreateMainFrame({
+        parent = UIParent,
+        isInCombat = function()
+          return false
+        end,
+        onOpenSettings = function()
+          settingsOpenCalls = settingsOpenCalls + 1
+        end,
+      })
+
+      Assert.NotNil(mainUI.lockButton, "main UI should expose the lock button")
+      Assert.NotNil(mainUI.settingsButton, "main UI should expose the settings button")
+      Assert.NotNil(mainUI.settingsButton.icon, "settings button should render a gear icon")
+
+      local _, _, _, lockX = mainUI.lockButton:GetPoint()
+      local _, _, _, settingsX = mainUI.settingsButton:GetPoint()
+      Assert.Equal(settingsX, -46, "settings button should sit directly left of the lock button")
+      Assert.Equal(lockX, -24, "lock button should stay directly left of the close button")
+
+      local onClick = mainUI.settingsButton._scripts and mainUI.settingsButton._scripts.OnClick or nil
+      onClick = Assert.NotNil(onClick, "settings button should define OnClick")
+      onClick(mainUI.settingsButton, "LeftButton")
+
+      Assert.Equal(settingsOpenCalls, 1, "settings button should call the settings opener")
     end)
   end)
 
@@ -909,6 +1022,94 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI third game-menu addon panel also stays visible during combat", function()
+    local inCombat = false
+    local createFrameStub, createdFrames = BuildCreateFrameStub({
+      simulateProtectedFrames = true,
+      isInCombat = function()
+        return inCombat
+      end,
+    })
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    gameMenuFrame._isProtected = true
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "MythicDungeonTools" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return addOnName == "MythicDungeonTools" and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return addOnName == "MythicDungeonTools"
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({
+        gameMenuFrame = gameMenuFrame,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+        isInCombat = function()
+          return inCombat
+        end,
+        getL = function()
+          return {
+            BTN_ADDON_MDT = "MDT",
+            PANEL_HEADER_ADDONS = "Addons",
+          }
+        end,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist for loaded addons")
+      local addonPanel = RequireValue(addonStrip.panelFrame, "addon panel frame should exist")
+      local mdtButton = RequireValue(addonStrip.buttonsById.mdt, "MDT button should exist")
+      gameMenuFrame:Hide()
+
+      local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
+      onShow = Assert.NotNil(onShow, "game menu should register a shared OnShow hook")
+
+      inCombat = true
+      gameMenuFrame._shown = true
+      local okShow, errShow = pcall(function()
+        onShow(gameMenuFrame)
+      end)
+
+      Assert.True(okShow, "combat game-menu OnShow should keep the addon panel mounted: " .. tostring(errShow))
+      Assert.True(addonPanel:IsShown(), "addon panel should remain visible through the combat open")
+      Assert.True(mdtButton:IsShown(), "addon-panel button should stay visible during combat")
+
+      local retryFrame = FindCombatRetryFrame(createdFrames)
+      Assert.NotNil(retryFrame, "combat addon-panel show should rely on the regen retry frame")
+
+      inCombat = false
+      retryFrame = RequireValue(retryFrame, "combat addon-panel show should rely on the regen retry frame")
+      retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
+
+      Assert.True(addonPanel:IsShown(), "addon panel should remain visible after regen")
+    end)
+  end)
+
   test("UI second game-menu Arkantine shortcut uses the exact localized item name", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
@@ -947,6 +1148,323 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         "/use Persönlicher Schlüssel zur Arkantine",
         "German Arkantine shortcut must use the exact localized item name"
       )
+    end)
+  end)
+
+  test("UI third game-menu addon panel shows only installed and loaded addon shortcuts", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local installed = {
+      MythicDungeonTools = true,
+      ["DBM-Core"] = true,
+      BigWigs = true,
+      Details = true,
+      Simulationcraft = true,
+      Platynator = true,
+    }
+    local enabled = {
+      MythicDungeonTools = true,
+      ["DBM-Core"] = true,
+      BigWigs = true,
+      Details = true,
+      Simulationcraft = true,
+      Platynator = true,
+    }
+    local loaded = {
+      MythicDungeonTools = true,
+      ["DBM-Core"] = true,
+      BigWigs = true,
+      Details = false,
+      Simulationcraft = true,
+      Platynator = true,
+    }
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if installed[addOnName] then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return enabled[addOnName] and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return loaded[addOnName] == true
+        end,
+        LoadAddOn = function() end,
+      },
+      SlashCmdList = {
+        MYTHICDUNGEONTOOLS = function()
+          slashCalls[#slashCalls + 1] = "MDT"
+        end,
+        DEADLYBOSSMODS = function()
+          slashCalls[#slashCalls + 1] = "DBM"
+        end,
+        BigWigs = function()
+          slashCalls[#slashCalls + 1] = "BigWigs"
+        end,
+        Simulationcraft = function()
+          slashCalls[#slashCalls + 1] = "SIMC"
+        end,
+        Platynator = function()
+          slashCalls[#slashCalls + 1] = "PLATYNATOR"
+        end,
+      },
+      SLASH_MYTHICDUNGEONTOOLS2 = "/mdt",
+      SLASH_DEADLYBOSSMODS1 = "/dbm",
+      SLASH_BigWigs2 = "/bigwigs",
+      SLASH_Simulationcraft1 = "/simc",
+      SLASH_Platynator1 = "/platynator",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+        getL = function()
+          return {
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+        getL = function()
+          return {
+            PANEL_HEADER_ADDONS = "Addons",
+            BTN_ADDON_MDT = "MDT",
+            BTN_ADDON_DBM = "DBM",
+            BTN_ADDON_BIGWIGS = "BigWigs",
+            BTN_ADDON_DETAILS = "Details",
+            BTN_ADDON_SIMC = "SimC",
+            BTN_ADDON_PLATYNATOR = "Platynator",
+          }
+        end,
+      })
+
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist when supported addons are loaded")
+      Assert.NotNil(addonStrip.buttonsById.mdt, "loaded MDT must create a shortcut button")
+      Assert.NotNil(addonStrip.buttonsById.dbm, "loaded DBM must create a shortcut button")
+      Assert.NotNil(addonStrip.buttonsById.bigwigs, "loaded BigWigs must create a shortcut button")
+      Assert.Nil(addonStrip.buttonsById.mrt, "missing MRT must not create a shortcut button")
+      Assert.Nil(addonStrip.buttonsById.details, "not-loaded Details must not create a shortcut button")
+      Assert.NotNil(addonStrip.buttonsById.simc, "loaded SimC must create a shortcut button")
+      Assert.NotNil(addonStrip.buttonsById.platynator, "loaded Platynator must create a shortcut button")
+      Assert.Equal(addonStrip.shortcutsHeader:GetText(), "Addons", "addon panel header must be localized")
+
+      local _, relativeTo = addonStrip.panelFrame:GetPoint()
+      Assert.Equal(relativeTo, travelStrip.panelFrame, "addon panel must anchor to the left of the travel panel")
+
+      local onClickSimc = addonStrip.buttonsById.simc._scripts and addonStrip.buttonsById.simc._scripts.OnClick
+      onClickSimc = Assert.NotNil(onClickSimc, "SimC shortcut must define OnClick")
+      onClickSimc(addonStrip.buttonsById.simc, "LeftButton")
+      Assert.Equal(slashCalls[1], "SIMC", "SimC shortcut must call the registered slash handler")
+    end)
+  end)
+
+  test("UI third game-menu addon shortcuts resolve registered slash aliases and arguments", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local installed = {
+      MRT = true,
+      ["DBM-Core"] = true,
+      BigWigs = true,
+      Details = true,
+      Simulationcraft = true,
+      Platynator = true,
+    }
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      GetLocale = function()
+        return "deDE"
+      end,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if installed[addOnName] then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return installed[addOnName] and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return installed[addOnName] == true
+        end,
+        LoadAddOn = function() end,
+      },
+      SlashCmdList = {
+        mrtSlash = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "mrt", msg = msg }
+        end,
+        DEADLYBOSSMODS = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "dbm", msg = msg }
+        end,
+        BigWigs = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "bigwigs", msg = msg }
+        end,
+        DETAILS = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "details", msg = msg }
+        end,
+        Simulationcraft = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "simc", msg = msg }
+        end,
+        Platynator = function(msg)
+          slashCalls[#slashCalls + 1] = { id = "platynator", msg = msg }
+        end,
+      },
+      SLASH_mrtSlash6 = "/mrt",
+      SLASH_DEADLYBOSSMODS1 = "/dbm",
+      SLASH_BigWigs2 = "/bigwigs",
+      SLASH_DETAILS1 = "/details",
+      SLASH_Simulationcraft1 = "/simc",
+      SLASH_Platynator1 = "/platynator",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist")
+
+      local ids = { "mrt", "dbm", "bigwigs", "details", "simc", "platynator" }
+      for _, id in ipairs(ids) do
+        local button = RequireValue(addonStrip.buttonsById[id], id .. " shortcut button should exist")
+        local onClick = button._scripts and button._scripts.OnClick
+        onClick = Assert.NotNil(onClick, id .. " shortcut must define OnClick")
+        onClick(button, "LeftButton")
+      end
+
+      Assert.Equal(slashCalls[1].id, "mrt", "MRT shortcut must resolve the mixed-case mrtSlash alias")
+      Assert.Equal(slashCalls[1].msg, "", "MRT shortcut should pass no arguments")
+      Assert.Equal(slashCalls[2].id, "dbm", "DBM shortcut must resolve /dbm")
+      Assert.Equal(slashCalls[2].msg, "", "DBM shortcut should pass no arguments")
+      Assert.Equal(slashCalls[3].id, "bigwigs", "BigWigs shortcut must resolve /bigwigs")
+      Assert.Equal(slashCalls[3].msg, "", "BigWigs shortcut should pass no arguments")
+      Assert.Equal(slashCalls[4].id, "details", "Details shortcut must resolve /details")
+      Assert.Equal(slashCalls[4].msg, "optionen", "German Details shortcut must pass the localized options argument")
+      Assert.Equal(slashCalls[5].id, "simc", "SimC shortcut must resolve AceConsole's registered /simc alias")
+      Assert.Equal(slashCalls[5].msg, "", "SimC shortcut should pass no arguments")
+      Assert.Equal(slashCalls[6].id, "platynator", "Platynator shortcut must resolve the mixed-case alias")
+      Assert.Equal(slashCalls[6].msg, "", "Platynator shortcut should pass no arguments")
+    end)
+  end)
+
+  test("UI third game-menu addon shortcut fails closed without a registered slash alias", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local calls = 0
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Simulationcraft" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return addOnName == "Simulationcraft" and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return addOnName == "Simulationcraft"
+        end,
+        LoadAddOn = function() end,
+      },
+      SlashCmdList = {
+        UnknownInternalKey = function()
+          calls = calls + 1
+        end,
+      },
+      ChatEdit_ParseText = function()
+        calls = calls + 1
+      end,
+      ChatFrame1EditBox = {
+        SetText = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist")
+
+      local simcButton = RequireValue(addonStrip.buttonsById.simc, "SimC shortcut button should exist")
+      local onClick = simcButton._scripts and simcButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "SimC shortcut must define OnClick")
+      onClick(simcButton, "LeftButton")
+
+      Assert.Equal(calls, 0, "addon shortcut must not guess internal keys or fall back to chat parsing")
+    end)
+  end)
+
+  test("UI third game-menu addon panel stays hidden when no supported addon is loaded", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Simulationcraft" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function()
+          return 2
+        end,
+        IsAddOnLoaded = function()
+          return false
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      Assert.Nil(addonStrip, "addon shortcut panel must not render when no supported addon is loaded")
     end)
   end)
 

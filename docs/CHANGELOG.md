@@ -1,5 +1,122 @@
 # Changelog
 
+## 2026-05-21 - Version 0.9.264 (patch)
+
+Adds an ESC-menu Addons shortcut panel.
+
+### ESC Addons Panel
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua):
+
+- Added a third ESC overlay panel to the left of the Travel panel with the
+  `Addons` header.
+- Added shortcut buttons for MDT, MRT, DBM, BigWigs, Details, SimC, and
+  Platynator.
+- Buttons are created only when the corresponding addon is installed, enabled,
+  and already loaded in the current UI run.
+- Clicks use registered slash aliases instead of guessed runtime internals.
+
+## 2026-05-21 - Version 0.9.262 (patch)
+
+Fixes the Settings default-layout selector spacing.
+
+### Settings Layout
+
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua):
+
+- The default-layout label now uses the full Settings text width.
+- The V/H/M+ option buttons now sit on a separate row with clear vertical
+  spacing below the label.
+- Added deterministic coverage for the selector row spacing.
+
+## 2026-05-21 - Version 0.9.261 (patch)
+
+Closes German Settings translation gaps.
+
+### Settings Localization
+
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[factory/isiLive_factory_minimap.lua](../factory/isiLive_factory_minimap.lua):
+
+- Reworded German Settings labels that still used avoidable English terms.
+- Localized the minimap button tooltip instead of hard-coding English click
+  hints.
+- Added deterministic coverage for the localized minimap tooltip and verified
+  locale drift/dead-key checks.
+
+## 2026-05-21 - Version 0.9.260 (patch)
+
+Persists the current group target key through the reload roster mirror.
+
+### Reload Roster Mirror Target Key
+
+[logic/isiLive_group.lua](../logic/isiLive_group.lua),
+[factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- The reload roster mirror now stores the verified current group target key
+  alongside the member snapshot, bound to the same exact group signature.
+- Restoring a matching mirror seeds the target dungeon map, name, and accepted
+  key level back into the status target path before roster-owner fallbacks can
+  overwrite it.
+- Added deterministic coverage for target-key save/restore and updated the
+  active reload mirror rule mapping.
+
+## 2026-05-21 - Version 0.9.259 (patch)
+
+Tightens the standalone player Stats Box background to the rendered text.
+
+### Stats Box Fit
+
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua),
+[testmodul/isilive_test_scenarios_stats_box.lua](../testmodul/isilive_test_scenarios_stats_box.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- The Stats Box now measures its visible label, value, and percent text columns
+  after rendering and resizes the frameless background to those text bounds plus
+  compact padding.
+- Height now follows the number of visible stat rows instead of retaining empty
+  vertical space.
+- Added deterministic coverage and updated the active StatsBox rule mapping for
+  the fit-to-rendered-text contract.
+
+## 2026-05-21 - Version 0.9.258 (patch)
+
+Corrects the title-bar Settings shortcut placement and spacing.
+
+### Title Bar Settings Shortcut Follow-Up
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua):
+
+- Moved the gear button to the left of the `L` lock button.
+- Shifted the M+/H/V layout switcher group left so it no longer overlaps the
+  Settings, lock, and close controls.
+- Added deterministic coverage for the corrected title-bar order and shifted
+  layout-button anchors.
+
+## 2026-05-21 - Version 0.9.257 (patch)
+
+Adds a direct Settings shortcut to the main isiLive title bar.
+
+### Title Bar Settings Shortcut
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[factory/isiLive_frame_bridge.lua](../factory/isiLive_frame_bridge.lua),
+[factory/isiLive_factory_frame_bridge.lua](../factory/isiLive_factory_frame_bridge.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua):
+
+- Added a gear button directly to the right of the title-bar `L` lock button;
+  left-click opens the isiLive Blizzard Settings category.
+- Kept the shortcut available for all main layouts because M+, H, and V share
+  the same main-frame title bar.
+- Added localized tooltip strings and deterministic UI coverage for the
+  title-bar button placement and settings opener wiring.
+
 ## 2026-05-21 - Version 0.9.256 (patch)
 
 Fixes Settings audit findings around exposed numeric ranges and long localized

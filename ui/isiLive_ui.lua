@@ -90,6 +90,67 @@ local PANEL_UI_ENTRIES = {
     secureMacroText = "/click GameMenuButtonContinue\n/reload",
   },
 }
+local ADDON_PANEL_UI_ENTRIES = {
+  {
+    id = "mdt",
+    labelKey = "BTN_ADDON_MDT",
+    fallbackText = "MDT",
+    addonNames = { "MythicDungeonTools" },
+    slashText = "/mdt",
+    icon = "Interface\\Icons\\INV_Misc_Map_01",
+  },
+  {
+    id = "mrt",
+    labelKey = "BTN_ADDON_MRT",
+    fallbackText = "MRT",
+    addonNames = { "MRT", "ExRT" },
+    slashText = "/mrt",
+    icon = "Interface\\Icons\\INV_Misc_Note_01",
+  },
+  {
+    id = "dbm",
+    labelKey = "BTN_ADDON_DBM",
+    fallbackText = "DBM",
+    addonNames = { "DBM-Core" },
+    slashText = "/dbm",
+    icon = "Interface\\Icons\\INV_Misc_Bell_01",
+  },
+  {
+    id = "bigwigs",
+    labelKey = "BTN_ADDON_BIGWIGS",
+    fallbackText = "BigWigs",
+    addonNames = { "BigWigs" },
+    slashText = "/bigwigs",
+    icon = "Interface\\AddOns\\BigWigs\\Media\\Icons\\minimap_raid.tga",
+  },
+  {
+    id = "details",
+    labelKey = "BTN_ADDON_DETAILS",
+    fallbackText = "Details",
+    addonNames = { "Details" },
+    slashText = "/details options",
+    slashTextByLocale = {
+      deDE = "/details optionen",
+    },
+    icon = "Interface\\Icons\\INV_Misc_Spyglass_02",
+  },
+  {
+    id = "simc",
+    labelKey = "BTN_ADDON_SIMC",
+    fallbackText = "SimC",
+    addonNames = { "Simulationcraft", "SimulationCraft" },
+    slashText = "/simc",
+    icon = "Interface\\Icons\\INV_Scroll_03",
+  },
+  {
+    id = "platynator",
+    labelKey = "BTN_ADDON_PLATYNATOR",
+    fallbackText = "Platynator",
+    addonNames = { "Platynator" },
+    slashText = "/platynator",
+    icon = "Interface\\Icons\\INV_Misc_EngGizmos_30",
+  },
+}
 -- Hearthstone toy item IDs (collected from the WoW item database).
 local HEARTHSTONE_TOY_IDS = {
   54452,
@@ -199,6 +260,7 @@ local SECOND_PANEL_UI_ENTRIES = {
 }
 local panelUIState = nil
 local secondPanelUIState = nil
+local thirdPanelUIState = nil
 local PositionPanelUIButtons
 local ApplyPanelUISecureState
 local panelUISecureRetryFrame
@@ -314,6 +376,160 @@ local function EnsureAddOnLoaded(addOnName)
   if type(loadAddOn) == "function" then
     pcall(loadAddOn, addOnName)
     return true
+  end
+
+  return false
+end
+
+local function IsAddOnInstalled(addOnName)
+  if type(addOnName) ~= "string" or addOnName == "" then
+    return false
+  end
+
+  local cAddOns = rawget(_G, "C_AddOns")
+  if type(cAddOns) == "table" and type(cAddOns.GetAddOnInfo) == "function" then
+    local ok, info = pcall(cAddOns.GetAddOnInfo, addOnName)
+    if ok and info ~= nil then
+      return true
+    end
+  end
+
+  local getAddOnInfo = rawget(_G, "GetAddOnInfo")
+  if type(getAddOnInfo) == "function" then
+    local ok, nameOrTitle = pcall(getAddOnInfo, addOnName)
+    if ok and nameOrTitle ~= nil then
+      return true
+    end
+  end
+
+  return false
+end
+
+local function IsAddOnEnabled(addOnName)
+  if type(addOnName) ~= "string" or addOnName == "" then
+    return false
+  end
+
+  local cAddOns = rawget(_G, "C_AddOns")
+  if type(cAddOns) == "table" and type(cAddOns.GetAddOnEnableState) == "function" then
+    local ok, state = pcall(cAddOns.GetAddOnEnableState, addOnName, nil)
+    if ok then
+      if type(state) == "number" then
+        return state > 0
+      end
+      if type(state) == "boolean" then
+        return state == true
+      end
+    end
+  end
+
+  local getAddOnEnableState = rawget(_G, "GetAddOnEnableState")
+  if type(getAddOnEnableState) == "function" then
+    local ok, state = pcall(getAddOnEnableState, nil, addOnName)
+    if ok and type(state) == "number" then
+      return state > 0
+    end
+  end
+
+  return false
+end
+
+local function IsAddOnLoaded(addOnName)
+  if type(addOnName) ~= "string" or addOnName == "" then
+    return false
+  end
+
+  local cAddOns = rawget(_G, "C_AddOns")
+  if type(cAddOns) == "table" and type(cAddOns.IsAddOnLoaded) == "function" then
+    local ok, isLoaded = pcall(cAddOns.IsAddOnLoaded, addOnName)
+    return ok and isLoaded == true
+  end
+
+  local isAddOnLoaded = rawget(_G, "IsAddOnLoaded")
+  if type(isAddOnLoaded) == "function" then
+    local ok, isLoaded = pcall(isAddOnLoaded, addOnName)
+    return ok and isLoaded == true
+  end
+
+  return false
+end
+
+local function ResolveStartedAddOnName(addOnNames)
+  if type(addOnNames) ~= "table" then
+    return nil
+  end
+
+  for _, addOnName in ipairs(addOnNames) do
+    if IsAddOnInstalled(addOnName) and IsAddOnEnabled(addOnName) and IsAddOnLoaded(addOnName) then
+      return addOnName
+    end
+  end
+
+  return nil
+end
+
+local function ParseSlashCommandText(slashText)
+  if type(slashText) ~= "string" or slashText == "" then
+    return nil, nil
+  end
+
+  local command, args = slashText:match("^(%S+)%s*(.-)$")
+  if type(command) ~= "string" or command == "" then
+    return nil, nil
+  end
+
+  return string.lower(command), args or ""
+end
+
+local function ResolveLocaleSlashText(entry)
+  if type(entry) ~= "table" then
+    return nil
+  end
+
+  local byLocale = entry.slashTextByLocale
+  local getLocale = rawget(_G, "GetLocale")
+  local locale = type(getLocale) == "function" and getLocale() or nil
+  if type(byLocale) == "table" and type(locale) == "string" and type(byLocale[locale]) == "string" then
+    return byLocale[locale]
+  end
+
+  return entry.slashText
+end
+
+local function FindSlashHandlerByCommandAlias(commandText)
+  if type(commandText) ~= "string" or commandText == "" then
+    return nil
+  end
+
+  local slashCmdList = rawget(_G, "SlashCmdList")
+  if type(slashCmdList) ~= "table" then
+    return nil
+  end
+
+  local normalizedCommand = string.lower(commandText)
+  for slashId, handler in pairs(slashCmdList) do
+    if type(slashId) == "string" and type(handler) == "function" then
+      for index = 1, 20 do
+        local alias = rawget(_G, "SLASH_" .. slashId .. tostring(index))
+        if type(alias) == "string" and string.lower(alias) == normalizedCommand then
+          return handler
+        end
+      end
+    end
+  end
+
+  return nil
+end
+
+local function RunSlashText(slashText)
+  local commandText, args = ParseSlashCommandText(slashText)
+  if not commandText then
+    return false
+  end
+
+  local handler = FindSlashHandlerByCommandAlias(commandText)
+  if type(handler) == "function" then
+    return SafeCall(handler, args or "")
   end
 
   return false
@@ -756,6 +972,32 @@ local function MergePanelUIActions(isInCombat, overrides)
   end
 
   return actions
+end
+
+local function BuildAddonPanelUIActions()
+  local actions = {}
+  for _, entry in ipairs(ADDON_PANEL_UI_ENTRIES) do
+    actions[entry.id] = function()
+      local addOnName = ResolveStartedAddOnName(entry.addonNames)
+      if not addOnName then
+        return false
+      end
+      EnsureAddOnLoaded(addOnName)
+      return RunSlashText(ResolveLocaleSlashText(entry))
+    end
+  end
+  return actions
+end
+
+local function ResolveVisibleAddonPanelEntries()
+  local visible = {}
+  for _, entry in ipairs(ADDON_PANEL_UI_ENTRIES) do
+    local addOnName = ResolveStartedAddOnName(entry.addonNames)
+    if addOnName then
+      visible[#visible + 1] = entry
+    end
+  end
+  return visible
 end
 
 local function ResolvePanelUICloseAnchor(gameMenuFrame)
@@ -1424,6 +1666,139 @@ function UI.EnsureSecondPanelUI(opts)
   return state
 end
 
+function UI.EnsureThirdPanelUI(opts)
+  opts = opts or {}
+
+  local gameMenuFrame = opts.gameMenuFrame or rawget(_G, "GameMenuFrame")
+  if type(gameMenuFrame) ~= "table" then
+    return nil
+  end
+
+  local secondPanelState = opts.secondPanelState
+  if type(secondPanelState) ~= "table" or type(secondPanelState.panelFrame) ~= "table" then
+    return nil
+  end
+
+  if type(thirdPanelUIState) == "table" and thirdPanelUIState.gameMenuFrame == gameMenuFrame then
+    if type(opts.getL) == "function" then
+      thirdPanelUIState.getL = opts.getL
+    end
+    thirdPanelUIState.isEnabled = opts.isEnabled
+    thirdPanelUIState.isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil
+    thirdPanelUIState.positionAnchorFrame = secondPanelState.panelFrame
+    ApplyPanelUISecureState(thirdPanelUIState)
+    ApplyPanelUILocalization(thirdPanelUIState)
+    return thirdPanelUIState
+  end
+
+  local entries = ResolveVisibleAddonPanelEntries()
+  if #entries == 0 then
+    return nil
+  end
+  local state = {
+    gameMenuFrame = gameMenuFrame,
+    getL = type(opts.getL) == "function" and opts.getL or function()
+      return {}
+    end,
+    actions = BuildAddonPanelUIActions(),
+    isEnabled = opts.isEnabled,
+    isInCombat = type(opts.isInCombat) == "function" and opts.isInCombat or nil,
+    positionAnchorFrame = secondPanelState.panelFrame,
+    positionOffsetX = -SECOND_PANEL_GAP,
+    headerLKey = "PANEL_HEADER_ADDONS",
+    buttons = {},
+    buttonsById = {},
+    anchor = nil,
+  }
+
+  local frameStrata = type(gameMenuFrame.GetFrameStrata) == "function" and gameMenuFrame:GetFrameStrata() or nil
+  local baseFrameLevel = type(gameMenuFrame.GetFrameLevel) == "function" and gameMenuFrame:GetFrameLevel() or 1
+  state.frameStrata = frameStrata
+  state.baseFrameLevel = baseFrameLevel
+  state.buttonWidth, state.buttonHeight = ResolvePanelUIButtonSize(gameMenuFrame)
+
+  local panelFrame = CreateFrame("Frame", nil, gameMenuFrame, "BackdropTemplate")
+  if frameStrata ~= nil and type(panelFrame.SetFrameStrata) == "function" then
+    panelFrame:SetFrameStrata(frameStrata)
+  end
+  if type(panelFrame.SetFrameLevel) == "function" then
+    panelFrame:SetFrameLevel(baseFrameLevel + 10)
+  end
+  if type(panelFrame.EnableMouse) == "function" then
+    panelFrame:EnableMouse(true)
+  end
+  ApplyPanelUIBackdrop(panelFrame)
+  state.hostFrame = panelFrame
+  state.panelFrame = panelFrame
+
+  if type(gameMenuFrame.HookScript) == "function" then
+    gameMenuFrame:HookScript("OnShow", function()
+      if type(state.isEnabled) == "function" and not state.isEnabled() then
+        return
+      end
+      ApplyPanelUISecureState(state)
+    end)
+  end
+
+  if type(panelFrame.CreateFontString) == "function" then
+    state.shortcutsHeader = panelFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    if type(state.shortcutsHeader.SetTextColor) == "function" then
+      local td = Colors.TEXT_DIM
+      state.shortcutsHeader:SetTextColor(td[1], td[2], td[3], 1)
+    end
+    if type(state.shortcutsHeader.SetJustifyH) == "function" then
+      state.shortcutsHeader:SetJustifyH("LEFT")
+    end
+  end
+
+  if type(panelFrame.CreateTexture) == "function" then
+    state.shortcutsHeaderLine = panelFrame:CreateTexture(nil, "ARTWORK")
+    if type(state.shortcutsHeaderLine.SetHeight) == "function" then
+      state.shortcutsHeaderLine:SetHeight(1)
+    end
+    if type(state.shortcutsHeaderLine.SetColorTexture) == "function" then
+      local ab = Colors.ACCENT_BLUE
+      state.shortcutsHeaderLine:SetColorTexture(ab[1], ab[2], ab[3], 0.3)
+    end
+  end
+
+  for index, entry in ipairs(entries) do
+    local button = CreatePanelUIButton(
+      panelFrame,
+      frameStrata,
+      baseFrameLevel,
+      10 + index,
+      entry.iconAtlas or entry.icon,
+      "BackdropTemplate"
+    )
+
+    button._actionId = entry.id
+    button._labelKey = entry.labelKey
+    button._fallbackText = entry.fallbackText
+    button._gapBefore = math.max(0, tonumber(entry.gapBefore) or PANEL_UI_BUTTON_GAP)
+    button._verticalIndex = index
+    button._isSecurePanelAction = false
+    BindNonSecurePanelButtonOnClick(button, state)
+
+    state.buttons[index] = button
+    state.buttonsById[entry.id] = button
+  end
+
+  function state.ApplyLocalization()
+    ApplyPanelUISecureState(state)
+    ApplyPanelUILocalization(state)
+  end
+
+  state.SyncVisibility = function()
+    ApplyPanelUISecureState(state)
+  end
+
+  thirdPanelUIState = state
+  ApplyPanelUISecureState(state)
+  ApplyPanelUILocalization(state)
+  return state
+end
+
 local function SavePosition(target)
   -- SavedVariables are restored by Blizzard before ADDON_LOADED and the main
   -- frame is :Hide()d until then, so this only ever runs once IsiLiveDB is a
@@ -1497,6 +1872,68 @@ local function CreateDragHandle(frame, isDragLocked, beginDrag, endDrag)
   return dragHandle
 end
 
+local function CreateTitleBarIconButton(
+  frame,
+  dragHandle,
+  xOffset,
+  iconTexture,
+  tooltipTitleKey,
+  tooltipBodyKey,
+  tooltipTitle,
+  tooltipBody,
+  onClick
+)
+  local button = CreateFrame("Button", nil, frame, "BackdropTemplate")
+  button:SetSize(20, 20)
+  button:SetPoint("TOPRIGHT", frame, "TOPRIGHT", xOffset, -2)
+  button:SetFrameStrata(frame:GetFrameStrata())
+  button:SetFrameLevel(dragHandle:GetFrameLevel() + 3)
+  button:EnableMouse(true)
+  button:RegisterForClicks("LeftButtonUp")
+
+  if type(ApplyBackdrop) == "function" then
+    ApplyBackdrop(button, "CLOSE_BUTTON")
+  end
+
+  local icon = button:CreateTexture(nil, "OVERLAY")
+  icon:SetSize(14, 14)
+  icon:SetPoint("CENTER", button, "CENTER", 0, 0)
+  icon:SetTexture(iconTexture)
+  button.icon = icon
+
+  local resolvedTooltipTitle = GetLocalizedText(tooltipTitleKey, tooltipTitle)
+  local resolvedTooltipBody = GetLocalizedText(tooltipBodyKey, tooltipBody)
+
+  button:SetScript("OnEnter", function()
+    local tooltip = rawget(_G, "GameTooltip")
+    if tooltip and type(tooltip.SetOwner) == "function" then
+      tooltip:SetOwner(button, "ANCHOR_LEFT")
+      tooltip:AddLine(resolvedTooltipTitle)
+      tooltip:AddLine(resolvedTooltipBody, 0.8, 0.8, 0.8)
+      tooltip:Show()
+    end
+    if type(button.SetBackdropColor) == "function" then
+      button:SetBackdropColor(0.14, 0.14, 0.20, 0.7)
+    end
+  end)
+  button:SetScript("OnLeave", function()
+    local tooltip = rawget(_G, "GameTooltip")
+    if tooltip and type(tooltip.Hide) == "function" then
+      tooltip:Hide()
+    end
+    if type(button.SetBackdropColor) == "function" then
+      button:SetBackdropColor(0, 0, 0, 0.85)
+    end
+  end)
+  button:SetScript("OnClick", function(self, mouseButton)
+    if type(onClick) == "function" then
+      onClick(self, mouseButton)
+    end
+  end)
+
+  return button
+end
+
 local function CreateDragLockButton(frame, dragHandle, getDragLocked, setDragLocked)
   local button = CreateFrame("Button", nil, frame, "BackdropTemplate")
   button:SetSize(20, 20)
@@ -1564,6 +2001,20 @@ local function CreateDragLockButton(frame, dragHandle, getDragLocked, setDragLoc
   UpdateVisual()
 
   return button
+end
+
+local function CreateSettingsButton(frame, dragHandle, onOpenSettings)
+  return CreateTitleBarIconButton(
+    frame,
+    dragHandle,
+    -46,
+    "Interface\\Icons\\INV_Misc_Gear_01",
+    "TOOLTIP_OPEN_ISILIVE_SETTINGS",
+    "TOOLTIP_OPEN_ISILIVE_SETTINGS_HINT",
+    "Open isiLive settings",
+    "Left-click to open the settings panel.",
+    onOpenSettings
+  )
 end
 
 local function CreateVisibilityController(frame, onShownInGroup, onShownNoGroup, isInCombat, isRaidGroup)
@@ -1683,6 +2134,7 @@ function UI.CreateMainFrame(opts)
   end
   local onShownInGroup = opts.onShownInGroup or function() end
   local onShownNoGroup = opts.onShownNoGroup or function() end
+  local onOpenSettings = opts.onOpenSettings or function() end
 
   local frame = CreateFrame("Frame", "isiLiveMainFrame", parent, "BackdropTemplate")
   frame:SetSize(755, minHeight)
@@ -1770,6 +2222,7 @@ function UI.CreateMainFrame(opts)
   lockButton = CreateDragLockButton(frame, dragHandle, function()
     return dragLocked
   end, SetDragLocked)
+  local settingsButton = CreateSettingsButton(frame, dragHandle, onOpenSettings)
 
   SetDragLocked(dragLocked)
 
@@ -1801,6 +2254,7 @@ function UI.CreateMainFrame(opts)
     frame = frame,
     closeButton = closeButton,
     lockButton = lockButton,
+    settingsButton = settingsButton,
     dragHandle = dragHandle,
     SetVisible = SetVisible,
     SetHeightSafe = SetHeightSafe,

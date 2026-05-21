@@ -663,6 +663,9 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
     m2Button = Assert.NotNil(m2Button, "M2 mode button should exist")
     Assert.Nil(expandedButton, "Expanded mode button should stay hidden from the title bar")
     titleVersion = Assert.NotNil(titleVersion, "Title version should exist")
+    Assert.Equal(m2Button.pointX, -132, "M+ mode button should leave room for title-bar controls")
+    Assert.Equal(horizontalButton.pointX, -108, "H mode button should shift left with the mode-button group")
+    Assert.Equal(collapseButton.pointX, -88, "V mode button should stay left of the title-bar control group")
     Assert.Equal(horizontalButton._collapseButtonLabel, "H", "H mode button has static H label in expanded mode")
 
     local helperButtons = {}

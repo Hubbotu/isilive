@@ -33,10 +33,10 @@ local STATS_BOX_SETTING_LABELS = {
     fontSize = "Stats box font size",
   },
   deDE = {
-    enabled = "Spieler-Stats-Box anzeigen",
-    locked = "Spieler-Stats-Box-Position sperren",
-    alpha = "Stats-Box-Hintergrund-Deckkraft",
-    fontSize = "Stats-Box-Schriftgroesse",
+    enabled = "Spielerwerte-Box anzeigen",
+    locked = "Position der Spielerwerte-Box sperren",
+    alpha = "Hintergrund-Deckkraft der Spielerwerte-Box",
+    fontSize = "Schriftgroesse der Spielerwerte-Box",
   },
 }
 -- Brand title with the `isi` prefix as plain text and only `Live` colored
@@ -718,11 +718,17 @@ local function CreateSettingsOptionSelector(
   local tn = Colors.TEXT_NORMAL or { 0.85, 0.85, 0.9 }
   label:SetTextColor(tn[1], tn[2], tn[3], 1)
   label:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset - 3)
+  if labelOnTop and type(label.SetWidth) == "function" then
+    label:SetWidth(math.max(240, SETTINGS_CONTENT_WIDTH - (PADDING_X * 2)))
+  end
+  if labelOnTop and type(label.SetWordWrap) == "function" then
+    label:SetWordWrap(false)
+  end
   label:SetText(fallbackLabel or "")
 
   local buttons = {}
   local buttonX = labelOnTop and PADDING_X or (PADDING_X + 160)
-  local buttonYOffset = labelOnTop and (yOffset - LINE_HEIGHT + 4) or yOffset
+  local buttonYOffset = labelOnTop and (yOffset - LINE_HEIGHT - 6) or yOffset
   local bgSec = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.7 }
   local acBlue = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
   local borderDefault = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
@@ -811,7 +817,7 @@ local function CreateSettingsOptionSelector(
     buttons = buttons,
     UpdateHighlight = UpdateHighlight,
   },
-    yOffset - (labelOnTop and LINE_HEIGHT * 2 or LINE_HEIGHT)
+    yOffset - (labelOnTop and (LINE_HEIGHT * 2 + 8) or LINE_HEIGHT)
 end
 
 local function ResolveSettingsOptions(opts)

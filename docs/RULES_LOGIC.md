@@ -84,9 +84,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 61. Die experimentelle LFG-Invite-Liste bleibt deaktiviert: Es gibt kein Settings-Control, kein SavedVariable-Feld und kein Runtime-Wiring; `LFG_LIST_APPLICATION_STATUS_UPDATED` darf keine Invite-Listenverarbeitung ausloesen.
 62. Bei aktivierter Addon-Sprache `ruRU` muessen lokalisierte Hauptfenster-Texte und gefittete Button-Labels einen kyrillisch-faehigen Font verwenden, unabhaengig vom WoW-Client-Locale.
 63. Die M+Marker-Leiste muss native SecureActionButton-Worldmarker-Attribute verwenden, ihre sicheren Klickflaechen ueber konkurrierenden UI-Sibling-Frames halten und darf keine geschuetzten Marker-APIs direkt aufrufen.
-64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
+64. Ein Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten und den verifizierten aktuellen Gruppen-Ziel-Key nur wiederherstellen, wenn die aktuelle Gruppensignatur exakt zur gespeicherten Signatur passt; Kick-Zustaende werden daraus nicht wiederhergestellt.
 65. Die eigenstaendige Spieler-Stats-Box zeigt den Primärstat klassen- beziehungsweise spezialisierungsgenau, zeigt nur direkt aus Blizzard-Live-APIs gelesene Werte, ist rahmenlos, standardmaessig aus, ueber Settings einschaltbar und gegen Positions-Drag sperrbar, und speichert ihre Position getrennt von der Main-UI.
 66. Alle frei verschiebbaren isiLive-Fenster muessen an den WoW-Sichtbereich geklemmt sein, sodass ihre Raender beim Ziehen nicht ausserhalb des WoW-Fensters verschwinden.
+67. Das ESC-Addons-Panel darf Shortcut-Buttons nur fuer Addons anzeigen, die installiert, aktiviert und im aktuellen UI-Lauf bereits geladen sind.
 
 ## Regelbloecke
 
@@ -565,6 +566,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UI game-menu panels rely on parent visibility instead of deferred host callbacks
   - UI game-menu first combat open keeps mounted panel visible while insecure shortcuts are combat-blocked
   - UI second game-menu panel also stays visible during combat
+  - UI third game-menu addon panel also stays visible during combat
   - UI game-menu secure button updates are deferred during combat and applied after regen
 
 ### RULE-SYNC-LAST-RUN-METRIKEN
@@ -687,6 +689,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - LFGDetect ParseTitleKeyLevel picks the highest level when multiple +N tags appear
   - factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved
   - factory_controllers.status: SendOwnTargetSnapshot carries LFG level markup when numeric level is unresolved
+  - UI third game-menu addon shortcut fails closed without a registered slash alias
   - SpellUtils.GetTeleportCooldownRemaining normalizes wrapped portal cooldown start times
   - TeleportUI applies visible cooldown frame from normalized remaining time
   - AcceptedInviteNotice does not replay after challenge start
@@ -797,16 +800,18 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-RELOAD-ROSTER-MIRROR-SIGNATUR
 - Regelnummer: 64
 - Status: aktiv
-- Zusammenfassung: Der Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nach `/reload` nur dann in den Runtime-Roster vorbefuellen, wenn die aktuelle Gruppensignatur aus den konkret lesbaren `player`/`partyN`-Mitgliedern exakt der gespeicherten Signatur entspricht. Bei fehlender, unvollstaendiger oder abweichender Signatur muss der gespeicherte Mirror verworfen werden. Kick-Zustaende duerfen nicht aus dem Reload-Roster-Mirror wiederhergestellt werden. Nach einer erfolgreichen Vorbefuellung muss der normale Live-Sync-Refresh weiter angefordert werden.
+- Zusammenfassung: Der Reload-Roster-Mirror darf verifizierte Gruppenanzeigedaten nach `/reload` nur dann in den Runtime-Roster vorbefuellen, wenn die aktuelle Gruppensignatur aus den konkret lesbaren `player`/`partyN`-Mitgliedern exakt der gespeicherten Signatur entspricht. Der verifizierte aktuelle Gruppen-Ziel-Key mit Dungeon-mapID, Dungeonname und optionaler positiver numerischer Keystufe oder exaktem Leveltext darf nur mit derselben Signatur gespeichert und wiederhergestellt werden. Bei fehlender, unvollstaendiger oder abweichender Signatur muss der gespeicherte Mirror verworfen werden. Kick-Zustaende duerfen nicht aus dem Reload-Roster-Mirror wiederhergestellt werden. Nach einer erfolgreichen Vorbefuellung muss der normale Live-Sync-Refresh weiter angefordert werden.
 - Erforderliche Tests:
   - Reload roster mirror restores verified data when group signature matches
+  - Reload roster mirror restores verified target key when group signature matches
   - Reload roster mirror is discarded when group signature differs
+  - factory_controllers.status: reload roster target snapshot restores target level before roster owner
   - DBSchema.Sanitize gives each db an isolated reload roster mirror
 
 ### RULE-STATS-BOX-LIVE-QUELLE
 - Regelnummer: 65
 - Status: aktiv
-- Zusammenfassung: Die eigenstaendige Spieler-Stats-Box darf Attribute, Combat-Ratings und Prozentwerte nur anzeigen, wenn der jeweilige Wert direkt aus einer erfolgreichen Blizzard-Live-API-Lesung stammt; fehlende API-Werte bleiben unsichtbar und werden nicht durch Default-, Cache- oder Guess-Werte ersetzt. Als Secret Value markierte API-Werte duerfen fuer die Anzeige nur direkt per `string.format` in Text gewandelt werden; Lua-Arithmetik, `tonumber` oder Vergleiche auf diesen Secret Values sind verboten. Bei Klassen mit eindeutigem Primärstat wird dieser ueber den live gelesenen Klassentoken bestimmt; bei Hybridklassen wird der Primärstat nur bei exakt gelesener Spezialisierungs-ID angezeigt. Sichtbare Stat-Labels sind feste englische Kurzlabels ohne Locale-Varianten. Stat-Labels, Werte und Prozentwerte stehen rechtsbuendig, sichtbare Stats nutzen eine feste Blizzard-like Farbpalette, und alle sichtbaren Texte nutzen einen kontrastreichen dunklen Schatten ohne Outline. Die Box ist rahmenlos, standardmaessig aus, nur bei `statsBoxEnabled=true` sichtbar, ueber `statsBoxLocked` gegen Positions-Drag sperrbar, ihre Hintergrund-Deckkraft ist ueber `statsBoxBgAlpha` separat steuerbar, ihre Schriftgroesse und Box-Geometrie sind ueber `statsBoxFontSizeOffset` von `-3` bis `+3` relativ zum Default `0` gemeinsam steuerbar, und ihre gespeicherte Position liegt in `statsBoxPosition` ohne die Main-UI-Position zu veraendern.
+- Zusammenfassung: Die eigenstaendige Spieler-Stats-Box darf Attribute, Combat-Ratings und Prozentwerte nur anzeigen, wenn der jeweilige Wert direkt aus einer erfolgreichen Blizzard-Live-API-Lesung stammt; fehlende API-Werte bleiben unsichtbar und werden nicht durch Default-, Cache- oder Guess-Werte ersetzt. Als Secret Value markierte API-Werte duerfen fuer die Anzeige nur direkt per `string.format` in Text gewandelt werden; Lua-Arithmetik, `tonumber` oder Vergleiche auf diesen Secret Values sind verboten. Bei Klassen mit eindeutigem Primärstat wird dieser ueber den live gelesenen Klassentoken bestimmt; bei Hybridklassen wird der Primärstat nur bei exakt gelesener Spezialisierungs-ID angezeigt. Sichtbare Stat-Labels sind feste englische Kurzlabels ohne Locale-Varianten. Stat-Labels, Werte und Prozentwerte stehen rechtsbuendig, sichtbare Stats nutzen eine feste Blizzard-like Farbpalette, und alle sichtbaren Texte nutzen einen kontrastreichen dunklen Schatten ohne Outline. Die Box ist rahmenlos, standardmaessig aus, nur bei `statsBoxEnabled=true` sichtbar, ueber `statsBoxLocked` gegen Positions-Drag sperrbar, ihre Hintergrund-Deckkraft ist ueber `statsBoxBgAlpha` separat steuerbar, ihre Schriftgroesse und Box-Geometrie sind ueber `statsBoxFontSizeOffset` von `-3` bis `+3` relativ zum Default `0` gemeinsam steuerbar, ihr Hintergrund passt sich an die tatsaechlich gerenderten sichtbaren Textgrenzen an, und ihre gespeicherte Position liegt in `statsBoxPosition` ohne die Main-UI-Position zu veraendern.
 - Erforderliche Tests:
   - StatsBox renders class primary stat and directly observed secondary values
   - StatsBox resolves hybrid primary stat only from exact specialization
@@ -818,6 +823,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - StatsBox applies font size offset from settings
   - StatsBox applies high contrast text shadow
   - StatsBox renders labels and values right-aligned
+  - StatsBox fits background to rendered text bounds
   - StatsBox reads haste percent from player spell haste
   - StatsBox applies Blizzard-like fixed stat colors
   - StatsBox formats secret API values without arithmetic
@@ -830,3 +836,11 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UI main frame is clamped to the WoW screen while movable
   - StatsBox clamps its movable frame to the screen
   - Notice movable frames are clamped to the WoW screen
+
+### RULE-ESC-ADDON-PANEL-NUR-GELADENE-ADDONS
+- Regelnummer: 67
+- Status: aktiv
+- Zusammenfassung: Das ESC-Addons-Panel darf einen Shortcut-Button nur anzeigen, wenn das Ziel-Addon installiert, aktiviert und im aktuellen UI-Lauf bereits geladen ist. Installierte und aktivierte, aber noch nicht geladene Addons erzeugen keinen Button.
+- Erforderliche Tests:
+  - UI third game-menu addon panel shows only installed and loaded addon shortcuts
+  - UI third game-menu addon panel stays hidden when no supported addon is loaded

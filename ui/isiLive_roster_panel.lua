@@ -510,7 +510,7 @@ local function ConstructPanelUI(mainFrame, uiDeps)
   ui.modeButtons = {}
   local modeButtonDefs = {
     {
-      xOffset = -88,
+      xOffset = -132,
       label = "M+",
       target = LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL,
       width = 24,
@@ -518,14 +518,14 @@ local function ConstructPanelUI(mainFrame, uiDeps)
       descriptionFallback = L.MODE_LAYOUT_M2 or "Main horizontal layout.",
     },
     {
-      xOffset = -64,
+      xOffset = -108,
       label = "H",
       target = LAYOUT_MODE_COMPACT_HORIZONTAL,
       descriptionKey = "MODE_LAYOUT_H",
       descriptionFallback = L.MODE_LAYOUT_H or "Compact horizontal layout.",
     },
     {
-      xOffset = -44,
+      xOffset = -88,
       label = "V",
       target = LAYOUT_MODE_COMPACT_VERTICAL,
       descriptionKey = "MODE_LAYOUT_V",

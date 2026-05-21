@@ -88,6 +88,10 @@ local function BuildDeps(opts)
     end,
     setReloadRosterMirror = opts.setReloadRosterMirror or emptyfn,
     clearReloadRosterMirror = opts.clearReloadRosterMirror or emptyfn,
+    getReloadRosterTargetSnapshot = opts.getReloadRosterTargetSnapshot or function()
+      return nil
+    end,
+    restoreReloadRosterTargetSnapshot = opts.restoreReloadRosterTargetSnapshot or emptyfn,
     onGroupJoined = opts.onGroupJoined or function() end,
     onMemberJoinedGroup = opts.onMemberJoinedGroup or emptyfn,
     timerAfter = opts.timerAfter or function(_, cb)
@@ -213,6 +217,37 @@ local function CloneRosterEntryForMirror(info)
   return entry
 end
 
+local function CloneReloadRosterTargetSnapshot(source)
+  if type(source) ~= "table" then
+    return nil
+  end
+  local mapID = tonumber(source.mapID)
+  if not mapID or mapID <= 0 then
+    return nil
+  end
+  local name = CopyMirrorValue(source.name)
+  if type(name) ~= "string" or name == "" then
+    return nil
+  end
+
+  local snapshot = {
+    mapID = math.floor(mapID),
+    name = name,
+  }
+
+  local level = tonumber(source.level)
+  if level and level > 0 then
+    snapshot.level = math.floor(level)
+  end
+
+  local levelText = CopyMirrorValue(source.levelText)
+  if type(levelText) == "string" and levelText ~= "" then
+    snapshot.levelText = levelText
+  end
+
+  return snapshot
+end
+
 local function SaveReloadRosterMirror(deps, roster)
   local members = ReadCurrentGroupMembers(deps)
   local signature = BuildGroupSignatureFromMembers(members)
@@ -236,10 +271,16 @@ local function SaveReloadRosterMirror(deps, roster)
     end
   end
 
-  deps.setReloadRosterMirror({
+  local snapshot = {
     signature = signature,
     members = byKey,
-  })
+  }
+  local targetSnapshot = CloneReloadRosterTargetSnapshot(deps.getReloadRosterTargetSnapshot())
+  if targetSnapshot then
+    snapshot.targetKey = targetSnapshot
+  end
+
+  deps.setReloadRosterMirror(snapshot)
   return true
 end
 
@@ -277,6 +318,10 @@ local function TryRestoreReloadRosterMirror(deps)
   end
 
   deps.setRoster(restored)
+  local targetSnapshot = CloneReloadRosterTargetSnapshot(mirror.targetKey)
+  if targetSnapshot then
+    deps.restoreReloadRosterTargetSnapshot(targetSnapshot)
+  end
   deps.logRuntimeTracef("[ROSTER] reload_mirror_restored members=%s", tostring(#members))
   return true
 end

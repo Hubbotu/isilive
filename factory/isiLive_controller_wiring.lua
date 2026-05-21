@@ -127,6 +127,14 @@ function ControllerWiring.CreateGroupController(groupModule, deps)
       or function() end,
     clearReloadRosterMirror = type(deps.clearReloadRosterMirror) == "function" and deps.clearReloadRosterMirror
       or function() end,
+    getReloadRosterTargetSnapshot = type(deps.getReloadRosterTargetSnapshot) == "function"
+        and deps.getReloadRosterTargetSnapshot
+      or function()
+        return nil
+      end,
+    restoreReloadRosterTargetSnapshot = type(deps.restoreReloadRosterTargetSnapshot) == "function"
+        and deps.restoreReloadRosterTargetSnapshot
+      or function() end,
     getRaidTransitionBehavior = deps.getRaidTransitionBehavior or function()
       return "hide"
     end,
@@ -200,6 +208,8 @@ local function BuildGroupControllerDepsFromContext(ctx)
     getReloadRosterMirror = ctx.getReloadRosterMirror,
     setReloadRosterMirror = ctx.setReloadRosterMirror,
     clearReloadRosterMirror = ctx.clearReloadRosterMirror,
+    getReloadRosterTargetSnapshot = ctx.getReloadRosterTargetSnapshot,
+    restoreReloadRosterTargetSnapshot = ctx.restoreReloadRosterTargetSnapshot,
     timerAfter = BuildTimerAfter(),
     onGroupJoined = function() end,
     getRaidTransitionBehavior = ctx.getRaidTransitionBehavior,

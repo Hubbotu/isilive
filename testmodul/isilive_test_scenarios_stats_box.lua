@@ -338,21 +338,54 @@ return function(test, ctx)
 
       Assert.Equal(box.lines[1].label._text, "Strength", "label column should contain the stat label")
       Assert.Equal(box.lines[1].value._text, "2105", "value column should contain the stat value")
-      Assert.Equal(box.frame._width, 236, "stats box should keep the compact width")
+      Assert.Equal(box.frame._width, 170, "stats box background should fit the rendered text width")
+      Assert.Equal(box.frame._height, 44, "stats box background should fit the rendered visible row count")
       Assert.Equal(box.lines[1].label._point[1], "TOPLEFT", "label column should keep its left-side column anchor")
       Assert.Equal(box.lines[1].label._justifyH, "RIGHT", "label text should align to the right edge of its column")
-      Assert.Equal(box.lines[1].value._point[1], "TOPRIGHT", "value column should anchor right")
+      Assert.Equal(box.lines[1].value._point[1], "TOPLEFT", "value column should anchor after the label column")
       Assert.Equal(box.lines[1].value._justifyH, "RIGHT", "value text should align right")
-      Assert.Equal(box.lines[1].label._width, 100, "label column should leave room without widening the box")
-      Assert.Equal(box.lines[1].value._width, 44, "value column should stay compact")
+      Assert.Equal(box.lines[1].label._width, 56, "label column should fit the widest rendered label")
+      Assert.Equal(box.lines[1].value._width, 28, "value column should fit the widest rendered value")
       Assert.Equal(box.lines[2].value._text, "551", "rating column should keep the numeric rating separate")
       Assert.Equal(box.lines[2].percent._text, "(17.03%)", "percent column should keep the percent text separate")
-      Assert.Equal(box.lines[2].percent._point[1], "TOPRIGHT", "percent column should anchor to the right edge")
-      Assert.Equal(box.lines[2].percent._width, 74, "percent column should stay compact without truncating")
+      Assert.Equal(box.lines[2].percent._point[1], "TOPLEFT", "percent column should anchor after the value column")
+      Assert.Equal(box.lines[2].percent._width, 56, "percent column should fit the widest rendered percent")
       Assert.True(
         box.lines[1].label._width > box.lines[1].value._width,
         "label column should have more room than the value column"
       )
+    end)
+  end)
+
+  test("StatsBox fits background to rendered text bounds", function()
+    local createFrameStub = BuildCreateFrameStub()
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = { statsBoxEnabled = true },
+      CreateFrame = createFrameStub,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_stats_box.lua" })
+      local box = addon.StatsBox.Create({
+        parent = UIParent,
+        collectStats = function()
+          return {
+            { key = "strength", label = "Str", value = 1918 },
+            { key = "crit", label = "Crit", value = 923, percent = 25.07 },
+            { key = "haste", label = "Haste", value = 512, percent = 16.10 },
+            { key = "mastery", label = "Mast", value = 911, percent = 50.05 },
+            { key = "versatility", label = "Vers", value = 62, percent = 1.15 },
+            { key = "leech", label = "Leech", value = 0, percent = 0.00 },
+            { key = "speed", label = "Speed", value = 169, percent = 13.76 },
+          }
+        end,
+      })
+
+      Assert.Equal(box.frame._width, 149, "background width should follow the measured seven-row text block")
+      Assert.Equal(box.frame._height, 124, "background height should follow the seven visible stat rows")
+      Assert.Equal(box.lines[1].label._point[4], 8, "label text should start at the fitted left padding")
+      Assert.Equal(box.lines[1].value._point[4], 51, "value text should start after fitted labels and gap")
+      Assert.Equal(box.lines[2].percent._point[4], 85, "percent text should start after fitted values and gap")
     end)
   end)
 

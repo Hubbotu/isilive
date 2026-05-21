@@ -108,6 +108,9 @@ local function FinalizeFactorySettings(ctx)
         if ctx.secondPanelUI and type(ctx.secondPanelUI.SyncVisibility) == "function" then
           ctx.secondPanelUI.SyncVisibility()
         end
+        if ctx.thirdPanelUI and type(ctx.thirdPanelUI.SyncVisibility) == "function" then
+          ctx.thirdPanelUI.SyncVisibility()
+        end
       end,
       getQueueDebugEnabled = function()
         if ctx.queueDebugController and type(ctx.queueDebugController.IsEnabled) == "function" then
@@ -605,6 +608,8 @@ local function FinalizeFactoryRuntime(ctx)
         dbRef.reloadRosterMirror = {}
       end
     end,
+    getReloadRosterTargetSnapshot = ctx.GetReloadRosterTargetSnapshot,
+    restoreReloadRosterTargetSnapshot = ctx.RestoreReloadRosterTargetSnapshot,
     shouldAutoCloseOnKeyStart = function()
       local dbRef = rawget(_G, "IsiLiveDB")
       return ResolveAutoCloseOnKeyStartEnabled(dbRef)

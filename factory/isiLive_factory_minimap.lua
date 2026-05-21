@@ -94,10 +94,11 @@ local function CreateFactoryMinimapButton(ctx)
   btn:SetScript("OnEnter", function(self)
     local GameTooltip = rawget(_G, "GameTooltip")
     if GameTooltip then
+      local L = type(ctx.GetL) == "function" and ctx.GetL() or {}
       GameTooltip:SetOwner(self, "ANCHOR_LEFT")
       GameTooltip:AddLine("isiLive")
-      GameTooltip:AddLine("Left-click to toggle window", 0.8, 0.8, 0.8)
-      GameTooltip:AddLine("Right-click to open settings", 0.8, 0.8, 0.8)
+      GameTooltip:AddLine(L.TOOLTIP_MINIMAP_TOGGLE_WINDOW or "Left-click to toggle window.", 0.8, 0.8, 0.8)
+      GameTooltip:AddLine(L.TOOLTIP_MINIMAP_OPEN_SETTINGS or "Right-click to open settings.", 0.8, 0.8, 0.8)
       GameTooltip:Show()
     end
   end)

@@ -20,10 +20,13 @@ local TEXT_SHADOW_OFFSET_Y = -1
 local LABEL_COLUMN_WIDTH = 100
 local VALUE_COLUMN_WIDTH = 44
 local PERCENT_COLUMN_WIDTH = 74
-local VALUE_WITH_PERCENT_RIGHT_OFFSET = -82
-local VALUE_ONLY_RIGHT_OFFSET = -8
 local LEFT_PADDING = 8
+local RIGHT_PADDING = 8
 local TOP_PADDING = 6
+local BOTTOM_PADDING = 6
+local COLUMN_GAP = 8
+local VALUE_PERCENT_GAP = 6
+local VALUE_ONLY_RIGHT_OFFSET = -(RIGHT_PADDING + PERCENT_COLUMN_WIDTH + VALUE_PERCENT_GAP)
 
 local STAT_STRENGTH = 1
 local STAT_AGILITY = 2
@@ -146,10 +149,12 @@ local function ResolveLayout()
     labelWidth = ScaleDimension(LABEL_COLUMN_WIDTH, scale),
     valueWidth = ScaleDimension(VALUE_COLUMN_WIDTH, scale),
     percentWidth = ScaleDimension(PERCENT_COLUMN_WIDTH, scale),
-    valueWithPercentRightOffset = ScaleDimension(VALUE_WITH_PERCENT_RIGHT_OFFSET, scale),
-    valueOnlyRightOffset = ScaleDimension(VALUE_ONLY_RIGHT_OFFSET, scale),
     leftPadding = ScaleDimension(LEFT_PADDING, scale),
+    rightPadding = ScaleDimension(RIGHT_PADDING, scale),
     topPadding = ScaleDimension(TOP_PADDING, scale),
+    bottomPadding = ScaleDimension(BOTTOM_PADDING, scale),
+    columnGap = ScaleDimension(COLUMN_GAP, scale),
+    valuePercentGap = ScaleDimension(VALUE_PERCENT_GAP, scale),
   }
 end
 
@@ -409,6 +414,60 @@ local function FormatRow(row)
   return FormatInteger(row.value), FormatPercent(row.percent)
 end
 
+local function MeasureFontStringWidth(fontString)
+  if type(fontString) ~= "table" or type(fontString.GetStringWidth) ~= "function" then
+    return nil
+  end
+  local ok, width = pcall(fontString.GetStringWidth, fontString)
+  width = ok and tonumber(width) or nil
+  if width and width > 0 then
+    return math.ceil(width)
+  end
+  return nil
+end
+
+local function ResolveContentFitLayout(baseLayout, lines, visibleCount)
+  local labelWidth = 0
+  local valueWidth = 0
+  local percentWidth = 0
+  local hasPercent = false
+  for index = 1, visibleCount do
+    local rowFrame = lines[index]
+    if rowFrame then
+      labelWidth = math.max(labelWidth, MeasureFontStringWidth(rowFrame.label) or 0)
+      valueWidth = math.max(valueWidth, MeasureFontStringWidth(rowFrame.value) or 0)
+      if rowFrame.percent and type(rowFrame.percent.IsShown) == "function" and rowFrame.percent:IsShown() then
+        hasPercent = true
+        percentWidth = math.max(percentWidth, MeasureFontStringWidth(rowFrame.percent) or 0)
+      end
+    end
+  end
+
+  labelWidth = labelWidth > 0 and labelWidth or baseLayout.labelWidth
+  valueWidth = valueWidth > 0 and valueWidth or baseLayout.valueWidth
+  percentWidth = percentWidth > 0 and percentWidth or (hasPercent and baseLayout.percentWidth or 0)
+
+  local width = baseLayout.leftPadding
+    + labelWidth
+    + baseLayout.columnGap
+    + valueWidth
+    + (hasPercent and (baseLayout.valuePercentGap + percentWidth) or 0)
+    + baseLayout.rightPadding
+  local height = baseLayout.topPadding + math.max(1, visibleCount) * baseLayout.lineHeight + baseLayout.bottomPadding
+
+  local layout = {}
+  for key, value in pairs(baseLayout) do
+    layout[key] = value
+  end
+  layout.width = width
+  layout.height = height
+  layout.labelWidth = labelWidth
+  layout.valueWidth = valueWidth
+  layout.percentWidth = percentWidth
+  layout.hasPercent = hasPercent
+  return layout
+end
+
 local function SavePosition(frame)
   local db = GetDB()
   if type(db) ~= "table" or type(frame) ~= "table" or type(frame.GetPoint) ~= "function" then
@@ -443,12 +502,15 @@ local function ApplyStoredPosition(frame, parent)
   frame:SetPoint(pos.point, parent, pos.relativePoint, pos.x, pos.y)
 end
 
+local ApplyLayout
+
 local function RenderRows(state, rows)
   local layout = state.layout or ResolveLayout()
+  local visibleCount = 0
   for index, rowFrame in ipairs(state.lines) do
-    local yOffset = -layout.topPadding - ((index - 1) * layout.lineHeight)
     local row = rows[index]
     if row then
+      visibleCount = index
       rowFrame.label:SetText(row.label)
       local valueText, percentText = FormatRow(row)
       rowFrame.value:SetText(valueText)
@@ -456,15 +518,10 @@ local function RenderRows(state, rows)
       rowFrame.label:SetTextColor(c[1], c[2], c[3], c[4])
       rowFrame.value:SetTextColor(c[1], c[2], c[3], c[4])
       rowFrame.percent:SetTextColor(c[1], c[2], c[3], c[4])
-      if type(rowFrame.value.ClearAllPoints) == "function" then
-        rowFrame.value:ClearAllPoints()
-      end
       if percentText then
-        rowFrame.value:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", layout.valueWithPercentRightOffset, yOffset)
         rowFrame.percent:SetText("(" .. percentText .. ")")
         rowFrame.percent:Show()
       else
-        rowFrame.value:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", layout.valueOnlyRightOffset, yOffset)
         rowFrame.percent:SetText("")
         rowFrame.percent:Hide()
       end
@@ -479,9 +536,10 @@ local function RenderRows(state, rows)
       rowFrame.percent:Hide()
     end
   end
+  ApplyLayout(state, ResolveContentFitLayout(layout, state.lines, visibleCount))
 end
 
-local function ApplyLayout(state, layout)
+ApplyLayout = function(state, layout)
   state.layout = layout
   state.frame:SetSize(layout.width, layout.height)
   for index, rowFrame in ipairs(state.lines) do
@@ -490,10 +548,22 @@ local function ApplyLayout(state, layout)
     rowFrame.label:SetPoint("TOPLEFT", state.frame, "TOPLEFT", layout.leftPadding, yOffset)
     rowFrame.label:SetWidth(layout.labelWidth)
     rowFrame.value:ClearAllPoints()
-    rowFrame.value:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", layout.valueOnlyRightOffset, yOffset)
+    rowFrame.value:SetPoint(
+      "TOPLEFT",
+      state.frame,
+      "TOPLEFT",
+      layout.leftPadding + layout.labelWidth + layout.columnGap,
+      yOffset
+    )
     rowFrame.value:SetWidth(layout.valueWidth)
     rowFrame.percent:ClearAllPoints()
-    rowFrame.percent:SetPoint("TOPRIGHT", state.frame, "TOPRIGHT", layout.valueOnlyRightOffset, yOffset)
+    rowFrame.percent:SetPoint(
+      "TOPLEFT",
+      state.frame,
+      "TOPLEFT",
+      layout.leftPadding + layout.labelWidth + layout.columnGap + layout.valueWidth + layout.valuePercentGap,
+      yOffset
+    )
     rowFrame.percent:SetWidth(layout.percentWidth)
   end
 end

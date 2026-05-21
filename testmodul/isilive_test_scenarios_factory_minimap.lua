@@ -314,12 +314,31 @@ local function Register(test, ctx)
 
   test("factory_minimap: OnEnter populates tooltip and OnLeave hides it", function()
     local globals, state = BuildMinimapEnv()
-    LoadAndCreate(ctx, globals, {}, function(btn)
+    LoadAndCreate(ctx, globals, {
+      ctx = {
+        GetL = function()
+          return {
+            TOOLTIP_MINIMAP_TOGGLE_WINDOW = "Linksklick: Fenster ein- oder ausblenden.",
+            TOOLTIP_MINIMAP_OPEN_SETTINGS = "Rechtsklick: Einstellungen oeffnen.",
+          }
+        end,
+      },
+    }, function(btn)
       btn.scripts["OnEnter"](btn)
     end)
     Assert.Equal(state.tooltipShown, true, "tooltip must be shown on enter")
     Assert.NotNil(state.tooltipLines, "tooltip lines must be populated")
     Assert.True(#state.tooltipLines >= 3, "tooltip must contain title + left-click + right-click hints")
+    Assert.Equal(
+      state.tooltipLines[2],
+      "Linksklick: Fenster ein- oder ausblenden.",
+      "tooltip must use the localized left-click hint"
+    )
+    Assert.Equal(
+      state.tooltipLines[3],
+      "Rechtsklick: Einstellungen oeffnen.",
+      "tooltip must use the localized right-click settings hint"
+    )
 
     local globals2, state2 = BuildMinimapEnv()
     LoadAndCreate(ctx, globals2, {}, function(btn)

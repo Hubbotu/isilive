@@ -19,6 +19,7 @@ function FrameBridge.CreateContext(opts)
   local onShownInGroup = RequireFunction(opts.onShownInGroup, "onShownInGroup")
   local onShownNoGroup = RequireFunction(opts.onShownNoGroup, "onShownNoGroup")
   local isInCombat = RequireFunction(opts.isInCombat, "isInCombat")
+  local onOpenSettings = type(opts.onOpenSettings) == "function" and opts.onOpenSettings or function() end
   local isRaidGroup = type(opts.isRaidGroup) == "function" and opts.isRaidGroup or function()
     return false
   end
@@ -77,6 +78,7 @@ function FrameBridge.CreateContext(opts)
     end,
     onShownInGroup = onShownInGroup,
     onShownNoGroup = onShownNoGroup,
+    onOpenSettings = onOpenSettings,
   })
 
   local context = {

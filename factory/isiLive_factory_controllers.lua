@@ -295,6 +295,66 @@ local function ResolveActiveInviteLevelHint(lfgDetect)
   return nil, nil
 end
 
+local function BuildReloadRosterTargetSnapshot(ctx)
+  if type(ctx.GetStatusTargetDungeonInfo) ~= "function" or type(ctx.ResolveStatusTargetMapID) ~= "function" then
+    return nil
+  end
+  local mapID = tonumber(ctx.ResolveStatusTargetMapID())
+  if not mapID or mapID <= 0 then
+    return nil
+  end
+  local info = ctx.GetStatusTargetDungeonInfo()
+  if type(info) ~= "table" then
+    return nil
+  end
+  local name = ctx.NormalizeConcreteStatusTargetName(info.name, mapID)
+  if not name then
+    return nil
+  end
+
+  local snapshot = {
+    mapID = math.floor(mapID),
+    name = name,
+  }
+  local level = tonumber(info.level)
+  if level and level > 0 then
+    snapshot.level = math.floor(level)
+  end
+  if type(info.levelText) == "string" and info.levelText ~= "" then
+    snapshot.levelText = info.levelText
+  end
+  return snapshot
+end
+
+local function RestoreReloadRosterTargetSnapshot(ctx, runtimeState, snapshot)
+  if type(snapshot) ~= "table" then
+    return false
+  end
+  local mapID = tonumber(snapshot.mapID)
+  if not mapID or mapID <= 0 then
+    return false
+  end
+  local name = ctx.NormalizeConcreteStatusTargetName(snapshot.name, mapID)
+  if not name then
+    return false
+  end
+
+  local restored = {
+    mapID = math.floor(mapID),
+    name = name,
+  }
+  local level = tonumber(snapshot.level)
+  if level and level > 0 then
+    restored.level = math.floor(level)
+  end
+  if type(snapshot.levelText) == "string" and snapshot.levelText ~= "" then
+    restored.levelText = snapshot.levelText
+  end
+  ctx.reloadRosterTargetSnapshot = restored
+  runtimeState.SetLatestQueueState(name, nil, nil, restored.mapID)
+  return true
+end
+
 -- Sub-function: Status target resolution, dungeon info, and operational helpers.
 local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
   ctx.getPlayerSyncSummary = function(name, realm)
@@ -316,6 +376,7 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     return ctx.bindingController.GetPendingBindingApply()
   end
   ctx.ClearLatestQueueTarget = function()
+    ctx.reloadRosterTargetSnapshot = nil
     runtimeState.ClearLatestQueueTarget()
     if ctx.UpdateStatusLine then
       ctx.UpdateStatusLine()
@@ -569,6 +630,12 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
 
     return nil
   end
+  ctx.GetReloadRosterTargetSnapshot = function()
+    return BuildReloadRosterTargetSnapshot(ctx)
+  end
+  ctx.RestoreReloadRosterTargetSnapshot = function(snapshot)
+    return RestoreReloadRosterTargetSnapshot(ctx, runtimeState, snapshot)
+  end
   ctx.GetStatusTargetDungeonInfo = function()
     local targetMapID = ctx.ResolveStatusTargetMapID()
     local latestQueueDungeonName, latestQueueActivityID = runtimeState.GetLatestQueueState()
@@ -600,6 +667,18 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
     --   3. Synced target level: last fallback for peers that publish a target.
     local lfgDetect = addonTable.LFGDetect
     local targetLevel, targetLevelText = ResolveActiveInviteLevelHint(lfgDetect)
+
+    if not targetLevel or targetLevel <= 0 then
+      local restoredTarget = ctx.reloadRosterTargetSnapshot
+      if type(restoredTarget) == "table" and tonumber(restoredTarget.mapID) == tonumber(targetMapID) then
+        targetLevel = tonumber(restoredTarget.level)
+        if targetLevel and targetLevel > 0 then
+          targetLevelText = nil
+        elseif type(restoredTarget.levelText) == "string" and restoredTarget.levelText ~= "" then
+          targetLevelText = restoredTarget.levelText
+        end
+      end
+    end
 
     if not targetLevel or targetLevel <= 0 then
       local ownerUnit = ctx.ResolveActiveKeyOwnerUnit and ctx.ResolveActiveKeyOwnerUnit() or nil
@@ -676,6 +755,9 @@ local function InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
       source = source,
     })
   end
+end
+
+local function InitializeOperationalUIHelpers(ctx)
   ctx.UpdateCountdownCancelButton = function()
     if not ctx.rosterPanelController then
       return
@@ -708,6 +790,7 @@ local function InitializeFactoryRuntimeHelpers(ctx)
   InitializeRuntimeStateDelegates(ctx, modules, runtimeState)
   InitializeRioHelpers(ctx, runtimeState)
   InitializeStatusAndOperationalHelpers(ctx, modules, runtimeState)
+  InitializeOperationalUIHelpers(ctx)
 end
 FI.InitializeFactoryRuntimeHelpers = InitializeFactoryRuntimeHelpers
 
@@ -1424,6 +1507,16 @@ local function InitializeFactoryRefreshAndStatusControllers(ctx)
           return not IsiLiveDB or IsiLiveDB.showEscPanel ~= false
         end,
         firstPanelState = ctx.panelUI,
+      })
+    end
+    if modules.ui and type(modules.ui.EnsureThirdPanelUI) == "function" then
+      ctx.thirdPanelUI = modules.ui.EnsureThirdPanelUI({
+        getL = ctx.GetL,
+        isInCombat = ctx.IsInCombat,
+        isEnabled = function()
+          return not IsiLiveDB or IsiLiveDB.showEscPanel ~= false
+        end,
+        secondPanelState = ctx.secondPanelUI,
       })
     end
     ctx.rosterPanelController.ApplyLocalization()
