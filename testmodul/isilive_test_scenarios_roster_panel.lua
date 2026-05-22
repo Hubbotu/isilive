@@ -1013,6 +1013,101 @@ local function RegisterRosterPanelLeaderInteractionTests(test, Assert, WithGloba
       ---@diagnostic enable: undefined-field
     end)
   end)
+
+  test("Roster panel ready-check button uses a secure macro action", function()
+    local createdFrames = {}
+    local createdFontStrings = {}
+    local doReadyCheckCalls = 0
+
+    WithGlobals({
+      CreateFrame = function(frameType, name, parent, template)
+        local frame = NewRecordedFrame(createdFrames, createdFontStrings)
+        frame._frameType = frameType
+        frame._name = name
+        frame._parent = parent
+        frame._template = template
+        return frame
+      end,
+      DoReadyCheck = function()
+        doReadyCheckCalls = doReadyCheckCalls + 1
+      end,
+      GameTooltip = {
+        SetOwner = function() end,
+        SetText = function() end,
+        AddLine = function() end,
+        Show = function() end,
+        Hide = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_roster_panel.lua" })
+      local controller = addon.RosterPanel.CreateController({
+        mainFrame = NewRecordedMainFrame(createdFontStrings),
+        getL = function()
+          return {
+            BTN_READYCHECK = "Readycheck",
+            BTN_COUNTDOWN10 = "Countdown10",
+            BTN_COUNTDOWN_CANCEL = "Countdown 0",
+          }
+        end,
+        isPlayerLeader = function()
+          return true
+        end,
+        getAddonVersionText = function()
+          return ""
+        end,
+        updateStatusLine = function() end,
+        setMainFrameHeightSafe = function() end,
+        setMainFrameWidthSafe = function() end,
+        buildOrderedRoster = function()
+          return {}
+        end,
+        buildDisplayData = function()
+          return {}
+        end,
+        truncateName = function() end,
+        getShortSpecLabel = function() end,
+        getLanguageFlagMarkup = function() end,
+        getDungeonShortCode = function() end,
+        resolveActiveKeyOwnerUnit = function() end,
+        getRoster = function()
+          return {}
+        end,
+        isInGroup = function()
+          return true
+        end,
+        rolePriority = {},
+        unitPriority = {},
+      })
+
+      controller.ApplyLocalization()
+
+      local readyCheckButton = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame.text == "Readycheck" then
+          readyCheckButton = frame
+          break
+        end
+      end
+
+      readyCheckButton = Assert.NotNil(readyCheckButton, "ready-check button should exist")
+      Assert.Equal(
+        readyCheckButton._template,
+        "SecureActionButtonTemplate,BackdropTemplate",
+        "ready-check button must be a secure action button"
+      )
+      Assert.Equal(readyCheckButton.attributes.type1, "macro", "ready-check left click must execute a macro")
+      Assert.Equal(
+        readyCheckButton.attributes.macrotext1,
+        "/readycheck",
+        "ready-check macro must use Blizzard's secure slash command"
+      )
+
+      if type(readyCheckButton.OnClick) == "function" then
+        readyCheckButton.OnClick(readyCheckButton)
+      end
+      Assert.Equal(doReadyCheckCalls, 0, "ready-check click script must not call protected DoReadyCheck directly")
+    end)
+  end)
 end
 
 local function FindInteractiveRosterRow(createdFrames)

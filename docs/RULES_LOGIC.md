@@ -263,6 +263,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Zusammenfassung: Die Buttons `Readycheck`, `Countdown10` und `Countdown 0` sind fuer Nicht-Leader deaktiviert und optisch abgedimmt.
 - Erforderliche Tests:
   - Roster panel leader-only buttons disable when player is not leader
+  - Roster panel ready-check button uses a secure macro action
   - LeaderWatch detects leader gain via PARTY_LEADER_CHANGED
   - LeaderWatch detects leader loss
 

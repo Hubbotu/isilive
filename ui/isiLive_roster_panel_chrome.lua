@@ -160,8 +160,8 @@ local function SetPanelHeaderText(fontString, text)
   FitHeaderFontString(fontString)
 end
 
-local function CreateFlatButton(parent, width, height)
-  local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+local function CreateFlatButton(parent, width, height, template)
+  local button = CreateFrame("Button", nil, parent, template or "BackdropTemplate")
   button:SetSize(width, height)
   local common = addonTable and addonTable.UICommon
   if type(common) == "table" and type(common.ApplyBackdrop) == "function" then

@@ -313,19 +313,19 @@ local function CreatePanelButtons(mainFrame, deps)
   local getL = deps.getL
   local isPlayerLeader = deps.isPlayerLeader
 
-  local readyCheckButton = CreateFlatButton(mainFrame, 120, 24)
+  local readyCheckButton = CreateFlatButton(mainFrame, 120, 24, "SecureActionButtonTemplate,BackdropTemplate")
   readyCheckButton:SetPoint("TOPRIGHT", -10, -60)
   readyCheckButton._verticalY = -60
+  if type(readyCheckButton.SetAttribute) == "function" then
+    readyCheckButton:SetAttribute("type1", "macro")
+    readyCheckButton:SetAttribute("macrotext1", "/readycheck")
+  end
   readyCheckButton:SetScript("OnClick", function()
     if not isPlayerLeader() then
       return
     end
     if type(deps.logRuntimeTrace) == "function" then
       deps.logRuntimeTrace("[UI] btn_click name=readycheck")
-    end
-    local doReadyCheck = _G.DoReadyCheck
-    if type(doReadyCheck) == "function" then
-      pcall(doReadyCheck)
     end
   end)
   AttachPanelButtonTooltip(deps.tooltipFrame, readyCheckButton, getL, "BTN_READYCHECK", "TOOLTIP_READY", isPlayerLeader)

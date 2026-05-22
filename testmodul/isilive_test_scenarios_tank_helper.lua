@@ -380,7 +380,11 @@ local function RegisterNativeWorldMarkerButtonTests(test, Assert, WithGlobals, L
     local readyCheckButton = nil
     for _, frame in ipairs(createdFrames) do
       if
-        (frame._template == "UIPanelButtonTemplate" or frame._template == "BackdropTemplate") and frame.pointY == -60
+        (
+          frame._template == "UIPanelButtonTemplate"
+          or frame._template == "BackdropTemplate"
+          or (type(frame._template) == "string" and frame._template:find("BackdropTemplate", 1, true) ~= nil)
+        ) and frame.pointY == -60
       then
         readyCheckButton = frame
         break
@@ -536,7 +540,11 @@ local function RegisterVerticalMiniLayoutTests(test, Assert, WithGlobals, LoadAd
     local readyCheckButton = nil
     for _, frame in ipairs(createdFrames) do
       if
-        (frame._template == "UIPanelButtonTemplate" or frame._template == "BackdropTemplate") and frame.pointY == -60
+        (
+          frame._template == "UIPanelButtonTemplate"
+          or frame._template == "BackdropTemplate"
+          or (type(frame._template) == "string" and frame._template:find("BackdropTemplate", 1, true) ~= nil)
+        ) and frame.pointY == -60
       then
         readyCheckButton = frame
         break
@@ -674,7 +682,11 @@ local function RegisterHorizontalMiniLayoutTests(test, Assert, WithGlobals, Load
       if frame._template == "SecureActionButtonTemplate" and frame:GetAttribute("type1") == "worldmarker" then
         table.insert(helperButtons, frame)
       elseif
-        (frame._template == "UIPanelButtonTemplate" or frame._template == "BackdropTemplate") and frame._verticalY
+        (
+          frame._template == "UIPanelButtonTemplate"
+          or frame._template == "BackdropTemplate"
+          or (type(frame._template) == "string" and frame._template:find("BackdropTemplate", 1, true) ~= nil)
+        ) and frame._verticalY
       then
         table.insert(managementButtons, frame)
       end
@@ -840,7 +852,13 @@ local function RegisterHorizontalModernLayoutTests(test, Assert, WithGlobals, Lo
     local toolbarButtons = {}
     local markerButtons = {}
     for _, frame in ipairs(createdFrames) do
-      if (frame._template == "UIPanelButtonTemplate" or frame._template == "BackdropTemplate") and frame._flatLabel then
+      if
+        (
+          frame._template == "UIPanelButtonTemplate"
+          or frame._template == "BackdropTemplate"
+          or (type(frame._template) == "string" and frame._template:find("BackdropTemplate", 1, true) ~= nil)
+        ) and frame._flatLabel
+      then
         table.insert(toolbarButtons, frame)
       elseif frame._template == "SecureActionButtonTemplate" and frame:GetAttribute("type1") == "worldmarker" then
         table.insert(markerButtons, frame)
