@@ -859,5 +859,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UI third game-menu addon shortcut loads enabled addon before running slash
   - UI third game-menu isiLive shortcut can use direct settings action without self-load
   - UI third game-menu addon shortcuts resolve registered slash aliases and arguments
+  - UI third game-menu addon shortcut repeatedly invokes the verified slash handler
+  - UI third game-menu addon shortcut does not fall back to chat edit when handler fails
   - Commands settings opens the settings panel
   - UI third game-menu addon panel stays hidden when no supported addon is enabled

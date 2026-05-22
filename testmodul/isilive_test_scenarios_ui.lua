@@ -1524,6 +1524,128 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI third game-menu addon shortcut repeatedly invokes the verified slash handler", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local sendCalls = 0
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Simulationcraft" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return addOnName == "Simulationcraft" and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return addOnName == "Simulationcraft"
+        end,
+        LoadAddOn = function() end,
+      },
+      SlashCmdList = {
+        Simulationcraft = function(msg)
+          slashCalls[#slashCalls + 1] = msg
+        end,
+      },
+      SLASH_Simulationcraft1 = "/simc",
+      ChatEdit_SendText = function()
+        sendCalls = sendCalls + 1
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist")
+
+      local simcButton = RequireValue(addonStrip.buttonsById.simc, "SimC shortcut button should exist")
+      local onClick = simcButton._scripts and simcButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "SimC shortcut must define OnClick")
+      onClick(simcButton, "LeftButton")
+      onClick(simcButton, "LeftButton")
+
+      Assert.Equal(#slashCalls, 2, "registered addon slash should call the verified handler on every click")
+      Assert.Equal(slashCalls[1], "", "first direct slash call should pass the parsed argument string")
+      Assert.Equal(slashCalls[2], "", "second direct slash call should pass the parsed argument string")
+      Assert.Equal(sendCalls, 0, "successful direct slash dispatch should not touch the chat edit sender")
+    end)
+  end)
+
+  test("UI third game-menu addon shortcut does not fall back to chat edit when handler fails", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local sendCalls = 0
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Simulationcraft" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName)
+          return addOnName == "Simulationcraft" and 2 or 0
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return addOnName == "Simulationcraft"
+        end,
+        LoadAddOn = function() end,
+      },
+      SlashCmdList = {
+        Simulationcraft = function()
+          error("simc handler failed", 0)
+        end,
+      },
+      SLASH_Simulationcraft1 = "/simc",
+      ChatEdit_SendText = function()
+        sendCalls = sendCalls + 1
+      end,
+      ChatEdit_ParseText = function()
+        sendCalls = sendCalls + 1
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist")
+
+      local simcButton = RequireValue(addonStrip.buttonsById.simc, "SimC shortcut button should exist")
+      local onClick = simcButton._scripts and simcButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "SimC shortcut must define OnClick")
+      onClick(simcButton, "LeftButton")
+
+      Assert.Equal(sendCalls, 0, "failed handler dispatch must stay closed instead of writing slash text to chat")
+    end)
+  end)
+
   test("UI third game-menu addon shortcut fails closed without a registered slash alias", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
