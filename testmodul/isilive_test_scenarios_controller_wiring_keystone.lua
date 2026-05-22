@@ -302,7 +302,11 @@ return function(test, ctx)
       Assert.True(capturedDeps.sendOwnKeystoneToChat(), "late-loaded ContextHelpers must still build a chat line")
     end)
 
-    Assert.Equal(sentLines[1], "[isiLive] PartyKeys: [Keystone +17]", "line must be built from the real late-loaded helper")
+    Assert.Equal(
+      sentLines[1],
+      "[isiLive] PartyKeys: [Keystone +17]",
+      "line must be built from the real late-loaded helper"
+    )
   end)
 
   test("ControllerWiring SHAREKEYS send and receive paths use the same real payload", function()
