@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-05-22 - Version 0.9.270 (patch)
+
+Fixes the ready-check action button for combat lockdown and syncs release
+metadata.
+
+### Ready Check
+
+[ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua),
+[ui/isiLive_roster_panel_chrome.lua](../ui/isiLive_roster_panel_chrome.lua),
+[testmodul/isilive_test_scenarios_roster_panel.lua](../testmodul/isilive_test_scenarios_roster_panel.lua),
+[testmodul/isilive_test_scenarios_tank_helper.lua](../testmodul/isilive_test_scenarios_tank_helper.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Replaced the insecure `DoReadyCheck()` click path with a preconfigured
+  secure macro action using `/readycheck`.
+- Kept leader-only enablement and existing management-button layout behavior
+  intact while allowing the button to work under combat lockdown when Blizzard
+  permits the secure action.
+- Added deterministic coverage that the ready-check button is a secure macro
+  action and does not call the protected function directly.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.270`.
+- Updated the validator baseline to `1828` scenarios.
+
 ## 2026-05-22 - Version 0.9.269 (patch)
 
 Hardens the ESC Addons shortcut dispatch and syncs release documentation.
