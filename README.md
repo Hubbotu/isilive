@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.268`
+- **Current version:** `0.9.269`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -15,7 +15,7 @@ When you join a group, isiLive opens a single window with everything you want to
 
 - Who is in the group, their spec, item level, Raider.IO rating, and keystone
 - One-click access to all 8 season dungeon portals, with live cooldowns
-- Escape-menu shortcut panels for tools, travel, verified mount shortcuts, and supported addons
+- Escape-menu shortcut panels for tools, travel, verified mount shortcuts, and installed/enabled supported addons
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
@@ -34,6 +34,8 @@ Everything syncs automatically between group members who run isiLive — no manu
 2. Start the game. The window opens automatically the next time you join a 5-player group.
 
 No setup required. Open the settings via **Escape → AddOns → isiLive** if you want to change language, sounds, or auto-open behavior.
+
+The optional Escape-menu Addons panel shows shortcuts only for supported addons that are installed and enabled. External shortcuts use the target addon's registered slash handler directly after any verified load-on-demand load; they do not write slash text into chat.
 
 ---
 

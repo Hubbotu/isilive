@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-05-22 - Version 0.9.269 (patch)
+
+Hardens the ESC Addons shortcut dispatch and syncs release documentation.
+
+### ESC Addons Panel
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[docs/USECASES.md](USECASES.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[README.md](../README.md):
+
+- Kept shortcut visibility fail-closed: supported external addon buttons appear
+  only when the target addon is installed and enabled.
+- External shortcuts verify-load load-on-demand targets before dispatch and then
+  call the registered `SlashCmdList` handler directly.
+- Removed chat-edit fallback behavior from the shortcut contract; failed or
+  missing handlers stay silent instead of writing slash text such as `/mdt` into
+  chat.
+- Added deterministic coverage for repeated shortcut clicks and handler-failure
+  fail-closed behavior, and mapped those tests to active rule 67.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.269`.
+- Updated the validator baseline to `1827` scenarios.
+
 ## 2026-05-21 - Version 0.9.268 (patch)
 
 Stabilizes the standalone Stats Box value column for compact stat layouts.
