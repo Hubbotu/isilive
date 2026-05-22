@@ -492,19 +492,19 @@ local function HandleShareKeysRequest(ctx, syncResult, sender)
   end
 end
 
+local function NoopEventHandler(_event, ...) end
+
+local function ResolveEventHandler(handler)
+  return type(handler) == "function" and handler or NoopEventHandler
+end
+
 function RuntimeLifecycle.BuildHandlers(ctx)
-  ctx.handleLFGDetectEvent = type(ctx.handleLFGDetectEvent) == "function" and ctx.handleLFGDetectEvent
-    or function(_event, ...) end
-  ctx.handleKillTrackEvent = type(ctx.handleKillTrackEvent) == "function" and ctx.handleKillTrackEvent
-    or function(_event, ...) end
-  ctx.handleCombatEventsEvent = type(ctx.handleCombatEventsEvent) == "function" and ctx.handleCombatEventsEvent
-    or function(_event, ...) end
-  ctx.handleKickTrackerEvent = type(ctx.handleKickTrackerEvent) == "function" and ctx.handleKickTrackerEvent
-    or function(_event, ...) end
-  ctx.handleMplusTimerEvent = type(ctx.handleMplusTimerEvent) == "function" and ctx.handleMplusTimerEvent
-    or function(_event, ...) end
-  ctx.handleLeaderWatchEvent = type(ctx.handleLeaderWatchEvent) == "function" and ctx.handleLeaderWatchEvent
-    or function(_event, ...) end
+  ctx.handleLFGDetectEvent = ResolveEventHandler(ctx.handleLFGDetectEvent)
+  ctx.handleKillTrackEvent = ResolveEventHandler(ctx.handleKillTrackEvent)
+  ctx.handleCombatEventsEvent = ResolveEventHandler(ctx.handleCombatEventsEvent)
+  ctx.handleKickTrackerEvent = ResolveEventHandler(ctx.handleKickTrackerEvent)
+  ctx.handleMplusTimerEvent = ResolveEventHandler(ctx.handleMplusTimerEvent)
+  ctx.handleLeaderWatchEvent = ResolveEventHandler(ctx.handleLeaderWatchEvent)
 
   local function HandleGroupRosterUpdateEvent(frame)
     if ctx.isInGroup() and (ctx.isTestMode() or ctx.isTestAllMode()) then
