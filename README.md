@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.270`
+- **Current version:** `0.9.271`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -131,7 +131,7 @@ Only enabled when you are the leader:
 
 ### Share Keys
 
-Posts everyone's keystone in group chat — yours first, then other isiLive users reply with their own. The button has a 30-second cooldown after a real local share or successful peer request; receiving clients only lock their button when they actually post their own key.
+Posts everyone's keystone in group chat — yours first, then other isiLive users reply with their own. The button has a 30-second cooldown after a real local share or successful peer request; receiving clients also lock their button for 30 seconds whenever a valid peer request arrives, even if they have no key to post.
 
 ### Re-Sync
 

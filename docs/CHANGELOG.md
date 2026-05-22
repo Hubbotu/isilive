@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-05-22 - Version 0.9.271 (patch)
+
+Tightens the Share Keys cooldown chain for all isiLive users and sends the
+request with higher addon-message priority.
+
+### Share Keys
+
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua),
+[logic/isiLive_sync.lua](../logic/isiLive_sync.lua),
+[testmodul/isilive_test_scenarios_event_handlers_hidden_sync.lua](../testmodul/isilive_test_scenarios_event_handlers_hidden_sync.lua),
+[testmodul/isilive_test_scenarios_sync.lua](../testmodul/isilive_test_scenarios_sync.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Remote isiLive clients now start the 30-second Share Keys button cooldown for
+  every valid incoming `SHAREKEYS` request, even when they have no own key to
+  post.
+- Kept the own-key chat reply attempt intact, but decoupled button lockout from
+  the reply result.
+- Sent `SHAREKEYS` addon messages through ChatThrottleLib with `ALERT` priority
+  to reduce peer response delay.
+- Updated deterministic coverage and the active rule 53 mapping for the new
+  cooldown contract.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.271`.
+- Kept the validator baseline at `1828` scenarios.
+
 ## 2026-05-22 - Version 0.9.270 (patch)
 
 Fixes the ready-check action button for combat lockdown and syncs release

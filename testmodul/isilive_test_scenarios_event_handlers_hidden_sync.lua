@@ -680,7 +680,7 @@ local function RegisterHiddenFrameShareKeysAndReqSyncTests(test, Assert, LoadAdd
     Assert.Equal(counters.uiUpdates, 0, "hidden SHAREKEYS must not force a UI redraw by itself")
   end)
 
-  test("Event handlers skip SHAREKEYS cooldown when no own key chat share was posted", function()
+  test("Event handlers trigger SHAREKEYS cooldown even when no own key chat share was posted", function()
     local counters = { uiUpdates = 0, refreshResponses = 0 }
     local keystoneChatShares = 0
     local cooldownTriggers = 0
@@ -707,8 +707,8 @@ local function RegisterHiddenFrameShareKeysAndReqSyncTests(test, Assert, LoadAdd
     Assert.Equal(keystoneChatShares, 1, "hidden SHAREKEYS must still try one own-key chat announcement")
     Assert.Equal(
       cooldownTriggers,
-      0,
-      "SHAREKEYS must not lock the local share-keys button when no own party-key share was posted"
+      1,
+      "SHAREKEYS must lock the local share-keys button even when no own party-key share was posted"
     )
     Assert.Equal(counters.refreshResponses, 0, "SHAREKEYS must not trigger a refresh response")
     Assert.Equal(counters.uiUpdates, 0, "hidden SHAREKEYS must not force a UI redraw by itself")

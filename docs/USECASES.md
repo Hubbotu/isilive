@@ -1,6 +1,6 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.270`
+Versionsbasis: `0.9.271`
 Zuletzt aktualisiert: `2026-05-22`
 
 ## Akteure
@@ -112,7 +112,7 @@ Ziel: Dem User erlauben, aktuelle Party-Keys schnell zu posten.
 3. Verarbeitung: Danach broadcastet das Addon `SHAREKEYS` ueber den Addon-Sync-Channel, damit andere `isiLive`-Peers ihre eigene lokale Key-Zeile posten koennen, ohne einen vollen `Re-Sync` zu brauchen; dieser Request gilt nur dann als erfolgreich, wenn der Addon-Message-Dispatch selbst Erfolg meldet.
 4. Output: Eine lokale Key-Zeile geht sofort in den Gruppenchat; bei Sendefehler gibt es einen lokalen Print-Fallback, der nicht als erfolgreicher Gruppenchat-Share zaehlt. Weitere Peer-Zeilen duerfen danach von antwortenden Gruppenmitgliedern folgen.
 5. Regel: `Share Keys`-Button-Klicks werden entprellt, um schnelle doppelte Chat-Ausgaben zu vermeiden, und der Button zeigt waehrend der Sperre sichtbar `30s` Cooldown; ein fehlgeschlagener eigener Gruppenchat-Post ohne erfolgreich dispatchten `SHAREKEYS`-Request darf keine Sperre starten.
-5a. Regel: Wenn ein Client eine eingehende `SHAREKEYS`-Sync-Message erhaelt, wird der lokale `Share Keys`-Button nur dann ueber `TriggerRemoteCooldown` fuer `30s` gesperrt, wenn dieser Empfangspfad tatsaechlich einen eigenen Gruppenchat-Share ausgeloest hat; ein bereits laufender lokaler Cooldown wird nicht zurueckgesetzt.
+5a. Regel: Wenn ein Client eine eingehende `SHAREKEYS`-Sync-Message erhaelt, wird der lokale `Share Keys`-Button ueber `TriggerRemoteCooldown` fuer `30s` gesperrt, auch wenn dieser Empfangspfad keinen eigenen Gruppenchat-Share ausloesen kann; ein bereits laufender lokaler Cooldown wird nicht zurueckgesetzt.
 6. Verwandte Aktion: Der danebenliegende `Re-Sync`-Button erzwingt den Hidden-Peer-Sync-Handshake, sendet zusaetzlich eine `LibKS`-Party-Anfrage fuer kompatible Nicht-`isiLive`-Peers und bleibt danach sichtbar `10s` auf Cooldown.
 7. Erfolgskriterium: Der ausloesende User bekommt immer zuerst die eigene Owned-Keystone-Zeile, und Peer-Antworten bleiben senderverteilt statt aus gecachten Remote-Roster-Daten rekonstruiert zu werden.
 

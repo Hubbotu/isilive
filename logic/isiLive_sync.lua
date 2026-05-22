@@ -1722,7 +1722,7 @@ function Sync.SendShareKeysRequest()
   if not channel then
     return false
   end
-  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel, "NORMAL")
+  local sent = DispatchAddonMessage(ISILIVE_SYNC_PREFIX, "SHAREKEYS", channel, "ALERT")
   SyncLog("send_sharekeys", "channel=%s sent=%s", tostring(channel), tostring(sent))
   return sent == true
 end

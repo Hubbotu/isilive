@@ -172,8 +172,8 @@ Aktueller Soll-Zustand:
 - Alle Addon-Message-Sends laufen ueber `DispatchAddonMessage(prefix, payload, channel, priority)`.
 - Wenn ChatThrottleLib geladen ist, wird `ChatThrottleLib:SendAddonMessage(priority, prefix, text, chattype)` verwendet; andernfalls Fallback auf raw `C_ChatInfo.SendAddonMessage`.
 - Prioritaets-Schema:
-  - `ALERT` → `KICK`, `REQSYNC` (zeitkritische Coordination)
-  - `NORMAL` → `HELLO`, `KEY`, `TARGET`, `SHAREKEYS`, `BRLUST`, LibKeystone-Party-/Request-Envelopes
+  - `ALERT` → `KICK`, `REQSYNC`, `SHAREKEYS` (zeitkritische Coordination und schneller User-Fanout)
+  - `NORMAL` → `HELLO`, `KEY`, `TARGET`, `BRLUST`, LibKeystone-Party-/Request-Envelopes
   - `BULK` → `STATS`, `DPS`, `LOC` (Metriken, duerfen unter Last zurueckstehen)
 - Jeder Send loggt `sent=true|false` in den SyncLog-Trace; ChatThrottleLib-Drops werden dort sichtbar.
 - `Sync.SendShareKeysRequest()` darf nur `true` zurueckgeben, wenn `DispatchAddonMessage()` den `SHAREKEYS`-Payload tatsaechlich erfolgreich angenommen hat; ein vorhandener Kanal allein reicht nicht als Erfolg.

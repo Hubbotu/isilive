@@ -1,6 +1,6 @@
 # isiLive Architektur
 
-Versionsbasis: `0.9.270`
+Versionsbasis: `0.9.271`
 Zuletzt aktualisiert: `2026-05-22`
 
 ## Zweck
@@ -204,7 +204,7 @@ Die lokalen Wrapper `tools/check.ps1` und `tools/check.cmd` sind der bevorzugte 
 ## UI-Struktur (ASCII-Skizze)
 
 ```text
-| isiLive                                                 v0.9.270 Open/Close CTRL-F9 [H][V][M][M+][L][X]            |
+| isiLive                                                 v0.9.271 Open/Close CTRL-F9 [H][V][M][M+][L][X]            |
 |------------------------------------------------------------------------------------------------------------------|
 | Spec   Name         Flag Key     iLvl RIO       DPS       Kick    Marker (8x)             M+Managment    Travel  |
 |------------------------------------------------------------------------------------------------------------------|
@@ -252,7 +252,7 @@ Zusaetzlich zum Main-Roster-Frame kann `isiLive_ui.lua` optionale Tooling-, Trav
 | Highlight | Aktive Listings, Queue-Target und konkrete LFG-Map-Kontexte | Aktiver Teleport-Spell und Highlight-State |
 | KeySync | Sync-Messages, `LibKS`-Party-Messages und Owned-Snapshot-Daten | Roster-Backfill fuer Key/Stats/DPS/Location, `LibKeystone`-Party-Interop fuer Key/RIO, Key-Ownership und Sync-Marker |
 | Re-Sync | User-Refresh-Aktion | Erzwungener lokaler Snapshot, gruppenweiter Sync-Request, zusaetzliche `LibKS`-Party-Anfrage fuer kompatible Nicht-`isiLive`-Peers, Inspect-Refresh-Pipeline und sichtbarer 10s-Cooldown |
-| Share Keys | User-Chat-/Share-Aktion | Sofortiger eigener Key-Post in den passenden Gruppenchat, gruppenweiter `SHAREKEYS`-Request an Peers, sichtbarer 30s lokaler Cooldown nur nach erfolgreichem Gruppenchat-Post oder erfolgreich dispatchtem Sync-Request und remote getriggerter 30s-Cooldown-Lock nur auf Peer-Clients, deren eingehender `SHAREKEYS`-Pfad tatsaechlich einen eigenen Gruppenchat-Post ausloest; ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt; der lokale Fallback bleibt auch ohne Owned-Link-API klickbar |
+| Share Keys | User-Chat-/Share-Aktion | Sofortiger eigener Key-Post in den passenden Gruppenchat, gruppenweiter `SHAREKEYS`-Request an Peers, sichtbarer 30s lokaler Cooldown nur nach erfolgreichem Gruppenchat-Post oder erfolgreich dispatchtem Sync-Request und remote getriggerter 30s-Cooldown-Lock auf jedem Peer-Client mit eingehendem `SHAREKEYS`-Pfad, unabhaengig davon, ob dieser Client einen eigenen Gruppenchat-Post ausloesen kann; ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt; der lokale Fallback bleibt auch ohne Owned-Link-API klickbar |
 | EventHandlersRuntime | Addon-, World-, Combat-, Inspect- und Sync-Events | Startup, Hidden-Mode-Sync, sofortige Full-State-Reply auf neues Peer-`HELLO`, hidden `LibKS`-Party-Antworten auf Requests, eingehender Beschwoerungs-Sound ueber `CONFIRM_SUMMON`, Forwarding von `UNIT_AURA`-Full-Updates fuer den CdTracker, Regen-Recovery fuer pending Visibility/Height und Inspect-Dispatch |
 | EventHandlersQueue | LFG-Queue-/Listing-Events | Sichtbare Queue-Capture, Erhalt von Pending-Join-Kontext auf negativen Follow-ups und Joined-Key-Tracking |
 | LFGDetect | LFG-Queue-/Invite-Events | Locale-aware Invite-/Listing-Hinweise, statische Activity-zu-Map-Aufloesung, Prioritaet fuer lokalen konkreten LFG-Map-Kontext vor peer-synced Zielkontext, Highlight-Dispatch ueber injected Callback und Full-Reset bei Group leave mit Notice-Replay-Sperre ab Challenge start |
@@ -274,5 +274,5 @@ Zusaetzlich zum Main-Roster-Frame kann `isiLive_ui.lua` optionale Tooling-, Trav
 2. Neue UI-Aktionen und Config-Flaechen werden ueber `isiLive_roster_panel.lua`, `isiLive_ui.lua` oder `isiLive_settings.lua` eingefuehrt und anschliessend ueber `isiLive_controller_wiring.lua` oder `isiLive_factory.lua` verdrahtet. Roster-Tooltip- und Layout-Helfer gehoeren nach `isiLive_roster_tooltip.lua` bzw. `isiLive_roster_layout.lua`; Factory-Context- und Controller-Helfer nach `isiLive_factory_frame_bridge.lua` und `isiLive_factory_controllers.lua`.
 3. Neues Event-Verhalten geht zuerst durch die Gate-Logik und landet dann im passenden Lifecycle-Handler, damit der Runtime-State konsistent bleibt.
 4. Neue Combat-Signale (zum Beispiel zusaetzliche Chat-Ansagen in M+) werden in `isiLive_combat_events.lua` registriert, nutzen denselben Self-Cast-Filter plus `sourceGUID\|spellID`-Dedup und verwenden fuer die Gruppen-Verteilung `Sync.SendCombatAnnounce` mit neuer `BRLUST`-kompatibler Payload-Kennung, damit die 12.0-`ADDON_ACTION_FORBIDDEN`-Regression nicht ueber `SendChatMessage` zurueckkommt.
-5. Neue Addon-Message-Typen werden ueber `DispatchAddonMessage(prefix, payload, channel, priority)` gesendet, damit ChatThrottleLib-Prioritaet, CPS-Budget und der Raw-Fallback automatisch greifen; die Prioritaet folgt dem bestehenden Schema (`ALERT` fuer zeitkritische Coordination-Nachrichten, `NORMAL` fuer User-Aktionen und Key-Payloads, `BULK` fuer Metriken).
+5. Neue Addon-Message-Typen werden ueber `DispatchAddonMessage(prefix, payload, channel, priority)` gesendet, damit ChatThrottleLib-Prioritaet, CPS-Budget und der Raw-Fallback automatisch greifen; die Prioritaet folgt dem bestehenden Schema (`ALERT` fuer zeitkritische Coordination-Nachrichten und schnellen User-Fanout wie `SHAREKEYS`, `NORMAL` fuer Standard-Key-/Handshake-Payloads, `BULK` fuer Metriken).
 6. Neue M+-Forces-Daten (Mob-Counts, Dungeon-Totals) gehen ueber den Generator `tools/sync_mdt_forces.lua` in `data/isiLive_mplus_forces.lua`; das Lifetime-Gate `tools/check_mplus_db_lifetime.lua` und der wochenweise Workflow halten den Datensatz aktuell und bricht einen Release mit abgelaufenem `expiresAt`. Zusaetzliche Tooltip-Annotationen fuer aktive M+-Runs gehen ueber `isiLive_mob_tooltip.lua` und nutzen den bestehenden `TooltipDataProcessor`-Post-Call-Pfad.

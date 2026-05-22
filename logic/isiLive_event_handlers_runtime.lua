@@ -484,7 +484,7 @@ local function HandleShareKeysRequest(ctx, syncResult, sender)
   if type(ctx.logRuntimeTracef) == "function" then
     ctx.logRuntimeTracef("[SHAREKEYS] reply_result sender=%s sent=%s", resolvedSender, tostring(didShareOwnKey))
   end
-  if didShareOwnKey and type(ctx.triggerShareKeysCooldown) == "function" then
+  if type(ctx.triggerShareKeysCooldown) == "function" then
     ctx.triggerShareKeysCooldown()
     if type(ctx.logRuntimeTracef) == "function" then
       ctx.logRuntimeTracef("[SHAREKEYS] cooldown_triggered sender=%s", resolvedSender)

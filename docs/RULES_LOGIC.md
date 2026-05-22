@@ -73,7 +73,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 50. Die Kicks-Spalte zeigt fuer den lokalen Spieler und fuer isiLive-Gruppenmitglieder den aktuellen Kick-Status an; der kompakte `SYNC_KICK_READY_SHORT`-Marker ist gruen, laufende Cooldowns zeigen rote Restsekunden, `-` steht fuer keinen verfuegbaren Kick oder fehlenden isiLive-Sync, und aktive Kick-Statusaenderungen werden spaetestens einmal pro Sekunde synchronisiert.
 51. Bei ausgeblendeter UI bleibt der komplette isiLive-Gruppensync aktiv; nur nicht-sync-bezogenes Polling wie Queue-Scanning bleibt deaktiviert. Im Raid ist diese Hintergrundverarbeitung komplett aus.
 52. Hidden-Clients senden weiterhin alle gruppenrelevanten isiLive-Sync-Buckets einschliesslich `KEY`, `STATS`, `DPS`, `LOC`, `TARGET` und `KICK`; sichtbarkeitsabhängige Unterdrückung ist nur ohne explizite Hidden-Freigabe erlaubt. Im Raid ist das deaktiviert.
-53. Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt; lokal startet die Sperre nur nach einem wirksamen Klick mit erfolgreichem eigenem Party-Post oder erfolgreichem `SHAREKEYS`-Sync, und empfangende isiLive-Clients sperren ihren Button nur dann, wenn der eingehende `SHAREKEYS`-Pfad tatsaechlich einen eigenen Party-Post ausloest. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
+53. Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt; lokal startet die Sperre nur nach einem wirksamen Klick mit erfolgreichem eigenem Party-Post oder erfolgreichem `SHAREKEYS`-Sync, und empfangende isiLive-Clients sperren ihren Button bei jedem eingehenden `SHAREKEYS`-Pfad unabhaengig davon, ob sie dabei einen eigenen Party-Post ausloesen koennen. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
 54. Wenn fuer eine Runtime-Aufloesung keine eindeutige, belastbare Quelle vorliegt, muss das Ergebnis unresolved bleiben; fehlende oder mehrdeutige Laufzeitdaten duerfen nicht durch spekulative Fallbacks, Namens-/Token-Raten, heuristische Standardwerte oder synthetische Zustaende ersetzt werden.
 55. Die Main-UI kann ueber `lockMainFramePosition` gesperrt werden; bei aktivem Lock duerfen Frame und Drag-Handle keinen Positions-Drag starten und die gespeicherte Position bleibt unveraendert.
 56. Runtime-Log-Eintraege werden nur bei aktivem Runtime-Logging geschrieben; jeder Eintrag traegt eine stabile Sequenznummer und einen praezisen Zeitstempel, `[TAG] action`-Nachrichten werden zu `[TAG] event=action` normalisiert, teure Formatierung und Trace-Builder duerfen bei ausgeschaltetem Log oder deaktivierter Deep-Stufe nicht laufen, und der Logspeicher muss seine Tail-Reihenfolge und sein Cap auch bei grossen Log-, Sync- und Roster-Bursts behalten.
@@ -659,7 +659,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 ### RULE-SHAREKEYS-SPAMSCHUTZ
 - Regelnummer: 53
 - Status: aktiv
-- Zusammenfassung: Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt. Die Sperre wird lokal nur nach einem wirksamen eigenen Klick gesetzt, also wenn dabei entweder der eigene Key erfolgreich in `PARTY` angekuendigt oder ein erfolgreicher `SHAREKEYS`-Sync ausgeloest wurde; ein lokaler Print-Fallback zaehlt dafuer nicht als Chat-Share. Empfangende isiLive-Clients sperren ihren Button nur dann, wenn der eingehende `SHAREKEYS`-Pfad tatsaechlich einen eigenen `PARTY`-Post ausgeloest hat. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
+- Zusammenfassung: Der Share-Keys-Button ist 30 Sekunden gegen Spam gesperrt. Die Sperre wird lokal nur nach einem wirksamen eigenen Klick gesetzt, also wenn dabei entweder der eigene Key erfolgreich in `PARTY` angekuendigt oder ein erfolgreicher `SHAREKEYS`-Sync ausgeloest wurde; ein lokaler Print-Fallback zaehlt dafuer nicht als Chat-Share. Empfangende isiLive-Clients sperren ihren Button bei jedem eingehenden `SHAREKEYS`-Pfad, auch wenn sie keinen eigenen `PARTY`-Post ausloesen koennen. Ein bereits laufender lokaler Cooldown wird dabei nicht zurueckgesetzt.
 - Erforderliche Tests:
   - Roster panel share keys button debounces rapid clicks
   - Roster panel share keys button does not treat the local print fallback as a successful party share
@@ -667,12 +667,13 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Roster panel share keys button locks on remote SHAREKEYS signal
   - Sync SendShareKeysRequest returns false without an addon sync channel
   - Sync SendShareKeysRequest returns false when addon message dispatch fails
+  - Sync routes send through ChatThrottleLib with correct priority per message type
   - Sync ProcessAddonMessage handles SHAREKEYS payloads
   - ControllerWiring sendOwnKeystoneToChat uses ContextHelpers loaded after wiring
   - ControllerWiring SHAREKEYS send and receive paths use the same real payload
   - Event handlers answer SHAREKEYS requests while frame is hidden
   - Event handlers process SHAREKEYS through the real sync parser and trigger cooldown
-  - Event handlers skip SHAREKEYS cooldown when no own key chat share was posted
+  - Event handlers trigger SHAREKEYS cooldown even when no own key chat share was posted
 
 ### RULE-NO-GUESS-LAUFZEITAUFLOESUNG
 - Regelnummer: 54

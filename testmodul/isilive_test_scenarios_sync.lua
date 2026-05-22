@@ -2534,6 +2534,7 @@ local function RegisterChatThrottleLibRoutingTests(test, Assert, WithGlobals, Lo
       addon.Sync.SendLoc({ isVisible = true, mapID = 2649 })
       addon.Sync.SendTarget({ isVisible = true, mapID = 2649, level = 14 })
       addon.Sync.SendRefreshRequest({ force = true })
+      addon.Sync.SendShareKeysRequest()
       addon.Sync.SendHello({ force = true, version = "0.9.175", protocolVersion = 2, source = "test" })
 
       local byKind = {}
@@ -2543,6 +2544,7 @@ local function RegisterChatThrottleLibRoutingTests(test, Assert, WithGlobals, Lo
 
       Assert.Equal(byKind["KICK"].priority, "ALERT", "KICK must use ALERT priority")
       Assert.Equal(byKind["REQSYNC"].priority, "ALERT", "REQSYNC must use ALERT priority")
+      Assert.Equal(byKind["SHAREKEYS"].priority, "ALERT", "SHAREKEYS must use ALERT priority")
       Assert.Equal(byKind["STATS"].priority, "BULK", "STATS must use BULK priority")
       Assert.Equal(byKind["DPS"].priority, "BULK", "DPS must use BULK priority")
       Assert.Equal(byKind["LOC"].priority, "BULK", "LOC must use BULK priority")
