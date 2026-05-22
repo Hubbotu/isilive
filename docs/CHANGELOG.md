@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 2026-05-23 - Version 0.9.272 (patch)
 
-Documents the combat-lockdown hardening for leader-management buttons.
+Fixes combat-lockdown taint in leader-management button refreshes and syncs
+release metadata.
 
 ### Ready Check
 
@@ -19,6 +20,18 @@ Documents the combat-lockdown hardening for leader-management buttons.
   disabled/dimmed state is restored after combat.
 - Added deterministic taint coverage and regen-handler coverage, and mapped
   both tests to the active secure-button combat rule.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.272`.
+- Updated the validator baseline to `1830` scenarios.
 
 ## 2026-05-22 - Version 0.9.271 (patch)
 
