@@ -485,6 +485,15 @@ local function FindCombatRetryFrame(createdFrames)
   return nil
 end
 
+local function FindReadyCheckButton(createdFrames)
+  for _, frame in ipairs(createdFrames) do
+    if type(frame.GetAttribute) == "function" and frame:GetAttribute("macrotext1") == "/readycheck" then
+      return frame
+    end
+  end
+  return nil
+end
+
 local function FindTankHelperButtons(createdFrames)
   local buttons = {}
   for _, frame in ipairs(createdFrames) do
@@ -1028,6 +1037,65 @@ local function RegisterRosterPanelCombatTaintTests(test, Assert, WithGlobals, Lo
     end)
 
     Assert.True(ok, "combat rerender must not mutate secure tank-helper layout: " .. tostring(err))
+  end)
+
+  test("TAINT: Leader button update defers secure ready-check state during combat", function()
+    local inCombat = true
+    local controller, createdFrames, stubs = BuildRosterPanelController(WithGlobals, LoadAddonModules, {
+      decorateFrame = function(frame, _frameType, _name, _parent, template)
+        if type(template) == "string" and template:find("SecureActionButtonTemplate", 1, true) then
+          local baseSetEnabled = frame.SetEnabled
+          local baseSetAlpha = frame.SetAlpha
+
+          function frame:SetEnabled(enabled)
+            if inCombat then
+              error("secure SetEnabled must not run during combat leader update")
+            end
+            baseSetEnabled(self, enabled)
+          end
+
+          function frame:SetAlpha(alpha)
+            if inCombat then
+              error("secure SetAlpha must not run during combat leader update")
+            end
+            baseSetAlpha(self, alpha)
+          end
+        end
+
+        return frame
+      end,
+      opts = {
+        isPlayerLeader = function()
+          return false
+        end,
+      },
+    })
+
+    stubs.InCombatLockdown = function()
+      return inCombat
+    end
+
+    local ok, err = pcall(function()
+      WithGlobals(stubs, function()
+        controller.UpdateLeaderButtons()
+      end)
+    end)
+
+    Assert.True(ok, "combat leader update must not mutate secure ready-check button: " .. tostring(err))
+
+    local readyCheckButton = FindReadyCheckButton(createdFrames)
+    Assert.NotNil(readyCheckButton, "ready-check button should exist")
+    readyCheckButton = RequireNonNil(readyCheckButton, "ready-check button should exist")
+    Assert.Nil(readyCheckButton.enabled, "combat update must leave secure ready-check enabled state untouched")
+    Assert.Nil(readyCheckButton.alpha, "combat update must leave secure ready-check alpha untouched")
+
+    inCombat = false
+    WithGlobals(stubs, function()
+      controller.ApplyPendingLeaderButtonUpdates()
+    end)
+
+    Assert.False(readyCheckButton.enabled, "regen apply should disable ready-check for non-leaders")
+    Assert.Equal(readyCheckButton.alpha, 0.45, "regen apply should dim ready-check for non-leaders")
   end)
 
   test("TAINT: Collapse click switches layout during combat while secure roster buttons exist", function()

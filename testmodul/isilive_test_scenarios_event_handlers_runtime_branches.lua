@@ -61,6 +61,7 @@ local function NewCtx(overrides)
     restoreLayoutState = function() end,
     updateCountdownCancelButton = function() end,
     updateLeaderButtons = function() end,
+    applyPendingLeaderButtonUpdates = function() end,
     updateCdTracker = function() end,
     sendOwnKeySnapshot = function() end,
     sendOwnKickState = function() end,
@@ -675,6 +676,17 @@ return function(test, ctx)
     })
     handlers.PLAYER_REGEN_ENABLED(nil)
     Assert.Equal(widthCalls[1], 320, "pending width must be applied once combat ends")
+  end)
+
+  test("PLAYER_REGEN_ENABLED applies pending leader button updates", function()
+    local calls = 0
+    local handlers = LoadHandlers({
+      applyPendingLeaderButtonUpdates = function()
+        calls = calls + 1
+      end,
+    })
+    handlers.PLAYER_REGEN_ENABLED(nil)
+    Assert.Equal(calls, 1, "pending leader button updates must be applied once combat ends")
   end)
 
   test("PLAYER_REGEN_ENABLED bails out in raid mode after combat fade is applied", function()

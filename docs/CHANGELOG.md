@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+Documents the combat-lockdown hardening for leader-management buttons.
+
+### Ready Check
+
+[ui/isiLive_roster_panel.lua](../ui/isiLive_roster_panel.lua),
+[factory/isiLive_factory_controllers.lua](../factory/isiLive_factory_controllers.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua),
+[testmodul/isilive_test_scenarios_taint.lua](../testmodul/isilive_test_scenarios_taint.lua),
+[testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua](../testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Deferred secure ready-check button enable/alpha updates while combat lockdown
+  is active, preventing `ADDON_ACTION_BLOCKED` from `Button:SetEnabled()`.
+- Applied pending leader-button state on `PLAYER_REGEN_ENABLED`, so non-leader
+  disabled/dimmed state is restored after combat.
+- Added deterministic taint coverage and regen-handler coverage, and mapped
+  both tests to the active secure-button combat rule.
+
 ## 2026-05-22 - Version 0.9.271 (patch)
 
 Tightens the Share Keys cooldown chain for all isiLive users and sends the

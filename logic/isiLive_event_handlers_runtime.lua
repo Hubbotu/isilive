@@ -10,6 +10,12 @@ local function GetDB()
   return rawget(_G, "IsiLiveDB")
 end
 
+local function ApplyPendingLeaderButtonUpdates(ctx)
+  if type(ctx.applyPendingLeaderButtonUpdates) == "function" then
+    ctx.applyPendingLeaderButtonUpdates()
+  end
+end
+
 local TRACKED_NON_CHALLENGE_PARTY_DIFFICULTY_IDS = {
   [1] = true,
   [2] = true,
@@ -695,6 +701,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     if pendingMainFrameWidth then
       ctx.setMainFrameWidthSafe(pendingMainFrameWidth)
     end
+    ApplyPendingLeaderButtonUpdates(ctx)
     if ctx.isMainFrameShown() then
       ctx.updateUI()
       ctx.updateMPlusTeleportButton()

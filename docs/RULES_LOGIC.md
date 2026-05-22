@@ -185,6 +185,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UI game-menu secure button updates are deferred during combat and applied after regen
   - UI direct SetVisible defers during combat and applies after regen
   - TAINT: M2 roster rerender skips secure tank-helper layout mutations during combat
+  - TAINT: Leader button update defers secure ready-check state during combat
+  - PLAYER_REGEN_ENABLED applies pending leader button updates
 
 ### RULE-GRUPPE-RAID-SICHTBARKEIT
 - Regelnummer: 11

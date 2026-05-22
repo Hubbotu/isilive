@@ -700,9 +700,15 @@ function RosterPanel.CreateController(opts)
   local memberRows = {}
   local cdController = nil
   local cdTrackerNeedsVisibleRescan = true
+  local pendingLeaderButtonUpdate = false
 
   local function IsMainFrameShown()
     return type(mainFrame.IsShown) == "function" and mainFrame:IsShown() == true
+  end
+
+  local function IsInCombatLockdown()
+    local inCombatFn = rawget(_G, "InCombatLockdown")
+    return type(inCombatFn) == "function" and inCombatFn() == true
   end
 
   local function MarkCdTrackerDirty()
@@ -841,6 +847,12 @@ function RosterPanel.CreateController(opts)
         return string.format("[ROSTER_UI] leader_buttons enabled=%s", tostring(enabled))
       end)
     end
+    if IsInCombatLockdown() then
+      pendingLeaderButtonUpdate = true
+      updateStatusLine()
+      return
+    end
+    pendingLeaderButtonUpdate = false
     readyCheckButton:SetEnabled(enabled)
     countdownButton:SetEnabled(enabled)
     countdownCancelButton:SetEnabled(enabled)
@@ -849,6 +861,13 @@ function RosterPanel.CreateController(opts)
     countdownCancelButton:SetAlpha(enabled and 1 or 0.45)
     RefreshSystemOptionToggles(ui)
     updateStatusLine()
+  end
+
+  function controller.ApplyPendingLeaderButtonUpdates()
+    if not pendingLeaderButtonUpdate or IsInCombatLockdown() then
+      return
+    end
+    controller.UpdateLeaderButtons()
   end
 
   function controller.RenderRoster(roster)

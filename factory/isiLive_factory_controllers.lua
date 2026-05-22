@@ -1188,6 +1188,11 @@ local function InitializeFactoryPrimaryControllers(ctx)
   ctx.UpdateLeaderButtons = function()
     ctx.rosterPanelController.UpdateLeaderButtons()
   end
+  ctx.ApplyPendingLeaderButtonUpdates = function()
+    if ctx.rosterPanelController and type(ctx.rosterPanelController.ApplyPendingLeaderButtonUpdates) == "function" then
+      ctx.rosterPanelController.ApplyPendingLeaderButtonUpdates()
+    end
+  end
   ctx.IsRosterCollapsed = function()
     if not ctx.rosterPanelController then
       return false
