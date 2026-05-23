@@ -504,6 +504,14 @@ local function ResolveEventHandler(handler)
   return type(handler) == "function" and handler or NoopEventHandler
 end
 
+local function ApplyVIPGuestSoundSettingsIfAvailable()
+  if
+    type(addonTable.SoundUtils) == "table" and type(addonTable.SoundUtils.ApplyVIPGuestSoundSettings) == "function"
+  then
+    addonTable.SoundUtils.ApplyVIPGuestSoundSettings()
+  end
+end
+
 function RuntimeLifecycle.BuildHandlers(ctx)
   ctx.handleLFGDetectEvent = ResolveEventHandler(ctx.handleLFGDetectEvent)
   ctx.handleKillTrackEvent = ResolveEventHandler(ctx.handleKillTrackEvent)
@@ -559,6 +567,7 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     ctx.ensureRuntimeLogStorage()
     ctx.setRuntimeLogEnabled(false)
     ctx.restoreRioBaseline()
+    ApplyVIPGuestSoundSettingsIfAvailable()
 
     local mainFrame = ctx.getMainFrame()
     local pos = IsiLiveDB.position

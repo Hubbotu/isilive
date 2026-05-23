@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.272`
+- **Current version:** `0.9.273`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -16,6 +16,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Who is in the group, their spec, item level, Raider.IO rating, and keystone
 - One-click access to all 8 season dungeon portals, with live cooldowns
 - Escape-menu shortcut panels for tools, travel, verified mount shortcuts, and installed/enabled supported addons
+- Configurable Hearthstone travel shortcut with random owned, default item, or a specific owned Hearthstone toy
 - Who can interrupt, and whose kick is still on cooldown
 - Battle Res charges and Bloodlust cooldown during a run
 - The M+ timer with `+3 / +2 / +1` cutoffs live
@@ -221,10 +222,10 @@ If the group breaks up or someone disconnects, their data stays visible as a gre
 
 Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 
-- **General** — language, startup auto-show, minimap button
+- **General** — language, startup auto-show, minimap button, Hearthstone travel shortcut selection
 - **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, player stats box controls, reset UI
 - **Behavior** — addon sync, auto-show/hide triggers (show on login, auto-open on M+ queue, auto-open on key end, auto-close on key start, auto-close on leaving the group), lock main frame position, fade in combat, raid behavior status
-- **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust
+- **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust, plus VIP guest mount sound mute toggles for Astral Aurochs, Grand Expedition Yak, and Trader's Gilded Brutosaur
 - **Nameplates** — enable forces overlay, font size, position, percent toggle
 - **Chat Announcements** — announce Battle Res / announce Bloodlust
 - **Administrative** — queue debug log, runtime log (both reset on reload, for support), plus dedicated **Clear Queue Debug Log** / **Clear Runtime Log** buttons in the panel for one-click log purge without using the slash command

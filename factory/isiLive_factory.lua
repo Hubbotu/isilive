@@ -152,6 +152,14 @@ local function FinalizeFactorySettings(ctx)
           ctx.statusController.MaybeShowPortalNavigatorNotice()
         end
       end,
+      onHearthstoneChoiceChange = function()
+        if ctx.panelUI and type(ctx.panelUI.SyncVisibility) == "function" then
+          ctx.panelUI.SyncVisibility()
+        end
+        if ctx.secondPanelUI and type(ctx.secondPanelUI.SyncVisibility) == "function" then
+          ctx.secondPanelUI.SyncVisibility()
+        end
+      end,
       onBgAlphaChange = function(val)
         local logf = ctx.runtimeLogController and ctx.runtimeLogController.Logf or nil
         if logf then

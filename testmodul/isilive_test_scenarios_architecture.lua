@@ -422,6 +422,103 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
     end
   end)
 
+  test("Architecture secure button mutation surface is explicitly audited for combat and key safety", function()
+    local audited = {
+      ["game/isiLive_teleport.lua"] = {
+        "pendingCombatUpdates",
+        "PLAYER_REGEN_ENABLED",
+        'rawget(_G, "InCombatLockdown")',
+      },
+      ["ui/isiLive_bindings.lua"] = {
+        "pendingBindingApply",
+        'rawget(_G, "InCombatLockdown")',
+      },
+      ["ui/isiLive_teleport_ui.lua"] = {
+        "InsecureActionButtonTemplate",
+        'rawget(_G, "InCombatLockdown")',
+      },
+      ["ui/isiLive_notice.lua"] = {
+        "InsecureActionButtonTemplate",
+        "pendingTeleportButtonVisible",
+        'rawget(_G, "InCombatLockdown")',
+      },
+      ["ui/isiLive_roster_layout.lua"] = {
+        "IsCombatLockdownActive",
+        'rawget(_G, "InCombatLockdown")',
+      },
+      ["ui/isiLive_roster_panel.lua"] = {
+        "pendingLeaderButtonUpdate",
+        "IsInCombatLockdown",
+      },
+      ["ui/isiLive_roster_panel_chrome.lua"] = {
+        "SecureActionButtonTemplate",
+        'btn:SetAttribute("type", "worldmarker")',
+      },
+      ["ui/isiLive_roster_panel_render.lua"] = {
+        "IsCombatLockdownActive",
+        "row.roleButton:SetAttribute",
+      },
+      ["ui/isiLive_ui.lua"] = {
+        "IsPanelUISecureUpdateBlocked",
+        "QueuePanelUISecureStateRefresh",
+        "PLAYER_REGEN_ENABLED",
+        "C_ChallengeMode",
+      },
+      ["factory/isiLive_factory_minimap.lua"] = {
+        "RegisterForClicks",
+      },
+    }
+    local checked = {}
+    local surfaceMarkers = {
+      "SecureActionButtonTemplate",
+      "InsecureActionButtonTemplate",
+      "SetAttribute",
+      "RegisterForClicks",
+    }
+
+    local function StripLuaComments(content)
+      content = content:gsub("%-%-%[%[.-%]%]", "")
+      content = content:gsub("%-%-[^\r\n]*", "")
+      return content
+    end
+
+    local function IsProductionLuaPath(path)
+      return path:match("^core/.+%.lua$") ~= nil
+        or path:match("^factory/.+%.lua$") ~= nil
+        or path:match("^game/.+%.lua$") ~= nil
+        or path:match("^logic/.+%.lua$") ~= nil
+        or path:match("^ui/.+%.lua$") ~= nil
+    end
+
+    for _, resolvedPath in pairs(FILE_PATHS) do
+      if IsProductionLuaPath(resolvedPath) then
+        local content = StripLuaComments(ReadFile(resolvedPath))
+        local hasSurface = false
+        for _, marker in ipairs(surfaceMarkers) do
+          if content:find(marker, 1, true) then
+            hasSurface = true
+            break
+          end
+        end
+        if hasSurface then
+          Assert.True(
+            audited[resolvedPath] ~= nil,
+            resolvedPath .. " touches secure/click mutation APIs and must be explicitly audited"
+          )
+          checked[resolvedPath] = true
+        end
+      end
+    end
+
+    for path, requiredMarkers in pairs(audited) do
+      Assert.True(checked[path] == true, path .. " audit entry must still match a live secure/click mutation surface")
+      local content = ReadFile(path)
+      for _, marker in ipairs(requiredMarkers) do
+        AssertContains(Assert, content, marker, path .. " must keep audited secure safety marker " .. marker)
+      end
+    end
+  end)
+
   test("Architecture combat utility ticker rerenders UI while Mythic+ timer is active", function()
     local content = ReadFile("isiLive_factory_controllers.lua")
 
@@ -979,6 +1076,84 @@ local function RegisterArchitectureAudioAndKickWiringTests(test, Assert, WithGlo
       Assert.Equal(playCalls, 2, "numeric SoundKit ids must play directly")
       Assert.Equal(playedSoundKit, 7777, "numeric SoundKit playback must pass the given id")
       Assert.Equal(playedChannel, "SFX", "SoundKit playback defaults to the SFX channel")
+
+      local aurochsIDs = addon.SoundUtils.GetAstralAurochsSoundFileIDs()
+      Assert.NotNil(aurochsIDs, "astral aurochs sound mute list must be exposed for tests")
+      Assert.True(#aurochsIDs >= 88, "astral aurochs mute list should include summon, special, flight, and loop files")
+      local hasWingFlap = false
+      local hasLoop = false
+      for _, id in ipairs(aurochsIDs) do
+        if id == 4906115 then
+          hasWingFlap = true
+        elseif id == 6788040 then
+          hasLoop = true
+        end
+      end
+      Assert.True(hasWingFlap, "astral aurochs mute list must include the model wing-flap flight sound")
+      Assert.True(hasLoop, "astral aurochs mute list must include the model loop flight sound")
+      local yakIDs = addon.SoundUtils.GetGrandExpeditionYakSoundFileIDs()
+      local brutosaurIDs = addon.SoundUtils.GetGildedBrutosaurSoundFileIDs()
+      Assert.True(#yakIDs >= 300, "grand expedition yak mute list must include verified model and footstep files")
+      Assert.True(#brutosaurIDs >= 100, "gilded brutosaur mute list must include verified model and special files")
+      Assert.Equal(yakIDs[1], 613111, "grand expedition yak mute list must start with the verified base yak file")
+      Assert.Equal(
+        brutosaurIDs[1],
+        1824124,
+        "gilded brutosaur mute list must start with the verified base brutosaur file"
+      )
+      local hasYakFootstep = false
+      local hasYakMountFoley = false
+      local hasYakFalsePositive = false
+      for _, id in ipairs(yakIDs) do
+        if id == 1023697 then
+          hasYakFootstep = true
+        elseif id == 633579 then
+          hasYakMountFoley = true
+        elseif id == 3528725 then
+          hasYakFalsePositive = true
+        end
+      end
+      Assert.True(hasYakFootstep, "grand expedition yak mute list must include verified footstep files")
+      Assert.True(hasYakMountFoley, "grand expedition yak mute list must include verified yak mount foley files")
+      Assert.False(
+        hasYakFalsePositive,
+        "grand expedition yak mute list must not include the MountID 1460 false-positive row"
+      )
+      local hasBrutosaurFootstep = false
+      local hasBrutosaurMoving = false
+      local hasBrutosaurLateFidget = false
+      for _, id in ipairs(brutosaurIDs) do
+        if id == 801310 then
+          hasBrutosaurFootstep = true
+        elseif id == 6211355 then
+          hasBrutosaurMoving = true
+        elseif id == 6211670 then
+          hasBrutosaurLateFidget = true
+        end
+      end
+      Assert.True(hasBrutosaurFootstep, "gilded brutosaur mute list must include verified footstep files")
+      Assert.True(hasBrutosaurMoving, "gilded brutosaur mute list must include verified mount-special moving files")
+      Assert.True(hasBrutosaurLateFidget, "gilded brutosaur mute list must include verified late fidget files")
+    end)
+
+    local muted = {}
+    local unmuted = {}
+
+    WithGlobals({
+      C_Sound = {
+        MuteSoundFile = function(id)
+          muted[#muted + 1] = id
+        end,
+        UnmuteSoundFile = function(id)
+          unmuted[#unmuted + 1] = id
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_sound_utils.lua" })
+      Assert.True(addon.SoundUtils.ApplyAstralAurochsSoundSetting(true), "C_Sound mute API should be accepted")
+      Assert.Equal(muted[1], 7340960, "C_Sound mute API should receive astral aurochs file IDs")
+      Assert.True(addon.SoundUtils.ApplyAstralAurochsSoundSetting(false), "C_Sound unmute API should be accepted")
+      Assert.Equal(unmuted[1], 7340960, "C_Sound unmute API should receive astral aurochs file IDs")
     end)
   end)
 

@@ -28,7 +28,7 @@ local DBSchema = {}
 addonTable.DBSchema = DBSchema
 
 -- Bump every time MIGRATIONS gains a new step.
-local LATEST_SCHEMA_VERSION = 2
+local LATEST_SCHEMA_VERSION = 3
 
 -- Migrations transform db FROM version (key-1) TO version (key). Only steps
 -- with key > db.__schemaVersion run. Each step is responsible for ONE atomic
@@ -64,6 +64,17 @@ local MIGRATIONS = {
       return true
     end
     return false
+  end,
+  [3] = function(db, log)
+    if rawget(db, "vipAstralAurochsSoundEnabled") == nil then
+      return false
+    end
+    if rawget(db, "vipAstralAurochsSoundMuted") == nil then
+      db.vipAstralAurochsSoundMuted = db.vipAstralAurochsSoundEnabled == false
+    end
+    db.vipAstralAurochsSoundEnabled = nil
+    log("migrated vipAstralAurochsSoundEnabled -> vipAstralAurochsSoundMuted")
+    return true
   end,
 }
 
@@ -152,6 +163,7 @@ local SCHEMA = {
   -- ESC menu strips.
   showEscPanel = { type = "boolean", default = true },
   showPortalNavigator = { type = "boolean", default = true },
+  hearthstoneChoice = { type = "string", default = "random" },
 
   -- Minimap button.
   showMinimapButton = { type = "boolean", default = false },
@@ -183,6 +195,9 @@ local SCHEMA = {
   soundGroupJoinEnabled = { type = "boolean", default = true },
   soundLeadEnabled = { type = "boolean", default = true },
   soundPortalAvailableEnabled = { type = "boolean", default = true },
+  vipAstralAurochsSoundMuted = { type = "boolean", default = false },
+  vipGrandExpeditionYakSoundMuted = { type = "boolean", default = false },
+  vipGildedBrutosaurSoundMuted = { type = "boolean", default = false },
 
   -- Combat-event chat announces.
   chatAnnounceBR = { type = "boolean", default = true },

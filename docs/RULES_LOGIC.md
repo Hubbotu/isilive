@@ -183,6 +183,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 - Erforderliche Tests:
   - Teleport secure button updates are deferred during combat and applied after regen
   - UI game-menu secure button updates are deferred during combat and applied after regen
+  - UI second game-menu hearthstone settings change defers secure attributes during combat
+  - UI game-menu hearthstone settings change defers secure attributes during active challenge key
+  - Architecture secure button mutation surface is explicitly audited for combat and key safety
   - UI direct SetVisible defers during combat and applies after regen
   - TAINT: M2 roster rerender skips secure tank-helper layout mutations during combat
   - TAINT: Leader button update defers secure ready-check state during combat
@@ -211,6 +214,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - All enUS keys exist in deDE locale
   - All deDE keys exist in enUS locale
   - Locale tag resolver returns enUS as default fallback
+  - Settings panel refresh localizes behavior auto and raid notes
+  - Locale hearthstone settings strings are localized per supported language
+  - Settings hearthstone selector shows English toy names for non-German addon locales
+  - Settings hearthstone selector uses client-localized toy names for German addon locale
 
 ### RULE-REFRESH-STATE-GATES
 - Regelnummer: 13
@@ -701,6 +708,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - factory_controllers.status: GetStatusTargetDungeonInfo carries LFG level markup when numeric level is unresolved
   - factory_controllers.status: SendOwnTargetSnapshot carries LFG level markup when numeric level is unresolved
   - UI third game-menu addon shortcut fails closed without a registered slash alias
+  - Settings hearthstone selector shows English toy names for non-German addon locales
+  - Settings hearthstone selector uses client-localized toy names for German addon locale
   - Sync RegisterVerifiedAlias exposes exact sender data through a verified roster name
   - Sync RegisterVerifiedAlias rejects cross-realm and unknown sender aliases
   - KeySync RegisterVerifiedSyncAliasForRoster maps one same-realm sender to one roster row

@@ -7,12 +7,10 @@ local helpers = helpersChunk()
 local RequireValue = helpers.RequireValue
 local FindCombatRetryFrame = helpers.FindCombatRetryFrame
 local BuildCreateFrameStub = helpers.BuildCreateFrameStub
-
 local function RegisterMainFrameCombatVisibilityTests(test, Assert, WithGlobals, LoadAddonModules)
   test("UI toggle defers closing frame during combat and applies after regen", function()
     local inCombat = false
     local shownInGroupCalls = 0
-
     WithGlobals({
       UIParent = {},
       CreateFrame = BuildCreateFrameStub(),
@@ -28,27 +26,21 @@ local function RegisterMainFrameCombatVisibilityTests(test, Assert, WithGlobals,
           shownInGroupCalls = shownInGroupCalls + 1
         end,
       })
-
       mainUI.SetVisible(true)
       Assert.True(mainUI.frame:IsShown(), "frame should be visible before combat close test")
-
       inCombat = true
       mainUI.ToggleVisibility(true)
-
       Assert.True(mainUI.frame:IsShown(), "combat toggle must not close frame immediately (taint protection)")
       Assert.Equal(mainUI.GetPendingVisible(), false, "combat toggle should store pending hide")
       Assert.Equal(shownInGroupCalls, 0, "close path must not trigger show callbacks")
-
       inCombat = false
       mainUI.SetVisible(mainUI.GetPendingVisible())
       Assert.False(mainUI.frame:IsShown(), "frame should close after combat ends and pending is applied")
     end)
   end)
-
   test("UI toggle defers opening frame during combat and applies after regen", function()
     local inCombat = false
     local shownInGroupCalls = 0
-
     WithGlobals({
       UIParent = {},
       CreateFrame = BuildCreateFrameStub(),
@@ -64,25 +56,19 @@ local function RegisterMainFrameCombatVisibilityTests(test, Assert, WithGlobals,
           shownInGroupCalls = shownInGroupCalls + 1
         end,
       })
-
       Assert.False(mainUI.frame:IsShown(), "frame should start hidden")
-
       inCombat = true
       mainUI.ToggleVisibility(true)
-
       Assert.False(mainUI.frame:IsShown(), "combat toggle must not open frame immediately (taint protection)")
       Assert.Equal(mainUI.GetPendingVisible(), true, "combat toggle should store pending show")
       Assert.Equal(shownInGroupCalls, 0, "combat show must not trigger callbacks yet")
-
       inCombat = false
       mainUI.SetVisible(mainUI.GetPendingVisible())
       Assert.True(mainUI.frame:IsShown(), "frame should open after combat ends and pending is applied")
     end)
   end)
-
   test("UI direct SetVisible defers during combat and applies after regen", function()
     local inCombat = true
-
     WithGlobals({
       UIParent = {},
       CreateFrame = BuildCreateFrameStub(),
@@ -95,32 +81,26 @@ local function RegisterMainFrameCombatVisibilityTests(test, Assert, WithGlobals,
           return inCombat
         end,
       })
-
       mainUI.SetVisible(true)
-
       Assert.False(mainUI.frame:IsShown(), "direct SetVisible must not open during combat (taint protection)")
       Assert.Equal(mainUI.GetPendingVisible(), true, "combat SetVisible should store pending show")
-
       inCombat = false
       mainUI.SetVisible(mainUI.GetPendingVisible())
       Assert.True(mainUI.frame:IsShown(), "frame should open after combat ends and pending is applied")
     end)
   end)
 end
-
 local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, LoadAddonModules)
   test("Frame bridge direct SetMainFrameVisible triggers show callbacks on successful open", function()
     local visible = false
     local inGroup = true
     local groupShownCalls = 0
     local soloShownCalls = 0
-
     WithGlobals({
       UIParent = {},
     }, function()
       local addon = LoadAddonModules({ "isiLive_frame_bridge.lua" })
       local FrameBridge = RequireValue(addon.FrameBridge, "FrameBridge module should load")
-
       local context = FrameBridge.CreateContext({
         createCenterNotice = function()
           return {
@@ -190,15 +170,12 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
           return {}
         end,
       })
-
       local didShow = context.SetMainFrameVisible(true)
       Assert.True(didShow, "direct show should report a successful visibility change")
       Assert.Equal(groupShownCalls, 1, "group show callback should run after a successful direct open")
       Assert.Equal(soloShownCalls, 0, "solo callback should stay untouched while in a group")
-
       local didHide = context.SetMainFrameVisible(false)
       Assert.True(didHide, "direct hide should also report a successful visibility change")
-
       inGroup = false
       local didSoloShow = context.SetMainFrameVisible(true)
       Assert.True(didSoloShow, "direct solo show should report a successful visibility change")
@@ -206,17 +183,14 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
       Assert.Equal(soloShownCalls, 1, "solo show callback should run when not in a group")
     end)
   end)
-
   test("Frame bridge can open without running show callbacks when layout restore must be skipped", function()
     local visible = false
     local groupShownCalls = 0
-
     WithGlobals({
       UIParent = {},
     }, function()
       local addon = LoadAddonModules({ "isiLive_frame_bridge.lua" })
       local FrameBridge = RequireValue(addon.FrameBridge, "FrameBridge module should load")
-
       local context = FrameBridge.CreateContext({
         createCenterNotice = function()
           return {
@@ -284,7 +258,6 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
           return {}
         end,
       })
-
       local didShow = context.SetMainFrameVisible(true, {
         skipShowCallbacks = true,
       })
@@ -292,7 +265,6 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
       Assert.Equal(groupShownCalls, 0, "skipShowCallbacks must suppress restore/show callbacks")
     end)
   end)
-
   test("UI SetVisible outside combat has no pending state", function()
     WithGlobals({
       UIParent = {},
@@ -306,27 +278,22 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
           return false
         end,
       })
-
       mainUI.SetVisible(true)
       Assert.True(mainUI.frame:IsShown(), "SetVisible(true) outside combat should open immediately")
       Assert.Nil(mainUI.GetPendingVisible(), "no pending state outside combat")
-
       mainUI.SetVisible(false)
       Assert.False(mainUI.frame:IsShown(), "SetVisible(false) outside combat should close immediately")
       Assert.Nil(mainUI.GetPendingVisible(), "no pending state outside combat after close")
     end)
   end)
-
   test("Frame bridge forwards settings opener to the main frame", function()
     local forwardedOpenSettings = nil
     local openSettingsCalls = 0
-
     WithGlobals({
       UIParent = {},
     }, function()
       local addon = LoadAddonModules({ "isiLive_frame_bridge.lua" })
       local FrameBridge = RequireValue(addon.FrameBridge, "FrameBridge module should load")
-
       FrameBridge.CreateContext({
         createCenterNotice = function()
           return {
@@ -388,14 +355,12 @@ local function RegisterFrameBridgeVisibilityTests(test, Assert, WithGlobals, Loa
           return {}
         end,
       })
-
       forwardedOpenSettings = Assert.NotNil(forwardedOpenSettings, "main frame should receive the settings opener")
       forwardedOpenSettings()
       Assert.Equal(openSettingsCalls, 1, "forwarded settings opener should call the bridge callback")
     end)
   end)
 end
-
 local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, LoadAddonModules)
   test("UI main frame is clamped to the WoW screen while movable", function()
     WithGlobals({
@@ -414,7 +379,6 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           return false
         end,
       })
-
       Assert.True(mainUI.frame._clampedToScreen, "main frame must be clamped to the WoW screen")
       Assert.Equal(mainUI.frame._clampRectInsets[1], 0, "main frame left clamp inset must stay at the edge")
       Assert.Equal(mainUI.frame._clampRectInsets[2], 0, "main frame right clamp inset must stay at the edge")
@@ -422,10 +386,8 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
       Assert.Equal(mainUI.frame._clampRectInsets[4], 0, "main frame bottom clamp inset must stay at the edge")
     end)
   end)
-
   test("UI drag start/stop remains available during combat", function()
     local inCombat = true
-
     WithGlobals({
       UIParent = {},
       CreateFrame = BuildCreateFrameStub(),
@@ -442,21 +404,17 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           return false
         end,
       })
-
       local onDragStart = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStart or nil
       local onDragStop = mainUI.frame._scripts and mainUI.frame._scripts.OnDragStop or nil
       onDragStart = Assert.NotNil(onDragStart, "main frame should define OnDragStart handler")
       onDragStop = Assert.NotNil(onDragStop, "main frame should define OnDragStop handler")
-
       onDragStart(mainUI.frame)
       onDragStop(mainUI.frame)
-
       Assert.Equal(mainUI.frame._startMovingCalls, 1, "combat drag start should still call StartMoving")
       Assert.Equal(mainUI.frame._stopMovingCalls, 1, "combat drag stop should still call StopMovingOrSizing")
       Assert.NotNil(IsiLiveDB.position, "drag stop should persist main-frame position")
     end)
   end)
-
   test("UI drag grip lines can be hidden without disabling the drag handle", function()
     WithGlobals({
       UIParent = {},
@@ -473,29 +431,23 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           return false
         end,
       })
-
       Assert.NotNil(mainUI.dragHandle, "main UI should expose the drag handle")
       Assert.Equal(#(mainUI.dragHandle._grips or {}), 0, "drag handle should have no decorative grip lines")
-
       mainUI.SetDragGripVisible(false)
       Assert.False(mainUI.dragHandle._gripVisible, "drag grip should be flagged hidden")
       for _, grip in ipairs(mainUI.dragHandle._grips or {}) do
         Assert.True(grip.hidden == true, "all drag grip lines should hide together")
       end
-
       local onDragStart = mainUI.dragHandle._scripts and mainUI.dragHandle._scripts.OnDragStart or nil
       local onDragStop = mainUI.dragHandle._scripts and mainUI.dragHandle._scripts.OnDragStop or nil
       onDragStart = Assert.NotNil(onDragStart, "drag handle should still define OnDragStart")
       onDragStop = Assert.NotNil(onDragStop, "drag handle should still define OnDragStop")
-
       onDragStart(mainUI.dragHandle)
       onDragStop(mainUI.dragHandle)
-
       Assert.Equal(mainUI.frame._startMovingCalls, 1, "hidden grip lines must not disable dragging")
       Assert.Equal(mainUI.frame._stopMovingCalls, 1, "hidden grip lines must not disable drag stop")
     end)
   end)
-
   test("UI close button hides frame directly", function()
     WithGlobals({
       UIParent = {},
@@ -509,19 +461,15 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           return false
         end,
       })
-
       mainUI.SetVisible(true)
       Assert.True(mainUI.frame:IsShown(), "frame should be visible before close button click")
       Assert.NotNil(mainUI.closeButton, "main UI should expose close button")
-
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
       onClick = Assert.NotNil(onClick, "close button should define OnClick handler")
       onClick(mainUI.closeButton, "LeftButton")
-
       Assert.False(mainUI.frame:IsShown(), "close button should hide frame")
     end)
   end)
-
   test("UI title bar settings button opens settings beside the lock button", function()
     WithGlobals({
       UIParent = {},
@@ -539,24 +487,19 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           settingsOpenCalls = settingsOpenCalls + 1
         end,
       })
-
       Assert.NotNil(mainUI.lockButton, "main UI should expose the lock button")
       Assert.NotNil(mainUI.settingsButton, "main UI should expose the settings button")
       Assert.NotNil(mainUI.settingsButton.icon, "settings button should render a gear icon")
-
       local _, _, _, lockX = mainUI.lockButton:GetPoint()
       local _, _, _, settingsX = mainUI.settingsButton:GetPoint()
       Assert.Equal(settingsX, -46, "settings button should sit directly left of the lock button")
       Assert.Equal(lockX, -24, "lock button should stay directly left of the close button")
-
       local onClick = mainUI.settingsButton._scripts and mainUI.settingsButton._scripts.OnClick or nil
       onClick = Assert.NotNil(onClick, "settings button should define OnClick")
       onClick(mainUI.settingsButton, "LeftButton")
-
       Assert.Equal(settingsOpenCalls, 1, "settings button should call the settings opener")
     end)
   end)
-
   test("UI close button hides frame even during combat", function()
     local inCombat = true
     WithGlobals({
@@ -571,29 +514,24 @@ local function RegisterMainFrameInteractionTests(test, Assert, WithGlobals, Load
           return inCombat
         end,
       })
-
       -- Show frame before combat starts (SetVisible respects combat guard)
       inCombat = false
       mainUI.SetVisible(true)
       inCombat = true
       Assert.True(mainUI.frame:IsShown(), "frame should be visible before combat close test")
-
       local onClick = mainUI.closeButton._scripts and mainUI.closeButton._scripts.OnClick or nil
       onClick = Assert.NotNil(onClick, "close button should define OnClick handler")
       onClick(mainUI.closeButton, "LeftButton")
-
       Assert.False(mainUI.frame:IsShown(), "close button must hide frame immediately even during combat")
     end)
   end)
 end
-
 local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, LoadAddonModules)
   test("UI game-menu reload button uses secure macro attributes instead of insecure callbacks", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       CreateFrame = createFrameStub,
       GameMenuFrame = gameMenuFrame,
@@ -603,7 +541,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       local strip = UI.EnsurePanelUI({
         gameMenuFrame = gameMenuFrame,
       })
-
       Assert.Equal(
         strip.buttonsById.reloadui._template,
         "SecureActionButtonTemplate,BackdropTemplate",
@@ -645,13 +582,11 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       )
     end)
   end)
-
   test("UI game-menu reload button follows ActionButtonUseKeyDown cvar for secure clicks", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       CreateFrame = createFrameStub,
       GameMenuFrame = gameMenuFrame,
@@ -667,7 +602,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       local strip = UI.EnsurePanelUI({
         gameMenuFrame = gameMenuFrame,
       })
-
       Assert.Equal(
         strip.buttonsById.reloadui._registeredClicks[1],
         "LeftButtonDown",
@@ -680,7 +614,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       )
     end)
   end)
-
   test("UI game-menu secure button updates are deferred during combat and applied after regen", function()
     local inCombat = false
     local useKeyDown = false
@@ -693,7 +626,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       UIParent = {},
       CreateFrame = createFrameStub,
@@ -713,7 +645,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
           return inCombat
         end,
       })
-
       local reloadButton = RequireValue(strip.buttonsById.reloadui, "reload button should exist")
       local originalRegisterForClicks = reloadButton.RegisterForClicks
       reloadButton.RegisterForClicks = function(self, ...)
@@ -722,7 +653,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalRegisterForClicks(self, ...)
       end
-
       local originalSetAttribute = reloadButton.SetAttribute
       reloadButton.SetAttribute = function(self, key, value)
         if inCombat then
@@ -730,7 +660,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalSetAttribute(self, key, value)
       end
-
       local originalSetSize = reloadButton.SetSize
       reloadButton.SetSize = function(self, ...)
         if inCombat then
@@ -738,7 +667,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalSetSize(self, ...)
       end
-
       local originalClearAllPoints = reloadButton.ClearAllPoints
       reloadButton.ClearAllPoints = function(self)
         if inCombat then
@@ -746,7 +674,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalClearAllPoints(self)
       end
-
       local originalSetPoint = reloadButton.SetPoint
       reloadButton.SetPoint = function(self, ...)
         if inCombat then
@@ -754,7 +681,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalSetPoint(self, ...)
       end
-
       local originalShow = reloadButton.Show
       reloadButton.Show = function(self)
         if inCombat then
@@ -762,7 +688,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalShow(self)
       end
-
       local originalHide = reloadButton.Hide
       reloadButton.Hide = function(self)
         if inCombat then
@@ -770,17 +695,13 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         end
         return originalHide(self)
       end
-
       useKeyDown = true
       inCombat = true
-
       local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
       onShow = Assert.NotNil(onShow, "game menu should register an OnShow hook")
-
       local ok, err = pcall(function()
         onShow(gameMenuFrame)
       end)
-
       Assert.True(ok, "combat OnShow must defer secure button updates instead of tainting: " .. tostring(err))
       Assert.Equal(
         reloadButton._registeredClicks[1],
@@ -792,14 +713,11 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
         false,
         "combat OnShow should keep the previous secure attribute until regen"
       )
-
       local retryFrame = FindCombatRetryFrame(createdFrames)
       Assert.NotNil(retryFrame, "combat secure update should register a regen retry frame")
       retryFrame = RequireValue(retryFrame, "combat secure update should register a regen retry frame")
-
       inCombat = false
       retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
-
       Assert.Equal(
         reloadButton._registeredClicks[1],
         "LeftButtonDown",
@@ -820,7 +738,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
       )
     end)
   end)
-
   test("UI game-menu panel stays mounted as GameMenuFrame child while reload button remains secure", function()
     local inCombat = false
     local createFrameStub = BuildCreateFrameStub({
@@ -833,7 +750,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
     gameMenuFrame._isProtected = true
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       UIParent = {},
       CreateFrame = createFrameStub,
@@ -847,7 +763,6 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
           return inCombat
         end,
       })
-
       Assert.True(
         strip.panelFrame._parent == gameMenuFrame,
         "panel frame should be mounted directly under GameMenuFrame"
@@ -858,14 +773,12 @@ local function RegisterGameMenuReloadButtonTests(test, Assert, WithGlobals, Load
     end)
   end)
 end
-
 local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGlobals, LoadAddonModules)
   test("UI game-menu panels rely on parent visibility instead of deferred host callbacks", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       CreateFrame = createFrameStub,
       GameMenuFrame = gameMenuFrame,
@@ -875,7 +788,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       local strip = UI.EnsurePanelUI({
         gameMenuFrame = gameMenuFrame,
       })
-
       local onHide = gameMenuFrame._scripts and gameMenuFrame._scripts.OnHide or nil
       Assert.Nil(onHide, "game menu should not need an OnHide hook for mounted panel children")
       Assert.True(
@@ -884,7 +796,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       )
     end)
   end)
-
   test(
     "UI game-menu first combat open keeps mounted panel visible while insecure shortcuts are combat-blocked",
     function()
@@ -899,7 +810,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       gameMenuFrame._isProtected = true
       local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
       gameMenuFrame.CloseButton = closeButton
-
       WithGlobals({
         CreateFrame = createFrameStub,
         GameMenuFrame = gameMenuFrame,
@@ -921,16 +831,13 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         local panelFrame = RequireValue(strip.panelFrame, "panel frame should exist")
         local professionsButton = RequireValue(strip.buttonsById.professions, "profession shortcut should exist")
         gameMenuFrame:Hide()
-
         local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
         onShow = Assert.NotNil(onShow, "game menu should register an OnShow hook")
-
         inCombat = true
         gameMenuFrame._shown = true
         local okShow, errShow = pcall(function()
           onShow(gameMenuFrame)
         end)
-
         Assert.True(okShow, "combat game-menu OnShow should stay mutation-free: " .. tostring(errShow))
         Assert.True(panelFrame:IsShown(), "mounted panel should stay shown through the first combat open")
         Assert.True(professionsButton:IsShown(), "insecure shortcut button should stay visible during combat")
@@ -938,21 +845,17 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
         onClick = Assert.NotNil(onClick, "profession shortcut should keep an OnClick handler")
         onClick(professionsButton)
         Assert.Equal(professionsActionCalls, 0, "insecure shortcut action should no-op during combat")
-
         local retryFrame = FindCombatRetryFrame(createdFrames)
         Assert.NotNil(retryFrame, "combat secure refresh should rely on the regen retry frame")
-
         inCombat = false
         retryFrame = RequireValue(retryFrame, "combat secure refresh should rely on the regen retry frame")
         retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
-
         Assert.True(panelFrame:IsShown(), "mounted panel should remain visible after regen")
         onClick(professionsButton)
         Assert.Equal(professionsActionCalls, 1, "insecure shortcut action should execute again after combat")
       end)
     end
   )
-
   test("UI second game-menu panel also stays visible during combat", function()
     local inCombat = false
     local createFrameStub, createdFrames = BuildCreateFrameStub({
@@ -965,7 +868,6 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     gameMenuFrame._isProtected = true
     local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
     gameMenuFrame.CloseButton = closeButton
-
     WithGlobals({
       CreateFrame = createFrameStub,
       GameMenuFrame = gameMenuFrame,
@@ -994,10 +896,8 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
       })
       local travelPanel = RequireValue(travelStrip.panelFrame, "travel panel frame should exist")
       gameMenuFrame:Hide()
-
       local onShow = gameMenuFrame._scripts and gameMenuFrame._scripts.OnShow or nil
       onShow = Assert.NotNil(onShow, "game menu should register a shared OnShow hook")
-
       inCombat = true
       gameMenuFrame._shown = true
       local okShow, errShow = pcall(function()
@@ -2283,6 +2183,318 @@ local function RegisterGameMenuSecondPanelBehaviorTests(test, Assert, WithGlobal
         "item:6948",
         "PreClick must keep the fallback item binding when no toys are owned"
       )
+    end)
+  end)
+
+  test("UI second game-menu hearthstone button respects explicit toy choice", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(itemID)
+        return itemID == 64488
+      end,
+      InCombatLockdown = function()
+        return false
+      end,
+      IsiLiveDB = { hearthstoneChoice = "toy:64488" },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("type"),
+        "toy",
+        "explicit toy choice must bind the button as a toy action"
+      )
+      Assert.Equal(hearthstoneButton:GetAttribute("toy"), 64488, "explicit toy choice must bind the selected toy id")
+      local preClick = hearthstoneButton._scripts and hearthstoneButton._scripts.PreClick or nil
+      preClick = Assert.NotNil(preClick, "PreClick handler must be installed")
+      preClick(hearthstoneButton)
+      Assert.Equal(hearthstoneButton:GetAttribute("toy"), 64488, "explicit toy choice must not be changed by PreClick")
+    end)
+  end)
+
+  test("UI second game-menu hearthstone button rejects explicit toy choice when not owned", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      PlayerHasToy = function(itemID)
+        return itemID == 93672
+      end,
+      InCombatLockdown = function()
+        return false
+      end,
+      IsiLiveDB = { hearthstoneChoice = "toy:64488" },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("type"),
+        "toy",
+        "invalid explicit toy must fall back to a verified owned toy when one exists"
+      )
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("toy"),
+        93672,
+        "unowned explicit toy id must never be bound to the secure action"
+      )
+    end)
+  end)
+
+  test("UI second game-menu hearthstone settings change defers secure attributes during combat", function()
+    local inCombat = false
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local db = { hearthstoneChoice = "random" }
+    local ownedToys = { [54452] = true, [93672] = true }
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      IsiLiveDB = db,
+      PlayerHasToy = function(itemID)
+        return ownedToys[itemID] == true
+      end,
+      InCombatLockdown = function()
+        return inCombat
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({
+        gameMenuFrame = gameMenuFrame,
+        isInCombat = function()
+          return inCombat
+        end,
+      })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        isInCombat = function()
+          return inCombat
+        end,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      local originalToy = hearthstoneButton:GetAttribute("toy")
+      local originalSetAttribute = hearthstoneButton.SetAttribute
+      hearthstoneButton.SetAttribute = function(self, key, value)
+        if inCombat then
+          error("secure hearthstone attribute write blocked in combat: " .. tostring(key))
+        end
+        return originalSetAttribute(self, key, value)
+      end
+
+      db.hearthstoneChoice = "toy:93672"
+      inCombat = true
+      local ok, err = pcall(function()
+        travelStrip.SyncVisibility()
+      end)
+      Assert.True(ok, "combat settings refresh must defer secure hearthstone attributes: " .. tostring(err))
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("toy"),
+        originalToy,
+        "combat settings refresh must keep existing secure toy binding until regen"
+      )
+
+      local retryFrame =
+        Assert.NotNil(createdFrames and FindCombatRetryFrame(createdFrames), "combat refresh must queue regen")
+      inCombat = false
+      retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
+
+      Assert.Equal(hearthstoneButton:GetAttribute("type"), "toy", "regen must apply the selected hearthstone action")
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("toy"),
+        93672,
+        "regen must apply the verified selected hearthstone toy"
+      )
+    end)
+  end)
+
+  test("UI game-menu hearthstone settings change defers secure attributes during active challenge key", function()
+    local activeChallengeKey = false
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local db = { hearthstoneChoice = "random" }
+    local ownedToys = { [54452] = true, [93672] = true }
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      IsiLiveDB = db,
+      PlayerHasToy = function(itemID)
+        return ownedToys[itemID] == true
+      end,
+      InCombatLockdown = function()
+        return activeChallengeKey
+      end,
+      C_ChallengeMode = {
+        IsChallengeModeActive = function()
+          return activeChallengeKey
+        end,
+        GetActiveChallengeMapID = function()
+          return activeChallengeKey and 503 or nil
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local strip = UI.EnsurePanelUI({
+        gameMenuFrame = gameMenuFrame,
+        isInCombat = function()
+          return activeChallengeKey
+        end,
+      })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = strip,
+        isInCombat = function()
+          return activeChallengeKey
+        end,
+        getL = function()
+          return {
+            BTN_SECOND_HEARTHSTONE = "Hearthstone",
+            BTN_SECOND_HOUSING = "Housing",
+            PANEL_HEADER_TRAVEL = "Travel",
+          }
+        end,
+      })
+
+      local hearthstoneButton = RequireValue(travelStrip.buttonsById.hearthstone, "hearthstone button must exist")
+      local originalToy = hearthstoneButton:GetAttribute("toy")
+      local originalSetAttribute = hearthstoneButton.SetAttribute
+      hearthstoneButton.SetAttribute = function(self, key, value)
+        if activeChallengeKey then
+          error("secure hearthstone attribute write blocked during active challenge key: " .. tostring(key))
+        end
+        return originalSetAttribute(self, key, value)
+      end
+
+      db.hearthstoneChoice = "toy:93672"
+      activeChallengeKey = true
+      local ok, err = pcall(function()
+        travelStrip.SyncVisibility()
+      end)
+      Assert.True(ok, "active-key settings refresh must defer secure hearthstone attributes: " .. tostring(err))
+      Assert.Equal(
+        hearthstoneButton:GetAttribute("toy"),
+        originalToy,
+        "active-key settings refresh must keep existing secure toy binding until protected state ends"
+      )
+
+      local retryFrame =
+        Assert.NotNil(createdFrames and FindCombatRetryFrame(createdFrames), "active-key refresh must queue regen")
+      activeChallengeKey = false
+      retryFrame:FireEvent("PLAYER_REGEN_ENABLED")
+
+      Assert.Equal(hearthstoneButton:GetAttribute("type"), "toy", "post-key regen must apply the selected action")
+      Assert.Equal(hearthstoneButton:GetAttribute("toy"), 93672, "post-key regen must apply the verified selected toy")
+    end)
+  end)
+
+  test("UI hearthstone collector only includes gated toys when their live requirement is verified", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local playerHasToyByID = {
+      [180290] = true,
+      [210455] = true,
+      [64488] = true,
+    }
+    local activeCovenantID = 0
+    local raceID = 1
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      PlayerHasToy = function(itemID)
+        return playerHasToyByID[itemID] == true
+      end,
+      GetAchievementCriteriaInfo = function(_achievementID, criteriaIndex)
+        return nil, nil, false
+      end,
+      C_Covenants = {
+        GetActiveCovenantID = function()
+          return activeCovenantID
+        end,
+      },
+      UnitRace = function()
+        return nil, nil, raceID
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local collect = Assert.NotNil(addon.UI.CollectOwnedHearthstoneToys, "collector must be exported")
+      local englishName =
+        Assert.NotNil(addon.UI.GetHearthstoneToyEnglishName, "English hearthstone name resolver must be exported")
+      Assert.Equal(
+        englishName(180290),
+        "Night Fae Hearthstone",
+        "English hearthstone name resolver must return the verified static name"
+      )
+
+      local cold = collect()
+      local coldSet = {}
+      for _, id in ipairs(cold) do
+        coldSet[id] = true
+      end
+      Assert.True(coldSet[64488] == true, "plain owned hearthstone toy must be available")
+      Assert.Nil(coldSet[180290], "covenant-gated hearthstone must stay hidden without verified access")
+      Assert.Nil(coldSet[210455], "race-gated hearthstone must stay hidden without verified race")
+
+      activeCovenantID = 3
+      raceID = 11
+      local warm = collect()
+      local warmSet = {}
+      for _, id in ipairs(warm) do
+        warmSet[id] = true
+      end
+      Assert.True(warmSet[180290] == true, "covenant-gated hearthstone must appear after verified access")
+      Assert.True(warmSet[210455] == true, "race-gated hearthstone must appear after verified race")
     end)
   end)
 

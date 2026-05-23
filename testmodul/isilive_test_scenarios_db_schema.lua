@@ -200,6 +200,19 @@ return function(test, ctx)
     Assert.Equal(db.autoCloseOnSoloChange, true, "legacy auto-close must enable solo-change auto-close explicitly")
   end)
 
+  test("DBSchema.Sanitize migrates legacy astral aurochs disabled sound into muted option", function()
+    local DBSchema = LoadSchema()
+    local db = {
+      __schemaVersion = 2,
+      vipAstralAurochsSoundEnabled = false,
+    }
+    local corrections, migrations = DBSchema.Sanitize(db)
+    Assert.Equal(migrations, 1, "legacy VIP sound migration must report one applied migration")
+    Assert.True(corrections > 0, "legacy VIP sound migration must log a correction")
+    Assert.Equal(db.vipAstralAurochsSoundMuted, true, "legacy disabled sound must become muted=true")
+    Assert.Nil(db.vipAstralAurochsSoundEnabled, "legacy enabled field must be removed after migration")
+  end)
+
   test("DBSchema.Sanitize preserves valid user-set table contents", function()
     local DBSchema = LoadSchema()
     local db = { position = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 50, y = -50 } }
@@ -313,6 +326,10 @@ return function(test, ctx)
     Assert.Equal(known.statsBoxBgAlpha, true, "statsBoxBgAlpha must be in known fields")
     Assert.Equal(known.statsBoxFontSizeOffset, true, "statsBoxFontSizeOffset must be in known fields")
     Assert.Equal(known.syncEnabled, true, "syncEnabled must be in known fields")
+    Assert.Equal(known.hearthstoneChoice, true, "hearthstoneChoice must be in known fields")
+    Assert.Equal(known.vipAstralAurochsSoundMuted, true, "vipAstralAurochsSoundMuted must be in known fields")
+    Assert.Equal(known.vipGrandExpeditionYakSoundMuted, true, "vipGrandExpeditionYakSoundMuted must be in known fields")
+    Assert.Equal(known.vipGildedBrutosaurSoundMuted, true, "vipGildedBrutosaurSoundMuted must be in known fields")
     Assert.Equal(known.mobNameplateEnabled, true, "mobNameplateEnabled must be in known fields")
     -- Runtime-only fields are intentionally excluded.
     Assert.Equal(known.queueDebug, nil, "queueDebug is runtime-only, must NOT be in schema")

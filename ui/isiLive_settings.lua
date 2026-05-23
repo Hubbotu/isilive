@@ -1,15 +1,11 @@
 local _, addonTable = ...
-
 addonTable = addonTable or {}
-
 local SettingsPanel = {}
 addonTable.SettingsPanel = SettingsPanel
-
 local Colors = addonTable.UICommon and addonTable.UICommon.Colors or {}
 local DEFAULT_BG_ALPHA = addonTable.UICommon and addonTable.UICommon.DEFAULT_BG_ALPHA or 0.50
 local ApplyBackdrop = addonTable.UICommon and addonTable.UICommon.ApplyBackdrop
 local MeasureFontStringWidthSafe = addonTable.UICommon and addonTable.UICommon.MeasureFontStringWidthSafe
-
 local PADDING_X = 16
 local PADDING_TOP = 16
 local LINE_HEIGHT = 28
@@ -58,34 +54,28 @@ local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL = "compact_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = "compact_main_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL_2_LEGACY = "compact_horizontal_2"
 local DEFAULT_LAYOUT_MODE_LAST_USED = "last_used"
-
 local function ApplySettingsBackdrop(frame)
   if type(ApplyBackdrop) == "function" then
     ApplyBackdrop(frame, "PRIMARY")
   end
 end
-
 local RESET_CONFIRM_POPUP_PREFIX = "ISILIVE_CONFIRM_RESET_ACTION_"
 local pendingResetConfirmActions = {}
 local YES_TEXT = rawget(_G, "YES") or "Yes"
 local NO_TEXT = rawget(_G, "NO") or "No"
-
 local function StyleResetConfirmPopup(dialog)
   if type(dialog) ~= "table" then
     return
   end
-
   if type(ApplyBackdrop) == "function" then
     ApplyBackdrop(dialog, "NOTICE")
   end
-
   if type(dialog.SetMovable) == "function" then
     dialog:SetMovable(false)
   end
   if type(dialog.SetResizable) == "function" then
     dialog:SetResizable(false)
   end
-
   if dialog.text and type(dialog.text.SetTextColor) == "function" then
     local tn = Colors.TEXT_NORMAL or { 0.85, 0.85, 0.9 }
     dialog.text:SetTextColor(tn[1], tn[2], tn[3], 1)
@@ -93,7 +83,6 @@ local function StyleResetConfirmPopup(dialog)
       dialog.text:SetWordWrap(true)
     end
   end
-
   local accent = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
   local gold = Colors.ACCENT_GOLD or { 1, 0.82, 0 }
   local buttons = { dialog.button1, dialog.button2 }
@@ -114,7 +103,6 @@ local function StyleResetConfirmPopup(dialog)
       elseif type(ApplyBackdrop) == "function" then
         ApplyBackdrop(button, "FLAT_BUTTON")
       end
-
       if button._isiLiveHoverGlow == nil and type(button.CreateTexture) == "function" then
         local glow = button:CreateTexture(nil, "BACKGROUND", nil, -1)
         if type(glow.SetAllPoints) == "function" then
@@ -128,7 +116,6 @@ local function StyleResetConfirmPopup(dialog)
         end
         button._isiLiveHoverGlow = glow
       end
-
       local text = button.GetText and button:GetText() or (index == 1 and YES_TEXT or NO_TEXT)
       if type(button.SetText) == "function" then
         button:SetText(text)
@@ -154,7 +141,6 @@ local function StyleResetConfirmPopup(dialog)
     end
   end
 end
-
 local function ShowResetConfirmation(dialogKey, confirmText, onAccept)
   local popupName = RESET_CONFIRM_POPUP_PREFIX .. tostring(dialogKey or "DEFAULT")
   local dialogs = rawget(_G, "StaticPopupDialogs")
@@ -165,7 +151,6 @@ local function ShowResetConfirmation(dialogKey, confirmText, onAccept)
     end
     return
   end
-
   local dialog = dialogs[popupName]
   if not dialog then
     dialogs[popupName] = {
@@ -196,11 +181,9 @@ local function ShowResetConfirmation(dialogKey, confirmText, onAccept)
   else
     dialog.text = confirmText or dialog.text
   end
-
   pendingResetConfirmActions[popupName] = onAccept
   showPopup(popupName)
 end
-
 local function CreateSectionHeader(parent, yOffset, text)
   local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   local td = Colors.TEXT_DIM or { 0.5, 0.5, 0.6 }
@@ -208,17 +191,14 @@ local function CreateSectionHeader(parent, yOffset, text)
   header:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset)
   header:SetJustifyH("LEFT")
   header:SetText(text or "")
-
   local line = parent:CreateTexture(nil, "ARTWORK")
   line:SetHeight(2)
   line:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset - HEADER_HEIGHT)
   line:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -PADDING_X, yOffset - HEADER_HEIGHT)
   local ab = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
   line:SetColorTexture(ab[1], ab[2], ab[3], 0.42)
-
   return header, yOffset - HEADER_HEIGHT - HEADER_LINE_GAP
 end
-
 local function MeasureWrappedTextHeight(textRegion, fallbackHeight, padding)
   local height = tonumber(fallbackHeight) or 0
   local measured = nil
@@ -230,7 +210,6 @@ local function MeasureWrappedTextHeight(textRegion, fallbackHeight, padding)
   end
   return height
 end
-
 local function CreateSettingsIntro(parent, yOffset, text)
   local intro = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   local td = Colors.TEXT_DIM or { 0.5, 0.5, 0.6 }
@@ -243,10 +222,8 @@ local function CreateSettingsIntro(parent, yOffset, text)
   end
   intro:SetText(text or "")
   local height = MeasureWrappedTextHeight(intro, 28, 8)
-
   return intro, yOffset - height
 end
-
 local function CreateSectionNote(parent, yOffset, text)
   local note = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   local td = Colors.TEXT_DIM or { 0.5, 0.5, 0.6 }
@@ -259,10 +236,8 @@ local function CreateSectionNote(parent, yOffset, text)
   end
   note:SetText(text or "")
   local height = MeasureWrappedTextHeight(note, 16, 6)
-
   return note, yOffset - height
 end
-
 local function CreateSettingsCheckbox(parent, yOffset, labelText, getter, setter, settingKey, options)
   options = type(options) == "table" and options or {}
   local check = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -273,7 +248,6 @@ local function CreateSettingsCheckbox(parent, yOffset, labelText, getter, setter
   if type(settingKey) == "string" and settingKey ~= "" then
     check._settingKey = settingKey
   end
-
   local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   local tn = Colors.TEXT_NORMAL or { 0.85, 0.85, 0.9 }
   label:SetTextColor(tn[1], tn[2], tn[3], 1)
@@ -290,17 +264,14 @@ local function CreateSettingsCheckbox(parent, yOffset, labelText, getter, setter
   end
   label:SetText(labelText or "")
   check.label = label
-
   if type(getter) == "function" then
     check:SetChecked(getter())
   end
-
   check:SetScript("OnClick", function(self)
     if type(setter) == "function" then
       setter(self:GetChecked() and true or false)
     end
   end)
-
   local rowHeight = tonumber(options.rowHeight) or LINE_HEIGHT
   if options.rowHeight == nil and type(label.GetStringHeight) == "function" then
     local textHeight = tonumber(label:GetStringHeight()) or 0
@@ -310,7 +281,6 @@ local function CreateSettingsCheckbox(parent, yOffset, labelText, getter, setter
   end
   return { check = check, label = label }, yOffset - rowHeight
 end
-
 local function CreateSettingsSlider(
   parent,
   yOffset,
@@ -337,7 +307,6 @@ local function CreateSettingsSlider(
   if type(label.SetWordWrap) == "function" then
     label:SetWordWrap(true)
   end
-
   local slider = CreateFrame("Slider", nil, parent, "BackdropTemplate")
   slider:SetSize(SLIDER_WIDTH, SLIDER_HEIGHT)
   slider:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X + 160, yOffset - 2)
@@ -348,7 +317,6 @@ local function CreateSettingsSlider(
   if type(settingKey) == "string" and settingKey ~= "" then
     slider._settingKey = settingKey
   end
-
   if type(slider.SetBackdrop) == "function" then
     slider:SetBackdrop({
       bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -361,7 +329,6 @@ local function CreateSettingsSlider(
     local bd = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
     slider:SetBackdropBorderColor(bd[1], bd[2], bd[3], bd[4])
   end
-
   if type(slider.SetThumbTexture) == "function" then
     local thumb = slider:CreateTexture(nil, "OVERLAY")
     if type(thumb.SetSize) == "function" then
@@ -373,12 +340,10 @@ local function CreateSettingsSlider(
     end
     slider:SetThumbTexture(thumb)
   end
-
   local valueLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
   valueLabel:SetTextColor(tn[1], tn[2], tn[3], 1)
   valueLabel:SetPoint("LEFT", slider, "RIGHT", 8, 0)
   local suppressValueChanged = false
-
   local function UpdateValueLabel(val)
     if type(formatFunc) == "function" then
       valueLabel:SetText(formatFunc(val))
@@ -734,6 +699,7 @@ local function CreateSettingsOptionSelector(
   local acBlue = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
   local borderDefault = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
   local buttonPadding = 22
+  local currentOptions = {}
 
   local function ResolveButtonWidth(button)
     local minWidth = tonumber(button._optionMinWidth) or 40
@@ -786,46 +752,6 @@ local function CreateSettingsOptionSelector(
     end
   end
 
-  for _, option in ipairs(options or {}) do
-    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
-    local buttonWidth = tonumber(option.width) or 40
-    button:SetSize(buttonWidth, LANG_BUTTON_HEIGHT)
-    button:SetPoint("TOPLEFT", parent, "TOPLEFT", buttonX, buttonYOffset - 1)
-    if type(button.SetBackdrop) == "function" then
-      button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
-    end
-
-    local buttonLabel = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    buttonLabel:SetPoint("CENTER", 0, 0)
-    button.label = buttonLabel
-    button._optionValue = option.value
-    button._optionLabelKey = option.labelKey
-    button._optionFallback = option.fallback or ""
-    button._optionMinWidth = buttonWidth
-
-    button:SetScript("OnClick", function()
-      if type(setter) == "function" then
-        setter(option.value)
-      end
-      local freshL = type(getLabels) == "function" and getLabels() or {}
-      label:SetText((freshL and freshL[labelKey]) or fallbackLabel or "")
-      local selectedMode = type(normalizeValue) == "function"
-          and normalizeValue(type(getter) == "function" and getter() or nil)
-        or (type(getter) == "function" and getter() or nil)
-      for _, btn in ipairs(buttons) do
-        local btnText = freshL and freshL[btn._optionLabelKey] or btn._optionFallback or ""
-        if btn.label and type(btn.label.SetText) == "function" then
-          btn.label:SetText(btnText)
-        end
-        ApplyButtonStyle(btn, selectedMode == btn._optionValue)
-      end
-      UpdateButtonLayout()
-    end)
-
-    table.insert(buttons, button)
-    buttonX = buttonX + buttonWidth + 4
-  end
-
   local function UpdateHighlight()
     local freshL = type(getLabels) == "function" and getLabels() or {}
     label:SetText((freshL and freshL[labelKey]) or fallbackLabel or "")
@@ -842,14 +768,430 @@ local function CreateSettingsOptionSelector(
     UpdateButtonLayout()
   end
 
-  UpdateHighlight()
+  local function CreateOptionButton(option)
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    local buttonWidth = tonumber(option.width) or 40
+    button:SetSize(buttonWidth, LANG_BUTTON_HEIGHT)
+    if type(button.SetBackdrop) == "function" then
+      button:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8" })
+    end
+
+    local buttonLabel = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    buttonLabel:SetPoint("CENTER", 0, 0)
+    button.label = buttonLabel
+    button._optionValue = option.value
+    button._optionLabelKey = option.labelKey
+    button._optionFallback = option.fallback or ""
+    button._optionMinWidth = buttonWidth
+
+    button:SetScript("OnClick", function()
+      if type(setter) == "function" then
+        setter(option.value)
+      end
+      if type(getLabels) == "function" then
+        local freshL = getLabels()
+        label:SetText((freshL and freshL[labelKey]) or fallbackLabel or "")
+      end
+      UpdateHighlight()
+    end)
+
+    return button
+  end
+
+  local function UpdateOptions(newOptions)
+    currentOptions = type(newOptions) == "table" and newOptions or {}
+    for _, button in ipairs(buttons) do
+      if type(button.Hide) == "function" then
+        button:Hide()
+      end
+    end
+    buttons = {}
+    buttonX = labelOnTop and PADDING_X or (PADDING_X + 160)
+    for _, option in ipairs(currentOptions) do
+      local button = CreateOptionButton(option)
+      button:SetPoint("TOPLEFT", parent, "TOPLEFT", buttonX, buttonYOffset - 1)
+      table.insert(buttons, button)
+      buttonX = buttonX + ResolveButtonWidth(button) + 4
+    end
+    UpdateHighlight()
+  end
+
+  UpdateOptions(options)
 
   return {
     label = label,
     buttons = buttons,
     UpdateHighlight = UpdateHighlight,
+    UpdateOptions = UpdateOptions,
   },
     yOffset - (labelOnTop and (LINE_HEIGHT * 2 + 8) or LINE_HEIGHT)
+end
+
+local function CreateSettingsDropdownSelector(
+  parent,
+  yOffset,
+  labelKey,
+  fallbackLabel,
+  options,
+  getLabels,
+  getter,
+  setter,
+  normalizeValue,
+  labelOnTop
+)
+  local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  local tn = Colors.TEXT_NORMAL or { 0.85, 0.85, 0.9 }
+  label:SetTextColor(tn[1], tn[2], tn[3], 1)
+  label:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset - 3)
+  if labelOnTop and type(label.SetWidth) == "function" then
+    label:SetWidth(math.max(240, SETTINGS_CONTENT_WIDTH - (PADDING_X * 2)))
+  end
+  if labelOnTop and type(label.SetWordWrap) == "function" then
+    label:SetWordWrap(false)
+  end
+  local initialLabels = type(getLabels) == "function" and getLabels() or {}
+  label:SetText((initialLabels and initialLabels[labelKey]) or fallbackLabel or "")
+
+  local buttonWidth = 380
+  local buttonHeight = 24
+  local dropdownButton = CreateFrame("Button", nil, parent, "BackdropTemplate")
+  dropdownButton._settingKey = labelKey
+  dropdownButton._label = label
+  dropdownButton:SetSize(buttonWidth, buttonHeight)
+  dropdownButton:SetPoint(
+    "TOPLEFT",
+    parent,
+    "TOPLEFT",
+    labelOnTop and PADDING_X or (PADDING_X + 160),
+    labelOnTop and (yOffset - LINE_HEIGHT - 6) or yOffset
+  )
+
+  if type(dropdownButton.SetBackdrop) == "function" then
+    dropdownButton:SetBackdrop({
+      bgFile = "Interface\\Buttons\\WHITE8X8",
+      edgeFile = "Interface\\Buttons\\WHITE8X8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    local bgSec = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.7 }
+    local bd = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
+    dropdownButton:SetBackdropColor(bgSec[1], bgSec[2], bgSec[3], bgSec[4])
+    dropdownButton:SetBackdropBorderColor(bd[1], bd[2], bd[3], bd[4])
+  end
+
+  local dropdownLabel = dropdownButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  dropdownLabel:SetPoint("LEFT", dropdownButton, "LEFT", 8, 0)
+  dropdownLabel:SetPoint("RIGHT", dropdownButton, "RIGHT", -24, 0)
+  dropdownLabel:SetJustifyH("LEFT")
+  dropdownLabel:SetTextColor(tn[1], tn[2], tn[3], 1)
+  dropdownLabel:SetText(fallbackLabel or "")
+  dropdownButton._dropdownLabel = dropdownLabel
+
+  local arrow = dropdownButton:CreateTexture(nil, "ARTWORK")
+  arrow:SetSize(12, 12)
+  arrow:SetPoint("RIGHT", dropdownButton, "RIGHT", -8, 0)
+  arrow:SetTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+  arrow:SetVertexColor(0.8, 0.8, 0.8)
+
+  local menuParent = rawget(_G, "UIParent") or parent
+  local menuFrame = CreateFrame("Frame", nil, menuParent, "BackdropTemplate")
+  menuFrame:SetSize(buttonWidth, 0)
+  menuFrame:SetFrameStrata("DIALOG")
+  menuFrame:Hide()
+  menuFrame:SetClampedToScreen(true)
+
+  if type(menuFrame.SetBackdrop) == "function" then
+    menuFrame:SetBackdrop({
+      bgFile = "Interface\\Buttons\\WHITE8X8",
+      edgeFile = "Interface\\Buttons\\WHITE8X8",
+      edgeSize = 1,
+      insets = { left = 0, right = 0, top = 0, bottom = 0 },
+    })
+    local bg = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.88 }
+    local bd = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.85 }
+    menuFrame:SetBackdropColor(bg[1], bg[2], bg[3], bg[4])
+    menuFrame:SetBackdropBorderColor(bd[1], bd[2], bd[3], bd[4])
+  end
+
+  local clickCatcher = CreateFrame("Button", nil, menuParent)
+  clickCatcher:SetAllPoints(menuParent)
+  clickCatcher:SetFrameStrata("BACKGROUND")
+  clickCatcher:Hide()
+  clickCatcher:SetScript("OnMouseDown", function()
+    menuFrame:Hide()
+    clickCatcher:Hide()
+  end)
+
+  local currentOptions = type(options) == "table" and options or {}
+  local labelsCache = {}
+
+  local function ResolveOptionLabel(option, freshL)
+    return (freshL and freshL[option.labelKey]) or option.fallback or tostring(option.value or "")
+  end
+
+  local function GetSelectedValue()
+    local value = type(getter) == "function" and getter() or nil
+    if type(normalizeValue) == "function" then
+      return normalizeValue(value)
+    end
+    return value
+  end
+
+  local optionButtons = {}
+
+  local function RefreshDropdown()
+    labelsCache = type(getLabels) == "function" and getLabels() or {}
+    label:SetText((labelsCache and labelsCache[labelKey]) or fallbackLabel or "")
+    local selectedValue = GetSelectedValue()
+    local selectedText = fallbackLabel or ""
+    for _, option in ipairs(currentOptions) do
+      if option.value == selectedValue then
+        selectedText = ResolveOptionLabel(option, labelsCache)
+        break
+      end
+    end
+    dropdownLabel:SetText(selectedText)
+    for index, option in ipairs(currentOptions) do
+      local btn = optionButtons[index]
+      if btn and btn.label then
+        btn.label:SetText(ResolveOptionLabel(option, labelsCache))
+      end
+    end
+  end
+
+  local function HideMenu()
+    if menuFrame:IsShown() then
+      menuFrame:Hide()
+      clickCatcher:Hide()
+    end
+  end
+
+  local function ShowMenu()
+    if #currentOptions == 0 then
+      return
+    end
+    local menuHeight = 0
+    for index, option in ipairs(currentOptions) do
+      local btn = optionButtons[index]
+      if not btn then
+        btn = CreateFrame("Button", nil, menuFrame, "BackdropTemplate")
+        btn:SetSize(buttonWidth - 2, buttonHeight)
+        btn:SetPoint("TOPLEFT", menuFrame, "TOPLEFT", 1, -((index - 1) * buttonHeight) - 1)
+        if type(btn.SetBackdrop) == "function" then
+          btn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Buttons\\WHITE8X8",
+            edgeSize = 1,
+            insets = { left = 0, right = 0, top = 0, bottom = 0 },
+          })
+          local bgItem = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.65 }
+          local bdItem = Colors.BORDER_DEFAULT or { 0.25, 0.25, 0.35, 0.5 }
+          btn:SetBackdropColor(bgItem[1], bgItem[2], bgItem[3], bgItem[4])
+          btn:SetBackdropBorderColor(bdItem[1], bdItem[2], bdItem[3], bdItem[4])
+        end
+        local btnLabel = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        btnLabel:SetPoint("LEFT", btn, "LEFT", 8, 0)
+        btnLabel:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+        btnLabel:SetJustifyH("LEFT")
+        if type(btnLabel.SetTextColor) == "function" then
+          btnLabel:SetTextColor(tn[1], tn[2], tn[3], 1)
+        end
+        btn.label = btnLabel
+        btn:SetScript("OnEnter", function(self)
+          if type(self.SetBackdropColor) == "function" then
+            local acBlue = Colors.ACCENT_BLUE or { 0.3, 0.65, 1 }
+            self:SetBackdropColor(acBlue[1], acBlue[2], acBlue[3], 0.18)
+          end
+        end)
+        btn:SetScript("OnLeave", function(self)
+          if type(self.SetBackdropColor) == "function" then
+            local bgItem = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.65 }
+            self:SetBackdropColor(bgItem[1], bgItem[2], bgItem[3], bgItem[4])
+          end
+        end)
+        optionButtons[index] = btn
+      end
+      local optionText = ResolveOptionLabel(option, labelsCache)
+      btn.label:SetText(optionText)
+      btn:SetScript("OnClick", function()
+        if type(setter) == "function" then
+          setter(option.value)
+        end
+        RefreshDropdown()
+        HideMenu()
+      end)
+      optionButtons[index] = btn
+      menuHeight = menuHeight + buttonHeight
+    end
+    menuFrame:SetHeight(menuHeight + 2)
+    menuFrame:SetPoint("TOPLEFT", dropdownButton, "BOTTOMLEFT", 0, -2)
+    menuFrame:Show()
+    clickCatcher:Show()
+  end
+
+  dropdownButton:SetScript("OnClick", function()
+    if menuFrame:IsShown() then
+      HideMenu()
+    else
+      ShowMenu()
+    end
+  end)
+
+  dropdownButton:SetScript("OnEnter", function(self)
+    if type(self.SetBackdropColor) == "function" then
+      self:SetBackdropColor(0.14, 0.14, 0.20, 0.92)
+    end
+  end)
+  dropdownButton:SetScript("OnLeave", function(self)
+    if type(self.SetBackdropColor) == "function" then
+      local bgSec = Colors.BG_SECONDARY or { 0.12, 0.12, 0.18, 0.7 }
+      self:SetBackdropColor(bgSec[1], bgSec[2], bgSec[3], bgSec[4])
+    end
+  end)
+
+  local function UpdateOptions(newOptions)
+    for _, btn in ipairs(optionButtons) do
+      if type(btn) == "table" and type(btn.Hide) == "function" then
+        btn:Hide()
+      end
+    end
+    currentOptions = type(newOptions) == "table" and newOptions or {}
+    dropdownButton._options = currentOptions
+    optionButtons = {}
+    HideMenu()
+    RefreshDropdown()
+  end
+
+  dropdownButton._options = currentOptions
+  RefreshDropdown()
+
+  return {
+    label = label,
+    button = dropdownButton,
+    UpdateHighlight = RefreshDropdown,
+    UpdateOptions = UpdateOptions,
+  },
+    yOffset - (labelOnTop and (LINE_HEIGHT * 2 + 8) or LINE_HEIGHT)
+end
+
+local function RequestHearthstoneToyItemData(toyId)
+  toyId = tonumber(toyId)
+  if not toyId then
+    return
+  end
+  local itemApi = rawget(_G, "C_Item")
+  if type(itemApi) == "table" and type(itemApi.RequestLoadItemDataByID) == "function" then
+    pcall(itemApi.RequestLoadItemDataByID, toyId)
+    return
+  end
+  local itemFactory = rawget(_G, "Item")
+  if type(itemFactory) == "table" and type(itemFactory.CreateFromItemID) == "function" then
+    pcall(itemFactory.CreateFromItemID, toyId)
+  end
+end
+
+local function ResolveHearthstoneSettingsLocale(config)
+  if type(config) == "table" then
+    if type(config.getCurrentLocale) == "function" then
+      local ok, locale = pcall(config.getCurrentLocale)
+      if ok and type(locale) == "string" and locale ~= "" then
+        return locale
+      end
+    end
+    if type(config.getDB) == "function" then
+      local ok, db = pcall(config.getDB)
+      if ok and type(db) == "table" and type(db.locale) == "string" and db.locale ~= "" then
+        return db.locale
+      end
+    end
+  end
+
+  local getLocale = rawget(_G, "GetLocale")
+  if type(getLocale) == "function" then
+    local ok, locale = pcall(getLocale)
+    if ok and type(locale) == "string" and locale ~= "" then
+      return locale
+    end
+  end
+
+  return "enUS"
+end
+
+local function ResolveHearthstoneToyDisplayName(toyId, config)
+  toyId = tonumber(toyId)
+  if not toyId then
+    return nil
+  end
+
+  if ResolveHearthstoneSettingsLocale(config) ~= "deDE" then
+    local getEnglishName = addonTable.UI and addonTable.UI.GetHearthstoneToyEnglishName
+    if type(getEnglishName) ~= "function" then
+      return nil
+    end
+    local name = getEnglishName(toyId)
+    if type(name) == "string" and name ~= "" then
+      return name
+    end
+    return nil
+  end
+
+  local toyBox = rawget(_G, "C_ToyBox")
+  if type(toyBox) == "table" and type(toyBox.GetToyInfo) == "function" then
+    local ok, _, name = pcall(toyBox.GetToyInfo, toyId)
+    if ok and type(name) == "string" and name ~= "" then
+      return name
+    end
+  end
+
+  local itemApi = rawget(_G, "C_Item")
+  if type(itemApi) == "table" and type(itemApi.GetItemNameByID) == "function" then
+    local ok, name = pcall(itemApi.GetItemNameByID, toyId)
+    if ok and type(name) == "string" and name ~= "" then
+      return name
+    end
+  end
+
+  local getItemInfo = rawget(_G, "GetItemInfo")
+  if type(getItemInfo) == "function" then
+    local ok, itemName = pcall(getItemInfo, toyId)
+    if ok and type(itemName) == "string" and itemName ~= "" then
+      return itemName
+    end
+  end
+
+  RequestHearthstoneToyItemData(toyId)
+  return nil
+end
+
+local function BuildHearthstoneSettingsOptions(config, labels)
+  local options = {
+    {
+      value = "random",
+      fallback = labels.SETTINGS_HEARTHSTONE_RANDOM or "Random owned Hearthstone",
+    },
+    {
+      value = "item:6948",
+      fallback = labels.SETTINGS_HEARTHSTONE_DEFAULT or "Default Hearthstone (6948)",
+    },
+  }
+
+  local collectOwned = addonTable.UI and addonTable.UI.CollectOwnedHearthstoneToys
+  if type(collectOwned) == "function" then
+    local pool = collectOwned()
+    if type(pool) == "table" and #pool > 0 then
+      for _, toyId in ipairs(pool) do
+        local itemLabel = ResolveHearthstoneToyDisplayName(toyId, config)
+        if itemLabel then
+          options[#options + 1] = {
+            value = "toy:" .. tostring(toyId),
+            fallback = itemLabel,
+          }
+        end
+      end
+    end
+  end
+
+  return options
 end
 
 local function ResolveSettingsOptions(opts)
@@ -898,6 +1240,7 @@ local function ResolveSettingsOptions(opts)
     onMobNameplateChange = opts.onMobNameplateChange,
     onResetDB = opts.onResetDB,
     onResetMainFramePosition = opts.onResetMainFramePosition,
+    onHearthstoneChoiceChange = opts.onHearthstoneChoiceChange,
   }
 end
 
@@ -1076,6 +1419,26 @@ local function BuildGeneralSettingsSection(canvas, yOffset, labels, config, cont
       end
     end,
     "SETTINGS_SHOW_TIMEWAYS_NAVIGATOR"
+  )
+
+  controls.hearthstoneSelect, yOffset = CreateSettingsDropdownSelector(
+    canvas,
+    yOffset,
+    "SETTINGS_HEARTHSTONE_SELECT",
+    labels.SETTINGS_HEARTHSTONE_SELECT or "Hearthstone",
+    BuildHearthstoneSettingsOptions(config, labels),
+    config.getL,
+    function()
+      local db = config.getDB()
+      return db.hearthstoneChoice or "random"
+    end,
+    function(val)
+      local db = config.getDB()
+      db.hearthstoneChoice = val
+      if type(config.onHearthstoneChoiceChange) == "function" then
+        config.onHearthstoneChoiceChange()
+      end
+    end
   )
 
   return yOffset
@@ -2103,6 +2466,74 @@ local function BuildSoundSettingsSection(canvas, yOffset, labels, config, contro
   return yOffset
 end
 
+local function BuildVIPGuestSettingsSection(canvas, yOffset, labels, config, controls)
+  controls.vipGuestHeader, yOffset =
+    CreateSectionHeader(canvas, yOffset, labels.SETTINGS_SECTION_VIP_GUESTS or "VIP Guest Settings")
+  if controls.vipGuestHeader then
+    controls.vipGuestHeader._sectionKey = "SETTINGS_SECTION_VIP_GUESTS"
+  end
+
+  controls.vipGuestHint, yOffset = CreateSectionNote(
+    canvas,
+    yOffset,
+    labels.SETTINGS_SECTION_VIP_GUESTS_HINT or "Special sound controls for selected guests."
+  )
+  if controls.vipGuestHint then
+    controls.vipGuestHint._sectionKey = "SETTINGS_SECTION_VIP_GUESTS"
+  end
+
+  local function CreateVIPMountSoundCheckbox(controlKey, labelKey, fallbackLabel, dbKey, applyFnName)
+    controls[controlKey], yOffset = CreateSettingsCheckbox(
+      canvas,
+      yOffset,
+      labels[labelKey] or fallbackLabel,
+      function()
+        local db = config.getDB()
+        return db[dbKey] == true
+      end,
+      function(checked)
+        local db = config.getDB()
+        db[dbKey] = checked == true
+        local soundUtils = addonTable.SoundUtils
+        if type(soundUtils) == "table" and type(soundUtils[applyFnName]) == "function" then
+          soundUtils[applyFnName](checked)
+        end
+      end,
+      labelKey
+    )
+    if controls[controlKey] and controls[controlKey].check then
+      controls[controlKey].check._sectionKey = "SETTINGS_SECTION_VIP_GUESTS"
+    end
+  end
+
+  CreateVIPMountSoundCheckbox(
+    "vipAstralAurochsSound",
+    "SETTINGS_VIP_ASTRAL_AUROCHS_SOUND",
+    "Mute Astral Aurochs mount sound",
+    "vipAstralAurochsSoundMuted",
+    "ApplyAstralAurochsSoundSetting"
+  )
+  if controls.vipAstralAurochsSound and controls.vipAstralAurochsSound.check then
+    controls.vipAstralAurochsSound.check._sectionKey = "SETTINGS_SECTION_VIP_GUESTS"
+  end
+  CreateVIPMountSoundCheckbox(
+    "vipGrandExpeditionYakSound",
+    "SETTINGS_VIP_GRAND_EXPEDITION_YAK_SOUND",
+    "Mute Grand Expedition Yak mount sound",
+    "vipGrandExpeditionYakSoundMuted",
+    "ApplyGrandExpeditionYakSoundSetting"
+  )
+  CreateVIPMountSoundCheckbox(
+    "vipGildedBrutosaurSound",
+    "SETTINGS_VIP_GILDED_BRUTOSAUR_SOUND",
+    "Mute Trader Brutosaur mount sound",
+    "vipGildedBrutosaurSoundMuted",
+    "ApplyGildedBrutosaurSoundSetting"
+  )
+
+  return yOffset
+end
+
 local function BuildChatSettingsSection(canvas, yOffset, labels, config, controls)
   controls.chatHeader, yOffset =
     CreateSectionHeader(canvas, yOffset, labels.SETTINGS_SECTION_CHAT or "Chat Announcements")
@@ -2383,6 +2814,30 @@ local function RefreshSettingsControls(controls, config)
   )
   SetLocalizedText(controls.soundHeader, "SETTINGS_SECTION_SOUNDS", "Sounds")
   SetLocalizedText(controls.soundHint, "SETTINGS_SECTION_SOUNDS_HINT", "Toggle the built-in audio cues.")
+  SetLocalizedText(controls.vipGuestHeader, "SETTINGS_SECTION_VIP_GUESTS", "VIP Guest Settings")
+  SetLocalizedText(
+    controls.vipGuestHint,
+    "SETTINGS_SECTION_VIP_GUESTS_HINT",
+    "Special sound controls for selected guests."
+  )
+  if controls.vipAstralAurochsSound and controls.vipAstralAurochsSound.label then
+    controls.vipAstralAurochsSound.label:SetText(
+      freshL.SETTINGS_VIP_ASTRAL_AUROCHS_SOUND or "Mute Astral Aurochs mount sound"
+    )
+    controls.vipAstralAurochsSound.check:SetChecked(db.vipAstralAurochsSoundMuted == true)
+  end
+  if controls.vipGrandExpeditionYakSound and controls.vipGrandExpeditionYakSound.label then
+    controls.vipGrandExpeditionYakSound.label:SetText(
+      freshL.SETTINGS_VIP_GRAND_EXPEDITION_YAK_SOUND or "Mute Grand Expedition Yak mount sound"
+    )
+    controls.vipGrandExpeditionYakSound.check:SetChecked(db.vipGrandExpeditionYakSoundMuted == true)
+  end
+  if controls.vipGildedBrutosaurSound and controls.vipGildedBrutosaurSound.label then
+    controls.vipGildedBrutosaurSound.label:SetText(
+      freshL.SETTINGS_VIP_GILDED_BRUTOSAUR_SOUND or "Mute Trader Brutosaur mount sound"
+    )
+    controls.vipGildedBrutosaurSound.check:SetChecked(db.vipGildedBrutosaurSoundMuted == true)
+  end
   SetLocalizedText(controls.chatHeader, "SETTINGS_SECTION_CHAT", "Chat Announcements")
   SetLocalizedText(
     controls.chatHint,
@@ -2408,6 +2863,9 @@ local function RefreshSettingsControls(controls, config)
   controls.dmReset.label:SetText(freshL.SETTINGS_DM_RESET or "Reset Blizzard Damage Meter on dungeon entry")
   controls.escPanel.label:SetText(freshL.SETTINGS_ESC_PANEL or "Show ESC Menu Shortcuts")
   controls.bgAlpha.label:SetText(freshL.SETTINGS_BG_ALPHA or "Background Opacity")
+  if controls.hearthstoneSelect then
+    controls.hearthstoneSelect.UpdateOptions(BuildHearthstoneSettingsOptions(config, freshL))
+  end
   if controls.statsBoxEnabled and controls.statsBoxEnabled.label then
     controls.statsBoxEnabled.label:SetText(GetStatsBoxSettingLabel(config, "enabled")) -- i18n-ok
   end
@@ -2658,6 +3116,15 @@ function SettingsPanel.Create(opts)
     end)
   end
 
+  local itemDataRefreshFrame = CreateFrame("Frame")
+  itemDataRefreshFrame:SetScript("OnEvent", function()
+    if type(canvas.Refresh) == "function" then
+      canvas.Refresh()
+    end
+  end)
+  itemDataRefreshFrame:RegisterEvent("TOYS_UPDATED")
+  itemDataRefreshFrame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+
   local L = config.getL()
   local controls = {}
 
@@ -2686,6 +3153,8 @@ function SettingsPanel.Create(opts)
   y = BuildDebugSettingsSection(content, y, L, config, controls)
   y = y - SECTION_GAP
   y = BuildResetSection(content, y, L, config, controls)
+  y = y - SECTION_GAP
+  y = BuildVIPGuestSettingsSection(content, y, L, config, controls)
 
   local finalYOffset = tonumber(y) or 0
   local contentHeight = math.max(212, math.ceil(-finalYOffset + PADDING_TOP))
@@ -2707,6 +3176,7 @@ function SettingsPanel.Create(opts)
   local function Refresh()
     RefreshSettingsControls(controls, config)
   end
+  canvas.Refresh = Refresh
 
   return {
     category = category,

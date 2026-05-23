@@ -642,6 +642,171 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
       )
     end)
   end)
+
+  test("Settings hearthstone selector shows English toy names for non-German addon locales", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { hearthstoneChoice = "random" }
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      C_ToyBox = {
+        GetToyInfo = function(itemID)
+          if itemID == 180290 then
+            return itemID, "Nachtfae-Ruhestein", "Interface\\Icons\\inv_hearthstonepet"
+          end
+          return nil
+        end,
+      },
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      addon.UI = addon.UI or {}
+      addon.UI.CollectOwnedHearthstoneToys = function()
+        return { 180290 }
+      end
+      addon.UI.GetHearthstoneToyEnglishName = function(itemID)
+        if itemID == 180290 then
+          return "Night Fae Hearthstone"
+        end
+        return nil
+      end
+
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_HEARTHSTONE_SELECT = "Hearthstone Selection",
+            SETTINGS_HEARTHSTONE_RANDOM = "Random owned Hearthstone",
+            SETTINGS_HEARTHSTONE_DEFAULT = "Default Hearthstone (6948)",
+          }
+        end,
+        getCurrentLocale = function()
+          return "frFR"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+      Assert.NotNil(panel, "settings panel should be created")
+
+      local dropdown = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_HEARTHSTONE_SELECT" then
+          dropdown = frame
+          break
+        end
+      end
+      dropdown = Assert.NotNil(dropdown, "hearthstone selector dropdown must exist")
+      local options = dropdown._options or {}
+      local found = false
+      for _, option in ipairs(options) do
+        if option.value == "toy:180290" then
+          found = true
+          Assert.Equal(
+            option.fallback,
+            "Night Fae Hearthstone",
+            "non-German addon locale must use the verified English toy name"
+          )
+        end
+        Assert.False(option.fallback == "180290", "selector must not show a raw item id as its label")
+      end
+      Assert.True(found, "owned toy with a verified name must be selectable")
+    end)
+  end)
+
+  test("Settings hearthstone selector uses client-localized toy names for German addon locale", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { hearthstoneChoice = "random" }
+    local toyName = nil
+    local requestedItemID = nil
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      C_ToyBox = {
+        GetToyInfo = function(itemID)
+          return itemID, toyName, "Interface\\Icons\\inv_hearthstonepet"
+        end,
+      },
+      C_Item = {
+        RequestLoadItemDataByID = function(itemID)
+          requestedItemID = itemID
+        end,
+      },
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_settings.lua" })
+      addon.UI = addon.UI or {}
+      addon.UI.CollectOwnedHearthstoneToys = function()
+        return { 180290 }
+      end
+
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_GENERAL = "General",
+            SETTINGS_HEARTHSTONE_SELECT = "Hearthstone Selection",
+            SETTINGS_HEARTHSTONE_RANDOM = "Random owned Hearthstone",
+            SETTINGS_HEARTHSTONE_DEFAULT = "Default Hearthstone (6948)",
+          }
+        end,
+        getCurrentLocale = function()
+          return "deDE"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+      Assert.NotNil(panel, "settings panel should be created")
+
+      local dropdown = nil
+      local itemDataFrame = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_HEARTHSTONE_SELECT" then
+          dropdown = frame
+        elseif frame.IsEventRegistered and frame:IsEventRegistered("GET_ITEM_INFO_RECEIVED") then
+          itemDataFrame = frame
+        end
+      end
+      dropdown = Assert.NotNil(dropdown, "hearthstone selector dropdown must exist")
+      itemDataFrame = Assert.NotNil(itemDataFrame, "settings must refresh when item info becomes available")
+      Assert.Equal(requestedItemID, 180290, "missing toy name must request item data")
+      for _, option in ipairs(dropdown._options or {}) do
+        Assert.False(option.value == "toy:180290", "uncached toy name must not be shown as a raw numeric fallback")
+      end
+
+      toyName = "Nachtfae-Ruhestein"
+      itemDataFrame:FireEvent("GET_ITEM_INFO_RECEIVED", 180290, true)
+
+      local found = false
+      for _, option in ipairs(dropdown._options or {}) do
+        if option.value == "toy:180290" then
+          found = true
+          Assert.Equal(
+            option.fallback,
+            "Nachtfae-Ruhestein",
+            "loaded item info must refresh the German toy option label"
+          )
+        end
+      end
+      Assert.True(found, "loaded toy name must make the owned toy selectable")
+    end)
+  end)
 end
 
 local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, LoadAddonModules)
@@ -810,7 +975,7 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
   end)
 
   test("Settings panel refresh localizes behavior auto and raid notes", function()
-    local createFrameStub = BuildCreateFrameStub()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
     local activeLocale = "enUS"
 
@@ -855,6 +1020,15 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
       raidNote = Assert.NotNil(raidNote, "settings panel should create the raid behavior note")
       Assert.Equal(autoNote._sectionKey, "SETTINGS_AUTO_TRIGGERS_NOTE", "auto-trigger note should keep its locale key")
       Assert.Equal(raidNote._sectionKey, "SETTINGS_RAID_TRANSITION_NOTE", "raid note should keep its locale key")
+      local hearthstoneDropdown = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._settingKey == "SETTINGS_HEARTHSTONE_SELECT" then
+          hearthstoneDropdown = frame
+          break
+        end
+      end
+      hearthstoneDropdown = Assert.NotNil(hearthstoneDropdown, "settings panel should create the hearthstone selector")
+      Assert.NotNil(hearthstoneDropdown._label, "hearthstone selector must expose its localized label")
 
       for locale, texts in pairs(localeTexts) do
         activeLocale = locale
@@ -865,8 +1039,62 @@ local function RegisterSettingsPanelBehaviorTests(test, Assert, WithGlobals, Loa
           "auto-trigger note must refresh for " .. locale
         )
         Assert.Equal(raidNote:GetText(), texts.SETTINGS_RAID_TRANSITION_NOTE, "raid note must refresh for " .. locale)
+        Assert.Equal(
+          hearthstoneDropdown._label:GetText(),
+          texts.SETTINGS_HEARTHSTONE_SELECT,
+          "hearthstone selector label must refresh for " .. locale
+        )
       end
     end)
+  end)
+
+  test("Locale hearthstone settings strings are localized per supported language", function()
+    local addon = LoadAddonModules({ "isiLive_texts.lua" })
+    local localeTexts = addon.Texts.GetLocaleTables()
+    Assert.Equal(
+      localeTexts.deDE.SETTINGS_HEARTHSTONE_SELECT,
+      "Ruhestein-Auswahl",
+      "German hearthstone selector label must not fall back to English"
+    )
+    Assert.Equal(
+      localeTexts.deDE.SETTINGS_HEARTHSTONE_RANDOM,
+      "Zufaelliger eigener Ruhestein",
+      "German random hearthstone option must be localized"
+    )
+    Assert.Equal(
+      localeTexts.deDE.SETTINGS_HEARTHSTONE_DEFAULT,
+      "Standard-Ruhestein (6948)",
+      "German default hearthstone option must be localized"
+    )
+
+    for locale, texts in pairs(localeTexts) do
+      Assert.True(
+        type(texts.SETTINGS_HEARTHSTONE_SELECT) == "string" and texts.SETTINGS_HEARTHSTONE_SELECT ~= "",
+        "hearthstone selector label must be present for " .. locale
+      )
+      Assert.True(
+        type(texts.SETTINGS_HEARTHSTONE_RANDOM) == "string" and texts.SETTINGS_HEARTHSTONE_RANDOM ~= "",
+        "random hearthstone option must be present for " .. locale
+      )
+      Assert.True(
+        type(texts.SETTINGS_HEARTHSTONE_DEFAULT) == "string" and texts.SETTINGS_HEARTHSTONE_DEFAULT ~= "",
+        "default hearthstone option must be present for " .. locale
+      )
+      if locale ~= "deDE" then
+        Assert.False(
+          texts.SETTINGS_HEARTHSTONE_SELECT:find("Ruhestein", 1, true) ~= nil,
+          "non-German hearthstone selector label must not contain German text for " .. locale
+        )
+        Assert.False(
+          texts.SETTINGS_HEARTHSTONE_RANDOM:find("Ruhestein", 1, true) ~= nil,
+          "non-German random hearthstone option must not contain German text for " .. locale
+        )
+        Assert.False(
+          texts.SETTINGS_HEARTHSTONE_DEFAULT:find("Ruhestein", 1, true) ~= nil,
+          "non-German default hearthstone option must not contain German text for " .. locale
+        )
+      end
+    end
   end)
 
   test("Settings panel defaults Login / Reload auto-show and Key-End auto-open to enabled", function()
@@ -1438,6 +1666,114 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
     end)
   end)
 
+  test("Settings panel exposes VIP guest sound toggle and applies astral aurochs muting", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = {}
+    local muted = {}
+    local unmuted = {}
+
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      MuteSoundFile = function(id)
+        muted[#muted + 1] = id
+      end,
+      UnmuteSoundFile = function(id)
+        unmuted[#unmuted + 1] = id
+      end,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_sound_utils.lua", "isiLive_settings.lua" })
+      local panel = addon.SettingsPanel.Create({
+        getL = function()
+          return {
+            SETTINGS_SECTION_VIP_GUESTS = "VIP Guest Settings",
+            SETTINGS_SECTION_VIP_GUESTS_HINT = "Special sound controls.",
+            SETTINGS_VIP_ASTRAL_AUROCHS_SOUND = "Mute Astral Aurochs mount sound",
+            SETTINGS_VIP_GRAND_EXPEDITION_YAK_SOUND = "Mute Grand Expedition Yak mount sound",
+            SETTINGS_VIP_GILDED_BRUTOSAUR_SOUND = "Mute Trader Brutosaur mount sound",
+          }
+        end,
+        getCurrentLocale = function()
+          return "enUS"
+        end,
+        setLanguage = function() end,
+        getDB = function()
+          return db
+        end,
+      })
+
+      Assert.NotNil(panel, "settings panel should be created when Blizzard Settings API exists")
+      Assert.Nil(db.vipAstralAurochsSoundMuted, "opening settings should not persist the default VIP mute state")
+
+      local vipHeader = nil
+      local aurochsCheck = nil
+      local yakCheck = nil
+      local brutosaurCheck = nil
+      for _, frame in ipairs(createdFrames) do
+        if frame._sectionKey == "SETTINGS_SECTION_VIP_GUESTS" then
+          vipHeader = vipHeader or frame
+        end
+        if frame._settingKey == "SETTINGS_VIP_ASTRAL_AUROCHS_SOUND" then
+          aurochsCheck = frame
+        elseif frame._settingKey == "SETTINGS_VIP_GRAND_EXPEDITION_YAK_SOUND" then
+          yakCheck = frame
+        elseif frame._settingKey == "SETTINGS_VIP_GILDED_BRUTOSAUR_SOUND" then
+          brutosaurCheck = frame
+        end
+      end
+
+      Assert.NotNil(vipHeader, "settings panel should create the VIP guest section")
+      aurochsCheck = Assert.NotNil(aurochsCheck, "settings panel should create the astral aurochs sound checkbox")
+      yakCheck = Assert.NotNil(yakCheck, "settings panel should create the grand expedition yak sound checkbox")
+      brutosaurCheck = Assert.NotNil(brutosaurCheck, "settings panel should create the gilded brutosaur sound checkbox")
+      ---@diagnostic disable: undefined-field
+      Assert.False(aurochsCheck:GetChecked(), "astral aurochs sound mute should default to off")
+      Assert.False(yakCheck:GetChecked(), "grand expedition yak sound mute should default to off")
+      Assert.False(brutosaurCheck:GetChecked(), "gilded brutosaur sound mute should default to off")
+      local onClick =
+        Assert.NotNil(aurochsCheck._scripts and aurochsCheck._scripts.OnClick or nil, "VIP checkbox needs OnClick")
+
+      aurochsCheck:SetChecked(true)
+      onClick(aurochsCheck)
+      Assert.True(db.vipAstralAurochsSoundMuted, "checking the VIP sound option should persist muted=true")
+      Assert.True(#muted >= 88, "checking the VIP sound option should mute every known astral aurochs file")
+      Assert.Equal(muted[1], 7340960, "muting should include the model-sound first file")
+      Assert.Equal(muted[#muted], 6788058, "muting should include the model loop tail file")
+
+      aurochsCheck:SetChecked(false)
+      onClick(aurochsCheck)
+      Assert.False(db.vipAstralAurochsSoundMuted, "unchecking the VIP sound option should persist muted=false")
+      Assert.Equal(#unmuted, #muted, "unchecking should unmute the same number of astral aurochs files")
+
+      panel.Refresh()
+      Assert.False(aurochsCheck:GetChecked(), "refresh should keep the unmuted VIP sound state")
+      local yakOnClick =
+        Assert.NotNil(yakCheck._scripts and yakCheck._scripts.OnClick or nil, "yak VIP checkbox needs OnClick")
+      local brutosaurOnClick = Assert.NotNil(
+        brutosaurCheck._scripts and brutosaurCheck._scripts.OnClick or nil,
+        "brutosaur VIP checkbox needs OnClick"
+      )
+      muted = {}
+      yakCheck:SetChecked(true)
+      yakOnClick(yakCheck)
+      Assert.True(db.vipGrandExpeditionYakSoundMuted, "checking the yak option should persist muted=true")
+      Assert.Equal(muted[1], 613111, "yak muting should include the verified first model sound file")
+      muted = {}
+      brutosaurCheck:SetChecked(true)
+      brutosaurOnClick(brutosaurCheck)
+      Assert.True(db.vipGildedBrutosaurSoundMuted, "checking the brutosaur option should persist muted=true")
+      Assert.Equal(muted[1], 1824124, "brutosaur muting should include the verified first model sound file")
+      ---@diagnostic enable: undefined-field
+    end)
+  end)
+
   test("Settings panel expands layout height for wrapped intro and hint text", function()
     local function BuildPanelHeight(textSet)
       local createFrameStub = BuildCreateFrameStub()
@@ -1727,11 +2063,12 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        31,
+        34,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
           .. " chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, stats-box toggles, and the two auto-close split checkboxes visible"
+          .. " accepted-invite-notice, stats-box toggles, VIP sound toggles,"
+          .. " and the two auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
 
@@ -1739,10 +2076,11 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 7, "refresh should keep the stats-box and nameplate sliders visible")
       Assert.Equal(
         checkboxCount,
-        31,
+        34,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, stats-box toggles, and the two auto-close split checkboxes"
+          .. " accepted-invite-notice, stats-box toggles, VIP sound toggles,"
+          .. " and the two auto-close split checkboxes"
       )
     end)
   end)

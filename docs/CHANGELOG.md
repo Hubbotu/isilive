@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-05-24 - Version 0.9.273 (patch)
+
+Adds the Settings-driven Hearthstone travel selection, VIP guest mount sound
+muting, and the matching deterministic coverage.
+
+### Hearthstone Selection
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua),
+[testmodul/isilive_test_scenarios_ui_settings.lua](../testmodul/isilive_test_scenarios_ui_settings.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Added a Settings dropdown for `random-owned`, the default Hearthstone item,
+  and specific owned Hearthstone toys.
+- Refreshes the selectable list on toy and item-info updates, keeps
+  covenant/race-gated toys hidden until ownership is verified, and avoids
+  numeric fallback display for unresolved names.
+- Shows client-localized toy names for the German addon locale and verified
+  English names for all other addon languages.
+- Applies the selected Hearthstone to the ESC travel button and defers secure
+  action attribute updates while combat lockdown or active keydown would block
+  them.
+
+### VIP Guest Sounds
+
+[core/isiLive_sound_utils.lua](../core/isiLive_sound_utils.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[testmodul/isilive_test_scenarios_db_schema.lua](../testmodul/isilive_test_scenarios_db_schema.lua):
+
+- Added VIP Guest Settings mute toggles for Astral Aurochs, Grand Expedition
+  Yak, and Trader's Gilded Brutosaur mount sounds.
+- Applies verified sound file ID sets through Blizzard's `MuteSoundFile` and
+  `UnmuteSoundFile` APIs on login/reload and immediate Settings changes.
+- Migrated the legacy Astral Aurochs enabled flag into the new muted SavedVariable
+  shape and added persisted defaults for all three toggles.
+
+### Settings / Localization
+
+- Localized the Hearthstone selection and VIP sound Settings strings.
+- Widened the Hearthstone dropdown to prevent label wrapping in the Settings
+  canvas.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.273`.
+- Updated the validator baseline to `1841` scenarios.
+
 ## 2026-05-23 - Version 0.9.272 (patch)
 
 Fixes combat-lockdown taint in leader-management button refreshes and syncs

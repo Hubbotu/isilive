@@ -187,41 +187,114 @@ local MOUNT_PANEL_UI_ENTRIES = {
     spellID = REPAIR_MOUNT_SPELL_ID,
   },
 }
--- Hearthstone toy item IDs (collected from the WoW item database).
-local HEARTHSTONE_TOY_IDS = {
-  54452,
-  64488,
-  93672,
-  142542,
-  162973,
-  163045,
-  163206,
-  165669,
-  165670,
-  165802,
-  166746,
-  166747,
-  168907,
-  172179,
-  188952,
-  190196,
-  190237,
-  193588,
-  200630,
-  206195,
-  208704,
-  209035,
-  212337,
-  228940,
-  235016,
-  236687,
-  245970,
-  246565,
-  257736,
-  263489,
-  263933,
-  265100,
+local covenantRenownCriteria = nil
+local function HasCompletedCovenantRenownCriteria(criteriaIndex)
+  criteriaIndex = tonumber(criteriaIndex)
+  if not criteriaIndex then
+    return false
+  end
+  if covenantRenownCriteria == nil then
+    covenantRenownCriteria = {}
+    local getCriteriaInfo = rawget(_G, "GetAchievementCriteriaInfo")
+    if type(getCriteriaInfo) == "function" then
+      for index = 1, 4 do
+        local ok, _, _, completed = pcall(getCriteriaInfo, 15646, index)
+        covenantRenownCriteria[index] = ok and completed == true or false
+      end
+    end
+  end
+  return covenantRenownCriteria[criteriaIndex] == true
+end
+
+local function HasActiveCovenant(covenantID)
+  local covenantsApi = rawget(_G, "C_Covenants")
+  if type(covenantsApi) ~= "table" or type(covenantsApi.GetActiveCovenantID) ~= "function" then
+    return false
+  end
+  local ok, activeID = pcall(covenantsApi.GetActiveCovenantID)
+  return ok and activeID == covenantID
+end
+
+local function PlayerRaceIDIs(...)
+  local unitRace = rawget(_G, "UnitRace")
+  if type(unitRace) ~= "function" then
+    return false
+  end
+  local ok, _, _, raceID = pcall(unitRace, "player")
+  if not ok then
+    return false
+  end
+  for index = 1, select("#", ...) do
+    if raceID == select(index, ...) then
+      return true
+    end
+  end
+  return false
+end
+
+local function IsNightFaeHearthstoneUsable()
+  return HasCompletedCovenantRenownCriteria(3) or HasActiveCovenant(3)
+end
+
+local function IsNecrolordHearthstoneUsable()
+  return HasCompletedCovenantRenownCriteria(2) or HasActiveCovenant(4)
+end
+
+local function IsVenthyrHearthstoneUsable()
+  return HasCompletedCovenantRenownCriteria(4) or HasActiveCovenant(2)
+end
+
+local function IsKyrianHearthstoneUsable()
+  return HasCompletedCovenantRenownCriteria(1) or HasActiveCovenant(1)
+end
+
+local function IsDraenicHologemUsable()
+  return PlayerRaceIDIs(11, 30)
+end
+
+local HEARTHSTONE_TOYS = {
+  { id = 54452, englishName = "Ethereal Portal" },
+  { id = 64488, englishName = "The Innkeeper's Daughter" },
+  { id = 93672, englishName = "Dark Portal" },
+  { id = 142542, englishName = "Tome of Town Portal" },
+  { id = 162973, englishName = "Greatfather Winter's Hearthstone" },
+  { id = 163045, englishName = "Headless Horseman's Hearthstone" },
+  { id = 163206, englishName = "Weary Spirit Binding" },
+  { id = 165669, englishName = "Lunar Elder's Hearthstone" },
+  { id = 165670, englishName = "Peddlefeet's Lovely Hearthstone" },
+  { id = 165802, englishName = "Noble Gardener's Hearthstone" },
+  { id = 166746, englishName = "Fire Eater's Hearthstone" },
+  { id = 166747, englishName = "Brewfest Reveler's Hearthstone" },
+  { id = 168907, englishName = "Holographic Digitalization Hearthstone" },
+  { id = 172179, englishName = "Eternal Traveler's Hearthstone" },
+  { id = 180290, englishName = "Night Fae Hearthstone", usable = IsNightFaeHearthstoneUsable },
+  { id = 182773, englishName = "Necrolord Hearthstone", usable = IsNecrolordHearthstoneUsable },
+  { id = 183716, englishName = "Venthyr Sinstone", usable = IsVenthyrHearthstoneUsable },
+  { id = 184353, englishName = "Kyrian Hearthstone", usable = IsKyrianHearthstoneUsable },
+  { id = 188952, englishName = "Dominated Hearthstone" },
+  { id = 190196, englishName = "Enlightened Hearthstone" },
+  { id = 190237, englishName = "Broker Translocation Matrix" },
+  { id = 193588, englishName = "Timewalker's Hearthstone" },
+  { id = 200630, englishName = "Ohn'ir Windsage's Hearthstone" },
+  { id = 206195, englishName = "Path of the Naaru" },
+  { id = 208704, englishName = "Deepdweller's Earthen Hearthstone" },
+  { id = 209035, englishName = "Hearthstone of the Flame" },
+  { id = 210455, englishName = "Draenic Hologem", usable = IsDraenicHologemUsable },
+  { id = 212337, englishName = "Stone of the Hearth" },
+  { id = 228940, englishName = "Notorious Thread's Hearthstone" },
+  { id = 235016, englishName = "Redeployment Module" },
+  { id = 236687, englishName = "Explosive Hearthstone" },
+  { id = 245970, englishName = "P.O.S.T. Master's Express Hearthstone" },
+  { id = 246565, englishName = "Cosmic Hearthstone" },
+  { id = 257736, englishName = "Lightcalled Hearthstone" },
+  { id = 263489, englishName = "Naaru's Enfold" },
+  { id = 263933, englishName = "Preyseeker's Hearthstone" },
+  { id = 265100, englishName = "Corewarden's Hearthstone" },
 }
+local HEARTHSTONE_TOY_LOOKUP = {}
+for _, entry in ipairs(HEARTHSTONE_TOYS) do
+  HEARTHSTONE_TOY_LOOKUP[entry.id] = entry
+end
 local housingSecureButton = nil
 local housingDataEventFrame = nil
 local hearthstoneSecureButton = nil
@@ -256,13 +329,84 @@ local function CollectOwnedHearthstoneToys()
   if type(playerHasToy) ~= "function" then
     return owned
   end
-  for _, toyId in ipairs(HEARTHSTONE_TOY_IDS) do
-    if playerHasToy(toyId) then
-      owned[#owned + 1] = toyId
+  for _, entry in ipairs(HEARTHSTONE_TOYS) do
+    local ok, hasToy = pcall(playerHasToy, entry.id)
+    if ok and hasToy == true then
+      local usable = true
+      if type(entry.usable) == "function" then
+        local okUsable, result = pcall(entry.usable)
+        usable = okUsable and result == true
+      end
+      if usable then
+        owned[#owned + 1] = entry.id
+      end
     end
   end
   return owned
 end
+
+local function IsAvailableHearthstoneToy(toyId)
+  toyId = tonumber(toyId)
+  if not toyId or not HEARTHSTONE_TOY_LOOKUP[toyId] then
+    return false
+  end
+  local playerHasToy = rawget(_G, "PlayerHasToy")
+  if type(playerHasToy) ~= "function" then
+    return false
+  end
+  local ok, hasToy = pcall(playerHasToy, toyId)
+  if not ok or hasToy ~= true then
+    return false
+  end
+  local usable = HEARTHSTONE_TOY_LOOKUP[toyId].usable
+  if type(usable) ~= "function" then
+    return true
+  end
+  local okUsable, result = pcall(usable)
+  return okUsable and result == true
+end
+
+local function GetHearthstoneToyEnglishName(toyId)
+  toyId = tonumber(toyId)
+  local entry = toyId and HEARTHSTONE_TOY_LOOKUP[toyId] or nil
+  if type(entry) ~= "table" or type(entry.englishName) ~= "string" or entry.englishName == "" then
+    return nil
+  end
+  return entry.englishName
+end
+
+local function ResolveHearthstoneChoice(choice)
+  if type(choice) == "number" then
+    return IsAvailableHearthstoneToy(choice) and choice or nil, nil
+  end
+
+  if type(choice) ~= "string" then
+    return nil, nil
+  end
+
+  local normalized = tostring(choice)
+  local toyId = normalized:match("^toy:(%d+)$")
+  if toyId then
+    local numericToyId = tonumber(toyId)
+    return IsAvailableHearthstoneToy(numericToyId) and numericToyId or nil, nil
+  end
+
+  if normalized == "item:6948" then
+    return nil, normalized
+  end
+
+  local numericToyId = tonumber(normalized)
+  if numericToyId then
+    return IsAvailableHearthstoneToy(numericToyId) and numericToyId or nil, nil
+  end
+
+  return nil, nil
+end
+
+-- Export helper so other modules (settings) can query owned hearthstone toys.
+addonTable.UI = addonTable.UI or {}
+addonTable.UI.CollectOwnedHearthstoneToys = CollectOwnedHearthstoneToys
+addonTable.UI.GetHearthstoneToyEnglishName = GetHearthstoneToyEnglishName
 local SECOND_PANEL_UI_ENTRIES = {
   {
     id = "arkanatine_key",
@@ -323,8 +467,31 @@ local function IsPanelUISecureMacroButton(button)
   return type(button) == "table" and type(button._secureMacroText) == "string" and button._secureMacroText ~= ""
 end
 
+local function IsChallengeModeActiveForSecureUI()
+  local challengeMode = rawget(_G, "C_ChallengeMode")
+  if type(challengeMode) ~= "table" then
+    return false
+  end
+  if type(challengeMode.IsChallengeModeActive) == "function" then
+    local ok, active = pcall(challengeMode.IsChallengeModeActive)
+    if ok and active == true then
+      return true
+    end
+  end
+  if type(challengeMode.GetActiveChallengeMapID) == "function" then
+    local ok, mapID = pcall(challengeMode.GetActiveChallengeMapID)
+    if ok and tonumber(mapID) ~= nil then
+      return true
+    end
+  end
+  return false
+end
+
 local function IsPanelUISecureUpdateBlocked(state)
-  return type(state) == "table" and type(state.isInCombat) == "function" and state.isInCombat() == true
+  if type(state) == "table" and type(state.isInCombat) == "function" and state.isInCombat() == true then
+    return true
+  end
+  return IsChallengeModeActiveForSecureUI()
 end
 
 local function ClearQueuedPanelUISecureState(state)
@@ -674,9 +841,38 @@ local function RefreshPanelUISecureButton(button)
   if type(button.RegisterForClicks) == "function" then
     button:RegisterForClicks(clickBinding)
   end
+
+  if type(button._actionId) == "string" and button._actionId == "hearthstone" then
+    local db = rawget(_G, "IsiLiveDB") or {}
+    local explicitToyId, explicitItemString = ResolveHearthstoneChoice(db.hearthstoneChoice)
+    if explicitToyId then
+      button:SetAttribute("type", "toy")
+      button:SetAttribute("toy", explicitToyId)
+      button._hearthstoneOwnedToys = { explicitToyId }
+    elseif explicitItemString then
+      button:SetAttribute("type", "item")
+      button:SetAttribute("item", explicitItemString)
+      button._hearthstoneOwnedToys = nil
+    else
+      local collect = addonTable.UI and addonTable.UI.CollectOwnedHearthstoneToys
+      local pool = type(collect) == "function" and collect() or {}
+      if type(pool) == "table" and #pool > 0 then
+        button._hearthstoneOwnedToys = pool
+        button:SetAttribute("type", "toy")
+        button:SetAttribute("toy", pool[math.random(1, #pool)])
+      else
+        button:SetAttribute("type", "item")
+        button:SetAttribute("item", "item:6948")
+        button._hearthstoneOwnedToys = nil
+      end
+    end
+    return
+  end
+
   if not IsPanelUISecureMacroButton(button) then
     return
   end
+
   button:SetAttribute("type", "macro")
   button:SetAttribute("type1", "macro")
   button:SetAttribute("*type1", "macro")
@@ -1859,38 +2055,25 @@ function UI.EnsureSecondPanelUI(opts)
     button._verticalIndex = index
     button._secureMacroText = resolvedMacroText
     button._isSecurePanelAction = isSecure
+    button._panelUIState = state
 
     if (entry.id == "hearthstone" or entry.id == "housing_plot") and type(button.SetAttribute) == "function" then
-      local clickBinding, useOnKeyDown = ResolveSecureClickBinding()
-      if type(button.RegisterForClicks) == "function" then
-        button:RegisterForClicks(clickBinding)
+      if IsPanelUISecureUpdateBlocked(state) then
+        QueuePanelUISecureStateRefresh(state)
+      else
+        local clickBinding, useOnKeyDown = ResolveSecureClickBinding()
+        if type(button.RegisterForClicks) == "function" then
+          button:RegisterForClicks(clickBinding)
+        end
+        button:SetAttribute("useOnKeyDown", useOnKeyDown)
       end
-      button:SetAttribute("useOnKeyDown", useOnKeyDown)
     end
 
     if entry.id == "hearthstone" and type(button.SetAttribute) == "function" then
-      -- Collect every owned hearthstone toy. Picking just the first match
-      -- via `break` made the button bind the same toy forever; the user
-      -- expects each click to roll a different one. We re-roll lazily in
-      -- the PreClick hook below so the secure action button still casts
-      -- in a single click without an extra round-trip.
-      local ownedToys = CollectOwnedHearthstoneToys()
-
-      if #ownedToys > 0 then
-        button._hearthstoneOwnedToys = ownedToys
-        local initialIndex = math.random(1, #ownedToys)
-        button:SetAttribute("type", "toy")
-        button:SetAttribute("toy", ownedToys[initialIndex])
+      if IsPanelUISecureUpdateBlocked(state) then
+        QueuePanelUISecureStateRefresh(state)
       else
-        -- Toy cache not warm yet (typical right after a character login on
-        -- the same account: ApplyLocalizationToUI runs from ADDON_LOADED
-        -- before TOYS_UPDATED fires). Use the regular Hearthstone (item
-        -- 6948) as interim. The TOYS_UPDATED listener and the PreClick
-        -- rebuild below upgrade the button to a random toy as soon as the
-        -- cache is available, so the bug where the button stayed stuck on
-        -- the item fallback for the whole session is now self-healing.
-        button:SetAttribute("type", "item")
-        button:SetAttribute("item", "item:6948")
+        RefreshPanelUISecureButton(button)
       end
 
       hearthstoneSecureButton = button
@@ -1906,6 +2089,14 @@ function UI.EnsureSecondPanelUI(opts)
           end
           local inCombat = rawget(_G, "InCombatLockdown")
           if type(inCombat) == "function" and inCombat() then
+            QueuePanelUISecureStateRefresh(btn._panelUIState)
+            return
+          end
+          -- Respect a user-set choice in the settings: if a fixed toy or
+          -- explicit item is selected, do not override it on TOYS_UPDATED.
+          local db = rawget(_G, "IsiLiveDB") or {}
+          local explicitToyId, explicitItemString = ResolveHearthstoneChoice(db.hearthstoneChoice)
+          if explicitToyId or explicitItemString then
             return
           end
           local refreshed = CollectOwnedHearthstoneToys()
@@ -1923,6 +2114,11 @@ function UI.EnsureSecondPanelUI(opts)
         local function PickRandomHearthstoneToy()
           local inCombat = rawget(_G, "InCombatLockdown")
           if type(inCombat) == "function" and inCombat() then
+            return
+          end
+          local db = rawget(_G, "IsiLiveDB") or {}
+          local explicitToyId, explicitItemString = ResolveHearthstoneChoice(db.hearthstoneChoice)
+          if explicitToyId or explicitItemString then
             return
           end
           local pool = button._hearthstoneOwnedToys
