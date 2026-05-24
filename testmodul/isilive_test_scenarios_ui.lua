@@ -1252,6 +1252,130 @@ local function RegisterGameMenuReloadButtonDeferredTests(test, Assert, WithGloba
     end)
   end)
 
+  test("UI third game-menu addon shortcut uses current-character enable state", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local loaded = {
+      Details = false,
+    }
+    local loadCalls = {}
+    local slashCalls = {}
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      UnitName = function(unit)
+        Assert.Equal(unit, "player", "addon shortcut enable state should resolve the current player name")
+        return "Activechar"
+      end,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Details" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(addOnName, character)
+          Assert.Equal(addOnName, "Details", "enable state should be queried for Details")
+          Assert.Equal(character, "Activechar", "enable state must be scoped to the current character")
+          return 2
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return loaded[addOnName] == true
+        end,
+        LoadAddOn = function(addOnName)
+          loadCalls[#loadCalls + 1] = addOnName
+          loaded[addOnName] = true
+        end,
+      },
+      SlashCmdList = {
+        DETAILS = function(msg)
+          slashCalls[#slashCalls + 1] = msg
+        end,
+      },
+      SLASH_DETAILS1 = "/details",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+      addonStrip = Assert.NotNil(addonStrip, "addon shortcut panel should exist for current-character Details")
+
+      local detailsButton =
+        RequireValue(addonStrip.buttonsById.details, "current-character Details button should exist")
+      local onClick = detailsButton._scripts and detailsButton._scripts.OnClick
+      onClick = Assert.NotNil(onClick, "Details shortcut must define OnClick")
+      onClick(detailsButton, "LeftButton")
+
+      Assert.Equal(loadCalls[1], "Details", "current-character enabled addon should be loaded on click")
+      Assert.Equal(slashCalls[1], "options", "current-character enabled addon should run its slash handler")
+    end)
+  end)
+
+  test("UI third game-menu addon panel hides addons enabled only on another character", function()
+    local createFrameStub = BuildCreateFrameStub()
+    local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")
+    local closeButton = createFrameStub("Button", nil, gameMenuFrame, "UIPanelCloseButton")
+    gameMenuFrame.CloseButton = closeButton
+    local loadCalls = 0
+
+    WithGlobals({
+      CreateFrame = createFrameStub,
+      GameMenuFrame = gameMenuFrame,
+      UnitName = function()
+        return "Currentchar"
+      end,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Details" then
+            return { name = addOnName }
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(_addOnName, character)
+          if character == "Currentchar" then
+            return 0
+          end
+          return 1
+        end,
+        IsAddOnLoaded = function()
+          return false
+        end,
+        LoadAddOn = function()
+          loadCalls = loadCalls + 1
+        end,
+      },
+      SlashCmdList = {
+        DETAILS = function() end,
+      },
+      SLASH_DETAILS1 = "/details",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_common.lua", "isiLive_ui.lua" })
+      local UI = RequireValue(addon.UI, "UI module should load")
+      local toolingStrip = UI.EnsurePanelUI({ gameMenuFrame = gameMenuFrame })
+      local travelStrip = UI.EnsureSecondPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        firstPanelState = toolingStrip,
+      })
+      local addonStrip = UI.EnsureThirdPanelUI({
+        gameMenuFrame = gameMenuFrame,
+        secondPanelState = travelStrip,
+      })
+
+      Assert.Nil(addonStrip, "addon panel must stay hidden when supported addons are disabled on this character")
+      Assert.Equal(loadCalls, 0, "disabled current-character addons must not be loaded by shortcut setup")
+    end)
+  end)
+
   test("UI third game-menu isiLive shortcut can use direct settings action without self-load", function()
     local createFrameStub = BuildCreateFrameStub()
     local gameMenuFrame = createFrameStub("Frame", "GameMenuFrame", nil, "BackdropTemplate")

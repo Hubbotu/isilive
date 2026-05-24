@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-25 - Pending
+
+Fixes ESC Addons shortcut visibility for per-character addon enable states.
+
+### ESC Addons Panel
+
+[ui/isiLive_ui_game_menu_actions.lua](../ui/isiLive_ui_game_menu_actions.lua),
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md):
+
+- Scoped supported external addon shortcut visibility to the current character's
+  enable state instead of treating the global `Some` state as active.
+- Prevents shortcuts from appearing for addons that are installed and enabled on
+  another character but disabled on the current character, which could leave the
+  button visible while `LoadAddOn` fails with a disabled target.
+- Added deterministic coverage for current-character enabled shortcuts and the
+  "enabled only on another character" fail-closed path.
+
 ## 2026-05-24 - Version 0.9.274 (patch)
 
 Splits the large UI orchestration files into focused modules and pins the new

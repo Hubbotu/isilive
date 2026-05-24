@@ -145,29 +145,53 @@ local function IsAddOnInstalled(addOnName)
   return false
 end
 
+local function ResolveCurrentCharacterName()
+  local unitName = rawget(_G, "UnitName")
+  if type(unitName) ~= "function" then
+    return nil
+  end
+
+  local ok, name = pcall(unitName, "player")
+  if not ok or type(name) ~= "string" or name == "" then
+    return nil
+  end
+
+  return name
+end
+
+local function IsEnabledStateForCurrentCharacter(state, hasCurrentCharacter)
+  if type(state) == "boolean" then
+    return state == true
+  end
+  if type(state) ~= "number" then
+    return false
+  end
+  if hasCurrentCharacter then
+    return state == 2
+  end
+  return state == 2
+end
+
 local function IsAddOnEnabled(addOnName)
   if type(addOnName) ~= "string" or addOnName == "" then
     return false
   end
 
+  local currentCharacter = ResolveCurrentCharacterName()
+  local hasCurrentCharacter = type(currentCharacter) == "string" and currentCharacter ~= ""
   local cAddOns = rawget(_G, "C_AddOns")
   if type(cAddOns) == "table" and type(cAddOns.GetAddOnEnableState) == "function" then
-    local ok, state = pcall(cAddOns.GetAddOnEnableState, addOnName, nil)
+    local ok, state = pcall(cAddOns.GetAddOnEnableState, addOnName, currentCharacter)
     if ok then
-      if type(state) == "number" then
-        return state > 0
-      end
-      if type(state) == "boolean" then
-        return state == true
-      end
+      return IsEnabledStateForCurrentCharacter(state, hasCurrentCharacter)
     end
   end
 
   local getAddOnEnableState = rawget(_G, "GetAddOnEnableState")
   if type(getAddOnEnableState) == "function" then
-    local ok, state = pcall(getAddOnEnableState, nil, addOnName)
-    if ok and type(state) == "number" then
-      return state > 0
+    local ok, state = pcall(getAddOnEnableState, currentCharacter, addOnName)
+    if ok then
+      return IsEnabledStateForCurrentCharacter(state, hasCurrentCharacter)
     end
   end
 
