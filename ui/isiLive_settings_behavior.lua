@@ -201,7 +201,12 @@ function SettingsBehavior.RefreshControls(controls, labels, db)
   if controls.behaviorHeader then
     controls.behaviorHeader:SetText(labels.SETTINGS_SECTION_BEHAVIOR or "Behavior")
   end
-  SetLocalizedText(controls.behaviorHint, labels, "SETTINGS_SECTION_BEHAVIOR_HINT", "Sync, auto-open, combat, and raid handling.")
+  SetLocalizedText(
+    controls.behaviorHint,
+    labels,
+    "SETTINGS_SECTION_BEHAVIOR_HINT",
+    "Sync, auto-open, combat, and raid handling."
+  )
   SetLocalizedText(
     controls.autoTriggersNote,
     labels,

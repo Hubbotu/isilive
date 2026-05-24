@@ -314,7 +314,6 @@ local function IsAnyNamedFrameShown(frameNames)
   return false
 end
 
-
 local function OpenViaMicroButton(buttonName, targetFrameNames, fallbackFn, ...)
   if IsAnyNamedFrameShown(targetFrameNames) then
     return true
@@ -495,8 +494,6 @@ local function ResolveVisibleAddonPanelEntries()
   end
   return visible
 end
-
-
 
 Actions.BuildDefaultPanelUIActions = BuildDefaultPanelUIActions
 Actions.MergePanelUIActions = MergePanelUIActions

@@ -247,7 +247,5 @@ local function ResolveVisibleMountPanelEntries()
   return visible
 end
 
-
-
 Mounts.ResolveVisibleMountPanelEntries = ResolveVisibleMountPanelEntries
 Mounts.MOUNT_PANEL_UI_ENTRIES = MOUNT_PANEL_UI_ENTRIES

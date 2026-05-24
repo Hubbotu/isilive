@@ -115,7 +115,6 @@ for _, entry in ipairs(HEARTHSTONE_TOYS) do
   HEARTHSTONE_TOY_LOOKUP[entry.id] = entry
 end
 
-
 local function CollectOwnedHearthstoneToys()
   local playerHasToy = rawget(_G, "PlayerHasToy")
   local owned = {}

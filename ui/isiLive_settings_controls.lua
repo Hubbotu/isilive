@@ -241,7 +241,15 @@ function SettingsControls.CreateSettingsSlider(
     yOffset - rowHeight
 end
 
-function SettingsControls.CreateSettingsActionButton(parent, yOffset, labelText, width, onClick, settingKey, subtitleText)
+function SettingsControls.CreateSettingsActionButton(
+  parent,
+  yOffset,
+  labelText,
+  width,
+  onClick,
+  settingKey,
+  subtitleText
+)
   local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
   local buttonWidth = tonumber(width) or 200
   local hasSubtitle = type(subtitleText) == "string" and subtitleText ~= ""

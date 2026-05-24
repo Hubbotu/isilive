@@ -634,7 +634,12 @@ function SettingsSections.RefreshDisplayControls(controls, labels, db, config)
   if controls.displayHeader then
     controls.displayHeader:SetText(labels.SETTINGS_SECTION_DISPLAY or "Display")
   end
-  SetLocalizedText(controls.displayHint, labels, "SETTINGS_SECTION_DISPLAY_HINT", "Scale, opacity, and UI recovery tools.")
+  SetLocalizedText(
+    controls.displayHint,
+    labels,
+    "SETTINGS_SECTION_DISPLAY_HINT",
+    "Scale, opacity, and UI recovery tools."
+  )
 
   if controls.bgAlpha then
     controls.bgAlpha.label:SetText(labels.SETTINGS_BG_ALPHA or "Background Opacity")

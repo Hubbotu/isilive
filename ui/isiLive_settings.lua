@@ -160,7 +160,6 @@ local function RefreshSettingsControls(controls, config)
   if type(controls.nameplatePreviewUpdate) == "function" then
     controls.nameplatePreviewUpdate()
   end
-
 end
 
 function SettingsPanel.Create(opts)

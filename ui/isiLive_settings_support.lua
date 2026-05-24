@@ -261,7 +261,9 @@ function SettingsSupport.RefreshControls(controls, labels, db, config)
     controls.chatAnnounceBR.check:SetChecked(db.chatAnnounceBR ~= false)
   end
   if controls.chatAnnounceLust and controls.chatAnnounceLust.label then
-    controls.chatAnnounceLust.label:SetText(labels.SETTINGS_CHAT_LUST_ANNOUNCE or "Chat: Announce Bloodlust casts in M+")
+    controls.chatAnnounceLust.label:SetText(
+      labels.SETTINGS_CHAT_LUST_ANNOUNCE or "Chat: Announce Bloodlust casts in M+"
+    )
     controls.chatAnnounceLust.check:SetChecked(db.chatAnnounceLust ~= false)
   end
 
@@ -298,7 +300,9 @@ function SettingsSupport.RefreshControls(controls, labels, db, config)
     controls.resetDBBtn.label:SetText(labels.SETTINGS_RESET_DB or "Reset All Settings")
   end
   if controls.resetHint then
-    controls.resetHint:SetText(labels.SETTINGS_SECTION_RESET_HINT or "Use these actions to restore the frame or all settings.")
+    controls.resetHint:SetText(
+      labels.SETTINGS_SECTION_RESET_HINT or "Use these actions to restore the frame or all settings."
+    )
   end
 
   if controls.betaHeader then

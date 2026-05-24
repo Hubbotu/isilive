@@ -9,11 +9,15 @@ local MergePanelUIActions =
   assert(GameMenuActions.MergePanelUIActions, "isiLive: UIGameMenuActions.MergePanelUIActions missing")
 local BuildAddonPanelUIActions =
   assert(GameMenuActions.BuildAddonPanelUIActions, "isiLive: UIGameMenuActions.BuildAddonPanelUIActions missing")
-local ResolveVisibleAddonPanelEntries =
-  assert(GameMenuActions.ResolveVisibleAddonPanelEntries, "isiLive: UIGameMenuActions.ResolveVisibleAddonPanelEntries missing")
+local ResolveVisibleAddonPanelEntries = assert(
+  GameMenuActions.ResolveVisibleAddonPanelEntries,
+  "isiLive: UIGameMenuActions.ResolveVisibleAddonPanelEntries missing"
+)
 local GameMenuMounts = assert(addonTable.UIGameMenuMounts, "isiLive: UIGameMenuMounts missing")
-local ResolveVisibleMountPanelEntries =
-  assert(GameMenuMounts.ResolveVisibleMountPanelEntries, "isiLive: UIGameMenuMounts.ResolveVisibleMountPanelEntries missing")
+local ResolveVisibleMountPanelEntries = assert(
+  GameMenuMounts.ResolveVisibleMountPanelEntries,
+  "isiLive: UIGameMenuMounts.ResolveVisibleMountPanelEntries missing"
+)
 local MOUNT_PANEL_UI_ENTRIES =
   assert(GameMenuMounts.MOUNT_PANEL_UI_ENTRIES, "isiLive: UIGameMenuMounts.MOUNT_PANEL_UI_ENTRIES missing")
 local GameMenuTravel = assert(addonTable.UIGameMenuTravel, "isiLive: UIGameMenuTravel missing")

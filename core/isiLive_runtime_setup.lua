@@ -37,7 +37,8 @@ function RuntimeSetup.Configure(ctx)
   ctx.leaderWatchController = leaderWatchController
   leaderWatchController.Start()
 
-  local eventHandlersController = controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, eventContext)
+  local eventHandlersController =
+    controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, eventContext)
 
   bootstrap.RegisterSlashCommands(configBuilders.BuildSlashCommandsOpts(ctx))
 
