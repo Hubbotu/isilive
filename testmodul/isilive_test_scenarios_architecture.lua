@@ -66,7 +66,8 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
       Assert,
       factoryContent,
       "local runtimeSetupResult = isiLiveRuntimeSetup.Configure(runtimeSetupContext)",
-      "isiLive_factory.lua must delegate final assembly to RuntimeSetup.Configure through the named runtime setup context"
+      "isiLive_factory.lua must delegate final assembly to RuntimeSetup.Configure"
+        .. " through the named runtime setup context"
     )
     AssertNotContains(
       Assert,

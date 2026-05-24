@@ -28,8 +28,6 @@ local CollectOwnedHearthstoneToys =
 local ResolveHearthstoneChoice =
   assert(GameMenuTravel.ResolveHearthstoneChoice, "isiLive: UIGameMenuTravel.ResolveHearthstoneChoice missing")
 local Colors = addonTable.UICommon.Colors or {}
-local GetLocalizedText =
-  assert(addonTable.UICommon and addonTable.UICommon.GetLocalizedText, "isiLive: UICommon.GetLocalizedText missing")
 local DEFAULT_GAME_MENU_BUTTON_WIDTH = 120
 local DEFAULT_GAME_MENU_BUTTON_HEIGHT = 30
 local PANEL_UI_BUTTON_GAP = 1

@@ -16,7 +16,6 @@ local CreateLanguageSelector = addonTable.SettingsControls.CreateLanguageSelecto
 local CreateSettingsOptionSelector = addonTable.SettingsControls.CreateSettingsOptionSelector
 local CreateSettingsDropdownSelector = addonTable.SettingsControls.CreateSettingsDropdownSelector
 
-local PADDING_X = 16
 local SHOW_NAME_MAX_CHARS_SETTING = false
 local SHOW_TELEPORT_COLUMNS_SETTING = false
 local DEFAULT_LAYOUT_MODE_EXPANDED = "expanded"
