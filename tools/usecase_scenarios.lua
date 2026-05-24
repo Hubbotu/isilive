@@ -47,6 +47,7 @@ local scenarioFiles = {
   "testmodul/isilive_test_scenarios_ui_center_notice.lua",
   "testmodul/isilive_test_scenarios_ui_notice_branches.lua",
   "testmodul/isilive_test_scenarios_ui.lua",
+  "testmodul/isilive_test_scenarios_ui_game_menu_addons.lua",
   "testmodul/isilive_test_scenarios_ui_branches.lua",
   "testmodul/isilive_test_scenarios_ui_settings.lua",
   "testmodul/isilive_test_scenarios_roster_display.lua",
