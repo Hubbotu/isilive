@@ -29,6 +29,10 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 5. `ControllerWiring` exportiert Context-Factories fuer Group- und Event-Controller.
 6. `ConfigBuilders` bleibt fokussiert und fuehrt keine Legacy-Builder fuer Group-/Event-Handler-Dependencies wieder ein.
 7. Der Rule-Validator muss Testdateien aus dem Szenario-Manifest sowie statisch eingebundene Split-Dateien aus `dofile` und `require` indizieren.
+8. Die Hidden-Gate-Policy wird zentral in `ConfigBuilders` gepflegt und nicht nachtraeglich in `RuntimeSetup` mutiert.
+9. Secure- und Klick-Mutationsflaechen muessen explizit fuer Kampf- und Key-Sicherheit auditiert sein.
+10. Lokale CI-Wrapper muessen die GitHub-Lua-Check-Workflow-Gates spiegeln und nur delegierend verschalten.
+11. `RuntimeSetup` erhaelt benannte Controller-Context-Bundles, damit Group- und Event-Handler-Wiring nicht mehr aus einem unmarkierten Gesamtcontext gelesen werden.
 
 ## Regelbloecke
 
@@ -80,3 +84,36 @@ stabile Architekturgrenzen, die ueber deterministische Strukturtests geprueft we
 - Zusammenfassung: Der Rule-Validator muss Testdateien aus dem Szenario-Manifest sowie statisch eingebundene Split-Dateien aus `dofile` und `require` indizieren.
 - Erforderliche Tests:
   - Architecture rules validator indexes split scenario files from dofile and require
+
+### RULE-ARCH-HIDDEN-GATE-CONFIG-BUILDERS
+- Regelnummer: 8
+- Status: aktiv
+- Zusammenfassung: Die Hidden-Gate-Policy wird zentral in `ConfigBuilders` gepflegt und darf nicht nachtraeglich in `RuntimeSetup` mutiert werden.
+- Erforderliche Tests:
+  - Architecture hidden-gate policy is owned by config builders instead of runtime setup
+
+### RULE-ARCH-SECURE-MUTATION-AUDIT
+- Regelnummer: 9
+- Status: aktiv
+- Zusammenfassung: Alle Produktionsdateien, die Secure-, Insecure-Action- oder Klick-Mutationsflaechen beruehren, muessen explizit fuer Kampf- und Key-Sicherheit auditiert sein.
+- Erforderliche Tests:
+  - Architecture secure button mutation surface is explicitly audited for combat and key safety
+
+### RULE-ARCH-CI-WRAPPER-PARITAET
+- Regelnummer: 10
+- Status: aktiv
+- Zusammenfassung: Der lokale CI-Preflight muss die GitHub-Lua-Check-Gates spiegeln; die lokalen Wrapper bleiben reine Delegationsschichten und duerfen keine eigene Parallel- oder Sonderlogik einfuehren.
+- Erforderliche Tests:
+  - Architecture GitHub Lua Check workflow keeps CI validation steps wired
+  - Architecture local CI preflight mirrors the GitHub Lua Check workflow
+  - Architecture local CI wrapper forwards directly into the preflight script
+  - Architecture local CI shorthand wrapper forwards into the local CI wrapper
+  - Architecture local CI cmd wrapper forwards into the PowerShell shortcut
+
+### RULE-ARCH-RUNTIME-SETUP-CONTEXT-BUNDLES
+- Regelnummer: 11
+- Status: aktiv
+- Zusammenfassung: `RuntimeSetup` erhaelt benannte Controller-Context-Bundles; der Group-Controller wird aus einem eigenen Group-Context verdrahtet und der Event-Handler-Controller aus einem expliziten Event-Context.
+- Erforderliche Tests:
+  - Architecture runtime setup uses context-based wiring factories
+  - Architecture factory passes named runtime setup controller contexts

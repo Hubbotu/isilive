@@ -65,8 +65,8 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
     AssertContains(
       Assert,
       factoryContent,
-      "local runtimeSetupResult = isiLiveRuntimeSetup.Configure({",
-      "isiLive_factory.lua must delegate final assembly to RuntimeSetup.Configure"
+      "local runtimeSetupResult = isiLiveRuntimeSetup.Configure(runtimeSetupContext)",
+      "isiLive_factory.lua must delegate final assembly to RuntimeSetup.Configure through the named runtime setup context"
     )
     AssertNotContains(
       Assert,
@@ -123,14 +123,26 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
     AssertContains(
       Assert,
       content,
-      "controllerWiring.CreateGroupControllerFromContext(groupModule, ctx)",
-      "RuntimeSetup must create group controller via context-based wiring factory"
+      "controllerWiring.CreateGroupControllerFromContext(groupModule, groupContext)",
+      "RuntimeSetup must create group controller via the explicit group context wiring factory"
     )
     AssertContains(
       Assert,
       content,
-      "controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, ctx)",
-      "RuntimeSetup must create event handler controller via context-based wiring factory"
+      "controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, eventContext)",
+      "RuntimeSetup must create event handler controller via the explicit event context wiring factory"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "local groupContext = ctx.groupControllerContext or ctx",
+      "RuntimeSetup must accept a narrow group-controller context bundle"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "local eventContext = ctx.eventHandlersContext or ctx",
+      "RuntimeSetup must accept an event-handler context bundle"
     )
     AssertNotContains(
       Assert,
@@ -179,6 +191,35 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
       content,
       "    onEvent = ctx.onEvent,",
       "RuntimeSetup must not expose unused raw onEvent return payload"
+    )
+  end)
+
+  test("Architecture factory passes named runtime setup controller contexts", function()
+    local content = ReadFile("isiLive_factory.lua")
+
+    AssertContains(
+      Assert,
+      content,
+      "local function BuildRuntimeSetupGroupContext(ctx, runtimeState)",
+      "factory root must build a named group-controller context for RuntimeSetup"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "groupControllerContext = BuildRuntimeSetupGroupContext(ctx, runtimeState)",
+      "factory root must pass the group-controller context explicitly"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "runtimeSetupContext.eventHandlersContext = runtimeSetupContext",
+      "factory root must pass the event-handler context explicitly"
+    )
+    AssertContains(
+      Assert,
+      content,
+      "local runtimeSetupResult = isiLiveRuntimeSetup.Configure(runtimeSetupContext)",
+      "factory root must hand RuntimeSetup the named context object"
     )
   end)
 
@@ -458,11 +499,16 @@ local function RegisterArchitectureSourceBoundaryTests(test, Assert)
         "IsCombatLockdownActive",
         "row.roleButton:SetAttribute",
       },
-      ["ui/isiLive_ui.lua"] = {
+      ["ui/isiLive_ui_game_menu.lua"] = {
         "IsPanelUISecureUpdateBlocked",
         "QueuePanelUISecureStateRefresh",
         "PLAYER_REGEN_ENABLED",
         "C_ChallengeMode",
+      },
+      ["ui/isiLive_ui_main_frame.lua"] = {
+        "RegisterForClicks",
+        'rawget(_G, "InCombatLockdown")',
+        "lockMainFramePosition",
       },
       ["factory/isiLive_factory_minimap.lua"] = {
         "RegisterForClicks",

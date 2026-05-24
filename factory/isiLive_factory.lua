@@ -457,6 +457,108 @@ local function FinalizeFactorySettings(ctx)
   end
 end
 
+local function BuildRuntimeSetupGroupContext(ctx, runtimeState)
+  return {
+    sync = ctx.modules.sync,
+    isInGroup = IsInGroup,
+    getNumGroupMembers = GetNumGroupMembers,
+    getActiveChallengeMapID = ctx.GetActiveChallengeMapID,
+    getWasInGroup = ctx.GetWasInGroup,
+    setWasInGroup = ctx.SetWasInGroup,
+    getWasRaidGroup = ctx.GetWasRaidGroup,
+    setWasRaidGroup = ctx.SetWasRaidGroup,
+    isRosterCollapsed = ctx.IsRosterCollapsed,
+    setWasGroupLeader = ctx.SetWasGroupLeader,
+    getRoster = ctx.GetRoster,
+    setRoster = ctx.SetRoster,
+    captureQueueJoinCandidate = ctx.CaptureQueueJoinCandidate,
+    announceQueuedGroupJoin = ctx.AnnounceQueuedGroupJoin,
+    setMainFrameVisible = ctx.SetMainFrameVisible,
+    updateLeaderButtons = ctx.UpdateLeaderButtons,
+    clearLatestQueueTarget = ctx.ClearLatestQueueTarget,
+    clearRioBaselineSnapshot = ctx.ClearRioBaselineSnapshot,
+    clearPendingQueueJoinInfo = function()
+      runtimeState.SetPendingQueueJoinInfo(nil)
+    end,
+    resetInspectAll = ctx.ResetInspectAll,
+    resetInspectQueues = ctx.ResetInspectQueues,
+    updateUI = ctx.UpdateUI,
+    updateMPlusTeleportButton = ctx.UpdateMPlusTeleportButton,
+    getUnitNameAndRealm = ctx.GetUnitNameAndRealm,
+    getUnitClass = ctx.GetUnitClass,
+    getUnitServerLanguage = ctx.GetUnitServerLanguage,
+    getOwnedKeystoneSnapshot = ctx.GetOwnedKeystoneSnapshot,
+    markIsiLiveUser = ctx.MarkIsiLiveUser,
+    getUnitRole = ctx.GetUnitRole,
+    getPlayerSpecName = ctx.GetPlayerSpecName,
+    getUnitRio = ctx.GetUnitRio,
+    getOwnAverageItemLevel = ctx.GetOwnAverageItemLevel,
+    unitHasIsiLive = ctx.UnitHasIsiLive,
+    applyKnownKeyToRosterEntry = ctx.ApplyKnownKeyToRosterEntry,
+    enqueueInspect = ctx.EnqueueInspect,
+    sendOwnKeySnapshot = ctx.SendOwnKeySnapshot,
+    sendIsiLiveHello = ctx.SendIsiLiveHello,
+    sendRefreshRequest = ctx.SendRefreshRequest,
+    getReloadRosterMirror = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      return type(dbRef) == "table" and dbRef.reloadRosterMirror or nil
+    end,
+    setReloadRosterMirror = function(snapshot)
+      local dbRef = rawget(_G, "IsiLiveDB")
+      if type(dbRef) == "table" then
+        dbRef.reloadRosterMirror = snapshot
+      end
+    end,
+    clearReloadRosterMirror = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      if type(dbRef) == "table" then
+        dbRef.reloadRosterMirror = {}
+      end
+    end,
+    getReloadRosterTargetSnapshot = ctx.GetReloadRosterTargetSnapshot,
+    restoreReloadRosterTargetSnapshot = ctx.RestoreReloadRosterTargetSnapshot,
+    shouldAutoCloseOnSoloChange = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      return ResolveAutoCloseOnSoloChangeEnabled(dbRef)
+    end,
+    getRaidTransitionBehavior = function()
+      local dbRef = rawget(_G, "IsiLiveDB")
+      return ResolveRaidTransitionBehavior(dbRef)
+    end,
+    autoCloseMainFrame = function()
+      if ctx.mainFrame:IsShown() then
+        ctx.SetMainFrameVisible(false)
+      end
+    end,
+    unitIsGroupLeader = function(unit)
+      if type(unit) ~= "string" or unit == "" then
+        return false
+      end
+
+      local unitExists = rawget(_G, "UnitExists")
+      if type(unitExists) ~= "function" then
+        return false
+      end
+
+      local okExists, exists = pcall(unitExists, unit)
+      if not okExists or not exists then
+        return false
+      end
+
+      local unitIsGroupLeader = rawget(_G, "UnitIsGroupLeader")
+      if type(unitIsGroupLeader) ~= "function" then
+        return false
+      end
+
+      local okLeader, isLeader = pcall(unitIsGroupLeader, unit)
+      return okLeader and isLeader == true
+    end,
+    runtimeLogController = ctx.runtimeLogController,
+    getL = ctx.GetL,
+    printFn = ctx.Print,
+  }
+end
+
 local function FinalizeFactoryRuntime(ctx)
   local modules = ctx.modules
   local runtimeState = ctx.runtimeState
@@ -518,7 +620,7 @@ local function FinalizeFactoryRuntime(ctx)
     end,
   })
 
-  local runtimeSetupResult = isiLiveRuntimeSetup.Configure({
+  local runtimeSetupContext = {
     controllerWiring = modules.controllerWiring,
     configBuilders = modules.configBuilders,
     bootstrap = modules.bootstrap,
@@ -531,6 +633,7 @@ local function FinalizeFactoryRuntime(ctx)
     onDispatchError = function(_frame, event, err)
       ctx.Print(string.format("Event dispatch failed (%s): %s", tostring(event), tostring(err)))
     end,
+    groupControllerContext = BuildRuntimeSetupGroupContext(ctx, runtimeState),
     -- BuildEventHandlersDepsFromContext reads these PascalCase fields directly
     -- off the runtime_setup ctx. Without forwarding them the resolved deps are
     -- silently nil, breaking dungeon detection, killtrack, M+ timer, readycheck
@@ -742,7 +845,10 @@ local function FinalizeFactoryRuntime(ctx)
     recordRun = ctx.RecordRun,
     addonName = ctx.addonName,
     resetDB = ctx.resetDB,
-  })
+  }
+  runtimeSetupContext.eventHandlersContext = runtimeSetupContext
+
+  local runtimeSetupResult = isiLiveRuntimeSetup.Configure(runtimeSetupContext)
 
   ctx.eventHandlersController = runtimeSetupResult.eventHandlersController
   ctx.Print(string.format(ctx.L.LOADED_HINT, ctx.GetAddonVersionRaw()))

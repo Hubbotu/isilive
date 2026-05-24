@@ -26,14 +26,18 @@ function RuntimeSetup.Configure(ctx)
   local eventFrame = ctx.eventFrame
   RequireFunction(ctx.onEvent, "onEvent")
 
-  local groupController = controllerWiring.CreateGroupControllerFromContext(groupModule, ctx)
+  local groupContext = ctx.groupControllerContext or ctx
+  local eventContext = ctx.eventHandlersContext or ctx
+
+  local groupController = controllerWiring.CreateGroupControllerFromContext(groupModule, groupContext)
   ctx.groupController = groupController
+  eventContext.groupController = groupController
 
   local leaderWatchController = leaderWatchModule.CreateController(configBuilders.BuildLeaderWatchControllerOpts(ctx))
   ctx.leaderWatchController = leaderWatchController
   leaderWatchController.Start()
 
-  local eventHandlersController = controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, ctx)
+  local eventHandlersController = controllerWiring.CreateEventHandlersControllerFromContext(eventHandlersModule, eventContext)
 
   bootstrap.RegisterSlashCommands(configBuilders.BuildSlashCommandsOpts(ctx))
 

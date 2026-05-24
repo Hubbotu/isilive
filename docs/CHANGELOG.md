@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-05-24 - Version 0.9.274 (patch)
+
+Splits the large UI orchestration files into focused modules and pins the new
+architecture contracts with deterministic coverage.
+
+### Architecture Cleanup
+
+[ui/isiLive_ui.lua](../ui/isiLive_ui.lua),
+[ui/isiLive_ui_main_frame.lua](../ui/isiLive_ui_main_frame.lua),
+[ui/isiLive_ui_game_menu.lua](../ui/isiLive_ui_game_menu.lua),
+[ui/isiLive_ui_game_menu_actions.lua](../ui/isiLive_ui_game_menu_actions.lua),
+[ui/isiLive_ui_game_menu_mounts.lua](../ui/isiLive_ui_game_menu_mounts.lua),
+[ui/isiLive_ui_game_menu_travel.lua](../ui/isiLive_ui_game_menu_travel.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[ui/isiLive_settings_sections.lua](../ui/isiLive_settings_sections.lua):
+
+- Reduced the legacy UI entrypoints to thin namespace shims and moved main-frame,
+  ESC game-menu, travel, mount, action, and Settings section responsibilities
+  into focused modules.
+- Kept the TOC order, test harness registration, and architecture usecases in
+  lockstep with the split module graph.
+- Added architecture rules for hidden-gate config builders, secure mutation
+  audits, CI wrapper parity, and runtime setup context bundles.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.274`.
+- Updated the validator baseline to `1842` scenarios.
+
 ## 2026-05-24 - Version 0.9.273 (patch)
 
 Adds the Settings-driven Hearthstone travel selection, VIP guest mount sound

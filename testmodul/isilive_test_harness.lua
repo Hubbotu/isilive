@@ -57,6 +57,19 @@ local FILE_PATHS = {
   ["isiLive_roster_panel_kill_row.lua"] = "ui/isiLive_roster_panel_kill_row.lua",
   ["isiLive_roster_panel_render.lua"] = "ui/isiLive_roster_panel_render.lua",
   ["isiLive_ui.lua"] = "ui/isiLive_ui.lua",
+  ["isiLive_ui_main_frame.lua"] = "ui/isiLive_ui_main_frame.lua",
+  ["isiLive_ui_game_menu_actions.lua"] = "ui/isiLive_ui_game_menu_actions.lua",
+  ["isiLive_ui_game_menu_mounts.lua"] = "ui/isiLive_ui_game_menu_mounts.lua",
+  ["isiLive_ui_game_menu_travel.lua"] = "ui/isiLive_ui_game_menu_travel.lua",
+  ["isiLive_ui_game_menu.lua"] = "ui/isiLive_ui_game_menu.lua",
+  ["isiLive_settings_reset.lua"] = "ui/isiLive_settings_reset.lua",
+  ["isiLive_settings_hearthstone.lua"] = "ui/isiLive_settings_hearthstone.lua",
+  ["isiLive_settings_controls.lua"] = "ui/isiLive_settings_controls.lua",
+  ["isiLive_settings_nameplates.lua"] = "ui/isiLive_settings_nameplates.lua",
+  ["isiLive_settings_behavior.lua"] = "ui/isiLive_settings_behavior.lua",
+  ["isiLive_settings_sound.lua"] = "ui/isiLive_settings_sound.lua",
+  ["isiLive_settings_support.lua"] = "ui/isiLive_settings_support.lua",
+  ["isiLive_settings_sections.lua"] = "ui/isiLive_settings_sections.lua",
   ["isiLive_settings.lua"] = "ui/isiLive_settings.lua",
   ["isiLive_lfg_flags.lua"] = "ui/isiLive_lfg_flags.lua",
   -- logic
@@ -150,6 +163,28 @@ local IMPLICIT_DEPENDENCIES = {
   ["isiLive_locale.lua"] = { "isiLive_languages.lua" },
   ["isiLive_commands.lua"] = { "isiLive_languages.lua" },
   ["isiLive_season_data.lua"] = { "isiLive_languages.lua" },
+  ["isiLive_settings.lua"] = {
+    "isiLive_settings_reset.lua",
+    "isiLive_settings_hearthstone.lua",
+    "isiLive_settings_controls.lua",
+    "isiLive_settings_nameplates.lua",
+    "isiLive_settings_behavior.lua",
+    "isiLive_settings_sound.lua",
+    "isiLive_settings_support.lua",
+    "isiLive_settings_sections.lua",
+  },
+  ["isiLive_ui.lua"] = {
+    "isiLive_ui_main_frame.lua",
+    "isiLive_ui_game_menu_actions.lua",
+    "isiLive_ui_game_menu_mounts.lua",
+    "isiLive_ui_game_menu_travel.lua",
+    "isiLive_ui_game_menu.lua",
+  },
+  ["isiLive_ui_game_menu.lua"] = {
+    "isiLive_ui_game_menu_actions.lua",
+    "isiLive_ui_game_menu_mounts.lua",
+    "isiLive_ui_game_menu_travel.lua",
+  },
 }
 
 local function Fail(message)
