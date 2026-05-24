@@ -170,7 +170,7 @@ An optional standalone stats box can be enabled in Settings. It is independent f
 
 - Shows the class-appropriate primary stat (`Str`, `Agi`, or `Int`) plus `Crit`, `Haste`, `Mast`, `Vers`, `Leech`, and `Speed` when Blizzard's live APIs provide those values
 - Uses short English labels only
-- Values and percentages are right-aligned for compact scanning; the value column keeps a stable compact width for three- and four-digit values
+- Values and percentages are right-aligned for compact scanning; the value column keeps a stable compact width for three- and four-digit values, and the percent column fits values up to `(999.99%)`
 - Can be locked, hidden, moved, and configured with separate background opacity and relative font size
 - Starts disabled by default
 

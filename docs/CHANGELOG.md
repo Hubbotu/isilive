@@ -24,6 +24,18 @@ architecture contracts with deterministic coverage.
 - Added architecture rules for hidden-gate config builders, secure mutation
   audits, CI wrapper parity, and runtime setup context bundles.
 
+### Stats Box
+
+[ui/isiLive_stats_box.lua](../ui/isiLive_stats_box.lua),
+[testmodul/isilive_test_scenarios_stats_box.lua](../testmodul/isilive_test_scenarios_stats_box.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[README.md](../README.md):
+
+- Widened the standalone Stats Box percent column enough for `(999.99%)`, so
+  values above `100.00%` stay on one line.
+- Kept short and large percent rows aligned through a stable compact minimum
+  width and added deterministic regression coverage.
+
 ### Release Metadata
 
 [isiLive.toc](../isiLive.toc),

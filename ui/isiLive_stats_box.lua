@@ -7,7 +7,7 @@ addonTable.StatsBox = StatsBox
 
 local ApplyBackdrop = addonTable.UICommon and addonTable.UICommon.ApplyBackdrop
 
-local BOX_WIDTH = 170
+local BOX_WIDTH = 177
 local BOX_HEIGHT = 158
 local LINE_HEIGHT = 16
 local UPDATE_INTERVAL = 1
@@ -19,7 +19,7 @@ local TEXT_SHADOW_OFFSET_X = 1
 local TEXT_SHADOW_OFFSET_Y = -1
 local LABEL_COLUMN_WIDTH = 35
 local VALUE_COLUMN_WIDTH = 42
-local PERCENT_COLUMN_WIDTH = 63
+local PERCENT_COLUMN_WIDTH = 70
 local LEFT_PADDING = 8
 local RIGHT_PADDING = 8
 local TOP_PADDING = 6
@@ -477,8 +477,14 @@ local function ResolveContentFitLayout(baseLayout, lines, visibleCount, previous
       valueWidth > 0 and valueWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "valueWidth"),
       baseLayout.valueWidth
     )
-    percentWidth = percentWidth > 0 and percentWidth
-      or (hasPercent and ResolveFallbackColumnWidth(previousLayout, baseLayout, "percentWidth") or 0)
+    if hasPercent then
+      percentWidth = math.max(
+        percentWidth > 0 and percentWidth or ResolveFallbackColumnWidth(previousLayout, baseLayout, "percentWidth"),
+        baseLayout.percentWidth
+      )
+    else
+      percentWidth = 0
+    end
   end
 
   local width = baseLayout.leftPadding
