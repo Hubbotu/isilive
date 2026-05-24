@@ -34,7 +34,7 @@ architecture contracts with deterministic coverage.
 [docs/RELEASE.md](RELEASE.md):
 
 - Bumped the TOC and documented baselines to `0.9.274`.
-- Updated the validator baseline to `1842` scenarios.
+- Updated the validator baseline to `1848` scenarios.
 
 ## 2026-05-24 - Version 0.9.273 (patch)
 

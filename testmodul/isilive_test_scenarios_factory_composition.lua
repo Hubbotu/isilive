@@ -1252,6 +1252,7 @@ return function(test, ctx)
       end
 
       if type(capturedSettingsOpts) == "table" then
+        IsiLiveDB = db
         local settingsCallbacks = {
           "onResetMainFramePosition",
           "onBgAlphaChange",

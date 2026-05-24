@@ -8,6 +8,234 @@ local BuildCreateFrameStub = helpers.BuildCreateFrameStub
 local RequireValue = helpers.RequireValue
 
 local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, LoadAddonModules)
+  test("Settings reset confirmation styles popup chrome and hover feedback", function()
+    local staticPopupDialogs = {}
+    local shownPopup = nil
+    local acceptCalls = 0
+    local backdropCalls = {}
+
+    local function MakeButton(text)
+      local button = { _text = text, _scripts = {} }
+      function button:SetSize(width, height)
+        self._size = { width, height }
+      end
+      function button:SetBackdrop(backdrop)
+        self._backdrop = backdrop
+      end
+      function button:SetBackdropColor(...)
+        self._backdropColor = { ... }
+      end
+      function button:SetBackdropBorderColor(...)
+        self._backdropBorderColor = { ... }
+      end
+      function button:CreateTexture()
+        local texture = {}
+        function texture:SetAllPoints()
+          self._allPoints = true
+        end
+        function texture:SetColorTexture(...)
+          self._color = { ... }
+        end
+        function texture:Hide()
+          self._hidden = true
+        end
+        function texture:Show()
+          self._shown = true
+        end
+        return texture
+      end
+      function button:GetText()
+        return self._text
+      end
+      function button:SetText(value)
+        self._text = value
+      end
+      function button:SetScript(scriptName, fn)
+        self._scripts[scriptName] = fn
+      end
+      return button
+    end
+
+    WithGlobals({
+      YES = "Yep",
+      NO = "Nope",
+      StaticPopupDialogs = staticPopupDialogs,
+      StaticPopup_Show = function(name)
+        shownPopup = name
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_settings_reset.lua" }, {
+        UICommon = {
+          Colors = {
+            TEXT_NORMAL = { 0.9, 0.9, 1 },
+            ACCENT_BLUE = { 0.1, 0.2, 0.8 },
+            ACCENT_GOLD = { 1, 0.7, 0 },
+          },
+          ApplyBackdrop = function(frame, preset)
+            backdropCalls[#backdropCalls + 1] = { frame = frame, preset = preset }
+            frame._appliedPreset = preset
+            return true
+          end,
+        },
+      })
+
+      addon.SettingsReset.ShowResetConfirmation("STYLE", "Confirm reset?", function()
+        acceptCalls = acceptCalls + 1
+      end)
+
+      local dialog = Assert.NotNil(staticPopupDialogs[shownPopup], "reset confirmation dialog must be registered")
+      local text = {}
+      function text:SetTextColor(...)
+        self._color = { ... }
+      end
+      function text:SetWordWrap(value)
+        self._wordWrap = value
+      end
+      local styledDialog = {
+        text = text,
+        button1 = MakeButton("Yes"),
+        button2 = MakeButton("No"),
+      }
+      function styledDialog:SetMovable(value)
+        self._movable = value
+      end
+      function styledDialog:SetResizable(value)
+        self._resizable = value
+      end
+
+      dialog.OnShow(styledDialog)
+      Assert.Equal(styledDialog._appliedPreset, "NOTICE", "dialog backdrop preset must be applied")
+      Assert.False(styledDialog._movable, "reset confirmation must not be movable")
+      Assert.False(styledDialog._resizable, "reset confirmation must not be resizable")
+      Assert.True(text._wordWrap == true, "reset confirmation text must word-wrap")
+      Assert.NotNil(styledDialog.button1._isiLiveHoverGlow, "confirm button must get hover glow")
+
+      styledDialog.button1._scripts.OnEnter(styledDialog.button1)
+      Assert.True(styledDialog.button1._isiLiveHoverGlow._shown == true, "hover must show confirm glow")
+      styledDialog.button1._scripts.OnLeave(styledDialog.button1)
+      Assert.True(styledDialog.button1._isiLiveHoverGlow._hidden == true, "leave must hide confirm glow")
+
+      dialog.OnAccept()
+      Assert.Equal(acceptCalls, 1, "accept must run the pending reset action")
+      Assert.True(#backdropCalls >= 1, "ApplyBackdrop must be used while styling the popup")
+    end)
+  end)
+
+  test("Settings reset confirmation falls back to immediate accept without StaticPopup", function()
+    local acceptCalls = 0
+    WithGlobals({
+      StaticPopupDialogs = nil,
+      StaticPopup_Show = nil,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_settings_reset.lua" })
+      addon.SettingsReset.ShowResetConfirmation(nil, nil, function()
+        acceptCalls = acceptCalls + 1
+      end)
+      Assert.Equal(acceptCalls, 1, "missing StaticPopup API must execute the reset action immediately")
+    end)
+  end)
+
+  test("UI game-menu default actions use secure clicks and combat guards", function()
+    local professionClicks = 0
+    local spellbookCalls = 0
+    local professionsFrame = {
+      IsShown = function(self)
+        return self._shown == true
+      end,
+    }
+
+    WithGlobals({
+      ProfessionsFrame = professionsFrame,
+      ProfessionMicroButton = {
+        Click = function()
+          professionClicks = professionClicks + 1
+          professionsFrame._shown = true
+        end,
+      },
+      C_AddOns = {
+        IsAddOnLoaded = function()
+          return true
+        end,
+        LoadAddOn = function() end,
+      },
+      PlayerSpellsUtil = {
+        ToggleSpellBookFrame = function()
+          spellbookCalls = spellbookCalls + 1
+          return true
+        end,
+      },
+      securecallfunction = function(fn, ...)
+        return fn(...)
+      end,
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_game_menu_actions.lua" })
+      local blockedActions = addon.UIGameMenuActions.BuildDefaultPanelUIActions(function()
+        return true
+      end)
+      Assert.False(blockedActions.talents(), "talent action must be blocked during combat")
+
+      local actions = addon.UIGameMenuActions.BuildDefaultPanelUIActions(function()
+        return false
+      end)
+      Assert.True(actions.professions(), "profession action must click the micro button through the secure path")
+      Assert.Equal(professionClicks, 1, "profession micro button must be clicked exactly once")
+      Assert.True(actions.spellbook(), "spellbook action must use PlayerSpellsUtil when available")
+      Assert.Equal(spellbookCalls, 1, "spellbook util must be invoked")
+    end)
+  end)
+
+  test("UI game-menu addon actions resolve enabled addons and localized slash text", function()
+    local slashArgs = nil
+    local loadCalls = 0
+    local loaded = { isiLive = true }
+
+    WithGlobals({
+      GetLocale = function()
+        return "deDE"
+      end,
+      C_AddOns = {
+        GetAddOnInfo = function(addOnName)
+          if addOnName == "Details" or addOnName == "isiLive" then
+            return addOnName
+          end
+          return nil
+        end,
+        GetAddOnEnableState = function(_addOnName)
+          return 2
+        end,
+        IsAddOnLoaded = function(addOnName)
+          return loaded[addOnName] == true
+        end,
+        LoadAddOn = function(addOnName)
+          loadCalls = loadCalls + 1
+          loaded[addOnName] = true
+        end,
+      },
+      SlashCmdList = {
+        DETAILS = function(args)
+          slashArgs = args
+          return true
+        end,
+      },
+      SLASH_DETAILS1 = "/details",
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_ui_game_menu_actions.lua" })
+      local actions = addon.UIGameMenuActions.BuildAddonPanelUIActions({
+        custom = function()
+          return true
+        end,
+      })
+
+      Assert.True(actions.custom(), "addon action overrides must be merged")
+      Assert.True(actions.details(), "Details action must run through the slash handler")
+      Assert.Equal(slashArgs, "optionen", "German locale must use the localized Details slash arguments")
+      Assert.Equal(loadCalls, 1, "unloaded enabled addon must be load-attempted before slash execution")
+
+      local visible = addon.UIGameMenuActions.ResolveVisibleAddonPanelEntries()
+      Assert.True(#visible >= 2, "visible addon entries must include enabled installed addons")
+    end)
+  end)
+
   test("Settings panel exposes resetui action and styles Reset all Settings like the other buttons", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = {}
@@ -719,6 +947,77 @@ local function RegisterSettingsPanelTests(test, Assert, WithGlobals, LoadAddonMo
         Assert.False(option.fallback == "180290", "selector must not show a raw item id as its label")
       end
       Assert.True(found, "owned toy with a verified name must be selectable")
+    end)
+  end)
+
+  test("Settings hearthstone option builder uses DB and client locale fallbacks", function()
+    local requestedItemIDs = {}
+    local createdItemIDs = {}
+    WithGlobals({
+      GetLocale = function()
+        return "deDE"
+      end,
+      C_Item = {
+        GetItemNameByID = function(itemID)
+          if itemID == 222 then
+            return "C_Item Hearthstone"
+          end
+          return nil
+        end,
+      },
+      Item = {
+        CreateFromItemID = function(itemID)
+          createdItemIDs[#createdItemIDs + 1] = itemID
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_settings_hearthstone.lua" }, {
+        UI = {
+          CollectOwnedHearthstoneToys = function()
+            return { 222, 333, "bad" }
+          end,
+        },
+      })
+      local options = addon.SettingsHearthstone.BuildOptions({
+        getCurrentLocale = function()
+          return ""
+        end,
+        getDB = function()
+          return { locale = "deDE" }
+        end,
+      }, {})
+
+      Assert.Equal(options[3].value, "toy:222", "German DB locale fallback must keep resolved C_Item toy")
+      Assert.Equal(options[3].fallback, "C_Item Hearthstone", "C_Item name must be used for German toy labels")
+      Assert.Equal(#createdItemIDs, 1, "unresolved toy name must request item data through Item fallback")
+      Assert.Equal(createdItemIDs[1], 333, "Item fallback must request the unresolved toy ID")
+      Assert.Equal(#requestedItemIDs, 0, "test guard: C_Item request path is not configured here")
+    end)
+  end)
+
+  test("Settings hearthstone option builder requests C_Item data for unresolved toys", function()
+    local requestedItemIDs = {}
+    WithGlobals({
+      GetLocale = function()
+        return "deDE"
+      end,
+      C_Item = {
+        RequestLoadItemDataByID = function(itemID)
+          requestedItemIDs[#requestedItemIDs + 1] = itemID
+        end,
+      },
+    }, function()
+      local addon = LoadAddonModules({ "isiLive_settings_hearthstone.lua" }, {
+        UI = {
+          CollectOwnedHearthstoneToys = function()
+            return { 444 }
+          end,
+        },
+      })
+      local options = addon.SettingsHearthstone.BuildOptions(nil, nil)
+
+      Assert.Equal(#options, 2, "unresolved toy names must not be shown as numeric fallback labels")
+      Assert.Equal(requestedItemIDs[1], 444, "C_Item request path must warm unresolved toy item data")
     end)
   end)
 
