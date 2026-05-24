@@ -419,7 +419,11 @@ return function(test, ctx)
       Assert.Equal(box.lines[1].percent._width, 70, "percent column should keep enough room for 999.99 percent")
       Assert.Equal(box.lines[2].percent._width, 70, "shorter percent rows should use the same stable percent column")
       Assert.Equal(box.lines[1].percent._point[4], 99, "large percent text should stay aligned after the value column")
-      Assert.Equal(box.lines[2].percent._point[4], 99, "shorter percent text should stay aligned with large percent rows")
+      Assert.Equal(
+        box.lines[2].percent._point[4],
+        99,
+        "shorter percent text should stay aligned with large percent rows"
+      )
     end)
   end)
 
