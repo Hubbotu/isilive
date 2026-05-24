@@ -143,15 +143,47 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
         return self._shown == true
       end,
     }
+    local function MakeShownFrame()
+      return {
+        IsShown = function(self)
+          return self._shown == true
+        end,
+      }
+    end
+    local achievementFrame = MakeShownFrame()
+    local questLogFrame = MakeShownFrame()
+    local pveFrame = MakeShownFrame()
+    local encounterJournal = MakeShownFrame()
+    local collectionsJournal = MakeShownFrame()
+    local communitiesFrame = MakeShownFrame()
+    local function MakeButton(targetFrame)
+      return {
+        Click = function()
+          targetFrame._shown = true
+        end,
+      }
+    end
 
     WithGlobals({
       ProfessionsFrame = professionsFrame,
+      AchievementFrame = achievementFrame,
+      QuestLogFrame = questLogFrame,
+      PVEFrame = pveFrame,
+      EncounterJournal = encounterJournal,
+      CollectionsJournal = collectionsJournal,
+      CommunitiesFrame = communitiesFrame,
       ProfessionMicroButton = {
         Click = function()
           professionClicks = professionClicks + 1
           professionsFrame._shown = true
         end,
       },
+      AchievementMicroButton = MakeButton(achievementFrame),
+      QuestLogMicroButton = MakeButton(questLogFrame),
+      LFDMicroButton = MakeButton(pveFrame),
+      EJMicroButton = MakeButton(encounterJournal),
+      CollectionsMicroButton = MakeButton(collectionsJournal),
+      GuildMicroButton = MakeButton(communitiesFrame),
       C_AddOns = {
         IsAddOnLoaded = function()
           return true
@@ -181,6 +213,12 @@ local function RegisterSettingsPanelResetActionTests(test, Assert, WithGlobals, 
       Assert.Equal(professionClicks, 1, "profession micro button must be clicked exactly once")
       Assert.True(actions.spellbook(), "spellbook action must use PlayerSpellsUtil when available")
       Assert.Equal(spellbookCalls, 1, "spellbook util must be invoked")
+      Assert.True(actions.achievements(), "achievement action must click the matching micro button")
+      Assert.True(actions.quests(), "quest action must open through the quest micro button")
+      Assert.True(actions.dungeons(), "dungeon action must open through the LFD micro button")
+      Assert.True(actions.journal(), "journal action must open through the encounter journal button")
+      Assert.True(actions.collections(), "collections action must open through the collections button")
+      Assert.True(actions.guild(), "guild action must open through the guild button")
     end)
   end)
 
