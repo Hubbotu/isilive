@@ -9,14 +9,30 @@ addonTable.LFGFlags = LFGFlags
 local LI = addonTable._LFGFlagsInternal or {}
 addonTable._LFGFlagsInternal = LI
 
-local FLAG_WIDTH = 16
-local FLAG_HEIGHT = 12
+local FLAG_WIDTH = 12
+local FLAG_HEIGHT = 9
 local CLASS_BONUS_TEXT_COLOR = "|cff00ff00"
 local CLASS_BONUS_DIM_COLOR = "|cff777777"
 local CLASS_BONUS_UTILITY_COLOR = "|cffffd100"
 local CLASS_BONUS_RESET_COLOR = "|r"
 local APPLICANT_BONUS_TEXT_COLOR = { 0.20, 1.00, 0.20, 1.00 }
 local APPLICANT_BONUS_MAJOR_COLOR = { 1.00, 0.82, 0.00, 1.00 }
+local SEARCH_RESULT_BONUS_MARKUP = "|TInterface\\AddOns\\isiLive\\media\\heart_bonus_green:12:12|t"
+local SEARCH_RESULT_BONUS_MAX_MARKERS = 4
+local SEARCH_RESULT_FLAG_X = 2
+local SEARCH_RESULT_FLAG_Y = 10
+local SEARCH_RESULT_FLAG_ACTIVITY_NAME_OFFSET_Y = -2
+local SEARCH_RESULT_DUNGEON_NAME_SHIFT_X = FLAG_WIDTH + 4
+local SEARCH_RESULT_BONUS_RIGHT_X = -44
+local SEARCH_RESULT_BONUS_Y = -16
+local SEARCH_RESULT_BONUS_WIDTH = 68
+local SEARCH_RESULT_KEYSTONE_LABELS = {
+  ["Mythic Keystone"] = true,
+  ["Mythischer Schl\195\188sselstein"] = true,
+}
+local SEARCH_RESULT_PROMOTION_OFFERED_PLAYSTYLE_TEXTS = {
+  ["Bef\195\182rderung angeboten"] = true,
+}
 
 local CLASS_TOKENS = {
   DEATHKNIGHT = true,
@@ -101,6 +117,8 @@ local MAGIC_DAMAGE_SPEC_IDS = {
   [62] = true,
   [63] = true,
   [64] = true,
+  [251] = true,
+  [252] = true,
   [102] = true,
   [256] = true,
   [257] = true,
@@ -132,8 +150,6 @@ local PHYSICAL_DAMAGE_SPEC_IDS = {
   [103] = true,
   [104] = true,
   [250] = true,
-  [251] = true,
-  [252] = true,
   [253] = true,
   [254] = true,
   [255] = true,
@@ -524,6 +540,28 @@ local function IsMajorApplicantUtility(bonus)
   return bonus.textKey == "LFG_BONUS_BL" or bonus.textKey == "LFG_BONUS_BR"
 end
 
+local function HasRelevantSearchResultBonus(classToken, specID, profile)
+  local bonuses = BuildBonusList(classToken, specID)
+  if type(bonuses) ~= "table" or next(bonuses) == nil then
+    return false
+  end
+  for _, bonus in ipairs(bonuses) do
+    if type(bonus) == "table" and bonus.kind ~= "utility" and IsBonusRelevantForPlayer(bonus, profile) == true then
+      return true
+    end
+  end
+  return false
+end
+
+local function BuildSearchResultBonusBadgeText(count)
+  local numericCount = tonumber(count)
+  if not numericCount or numericCount <= 0 then
+    return nil
+  end
+  numericCount = math.min(SEARCH_RESULT_BONUS_MAX_MARKERS, math.floor(numericCount))
+  return string.rep(SEARCH_RESULT_BONUS_MARKUP, numericCount)
+end
+
 local function BuildApplicantBonusBadge(classToken, specID, profile)
   local bonuses = BuildBonusList(classToken, specID)
   if type(bonuses) ~= "table" or next(bonuses) == nil then
@@ -545,6 +583,20 @@ local function BuildApplicantBonusBadge(classToken, specID, profile)
     return "+", APPLICANT_BONUS_TEXT_COLOR
   end
   return nil
+end
+
+local function BuildApplicantBonusMarkerBadge(classToken, specID, profile)
+  local bonuses = BuildBonusList(classToken, specID)
+  if type(bonuses) ~= "table" or next(bonuses) == nil then
+    return nil
+  end
+  local relevantBonusCount = 0
+  for _, bonus in ipairs(bonuses) do
+    if type(bonus) == "table" and bonus.kind ~= "utility" and IsBonusRelevantForPlayer(bonus, profile) == true then
+      relevantBonusCount = relevantBonusCount + 1
+    end
+  end
+  return BuildSearchResultBonusBadgeText(relevantBonusCount), APPLICANT_BONUS_TEXT_COLOR
 end
 
 local function GetTagForResult(resultID)
@@ -748,23 +800,17 @@ local function BuildSearchResultBonusBadge(resultID)
     resultBonusBadgeCache[cacheKey] = false
     return nil
   end
-  local hasRelevantBonus = false
+  local relevantMemberCount = 0
   for index = 1, memberCount do
     local member = ReadSearchResultMemberInfo(resultID, index)
-    if member then
-      local badge, badgeColor = BuildApplicantBonusBadge(member.classToken, member.specID, profile)
-      if badge == "++" then
-        resultBonusBadgeCache[cacheKey] = { badge = badge, color = badgeColor }
-        return badge, badgeColor
-      end
-      if badge == "+" then
-        hasRelevantBonus = true
-      end
+    if member and HasRelevantSearchResultBonus(member.classToken, member.specID, profile) then
+      relevantMemberCount = relevantMemberCount + 1
     end
   end
-  if hasRelevantBonus then
-    resultBonusBadgeCache[cacheKey] = { badge = "+", color = APPLICANT_BONUS_TEXT_COLOR }
-    return "+", APPLICANT_BONUS_TEXT_COLOR
+  local badge = BuildSearchResultBonusBadgeText(relevantMemberCount)
+  if badge then
+    resultBonusBadgeCache[cacheKey] = { badge = badge, color = APPLICANT_BONUS_TEXT_COLOR }
+    return badge, APPLICANT_BONUS_TEXT_COLOR
   end
   resultBonusBadgeCache[cacheKey] = false
   return nil
@@ -852,7 +898,7 @@ local function BuildSingleApplicantMemberBadge(applicantID, memberIndex)
   if not member then
     return nil
   end
-  return BuildApplicantBonusBadge(member.classToken, member.specID, ResolvePlayerBonusProfile())
+  return BuildApplicantBonusMarkerBadge(member.classToken, member.specID, ResolvePlayerBonusProfile())
 end
 
 local function StripColorCodes(text)
@@ -862,6 +908,15 @@ local function StripColorCodes(text)
   local stripped = text:gsub("|c%x%x%x%x%x%x%x%x", "")
   stripped = stripped:gsub("|r", "")
   return stripped
+end
+
+local function IsSearchResultPromotionOfferedRow(button)
+  local playstyle = type(button) == "table" and rawget(button, "Playstyle") or nil
+  if type(playstyle) ~= "table" or type(playstyle.GetText) ~= "function" then
+    return false
+  end
+  local text = StripColorCodes(playstyle:GetText())
+  return SEARCH_RESULT_PROMOTION_OFFERED_PLAYSTYLE_TEXTS[text] == true
 end
 
 local function ClearSearchResultBonusCache(resultID)
@@ -1187,6 +1242,40 @@ local function ApplyApplicantBonusToButton(button, applicantIDOverride)
   end
 end
 
+local function ResolveApplicantRoleAnchor(member)
+  if type(member) ~= "table" then
+    return nil
+  end
+  local roleAnchorKeys = {
+    "RoleIcon",
+    "Role",
+    "RoleButton",
+    "RoleIconTexture",
+  }
+  for _, key in ipairs(roleAnchorKeys) do
+    local value = rawget(member, key)
+    if type(value) == "table" then
+      return value
+    end
+  end
+  return nil
+end
+
+local function AnchorApplicantBonusBadge(member, badgeText)
+  if type(member) ~= "table" or type(badgeText) ~= "table" or type(badgeText.SetPoint) ~= "function" then
+    return
+  end
+  if type(badgeText.ClearAllPoints) == "function" then
+    badgeText:ClearAllPoints()
+  end
+  local roleAnchor = ResolveApplicantRoleAnchor(member)
+  if roleAnchor then
+    badgeText:SetPoint("LEFT", roleAnchor, "RIGHT", 3, 0)
+    return
+  end
+  badgeText:SetPoint("LEFT", member, "LEFT", 104, 0)
+end
+
 local function ApplyApplicantBonusToMemberFrame(member, applicantID, memberIndex)
   if type(member) ~= "table" then
     return
@@ -1225,9 +1314,8 @@ local function ApplyApplicantBonusToMemberFrame(member, applicantID, memberIndex
   end
   if not member._isiLiveBonusBadge and type(member.CreateFontString) == "function" then
     local badgeText = member:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    badgeText:SetPoint("LEFT", member, "LEFT", 104, 0)
     badgeText:SetJustifyH("CENTER")
-    badgeText:SetWidth(18)
+    badgeText:SetWidth(54)
     if type(badgeText.SetHeight) == "function" then
       badgeText:SetHeight(14)
     end
@@ -1240,12 +1328,7 @@ local function ApplyApplicantBonusToMemberFrame(member, applicantID, memberIndex
     member._isiLiveBonusBadge = badgeText
   end
   if member._isiLiveBonusBadge and type(member._isiLiveBonusBadge.SetText) == "function" then
-    if type(member._isiLiveBonusBadge.ClearAllPoints) == "function" then
-      member._isiLiveBonusBadge:ClearAllPoints()
-    end
-    if type(member._isiLiveBonusBadge.SetPoint) == "function" then
-      member._isiLiveBonusBadge:SetPoint("LEFT", member, "LEFT", 104, 0)
-    end
+    AnchorApplicantBonusBadge(member, member._isiLiveBonusBadge)
     if badgeColor and type(member._isiLiveBonusBadge.SetTextColor) == "function" then
       member._isiLiveBonusBadge:SetTextColor(badgeColor[1], badgeColor[2], badgeColor[3], badgeColor[4])
     end
@@ -1369,19 +1452,180 @@ local function EnsureFlagTexture(button)
   end
   local tex = button:CreateTexture(nil, "OVERLAY")
   tex:SetSize(FLAG_WIDTH, FLAG_HEIGHT)
-
-  -- Place flag to the right of the Playstyle label (e.g. "Entspannt", "Kompetitiv").
-  -- Playstyle sits at x=10, W=53, so RIGHT edge is at ~63. We add a small gap.
-  local playstyleFS = rawget(button, "Playstyle")
-  if playstyleFS and type(playstyleFS.GetRight) == "function" then
-    tex:SetPoint("LEFT", playstyleFS, "RIGHT", 4, 0)
-  else
-    tex:SetPoint("LEFT", button, "LEFT", 67, 0)
-  end
+  tex:SetPoint("LEFT", button, "LEFT", SEARCH_RESULT_FLAG_X, SEARCH_RESULT_FLAG_Y)
 
   tex:Hide()
   button._isiFlagTex = tex
   return tex
+end
+
+local function StripSearchResultKeystoneSuffix(text)
+  if type(text) ~= "string" or text == "" then
+    return text
+  end
+  local labels = {}
+  local liveLabel = rawget(_G, "DUNGEON_DIFFICULTY_MYTHIC_KEYSTONE")
+  if type(liveLabel) == "string" and liveLabel ~= "" then
+    labels[liveLabel] = true
+  end
+  for label in pairs(SEARCH_RESULT_KEYSTONE_LABELS) do
+    labels[label] = true
+  end
+  for label in pairs(labels) do
+    local suffix = " (" .. label .. ")"
+    if string.sub(text, -string.len(suffix)) == suffix then
+      return string.sub(text, 1, string.len(text) - string.len(suffix))
+    end
+  end
+  return text
+end
+
+local function ApplySearchResultActivityNameText(activityName)
+  if
+    type(activityName) ~= "table"
+    or type(activityName.GetText) ~= "function"
+    or type(activityName.SetText) ~= "function"
+  then
+    return
+  end
+  if rawget(activityName, "_isiActivityNameCleaning") == true then
+    return
+  end
+  local currentText = activityName:GetText()
+  local displayText = StripSearchResultKeystoneSuffix(currentText)
+  if displayText == currentText then
+    return
+  end
+  activityName._isiActivityNameCleaning = true
+  activityName:SetText(displayText)
+  activityName._isiActivityNameCleaning = nil
+end
+
+local function HookSearchResultActivityNameText(activityName)
+  if
+    type(activityName) ~= "table"
+    or rawget(activityName, "_isiActivityNameTextHooked") == true
+    or type(activityName.SetText) ~= "function"
+  then
+    return
+  end
+  local hooksecurefuncRef = rawget(_G, "hooksecurefunc")
+  if type(hooksecurefuncRef) ~= "function" then
+    return
+  end
+  activityName._isiActivityNameTextHooked = true
+  pcall(hooksecurefuncRef, activityName, "SetText", function(self)
+    ApplySearchResultActivityNameText(self)
+  end)
+end
+
+local function GetStoredActivityNamePoint(button, activityName)
+  local stored = rawget(button, "_isiActivityNameOriginalPoint")
+  if type(stored) == "table" and rawget(button, "_isiActivityNameOriginalRegion") == activityName then
+    return stored
+  end
+  if type(activityName.GetPoint) ~= "function" then
+    return nil
+  end
+  local point, relativeTo, relativePoint, offsetX, offsetY = activityName:GetPoint(1)
+  if type(point) ~= "string" then
+    return nil
+  end
+  stored = {
+    point = point,
+    relativeTo = relativeTo or button,
+    relativePoint = relativePoint or point,
+    offsetX = tonumber(offsetX) or 0,
+    offsetY = tonumber(offsetY) or 0,
+  }
+  button._isiActivityNameOriginalPoint = stored
+  button._isiActivityNameOriginalRegion = activityName
+  return stored
+end
+
+local function GetStoredPlaystylePoint(button, playstyle)
+  local stored = rawget(button, "_isiPlaystyleOriginalPoint")
+  if type(stored) == "table" and rawget(button, "_isiPlaystyleOriginalRegion") == playstyle then
+    return stored
+  end
+  if type(playstyle) ~= "table" or type(playstyle.GetPoint) ~= "function" then
+    return nil
+  end
+  local point, relativeTo, relativePoint, offsetX, offsetY = playstyle:GetPoint(1)
+  if type(point) ~= "string" then
+    return nil
+  end
+  stored = {
+    point = point,
+    relativeTo = relativeTo or button,
+    relativePoint = relativePoint or point,
+    offsetX = tonumber(offsetX) or 0,
+    offsetY = tonumber(offsetY) or 0,
+  }
+  button._isiPlaystyleOriginalPoint = stored
+  button._isiPlaystyleOriginalRegion = playstyle
+  return stored
+end
+
+local function RestoreSearchResultPlaystyle(button, activityName, playstyleOriginalPoint)
+  local playstyle = rawget(button, "Playstyle")
+  if
+    type(playstyle) ~= "table"
+    or type(playstyle.SetPoint) ~= "function"
+    or type(playstyleOriginalPoint) ~= "table"
+  then
+    return
+  end
+  local offsetX = playstyleOriginalPoint.offsetX
+  if playstyleOriginalPoint.relativeTo == activityName then
+    offsetX = offsetX - SEARCH_RESULT_DUNGEON_NAME_SHIFT_X
+  end
+  if type(playstyle.ClearAllPoints) == "function" then
+    playstyle:ClearAllPoints()
+  end
+  playstyle:SetPoint(
+    playstyleOriginalPoint.point,
+    playstyleOriginalPoint.relativeTo,
+    playstyleOriginalPoint.relativePoint,
+    offsetX,
+    playstyleOriginalPoint.offsetY
+  )
+end
+
+local function AnchorSearchResultDungeonName(button)
+  local activityName = rawget(button, "ActivityName")
+  if type(activityName) ~= "table" or type(activityName.SetPoint) ~= "function" then
+    return
+  end
+  HookSearchResultActivityNameText(activityName)
+  local originalPoint = GetStoredActivityNamePoint(button, activityName)
+  local playstyleOriginalPoint = GetStoredPlaystylePoint(button, rawget(button, "Playstyle"))
+  if originalPoint then
+    if type(activityName.ClearAllPoints) == "function" then
+      activityName:ClearAllPoints()
+    end
+    activityName:SetPoint(
+      originalPoint.point,
+      originalPoint.relativeTo,
+      originalPoint.relativePoint,
+      originalPoint.offsetX + SEARCH_RESULT_DUNGEON_NAME_SHIFT_X,
+      originalPoint.offsetY
+    )
+
+    local flagTex = EnsureFlagTexture(button)
+    if type(flagTex.ClearAllPoints) == "function" then
+      flagTex:ClearAllPoints()
+    end
+    flagTex:SetPoint(
+      originalPoint.point,
+      originalPoint.relativeTo,
+      originalPoint.relativePoint,
+      originalPoint.offsetX,
+      originalPoint.offsetY + SEARCH_RESULT_FLAG_ACTIVITY_NAME_OFFSET_Y
+    )
+    RestoreSearchResultPlaystyle(button, activityName, playstyleOriginalPoint)
+  end
+  ApplySearchResultActivityNameText(activityName)
 end
 
 local function ApplyFlagToButton(button, resultID)
@@ -1396,16 +1640,13 @@ local function ApplyFlagToButton(button, resultID)
   end
 end
 
-local function EnsureSearchResultBonusBadge(button)
-  if button._isiSearchBonusBadge then
-    return button._isiSearchBonusBadge
+local function ConfigureSearchResultBonusBadgeText(badgeText)
+  if type(badgeText.SetJustifyH) == "function" then
+    badgeText:SetJustifyH("RIGHT")
   end
-  if type(button.CreateFontString) ~= "function" then
-    return nil
+  if type(badgeText.SetWidth) == "function" then
+    badgeText:SetWidth(SEARCH_RESULT_BONUS_WIDTH)
   end
-  local badgeText = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  badgeText:SetJustifyH("CENTER")
-  badgeText:SetWidth(18)
   if type(badgeText.SetHeight) == "function" then
     badgeText:SetHeight(14)
   end
@@ -1415,9 +1656,24 @@ local function EnsureSearchResultBonusBadge(button)
   if type(badgeText.SetShadowOffset) == "function" then
     badgeText:SetShadowOffset(1, -1)
   end
-  badgeText:Hide()
-  button._isiSearchBonusBadge = badgeText
-  return badgeText
+end
+
+local function EnsureSearchResultBonusBadges(button)
+  if type(button._isiSearchBonusBadges) == "table" then
+    return button._isiSearchBonusBadges
+  end
+  if type(button.CreateFontString) ~= "function" then
+    return nil
+  end
+  local badges = {}
+  local badgeText = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  ConfigureSearchResultBonusBadgeText(badgeText)
+  if type(badgeText.Hide) == "function" then
+    badgeText:Hide()
+  end
+  badges[1] = badgeText
+  button._isiSearchBonusBadges = badges
+  return badges
 end
 
 local function AnchorSearchResultBonusBadge(button, badgeText)
@@ -1427,22 +1683,32 @@ local function AnchorSearchResultBonusBadge(button, badgeText)
   if type(badgeText.ClearAllPoints) == "function" then
     badgeText:ClearAllPoints()
   end
-  local flagTex = rawget(button, "_isiFlagTex")
-  if type(flagTex) == "table" then
-    badgeText:SetPoint("LEFT", flagTex, "RIGHT", 4, 0)
+  badgeText:SetPoint("RIGHT", button, "RIGHT", SEARCH_RESULT_BONUS_RIGHT_X, SEARCH_RESULT_BONUS_Y)
+end
+
+local function HideSearchResultBonusBadges(badges)
+  if type(badges) ~= "table" then
     return
   end
-  local playstyleFS = rawget(button, "Playstyle")
-  if type(playstyleFS) == "table" then
-    badgeText:SetPoint("LEFT", playstyleFS, "RIGHT", 24, 0)
-    return
+  for _, badgeText in ipairs(badges) do
+    if type(badgeText) == "table" then
+      if type(badgeText.SetText) == "function" then
+        badgeText:SetText("")
+      end
+      if type(badgeText.Hide) == "function" then
+        badgeText:Hide()
+      end
+    end
   end
-  badgeText:SetPoint("LEFT", button, "LEFT", 88, -16)
 end
 
 local function ApplySearchResultBonusBadge(button, resultID)
-  local badgeText = EnsureSearchResultBonusBadge(button)
-  if not badgeText then
+  local badges = EnsureSearchResultBonusBadges(button)
+  if not badges then
+    return
+  end
+  if IsSearchResultPromotionOfferedRow(button) then
+    HideSearchResultBonusBadges(badges)
     return
   end
   local badge, badgeColor
@@ -1450,12 +1716,10 @@ local function ApplySearchResultBonusBadge(button, resultID)
     badge, badgeColor = BuildSearchResultBonusBadge(resultID)
   end
   if not badge then
-    badgeText:SetText("")
-    if type(badgeText.Hide) == "function" then
-      badgeText:Hide()
-    end
+    HideSearchResultBonusBadges(badges)
     return
   end
+  local badgeText = badges[1]
   AnchorSearchResultBonusBadge(button, badgeText)
   if badgeColor and type(badgeText.SetTextColor) == "function" then
     badgeText:SetTextColor(badgeColor[1], badgeColor[2], badgeColor[3], badgeColor[4])
@@ -1473,6 +1737,7 @@ end
 local function UpdateButton(button)
   -- resultID is a direct field on the Blizzard LFG search result button.
   local resultID = rawget(button, "resultID")
+  AnchorSearchResultDungeonName(button)
   ApplyFlagToButton(button, resultID)
   ApplySearchResultBonusBadge(button, resultID)
 end
@@ -1518,6 +1783,10 @@ end
 LI.SplitNameRealm = SplitNameRealm
 LI.GetTagForResult = GetTagForResult
 LI.EnsureFlagTexture = EnsureFlagTexture
+LI.StripSearchResultKeystoneSuffix = StripSearchResultKeystoneSuffix
+LI.ApplySearchResultActivityNameText = ApplySearchResultActivityNameText
+LI.HookSearchResultActivityNameText = HookSearchResultActivityNameText
+LI.AnchorSearchResultDungeonName = AnchorSearchResultDungeonName
 LI.ApplyFlagToButton = ApplyFlagToButton
 LI.UpdateButton = UpdateButton
 LI.HookButton = HookButton
@@ -1532,6 +1801,10 @@ LI.ApplyApplicantBonusToButton = ApplyApplicantBonusToButton
 LI.ApplyGroupBonusTooltipLines = ApplyGroupBonusTooltipLines
 LI.ResolvePlayerBonusProfile = ResolvePlayerBonusProfile
 LI.BuildApplicantBonusBadge = BuildApplicantBonusBadge
+LI.BuildApplicantBonusMarkerBadge = BuildApplicantBonusMarkerBadge
+LI.ResolveApplicantRoleAnchor = ResolveApplicantRoleAnchor
+LI.AnchorApplicantBonusBadge = AnchorApplicantBonusBadge
+LI.IsSearchResultPromotionOfferedRow = IsSearchResultPromotionOfferedRow
 LI.ResetCacheForTests = function()
   resultTagCache = {}
   resultBonusBadgeCache = {}

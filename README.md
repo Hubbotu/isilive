@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.276`
+- **Current version:** `0.9.277`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -24,6 +24,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Default-on **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus the verified remaining count needed to finish enemy forces
 - Forces info on the **mouseover tooltip** for any mob in a key
 - Optional independent **player stats box** with live primary/secondary stats, short English labels, and separate opacity/font/lock controls
+- Optional **Group Finder class-bonus hints** for applicant and search-result rows, shown only when the listed class/spec offers a relevant non-utility group bonus for your current character
 
 Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
 
@@ -191,6 +192,16 @@ You can turn either announce off in the settings. Non-isiLive group members won'
 
 When you get an LFG invite, the matching portal highlights and the chat tells you which dungeon and level you joined — so you know before loading in. The bottom M+ killtracker mirrors that verified target as a right-aligned dungeon + key-level label until the key starts.
 
+### Group Finder class-bonus hints
+
+Optional Group Finder hints help you scan applicant and search-result rows for useful class buffs before you join or accept someone:
+
+- Search results show compact green bonus markers inside the Blizzard row, independent of third-party class-badge addons
+- Applicant rows show the same marker next to the role badge when the applicant offers a relevant non-utility group bonus
+- Search-result tooltips add localized bonus text per listed class/spec
+- Battle Res, Bloodlust, PI, and other utility notes can appear in tooltips, but they do not count toward the compact green marker score
+- The setting lives under **Display -> Group Finder: Show class bonuses**
+
 ### Ghost rows after wipes / reloads
 
 If the group breaks up or someone disconnects, their data stays visible as a greyed-out row. You can still see what spec/key they had. Joining a new group clears the old ghosts.
@@ -223,7 +234,7 @@ If the group breaks up or someone disconnects, their data stays visible as a gre
 Open via **Escape → AddOns → isiLive**. Everything takes effect immediately.
 
 - **General** — language, startup auto-show, minimap button, Hearthstone travel shortcut selection
-- **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, player stats box controls, reset UI
+- **Display** — UI scale, background opacity, default layout (M+, M, H, V), lock main frame position, player stats box controls, Group Finder language flags and class-bonus hints, reset UI
 - **Behavior** — addon sync, auto-show/hide triggers (show on login, auto-open on M+ queue, auto-open on key end, auto-close on key start, auto-close on leaving the group), lock main frame position, fade in combat, raid behavior status
 - **Sounds** — lead transfer, full group, incoming summon, Battle Res, Bloodlust, plus VIP guest mount sound mute toggles for Astral Aurochs, Grand Expedition Yak, and Trader's Gilded Brutosaur
 - **Nameplates** — enable forces overlay, font size, position, percent toggle

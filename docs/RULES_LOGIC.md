@@ -727,6 +727,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - LI.BuildSearchResultMemberBonuses resolves German Verstärkung only for Evoker
   - LI.BuildApplicantBonusBadge does not treat Marksmanship Hunter as Bloodlust
   - LI.BuildSearchResultBonusBadge accepts tuple spec IDs only for their matching class
+  - LI.BuildSearchResultBonusBadge counts relevant non-utility bonuses as markers
+  - LI.UpdateButton renders search-result bonus markers as one right-aligned stack below the badge area
+  - LI.ApplyApplicantBonusToMemberFrame writes applicant bonus markers next to the role badge and clears them
+  - LI.BuildApplicantBonusMarkerBadge ignores applicant utility bonuses
 
 ### RULE-MAIN-UI-POSITION-LOCK
 - Regelnummer: 55

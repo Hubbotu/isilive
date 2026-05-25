@@ -1,7 +1,7 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.276`
-Zuletzt aktualisiert: `2026-05-24`
+Versionsbasis: `0.9.277`
+Zuletzt aktualisiert: `2026-05-25`
 
 ## Akteure
 
@@ -45,6 +45,7 @@ Zuletzt aktualisiert: `2026-05-24`
 | UC-21 | Multi-Kick-Extras im Roster-Tooltip | Zusaetzliche Interrupt-Spells einer Klasse (Prot Pala Avenger's Shield) werden separat vom Primary getrackt, ueber den Sync-Pfad an Peers verteilt und im Hover-Tooltip angezeigt |
 | UC-22 | LFG-Invite-Liste deaktiviert | Die experimentelle offene Premade-LFG-Invite-Liste bleibt ohne Settings, SavedVariable und Runtime-Wiring deaktiviert |
 | UC-23 | Spieler-Stats-Box | Eine optionale, eigenstaendige Stats-Box zeigt live gelesene Spielerwerte ohne Guessing und bleibt unabhaengig von den Main-UI-Layouts verschiebbar |
+| UC-24 | Gruppensuche-Klassenbonus-Hinweise | Bewerber- und Suchergebniszeilen zeigen relevante nicht-Utility-Gruppenboni kompakt an und ergaenzen Tooltips mit lokalisierten Bonusdetails |
 
 ## UC-01 Invite-Erkennung ohne Target-Guessing
 
@@ -158,7 +159,7 @@ Ziel: Schnelle Blizzard-Panel-Shortcuts und lokalisierte Addon-Toggles anbieten,
 6. Trigger B: Der Spieler oeffnet `Settings -> AddOns -> isiLive`.
 7. Ergebnis B: Blizzard Settings zeigen — gruppiert in sechs Sektionen plus Reset und Beta-Hinweis:
    - **General**: Sprache, `Default UI on Open`, `Advanced Combat Logging`, `DM Reset on Dungeon Entry`, `Show ESC Menu Shortcuts`, `Show Timeways Navigator`, `Hearthstone Selection`.
-   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, Spieler-Stats-Box mit Enable-, Lock-, Hintergrund-Deckkraft- und Schriftgroessen-Offset-Control, `Group Finder: Language Flags`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
+   - **Display**: `UI Scale`, `Background Opacity`, `/isilive resetui`-Button, `Minimap Button`, Spieler-Stats-Box mit Enable-, Lock-, Hintergrund-Deckkraft- und Schriftgroessen-Offset-Control, `Group Finder: Language Flags`, `Group Finder: Show class bonuses`, `Tooltip: Language Flags`, `LFG invite hint`, `Accepted-invite notice`.
    - **Nameplates**: 3-Modi-Selector `Off / Tooltip / Nameplate` fuer den M+-Forces-Overlay, plus `Show percentage`, `Show remaining needed`, `Font size`, `Position`, `X offset`, `Y offset` und ein Live-Preview.
    - **Behavior**: `Addon Sync`, `Lock main frame position`, `Fade out in Combat (M2 only)`, gefolgt vom Auto-Show/Hide-Block mit Erklaerung (`Show on Login / Reload`, `Auto-Open on M+ Queue`, `Auto-Open on Key End`, `Auto-close when key starts`, `Auto-close when leaving the group`), und einem statischen Raid-Behavior-Hinweis statt einem 1-Optionen-Selector.
    - **Sounds**: `Sound: Lead Transfer`, `Sound: Full Group`, `Sound: Incoming Summon`, `Sound: Battle Res`, `Sound: Bloodlust`, VIP-Gast-Sound-Schalter fuer Astral Aurochs, Grand Expedition Yak und Trader's Gilded Brutosaur. Eingehende Beschwoerungen des lokalen Spielers spielen den Summon-Sound ueber den klassischen `CONFIRM_SUMMON`-Pfad und ueber den statusbasierten `INCOMING_SUMMON_CHANGED`-Pfad nur bei `Enum.SummonStatus.Pending`.
@@ -221,6 +222,19 @@ Ziel: Jeder BR- und Bloodlust-Cast eines isiLive-Spielers wird im Mythic+ genau 
 10. Regel: Nicht-isiLive-Gruppenmitglieder sehen nichts; die Verteilung laeuft ausschliesslich ueber den Addon-Message-Kanal zwischen isiLive-Peers. Bei `N` isiLive-Usern in einer Gruppe meldet jeder Caster seinen eigenen Cast, und alle `N-1` Peers bekommen die Zeile.
 11. Realm-Darstellung: Die realm-strippende Display-Logik liegt in `factory/isiLive_factory_controllers.lua.FormatDisplayName` und wird sowohl vom Self-Render- als auch vom Peer-Render-Pfad genutzt; Cross-Realm-Namen behalten dabei ihren Realm-Suffix.
 12. Erfolgskriterium: Ein BR- oder Lust-Cast im Mythic+ erzeugt genau eine sichtbare Chat-Zeile pro isiLive-Empfaenger, der Self-Render beim Sender, keinen `ADDON_ACTION_FORBIDDEN`-Popup und keinen `"table index is secret"`-Fehler; Toggles entfernen die Zeile vollstaendig auf Senderseite, Peers ausserhalb eines aktiven Keys sehen keine Zeile.
+
+## UC-24 Gruppensuche-Klassenbonus-Hinweise
+
+Ziel: Der Spieler soll in der Blizzard-Gruppensuche schnell erkennen, ob eine Gruppe oder ein Bewerber relevante Klassenboni fuer den aktuell eingeloggten Charakter mitbringt.
+
+1. Trigger: Eine LFG-Suchergebniszeile, ein Suchergebnis-Tooltip oder eine Bewerberzeile wird aktualisiert.
+2. Verarbeitung: Das Addon liest nur die von Blizzard bereitgestellten Klassen-/Spezialisierungsdaten fuer die sichtbare Zeile beziehungsweise den sichtbaren Tooltip. Nicht aufloesbare Klassen oder Spezialisierungen bleiben unresolved.
+3. Verarbeitung: Die Relevanz wird gegen das live aufgeloeste Spielerprofil bewertet. Staerke-, Beweglichkeits- und Intelligenzboni, physischer und magischer Schadensbonus sowie Ausdauer-, Meisterschafts-, Versa- und Schadensreduktionsboni zaehlen nur, wenn sie fuer den lokalen Charakter relevant sind.
+4. Regel: Battle Res, Bloodlust, Power Infusion, Hunter's Mark, Schamanen-Speed-Utility und aehnliche Utility-Hinweise duerfen in Tooltip-Details erscheinen, zaehlen aber nicht als kompakte grüne Suchergebnis-Marker.
+5. Anzeige: Suchergebniszeilen zeigen bis zu vier gruene Herzmarker rechtsbuendig innerhalb der Blizzard-Zeile und unabhaengig davon, ob ein Drittanbieter-Addon zusaetzliche Klassenbadges zeichnet.
+6. Anzeige: Bewerberzeilen zeigen die Marker neben dem Rollenbadge. Suchergebnis-Tooltips ergaenzen passende Mitgliedszeilen mit lokalisierten Bonusdetails; deutsches Addon-Locale nutzt deutsche Begriffe, alle anderen vorbereiteten Locales nutzen englische Texte.
+7. Ausnahme: Zeilen mit `Beförderung angeboten` beziehungsweise dessen lokalisierter Spielstil-Anzeige zeigen keine kompakten Suchergebnis-Marker.
+8. Erfolgskriterium: Relevante nicht-Utility-Boni sind sichtbar, irrelevante oder unbekannte Boni bleiben ausgeblendet, und fehlende Drittanbieter-Badges entfernen die Marker nicht aus der Blizzard-Default-Anzeige.
 
 ## UC-17 Mob-Tooltip mit Forces-Anteil im Mythic+
 
@@ -325,7 +339,7 @@ Ziel: Eine optionale, eigenstaendige Spieler-Stats-Box zeigt live gelesene Prim�
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1872` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1880` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -339,6 +353,7 @@ Aktuelle Validator-Baseline: `1872` Szenarien ueber die in `tools/usecase_scenar
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
 11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-/Mounts-/Addons-Strips, Ruhestein-Auswahl, VIP-Gast-Sound-Schalter, Lokalisierung inklusive ruRU-Font-Override, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, sichere Mount-Macro-Shortcuts, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering, M+-Killtracker-Live-Refresh und gesyncte Interrupt-Cooldown-Anzeige.
 12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, konkrete lokale LFG-Map-Prioritaet und Highlight-Dispatch.
+13. UC-24: Gruppensuche-Klassenbonus-Hinweise ohne Guessing, mit Spielerprofil-Relevanz, Utility-Ausschluss fuer kompakte Marker und Blizzard-Default-kompatibler Suchergebnisposition.
 13. UC-16: BR-/Lust-Self-Cast-Filter gegen 12.0-Secret-Value-Spam, 3s-`sourceGUID|spellID`-Dedup, Toggle-Gating, ChatThrottleLib-Routing via `BRLUST`-Addon-Message, Receiver-Dispatch in lokalisierten Template-Zeilen und Drop-On-Unknown-Kind.
 14. UC-17: Mob-Tooltip-Forces-Rendering nur bei aktiver Challenge-Map-ID mit passendem NPC-Dataset, Per-Tooltip-Dedup gegen `TooltipDataProcessor`-Rerender und `SetEnabled(false)`-Gate.
 

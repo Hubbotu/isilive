@@ -14,9 +14,11 @@ local function NewButtonStub(opts)
   local hookEnter
   local createdTexture
   local createdFontString
+  local createdFontStrings = {}
   return {
     resultID = opts.resultID,
     Playstyle = opts.Playstyle,
+    ActivityName = opts.ActivityName,
     HookScript = function(_, scriptType, fn)
       if scriptType == "OnEnter" then
         hookEnter = fn
@@ -32,6 +34,9 @@ local function NewButtonStub(opts)
       end
       function tex.SetPoint(self, ...)
         self._point = { ... }
+      end
+      function tex.ClearAllPoints(self)
+        self._point = nil
       end
       function tex.SetTexture(self, path)
         self._texture = path
@@ -87,6 +92,7 @@ local function NewButtonStub(opts)
         self._shown = false
       end
       createdFontString = fs
+      table.insert(createdFontStrings, fs)
       return fs
     end,
     GetCreatedTexture = function()
@@ -94,6 +100,9 @@ local function NewButtonStub(opts)
     end,
     GetCreatedFontString = function()
       return createdFontString
+    end,
+    GetCreatedFontStrings = function()
+      return createdFontStrings
     end,
     GetEnterHook = function()
       return hookEnter
@@ -165,6 +174,8 @@ local function StripColors(text)
   return stripped
 end
 
+local BONUS_MARKUP = "|TInterface\\AddOns\\isiLive\\media\\heart_bonus_green:12:12|t"
+
 local function NewFontStringStub()
   local fs = {
     _text = "",
@@ -175,6 +186,12 @@ local function NewFontStringStub()
   end
   function fs.ClearAllPoints(self)
     self._point = nil
+  end
+  function fs.GetPoint(self)
+    if type(self._point) ~= "table" then
+      return nil
+    end
+    return self._point[1], self._point[2], self._point[3], self._point[4], self._point[5]
   end
   function fs.SetJustifyH(self, value)
     self._justifyH = value
@@ -396,23 +413,95 @@ return function(test, ctx)
       local tex2 = addon._LFGFlagsInternal.EnsureFlagTexture(button)
       Assert.NotNil(tex1, "first call must create texture")
       Assert.True(tex1 == tex2, "second call must reuse cached texture")
-      Assert.Equal(tex1._size[1], 16, "texture width must be FLAG_WIDTH")
-      Assert.Equal(tex1._size[2], 12, "texture height must be FLAG_HEIGHT")
+      Assert.Equal(tex1._size[1], 12, "texture width must be compact enough for the dungeon row")
+      Assert.Equal(tex1._size[2], 9, "texture height must fit inside the dungeon row")
     end)
   end)
 
-  test("LI.EnsureFlagTexture anchors to Playstyle label when present", function()
+  test("LI.EnsureFlagTexture anchors at the visible dungeon-name row start", function()
     WithGlobals(MinimalGlobals(), function()
       local addon = LoadAddonModules({ "isiLive_lfg_flags.lua" })
-      local playstyle = {
-        GetRight = function()
-          return 63
-        end,
-      }
-      local button = NewButtonStub({ Playstyle = playstyle })
+      local button = NewButtonStub()
       local tex = addon._LFGFlagsInternal.EnsureFlagTexture(button)
-      Assert.Equal(tex._point[1], "LEFT", "must anchor LEFT")
-      Assert.True(tex._point[2] == playstyle, "anchor target must be Playstyle when available")
+      Assert.Equal(tex._point[1], "LEFT", "flag must anchor from its left edge")
+      Assert.True(tex._point[2] == button, "anchor target must be the search result button")
+      Assert.Equal(tex._point[3], "LEFT", "flag must sit inside the visible row")
+      Assert.Equal(tex._point[4], 2, "flag must start before the dungeon name text")
+      Assert.Equal(tex._point[5], 10, "flag must sit on the dungeon-name row above playstyle")
+    end)
+  end)
+
+  test("LI.AnchorSearchResultDungeonName shifts ActivityName right for the compact flag", function()
+    WithGlobals(MinimalGlobals(), function()
+      local addon = LoadAddonModules({ "isiLive_lfg_flags.lua" })
+      local activityName = NewFontStringStub()
+      local playstyle = NewFontStringStub()
+      local button = NewButtonStub({ ActivityName = activityName, Playstyle = playstyle })
+      activityName:SetPoint("LEFT", button, "LEFT", 10, -4)
+      playstyle:SetPoint("TOPLEFT", activityName, "BOTTOMLEFT", 0, -3)
+      addon._LFGFlagsInternal.AnchorSearchResultDungeonName(button)
+      Assert.Equal(activityName._point[1], "LEFT", "dungeon name must keep a left anchor")
+      Assert.True(activityName._point[2] == button, "dungeon name must stay anchored to the search result button")
+      Assert.Equal(activityName._point[3], "LEFT", "dungeon name must stay in the row")
+      Assert.Equal(activityName._point[4], 26, "dungeon name must leave room for the compact flag")
+      Assert.Equal(activityName._point[5], -4, "dungeon name must keep Blizzard's original row offset")
+      local tex = button.GetCreatedTexture()
+      Assert.Equal(tex._point[4], 10, "flag must use the original dungeon-name x offset")
+      Assert.Equal(tex._point[5], -6, "flag must sit slightly lower than the original dungeon-name y offset")
+      Assert.True(playstyle._point[2] == activityName, "playstyle must keep its Blizzard relative target")
+      Assert.Equal(playstyle._point[4], -16, "playstyle must compensate the shifted ActivityName x offset")
+      Assert.Equal(playstyle._point[5], -3, "playstyle must keep its original vertical offset")
+    end)
+  end)
+
+  test("LI.AnchorSearchResultDungeonName removes the localized Mythic Keystone suffix", function()
+    local globals = MinimalGlobals()
+    globals.DUNGEON_DIFFICULTY_MYTHIC_KEYSTONE = "Mythischer Schlüsselstein"
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_flags.lua" })
+      local activityName = NewFontStringStub()
+      activityName:SetText("Himmelsnadel (Mythischer Schlüsselstein)")
+      local button = NewButtonStub({ ActivityName = activityName })
+      addon._LFGFlagsInternal.AnchorSearchResultDungeonName(button)
+      Assert.Equal(
+        activityName:GetText(),
+        "Himmelsnadel",
+        "visible search result name must omit the redundant key suffix"
+      )
+    end)
+  end)
+
+  test("LI.HookSearchResultActivityNameText strips later Blizzard ActivityName SetText calls", function()
+    local globals = MinimalGlobals()
+    globals.DUNGEON_DIFFICULTY_MYTHIC_KEYSTONE = "Mythischer Schlüsselstein"
+    globals.hooksecurefunc = function(target, methodName, fn)
+      local original = target[methodName]
+      target[methodName] = function(self, ...)
+        original(self, ...)
+        fn(self, ...)
+      end
+    end
+    WithGlobals(globals, function()
+      local addon = LoadAddonModules({ "isiLive_lfg_flags.lua" })
+      local activityName = NewFontStringStub()
+      addon._LFGFlagsInternal.HookSearchResultActivityNameText(activityName)
+      activityName:SetText("Windläuferturm (Mythischer Schlüsselstein)")
+      Assert.Equal(
+        activityName:GetText(),
+        "Windläuferturm",
+        "later Blizzard SetText calls must be stripped immediately"
+      )
+    end)
+  end)
+
+  test("LI.StripSearchResultKeystoneSuffix keeps unrelated parenthetical dungeon text", function()
+    WithGlobals(MinimalGlobals(), function()
+      local addon = LoadAddonModules({ "isiLive_lfg_flags.lua" })
+      Assert.Equal(
+        addon._LFGFlagsInternal.StripSearchResultKeystoneSuffix("Dungeon (Heroisch)"),
+        "Dungeon (Heroisch)",
+        "non-keystone suffixes must remain untouched"
+      )
     end)
   end)
 
@@ -504,16 +593,90 @@ return function(test, ctx)
     })
     WithGlobals(globals, function()
       local addon = LoadBonusModules(LoadAddonModules)
+      local playstyle = NewFontStringStub()
+      local button = NewButtonStub({ resultID = 17, Playstyle = playstyle })
+
+      addon._LFGFlagsInternal.UpdateButton(button)
+
+      local badges = Assert.NotNil(button.GetCreatedFontStrings(), "search result badges must be tracked")
+      Assert.Equal(#badges, 1, "search result button must create one right-aligned bonus badge stack")
+      local badge = Assert.NotNil(badges[1], "search result bonus stack must have a font string")
+      Assert.Equal(badge._text, BONUS_MARKUP, "Hunter damage bonus must render one bonus marker")
+      Assert.True(badge._shown == true, "resolved search result bonus badge must be visible")
+      Assert.Equal(badge._justifyH, "RIGHT", "search result badge stack must right-align under the badge area")
+      Assert.Equal(badge._point[1], "RIGHT", "badge stack must anchor from its right edge")
+      Assert.True(badge._point[2] == button, "badge must anchor to the search result button")
+      Assert.Equal(badge._point[3], "RIGHT", "badge must stay inside the visible result row")
+      Assert.Equal(badge._point[4], -44, "badge stack right edge must sit below the right badge area")
+      Assert.Equal(badge._point[5], -16, "badge stack must stay on the playstyle row below the role badges")
+      Assert.Equal(badge._textColor[1], 0.20, "search-result bonus markers must use the regular bonus color")
+      Assert.Equal(badge._width, 68, "badge stack keeps enough fixed width for four right-aligned hearts")
+    end)
+  end)
+
+  test("LI.UpdateButton renders search-result bonus markers as one right-aligned stack below the badge area", function()
+    local members = {
+      { classFilename = "HUNTER", specID = 253, className = "Hunter", specName = "Beast Mastery" },
+      { classFilename = "DEATHKNIGHT", specID = 250, className = "Death Knight", specName = "Blood" },
+      { classFilename = "PRIEST", specID = 256, className = "Priest", specName = "Discipline" },
+      { classFilename = "DRUID", specID = 104, className = "Druid", specName = "Guardian" },
+    }
+    local globals = BonusGlobals({
+      C_LFGList = {
+        GetSearchResultInfo = function()
+          return { numMembers = #members }
+        end,
+        GetSearchResultPlayerInfo = function(_, memberIndex)
+          return members[memberIndex]
+        end,
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadBonusModules(LoadAddonModules)
       local button = NewButtonStub({ resultID = 17 })
 
       addon._LFGFlagsInternal.UpdateButton(button)
 
-      local badge = Assert.NotNil(button.GetCreatedFontString(), "search result badge must create a font string")
-      Assert.Equal(badge._text, "++", "Hunter BL must render the major bonus marker")
-      Assert.True(badge._shown == true, "resolved search result bonus badge must be visible")
-      Assert.True(badge._point[2] == button._isiFlagTex, "badge must anchor after the flag texture when it exists")
-      Assert.Equal(badge._textColor[1], 1.00, "major utility badge must use the major utility color")
-      Assert.Equal(badge._width, 18, "badge keeps the compact fixed width")
+      local badges = Assert.NotNil(button.GetCreatedFontStrings(), "search result badges must be tracked")
+      local badge = Assert.NotNil(badges[1], "search result bonus stack must exist")
+      Assert.Equal(
+        badge._text,
+        BONUS_MARKUP .. BONUS_MARKUP .. BONUS_MARKUP,
+        "badge stack must count Hunter, Priest and Druid while ignoring utility-only DK battle resurrection"
+      )
+      Assert.Equal(badge._point[1], "RIGHT", "badge stack must anchor from its right edge")
+      Assert.Equal(badge._point[3], "RIGHT", "badge stack must anchor against the visible row right edge")
+      Assert.Equal(badge._point[4], -44, "badge stack must stay inside the result row")
+    end)
+  end)
+
+  test("LI.UpdateButton hides search-result bonus markers when promotion is offered", function()
+    local globals = BonusGlobals({
+      C_LFGList = {
+        GetSearchResultInfo = function()
+          return { numMembers = 1 }
+        end,
+        GetSearchResultPlayerInfo = function()
+          return { classFilename = "HUNTER", specID = 253, className = "Hunter", specName = "Beast Mastery" }
+        end,
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadBonusModules(LoadAddonModules)
+      local playstyle = NewFontStringStub()
+      local button = NewButtonStub({ resultID = 17, Playstyle = playstyle })
+
+      playstyle:SetText("Beförderung angeboten")
+      addon._LFGFlagsInternal.UpdateButton(button)
+      local badge =
+        Assert.NotNil(button.GetCreatedFontStrings()[1], "search result badge must still create a font string")
+      Assert.Equal(badge._text, "", "promotion-offered rows must not show bonus markers")
+      Assert.True(badge._shown == false, "promotion-offered rows must hide the bonus badge")
+
+      playstyle:SetText("Kompetitiv")
+      addon._LFGFlagsInternal.UpdateButton(button)
+      Assert.Equal(badge._text, BONUS_MARKUP, "normal playstyle rows must show bonus markers again")
+      Assert.True(badge._shown == true, "normal playstyle rows must show the bonus badge")
     end)
   end)
 
@@ -533,8 +696,8 @@ return function(test, ctx)
       local button = NewButtonStub({ resultID = 17 })
 
       addon._LFGFlagsInternal.UpdateButton(button)
-      local badge = Assert.NotNil(button.GetCreatedFontString(), "first update must create a visible badge")
-      Assert.Equal(badge._text, "++", "precondition: badge must be populated")
+      local badge = Assert.NotNil(button.GetCreatedFontStrings()[1], "first update must create a visible badge")
+      Assert.Equal(badge._text, BONUS_MARKUP, "precondition: badge must be populated")
 
       addon.LFGFlags.SetGroupBonusesEnabled(false)
       addon._LFGFlagsInternal.UpdateButton(button)
@@ -719,21 +882,61 @@ return function(test, ctx)
     end)
   end)
 
-  test("LI.BuildSearchResultBonusBadge returns plus-plus when a search result offers BL", function()
+  test("LI.ResolvePlayerBonusProfile treats Frost and Unholy DK as magic-only damage profiles", function()
+    local currentSpecID = 251
+    local globals = BonusGlobals({
+      UnitClass = function(unit)
+        if unit == "player" then
+          return "Death Knight", "DEATHKNIGHT"
+        end
+        return nil, nil
+      end,
+      GetSpecialization = function()
+        return 1
+      end,
+      GetSpecializationInfo = function()
+        return currentSpecID
+      end,
+    })
+    WithGlobals(globals, function()
+      local addon = LoadBonusModules(LoadAddonModules)
+      local LI = addon._LFGFlagsInternal
+      local profile = LI.ResolvePlayerBonusProfile()
+      Assert.True(profile.dealsMagicDamage == true, "Frost DK must count as magic damage")
+      Assert.True(profile.dealsPhysicalDamage == false, "Frost DK must not count as physical damage")
+
+      currentSpecID = 252
+      profile = LI.ResolvePlayerBonusProfile()
+      Assert.True(profile.dealsMagicDamage == true, "Unholy DK must count as magic damage")
+      Assert.True(profile.dealsPhysicalDamage == false, "Unholy DK must not count as physical damage")
+    end)
+  end)
+
+  test("LI.BuildSearchResultBonusBadge counts relevant non-utility bonuses as markers", function()
+    local members = {
+      { classFilename = "HUNTER", specID = 253, className = "Hunter", specName = "Beast Mastery" },
+      { classFilename = "MAGE", specID = 63, className = "Mage", specName = "Fire" },
+      { classFilename = "DEATHKNIGHT", specID = 250, className = "Death Knight", specName = "Blood" },
+      { classFilename = "PRIEST", specID = 256, className = "Priest", specName = "Discipline" },
+    }
     local globals = BonusGlobals({
       C_LFGList = {
         GetSearchResultInfo = function()
-          return { numMembers = 1 }
+          return { numMembers = #members }
         end,
-        GetSearchResultPlayerInfo = function()
-          return { classFilename = "HUNTER", specID = 253, className = "Hunter", specName = "Beast Mastery" }
+        GetSearchResultPlayerInfo = function(_, memberIndex)
+          return members[memberIndex]
         end,
       },
     })
     WithGlobals(globals, function()
       local addon = LoadBonusModules(LoadAddonModules)
       local badge = addon._LFGFlagsInternal.BuildSearchResultBonusBadge(17)
-      Assert.Equal(badge, "++", "search-result badge must surface major BL utility")
+      Assert.Equal(
+        badge,
+        BONUS_MARKUP .. BONUS_MARKUP .. BONUS_MARKUP,
+        "search-result badge must count Hunter damage, Mage intellect and Priest stamina but ignore BR/BL/PI"
+      )
     end)
   end)
 
@@ -803,8 +1006,8 @@ return function(test, ctx)
       local LI = addon._LFGFlagsInternal
       Assert.Equal(
         LI.BuildSearchResultBonusBadge(17),
-        "++",
-        "Shaman must keep its own Bloodlust but not inherit Hunter spec bonuses from tuple noise"
+        BONUS_MARKUP,
+        "Shaman must count mastery but not inherit Hunter spec bonuses from tuple noise"
       )
       local members = Assert.NotNil(LI.BuildSearchResultMemberBonuses(17), "shaman bonuses must still resolve")
       local shamanSuffix = StripColors(members[1].suffix)
@@ -819,8 +1022,8 @@ return function(test, ctx)
       currentNumeric = 253
       Assert.Equal(
         LI.BuildSearchResultBonusBadge(17),
-        "++",
-        "matching Hunter tuple spec ID must keep the verified Bloodlust bonus"
+        BONUS_MARKUP,
+        "matching Hunter tuple spec ID must count Hunter's Mark while ignoring Bloodlust for the badge"
       )
     end)
   end)
@@ -846,7 +1049,7 @@ return function(test, ctx)
       addon.LFGFlags.SetGroupBonusesEnabled(true)
       Assert.Equal(
         addon._LFGFlagsInternal.BuildSearchResultBonusBadge(17),
-        "++",
+        BONUS_MARKUP,
         "reenabling class bonuses must restore search-result badge computation"
       )
     end)
@@ -870,8 +1073,8 @@ return function(test, ctx)
     WithGlobals(globals, function()
       local addon = LoadBonusModules(LoadAddonModules)
       local LI = addon._LFGFlagsInternal
-      Assert.Equal(LI.BuildSearchResultBonusBadge(17), "++", "first lookup must resolve the badge")
-      Assert.Equal(LI.BuildSearchResultBonusBadge(17), "++", "second lookup must reuse cached badge data")
+      Assert.Equal(LI.BuildSearchResultBonusBadge(17), BONUS_MARKUP, "first lookup must resolve the badge")
+      Assert.Equal(LI.BuildSearchResultBonusBadge(17), BONUS_MARKUP, "second lookup must reuse cached badge data")
       Assert.Equal(infoCalls, 1, "cached badge lookup must not re-read search-result info")
       Assert.Equal(memberCalls, 1, "cached badge lookup must not re-read member info")
     end)
@@ -921,7 +1124,7 @@ return function(test, ctx)
 
       Assert.Equal(
         LI.BuildSearchResultBonusBadge(17),
-        "++",
+        BONUS_MARKUP,
         "updated result must recompute after the specific bonus cache entry was cleared"
       )
     end)
@@ -967,35 +1170,66 @@ return function(test, ctx)
     end)
   end)
 
-  test("LI.ApplyApplicantBonusToMemberFrame writes and clears the applicant plus badge", function()
-    local globals = BonusGlobals({
-      C_LFGList = {
-        GetApplicantInfo = function()
-          return { numMembers = 1 }
-        end,
-        GetApplicantMemberInfo = function()
-          return "Ariphinne", "HUNTER", "Hunter", 80, 280, 0, false, false, true, "DAMAGER", nil, 0, 0, nil, nil, 253
-        end,
-      },
-    })
-    WithGlobals(globals, function()
+  test(
+    "LI.ApplyApplicantBonusToMemberFrame writes applicant bonus markers next to the role badge and clears them",
+    function()
+      local globals = BonusGlobals({
+        C_LFGList = {
+          GetApplicantInfo = function()
+            return { numMembers = 1 }
+          end,
+          GetApplicantMemberInfo = function()
+            return "Ariphinne", "HUNTER", "Hunter", 80, 280, 0, false, false, true, "DAMAGER", nil, 0, 0, nil, nil, 253
+          end,
+        },
+      })
+      WithGlobals(globals, function()
+        local addon = LoadBonusModules(LoadAddonModules)
+        local member = {
+          memberIdx = 1,
+          Name = NewFontStringStub(),
+          RoleIcon = {},
+          CreateFontString = function()
+            return NewFontStringStub()
+          end,
+        }
+
+        addon._LFGFlagsInternal.ApplyApplicantBonusToMemberFrame(member, 51, 1)
+        Assert.NotNil(member._isiLiveBonusBadge, "applicant member frame must get a bonus badge font string")
+        Assert.Equal(
+          member._isiLiveBonusBadge._text,
+          BONUS_MARKUP,
+          "Hunter applicant must render one relevant bonus marker"
+        )
+        Assert.True(member._isiLiveBonusBadge._shown == true, "badge must be shown after applying a bonus")
+        Assert.True(member._isiLiveBonusBadge._point[2] == member.RoleIcon, "badge must anchor next to the role icon")
+        Assert.Equal(member._isiLiveBonusBadge._point[3], "RIGHT", "badge must anchor from the role icon's right edge")
+        Assert.Equal(member._isiLiveBonusBadge._width, 54, "badge must keep enough width for up to four markers")
+
+        addon.LFGFlags.SetGroupBonusesEnabled(false)
+        Assert.Equal(member._isiLiveBonusBadge._text, "", "disabling class bonuses must clear known applicant badges")
+        Assert.True(
+          member._isiLiveBonusBadge._shown == false,
+          "disabling class bonuses must hide known applicant badges"
+        )
+      end)
+    end
+  )
+
+  test("LI.BuildApplicantBonusMarkerBadge ignores applicant utility bonuses", function()
+    WithGlobals(BonusGlobals(), function()
       local addon = LoadBonusModules(LoadAddonModules)
-      local member = {
-        memberIdx = 1,
-        Name = NewFontStringStub(),
-        CreateFontString = function()
-          return NewFontStringStub()
-        end,
-      }
-
-      addon._LFGFlagsInternal.ApplyApplicantBonusToMemberFrame(member, 51, 1)
-      Assert.NotNil(member._isiLiveBonusBadge, "applicant member frame must get a bonus badge font string")
-      Assert.Equal(member._isiLiveBonusBadge._text, "++", "Hunter applicant must render the major utility badge")
-      Assert.True(member._isiLiveBonusBadge._shown == true, "badge must be shown after applying a bonus")
-
-      addon.LFGFlags.SetGroupBonusesEnabled(false)
-      Assert.Equal(member._isiLiveBonusBadge._text, "", "disabling class bonuses must clear known applicant badges")
-      Assert.True(member._isiLiveBonusBadge._shown == false, "disabling class bonuses must hide known applicant badges")
+      local LI = addon._LFGFlagsInternal
+      local physicalProfile = { dealsPhysicalDamage = true }
+      Assert.Equal(
+        LI.BuildApplicantBonusMarkerBadge("HUNTER", 253, physicalProfile),
+        BONUS_MARKUP,
+        "BM Hunter must count Hunter's Mark but not Bloodlust as an applicant marker"
+      )
+      Assert.Nil(
+        LI.BuildApplicantBonusMarkerBadge("DEATHKNIGHT", 250, { dealsMagicDamage = true }),
+        "Death Knight battle resurrection must not create an applicant marker by itself"
+      )
     end)
   end)
 

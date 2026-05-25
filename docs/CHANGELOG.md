@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-05-25 - Version 0.9.277 (patch)
+
+Stabilizes the LFG group-bonus marker placement for Blizzard's default
+Group Finder rows and completes the release documentation baseline for the
+class-bonus feature.
+
+### LFG Group Bonus Indicators
+
+[ui/isiLive_lfg_flags.lua](../ui/isiLive_lfg_flags.lua),
+[media/heart_bonus_green.tga](../media/heart_bonus_green.tga),
+[testmodul/isilive_test_scenarios_lfg_flags_branches.lua](../testmodul/isilive_test_scenarios_lfg_flags_branches.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Moved compact green search-result bonus markers to a right-aligned anchor
+  inside the Blizzard search-result row, so the display no longer depends on
+  third-party class-badge addons.
+- Kept the compact score limited to relevant non-utility group bonuses for
+  the logged-in character; Battle Res, Bloodlust, Power Infusion, and similar
+  utility notes stay out of the marker count.
+- Preserved applicant-row bonus markers next to the role badge and tooltip
+  bonus details for listed class/spec lines.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.277`.
+- Updated the validator baseline to `1880` scenarios.
+
 ## 2026-05-25 - Version 0.9.276 (patch)
 
 Fixes the incoming-summon sound path for Retail clients that surface the
