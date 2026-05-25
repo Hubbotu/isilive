@@ -1,8 +1,9 @@
 # Changelog
 
-## 2026-05-25 - Pending
+## 2026-05-25 - Version 0.9.275 (patch)
 
-Fixes ESC Addons shortcut visibility for per-character addon enable states.
+Fixes ESC Addons shortcut visibility for per-character addon enable states
+and ships the release baseline for the post-0.9.274 CI/test split.
 
 ### ESC Addons Panel
 
@@ -19,6 +20,29 @@ Fixes ESC Addons shortcut visibility for per-character addon enable states.
   button visible while `LoadAddOn` fails with a disabled target.
 - Added deterministic coverage for current-character enabled shortcuts and the
   "enabled only on another character" fail-closed path.
+
+### CI / Test Hygiene
+
+[testmodul/isilive_test_scenarios_ui.lua](../testmodul/isilive_test_scenarios_ui.lua),
+[testmodul/isilive_test_scenarios_ui_game_menu_addons.lua](../testmodul/isilive_test_scenarios_ui_game_menu_addons.lua),
+[tools/usecase_scenarios.lua](../tools/usecase_scenarios.lua):
+
+- Split the game-menu addon scenarios into a focused test module so the Lua
+  metrics hard file-size gate stays green without changing runtime behavior.
+- Kept the scenario registry explicit so the existing usecase validator still
+  executes the moved coverage.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.275`.
+- Updated the validator baseline to `1851` scenarios.
 
 ## 2026-05-24 - Version 0.9.274 (patch)
 
