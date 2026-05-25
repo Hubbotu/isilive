@@ -540,6 +540,24 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
     "SETTINGS_LFG_FLAGS"
   )
 
+  controls.lfgGroupBonuses, yOffset = CreateSettingsCheckbox(
+    canvas,
+    yOffset,
+    labels.SETTINGS_LFG_GROUP_BONUSES or "Group Finder: Show class bonuses",
+    function()
+      local db = config.getDB()
+      return db.lfgGroupBonusesEnabled ~= false
+    end,
+    function(checked)
+      local db = config.getDB()
+      db.lfgGroupBonusesEnabled = checked
+      if type(config.onLfgGroupBonusesToggle) == "function" then
+        config.onLfgGroupBonusesToggle(checked)
+      end
+    end,
+    "SETTINGS_LFG_GROUP_BONUSES"
+  )
+
   controls.tooltipFlags, yOffset = CreateSettingsCheckbox(
     canvas,
     yOffset,
@@ -692,6 +710,10 @@ function SettingsSections.RefreshDisplayControls(controls, labels, db, config)
   if controls.lfgFlags then
     controls.lfgFlags.label:SetText(labels.SETTINGS_LFG_FLAGS or "Group Finder: Language Flags")
     controls.lfgFlags.check:SetChecked(db.lfgFlagsEnabled ~= false)
+  end
+  if controls.lfgGroupBonuses then
+    controls.lfgGroupBonuses.label:SetText(labels.SETTINGS_LFG_GROUP_BONUSES or "Group Finder: Show class bonuses")
+    controls.lfgGroupBonuses.check:SetChecked(db.lfgGroupBonusesEnabled ~= false)
   end
   if controls.tooltipFlags then
     controls.tooltipFlags.label:SetText(labels.SETTINGS_TOOLTIP_FLAGS or "Tooltip: Language Flags")

@@ -5,6 +5,7 @@ addonTable = addonTable or {}
 local RuntimeLifecycle = {}
 addonTable.EventHandlersRuntimeLifecycle = RuntimeLifecycle
 local ChallengeLifecycle = addonTable.EventHandlersChallengeLifecycle
+local IsRaidModeActive
 
 local function GetDB()
   return rawget(_G, "IsiLiveDB")
@@ -14,6 +15,47 @@ local function ApplyPendingLeaderButtonUpdates(ctx)
   if type(ctx.applyPendingLeaderButtonUpdates) == "function" then
     ctx.applyPendingLeaderButtonUpdates()
   end
+end
+
+local function GetPendingSummonStatusValue()
+  local enumTable = rawget(_G, "Enum")
+  local summonStatus = type(enumTable) == "table" and enumTable.SummonStatus or nil
+  local pending = type(summonStatus) == "table" and summonStatus.Pending or nil
+  return pending
+end
+
+local function IsPlayerIncomingSummonPending(unitTarget)
+  if unitTarget ~= "player" then
+    return false
+  end
+  local incomingSummon = rawget(_G, "C_IncomingSummon")
+  local getStatus = type(incomingSummon) == "table" and incomingSummon.IncomingSummonStatus or nil
+  if type(getStatus) ~= "function" then
+    return false
+  end
+  local ok, status = pcall(getStatus, "player")
+  if not ok then
+    return false
+  end
+  local pending = GetPendingSummonStatusValue()
+  return pending ~= nil and status == pending
+end
+
+local function HandleConfirmSummonSound(ctx)
+  if IsRaidModeActive(ctx) then
+    return
+  end
+  ctx.playIncomingSummonSound()
+end
+
+local function HandleIncomingSummonChangedSound(ctx, unitTarget)
+  if IsRaidModeActive(ctx) then
+    return
+  end
+  if not IsPlayerIncomingSummonPending(unitTarget) then
+    return
+  end
+  ctx.playIncomingSummonSound()
 end
 
 local TRACKED_NON_CHALLENGE_PARTY_DIFFICULTY_IDS = {
@@ -231,7 +273,7 @@ local COMBAT_FADE_DURATION = 0.4
 local COMBAT_FADE_TICK = 0.05
 local activeFadeTicker = nil
 
-local function IsRaidModeActive(ctx)
+function IsRaidModeActive(ctx)
   return type(ctx.isRaidGroup) == "function" and ctx.isRaidGroup() == true
 end
 
@@ -845,13 +887,6 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     end
   end
 
-  local function HandleConfirmSummonEvent(_self)
-    if IsRaidModeActive(ctx) then
-      return
-    end
-    ctx.playIncomingSummonSound()
-  end
-
   local HandleSpellUpdateCooldownEvent, HandleSpellUpdateChargesEvent = BuildSpellCooldownCoalescer(ctx, function()
     return IsRaidModeActive(ctx)
   end)
@@ -890,7 +925,12 @@ function RuntimeLifecycle.BuildHandlers(ctx)
     ROLE_CHANGED_INFORM = HandlePlayerRolesAssignedEvent,
     INSPECT_READY = HandleInspectReadyEvent,
     CHAT_MSG_ADDON = HandleChatMsgAddonEvent,
-    CONFIRM_SUMMON = HandleConfirmSummonEvent,
+    CONFIRM_SUMMON = function(_self)
+      HandleConfirmSummonSound(ctx)
+    end,
+    INCOMING_SUMMON_CHANGED = function(_self, unitTarget)
+      HandleIncomingSummonChangedSound(ctx, unitTarget)
+    end,
     SPELL_UPDATE_COOLDOWN = HandleSpellUpdateCooldownEvent,
     SPELL_UPDATE_CHARGES = HandleSpellUpdateChargesEvent,
     UNIT_AURA = HandleUnitAuraEvent,

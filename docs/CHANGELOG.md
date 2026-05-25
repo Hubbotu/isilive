@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-05-25 - Version 0.9.276 (patch)
+
+Fixes the incoming-summon sound path for Retail clients that surface the
+summon dialog through status updates, and ships the documented baseline for
+the new LFG group-bonus indicators.
+
+### Incoming Summon Sound
+
+[core/isiLive_bootstrap.lua](../core/isiLive_bootstrap.lua),
+[logic/isiLive_event_handlers_runtime.lua](../logic/isiLive_event_handlers_runtime.lua),
+[testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua](../testmodul/isilive_test_scenarios_event_handlers_runtime_branches.lua),
+[testmodul/isilive_test_scenarios_event_utils.lua](../testmodul/isilive_test_scenarios_event_utils.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md):
+
+- Registered `INCOMING_SUMMON_CHANGED` alongside the existing
+  `CONFIRM_SUMMON` path so incoming summon dialogs can trigger the bundled
+  `sounds/Portal.ogg` cue when Retail reports the summon through the status API.
+- The new path is scoped to `unitTarget == "player"` and only plays when
+  `C_IncomingSummon.IncomingSummonStatus("player")` equals
+  `Enum.SummonStatus.Pending`.
+- Kept raid suppression intact and fail-closed when the pending summon enum is
+  unavailable, instead of guessing a numeric status.
+
+### LFG Group Bonus Indicators
+
+[ui/isiLive_lfg_flags.lua](../ui/isiLive_lfg_flags.lua),
+[ui/isiLive_settings.lua](../ui/isiLive_settings.lua),
+[ui/isiLive_settings_sections.lua](../ui/isiLive_settings_sections.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua),
+[core/isiLive_db_schema.lua](../core/isiLive_db_schema.lua),
+[factory/isiLive_factory.lua](../factory/isiLive_factory.lua):
+
+- Added optional LFG bonus hints for applicant rows and search-result tooltips,
+  including class buffs, major utility markers, Battle Res, Bloodlust, and
+  Augmentation Evoker damage utility.
+- The display respects the logged-in player's relevant primary stat profile and
+  can be toggled from settings.
+- German addon locale uses German bonus labels; all other locales are prepared
+  with English fallback text.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/USECASES.md](USECASES.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.276`.
+- Updated the validator baseline to `1872` scenarios.
+
 ## 2026-05-25 - Version 0.9.275 (patch)
 
 Fixes ESC Addons shortcut visibility for per-character addon enable states

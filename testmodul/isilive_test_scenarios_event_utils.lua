@@ -571,12 +571,14 @@ local function RegisterBootstrapHiddenGateTests(test, Assert, LoadAddonModules)
     gate(frame, "CHALLENGE_MODE_COMPLETED")
     gate(frame, "CHALLENGE_MODE_RESET")
     gate(frame, "CONFIRM_SUMMON")
+    gate(frame, "INCOMING_SUMMON_CHANGED", "player")
 
-    Assert.Equal(#dispatched, 4, "hidden gate must keep required lifecycle triggers")
+    Assert.Equal(#dispatched, 5, "hidden gate must keep required lifecycle triggers")
     Assert.Equal(dispatched[1], "CHALLENGE_MODE_START", "key-start trigger should pass hidden gate")
     Assert.Equal(dispatched[2], "CHALLENGE_MODE_COMPLETED", "key-end completed trigger should pass hidden gate")
     Assert.Equal(dispatched[3], "CHALLENGE_MODE_RESET", "key-end reset trigger should pass hidden gate")
     Assert.Equal(dispatched[4], "CONFIRM_SUMMON", "incoming summon trigger should pass hidden gate")
+    Assert.Equal(dispatched[5], "INCOMING_SUMMON_CHANGED", "incoming summon status trigger should pass hidden gate")
   end)
 
   -- 0.9.238: GROUP_ROSTER_UPDATE is now combat-allowed. In sustained-combat

@@ -2,8 +2,9 @@
 ---@diagnostic disable: undefined-global
 -- Pins the CLAUDE.md "Settings: default-on / default-off pattern" rule.
 --
--- For every boolean setting written by the settings panel (pattern
--- `db.X = checked`), verify there is at least one matching read site
+-- For every boolean setting written by the settings panel (patterns
+-- `db.X = checked` or `db.X = checked == true`), verify there is a boolean
+-- schema default, at least one matching read site
 -- elsewhere in the codebase, and that all reads use a CONSISTENT pattern:
 --
 --   * Pattern A (default-ON):  read = `db.X ~= false`
@@ -26,8 +27,10 @@
 --   lua tools/check_settings_default_pattern.lua
 
 local SCAN_DIRS = { "core", "factory", "game", "logic", "ui" }
-local SETTINGS_FILE = "ui/isiLive_settings.lua"
+local SETTINGS_DIR = "ui"
+local SETTINGS_FILE_PATTERN = "^isiLive_settings.*%.lua$"
 local FACTORY_FILE = "factory/isiLive_factory.lua"
+local DB_SCHEMA_FILE = "core/isiLive_db_schema.lua"
 
 -- Settings that are deliberately exempt (e.g. computed booleans that derive
 -- their value from a string-mode selector and use Pattern C migration).
@@ -84,16 +87,6 @@ local function listEntries(dir)
   return files, dirs
 end
 
-local function fileExists(path)
-  -- io.open on a directory returns nil on Windows, so this is files-only.
-  local fh = io.open(path, "r")
-  if not fh then
-    return false
-  end
-  fh:close()
-  return true
-end
-
 local function dirExists(path)
   -- Probe via listEntries — listing a missing dir yields zero entries on
   -- both Windows and POSIX paths via io.popen. Distinguishes "missing dir"
@@ -134,18 +127,60 @@ end
 -- ----------------------------------------------------------------------
 -- Step 1: enumerate boolean writes in the settings panel.
 -- A "boolean write" is `db.X = checked` exactly (no transformation) — we
--- ignore numeric / string / computed writes.
+-- also accept `db.X = checked == true`, which is the same persisted boolean
+-- normalization. We ignore numeric / string / other computed writes.
 -- ----------------------------------------------------------------------
+local function collectSettingsFiles()
+  if not dirExists(SETTINGS_DIR) then
+    fail(2, "scan dir mismatch: " .. SETTINGS_DIR .. " not found (run from repo root)")
+  end
+  local files = {}
+  local entryFiles = listEntries(SETTINGS_DIR)
+  for _, name in ipairs(entryFiles) do
+    if name:match(SETTINGS_FILE_PATTERN) then
+      files[#files + 1] = SETTINGS_DIR .. "/" .. name
+    end
+  end
+  table.sort(files)
+  return files
+end
+
 local function collectBooleanWrites()
-  local content = readFile(SETTINGS_FILE)
-  if content == "" then
-    fail(2, "cannot read " .. SETTINGS_FILE)
+  local settingsFiles = collectSettingsFiles()
+  if #settingsFiles == 0 then
+    fail(2, "no settings files matched " .. SETTINGS_DIR .. "/" .. SETTINGS_FILE_PATTERN)
   end
   local settings = {}
-  for fieldName in content:gmatch("db%.([%a_][%w_]*)%s*=%s*checked") do
-    settings[fieldName] = true
+  local sourceFiles = {}
+  for _, path in ipairs(settingsFiles) do
+    local content = readFile(path)
+    if content == "" then
+      fail(2, "cannot read " .. path)
+    end
+    sourceFiles[path] = true
+    for fieldName in content:gmatch("db%.([%a_][%w_]*)%s*=%s*checked%s*==%s*true") do
+      settings[fieldName] = true
+    end
+    for fieldName in content:gmatch("db%.([%a_][%w_]*)%s*=%s*checked") do
+      settings[fieldName] = true
+    end
   end
-  return settings
+  return settings, sourceFiles
+end
+
+local function collectBooleanSchemaDefaults()
+  local content = readFile(DB_SCHEMA_FILE)
+  if content == "" then
+    fail(2, "cannot read " .. DB_SCHEMA_FILE)
+  end
+  local defaults = {}
+  for fieldName in content:gmatch('([%a_][%w_]*)%s*=%s*{%s*type%s*=%s*"boolean"%s*,%s*default%s*=%s*true') do
+    defaults[fieldName] = true
+  end
+  for fieldName in content:gmatch('([%a_][%w_]*)%s*=%s*{%s*type%s*=%s*"boolean"%s*,%s*default%s*=%s*false') do
+    defaults[fieldName] = false
+  end
+  return defaults
 end
 
 -- ----------------------------------------------------------------------
@@ -157,7 +192,7 @@ end
 --
 -- Returns: { [setting] = { patternA = bool, patternB = bool, hasMigration = bool } }
 -- ----------------------------------------------------------------------
-local function classifyReads(settings, files)
+local function classifyReads(settings, files, settingsSourceFiles)
   local result = {}
   for name in pairs(settings) do
     result[name] = { patternA = false, patternB = false, hasMigration = false }
@@ -173,8 +208,8 @@ local function classifyReads(settings, files)
     end
   end
 
-  -- Scan ALL production files for read patterns. We exclude the settings
-  -- file itself (it has both writes AND its own reads of `db.X` to seed
+  -- Scan ALL production files for read patterns. We exclude settings files
+  -- themselves (they have both writes AND their own reads of `db.X` to seed
   -- checkbox initial state, which would skew classification).
   --
   -- Pattern A (default-ON) read forms in the wild:
@@ -192,7 +227,7 @@ local function classifyReads(settings, files)
   -- factory-bridge variables (dbRef, savedDb, IsiLiveDB) or used the
   -- negated/truthy variants.
   for _, path in ipairs(files) do
-    if path ~= SETTINGS_FILE and not path:match("^tools/") then
+    if not settingsSourceFiles[path] and not path:match("^tools/") then
       local content = readFile(path)
       for name in pairs(settings) do
         -- Pattern A: any "false" comparison against the field
@@ -247,10 +282,6 @@ end
 -- Main.
 -- ----------------------------------------------------------------------
 local function main()
-  if not fileExists(SETTINGS_FILE) then
-    fail(2, "scan dir mismatch: " .. SETTINGS_FILE .. " not found (run from repo root)")
-  end
-
   local files = {}
   for _, dir in ipairs(SCAN_DIRS) do
     if dirExists(dir) then
@@ -258,8 +289,9 @@ local function main()
     end
   end
 
-  local settings = collectBooleanWrites()
-  local reads = classifyReads(settings, files)
+  local settings, settingsSourceFiles = collectBooleanWrites()
+  local schemaDefaults = collectBooleanSchemaDefaults()
+  local reads = classifyReads(settings, files, settingsSourceFiles)
 
   local failures = {}
   local report = {}
@@ -273,6 +305,12 @@ local function main()
     local info = reads[name]
     local status = classifyStatus(name, info)
     table.insert(report, { name = name, status = status, info = info })
+    if schemaDefaults[name] == nil then
+      table.insert(
+        failures,
+        string.format("  %s: written by settings panel, but has NO boolean default in %s", name, DB_SCHEMA_FILE)
+      )
+    end
     if status == "no-reads" then
       table.insert(
         failures,
@@ -300,7 +338,13 @@ local function main()
       ["no-reads"] = "FAIL: no read site",
       ["mixed"] = "FAIL: mixed read patterns",
     })[entry.status] or entry.status
-    print(string.format("  %-40s %s", entry.name, label))
+    local schemaLabel = schemaDefaults[entry.name]
+    if schemaLabel == nil then
+      schemaLabel = "schema: MISSING"
+    else
+      schemaLabel = "schema default: " .. tostring(schemaLabel)
+    end
+    print(string.format("  %-40s %-45s %s", entry.name, label, schemaLabel))
   end
 
   if #failures > 0 then

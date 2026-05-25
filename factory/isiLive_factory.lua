@@ -274,6 +274,12 @@ local function FinalizeFactorySettings(ctx)
           lfgFlags.SetEnabled(enabled)
         end
       end,
+      onLfgGroupBonusesToggle = function(enabled)
+        local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
+        if type(lfgFlags) == "table" and type(lfgFlags.SetGroupBonusesEnabled) == "function" then
+          lfgFlags.SetGroupBonusesEnabled(enabled)
+        end
+      end,
       onTooltipFlagsToggle = function(enabled)
         local rosterInternal = ctx.addonTable and ctx.addonTable._RosterInternal
         if type(rosterInternal) == "table" and type(rosterInternal.SetTooltipFlagsEnabled) == "function" then
@@ -387,6 +393,9 @@ local function FinalizeFactorySettings(ctx)
       if db.inviteHintEnabled == nil then
         db.inviteHintEnabled = true
       end
+      if db.lfgGroupBonusesEnabled == nil then
+        db.lfgGroupBonusesEnabled = true
+      end
 
       if not IsiLiveDB then
         IsiLiveDB = db
@@ -395,6 +404,9 @@ local function FinalizeFactorySettings(ctx)
       local lfgFlags = ctx.addonTable and ctx.addonTable.LFGFlags
       if type(lfgFlags) == "table" and type(lfgFlags.SetEnabled) == "function" then
         lfgFlags.SetEnabled(db.lfgFlagsEnabled ~= false)
+      end
+      if type(lfgFlags) == "table" and type(lfgFlags.SetGroupBonusesEnabled) == "function" then
+        lfgFlags.SetGroupBonusesEnabled(db.lfgGroupBonusesEnabled ~= false)
       end
       local rosterInternal = ctx.addonTable and ctx.addonTable._RosterInternal
       if type(rosterInternal) == "table" and type(rosterInternal.SetTooltipFlagsEnabled) == "function" then

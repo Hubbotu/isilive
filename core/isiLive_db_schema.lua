@@ -171,6 +171,7 @@ local SCHEMA = {
 
   -- LFG flags + tooltip flags.
   lfgFlagsEnabled = { type = "boolean", default = true },
+  lfgGroupBonusesEnabled = { type = "boolean", default = true },
   tooltipFlagsEnabled = { type = "boolean", default = true },
   inviteHintEnabled = { type = "boolean", default = true },
   acceptedInviteNoticeEnabled = { type = "boolean", default = true },

@@ -2400,11 +2400,11 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       )
       Assert.Equal(
         checkboxCount,
-        34,
+        35,
         "settings should hide only the legacy name-length"
           .. " and teleport-column controls while keeping the startup/key-end, navigator, sound,"
           .. " chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, stats-box toggles, VIP sound toggles,"
+          .. " accepted-invite-notice, LFG class-bonus, stats-box toggles, VIP sound toggles,"
           .. " and the two auto-close split checkboxes visible"
           .. " (M+ forces tooltip/nameplate toggles replaced by a single 3-way display-mode selector)"
       )
@@ -2413,10 +2413,10 @@ local function RegisterSettingsPanelSoundAndLegacyTests(test, Assert, WithGlobal
       Assert.Equal(sliderCount, 7, "refresh should keep the stats-box and nameplate sliders visible")
       Assert.Equal(
         checkboxCount,
-        34,
+        35,
         "refresh should keep the hidden legacy checkboxes out of the settings UI"
           .. " while preserving the visible sound, chat-announce, combat-fade, nameplate-subtoggle,"
-          .. " accepted-invite-notice, stats-box toggles, VIP sound toggles,"
+          .. " accepted-invite-notice, LFG class-bonus, stats-box toggles, VIP sound toggles,"
           .. " and the two auto-close split checkboxes"
       )
     end)
@@ -2784,6 +2784,52 @@ local function RegisterSettingsPanelNameplateRoundtripTests(test, Assert, WithGl
       Assert.Equal(changeCalls, 1, "checking must invoke live MobNameplate refresh")
       panel.Refresh()
       Assert.Equal(db.mobNameplateShowRemaining, true, "Refresh must NOT overwrite true back to default")
+      Assert.True(check:GetChecked(), "Refresh must keep the checkbox visually checked")
+      ---@diagnostic enable: undefined-field
+    end)
+  end)
+
+  test("Settings LFG group-bonus checkbox persists and invokes live toggle callback", function()
+    local createFrameStub, createdFrames = BuildCreateFrameStub()
+    local db = { lfgGroupBonusesEnabled = true }
+    local toggleCalls = {}
+    WithGlobals({
+      UIParent = {},
+      IsiLiveDB = db,
+      CreateFrame = createFrameStub,
+      Settings = {
+        RegisterCanvasLayoutCategory = function(canvas, name)
+          return { canvas = canvas, name = name }
+        end,
+        RegisterAddOnCategory = function() end,
+      },
+    }, function()
+      local panel = Assert.NotNil(
+        BuildPanel(db, createFrameStub, {
+          onLfgGroupBonusesToggle = function(enabled)
+            toggleCalls[#toggleCalls + 1] = enabled
+          end,
+        }),
+        "settings panel must build"
+      )
+      local check = Assert.NotNil(
+        FindFrame(createdFrames, "CheckButton", "SETTINGS_LFG_GROUP_BONUSES"),
+        "LFG group-bonus checkbox must exist"
+      )
+      ---@diagnostic disable: undefined-field
+      check:SetChecked(false)
+      local onClick = Assert.NotNil(check._scripts.OnClick, "checkbox must define OnClick")
+      onClick(check)
+      Assert.Equal(db.lfgGroupBonusesEnabled, false, "uncheck must persist false to DB")
+      Assert.Equal(toggleCalls[1], false, "uncheck must invoke the live LFG group-bonus callback")
+      panel.Refresh()
+      Assert.False(check:GetChecked(), "Refresh must keep the checkbox visually unchecked")
+
+      check:SetChecked(true)
+      onClick(check)
+      Assert.Equal(db.lfgGroupBonusesEnabled, true, "check must persist true to DB")
+      Assert.Equal(toggleCalls[2], true, "check must invoke the live LFG group-bonus callback")
+      panel.Refresh()
       Assert.True(check:GetChecked(), "Refresh must keep the checkbox visually checked")
       ---@diagnostic enable: undefined-field
     end)

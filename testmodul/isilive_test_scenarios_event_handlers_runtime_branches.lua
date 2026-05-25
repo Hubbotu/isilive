@@ -433,6 +433,119 @@ return function(test, ctx)
     Assert.Equal(calls, 0, "incoming summon confirmation must stay silent in raid mode")
   end)
 
+  test("INCOMING_SUMMON_CHANGED plays incoming-summon sound for pending player summons", function()
+    local calls = 0
+    local globals = {
+      Enum = {
+        SummonStatus = {
+          Pending = 1,
+          Accepted = 2,
+          Declined = 3,
+        },
+      },
+      C_IncomingSummon = {
+        IncomingSummonStatus = function(unit)
+          Assert.Equal(unit, "player", "incoming summon status should be read for the player")
+          return 1
+        end,
+      },
+    }
+    local handlers = LoadHandlers({
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    }, globals)
+    WithGlobals(globals, function()
+      handlers.INCOMING_SUMMON_CHANGED(nil, "player")
+    end)
+    Assert.Equal(calls, 1, "pending player summons should play the configured summon sound")
+  end)
+
+  test("INCOMING_SUMMON_CHANGED ignores non-player and non-pending summon updates", function()
+    local calls = 0
+    local statusCalls = 0
+    local globals = {
+      Enum = {
+        SummonStatus = {
+          Pending = 1,
+          Accepted = 2,
+          Declined = 3,
+        },
+      },
+      C_IncomingSummon = {
+        IncomingSummonStatus = function()
+          statusCalls = statusCalls + 1
+          return 2
+        end,
+      },
+    }
+    local handlers = LoadHandlers({
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    }, globals)
+    WithGlobals(globals, function()
+      handlers.INCOMING_SUMMON_CHANGED(nil, "party1")
+      handlers.INCOMING_SUMMON_CHANGED(nil, "player")
+    end)
+    Assert.Equal(statusCalls, 1, "only player updates should read the incoming summon status")
+    Assert.Equal(calls, 0, "non-player and non-pending summon updates must stay silent")
+  end)
+
+  test("INCOMING_SUMMON_CHANGED fails closed when pending summon enum is unavailable", function()
+    local calls = 0
+    local statusCalls = 0
+    local globals = {
+      C_IncomingSummon = {
+        IncomingSummonStatus = function()
+          statusCalls = statusCalls + 1
+          return 1
+        end,
+      },
+    }
+    local handlers = LoadHandlers({
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    }, globals)
+    WithGlobals(globals, function()
+      handlers.INCOMING_SUMMON_CHANGED(nil, "player")
+    end)
+    Assert.Equal(statusCalls, 1, "player summon updates should still read the current summon status")
+    Assert.Equal(calls, 0, "missing pending enum must stay silent instead of guessing a status value")
+  end)
+
+  test("INCOMING_SUMMON_CHANGED suppresses incoming-summon sound in raid mode", function()
+    local calls = 0
+    local statusCalls = 0
+    local globals = {
+      Enum = {
+        SummonStatus = {
+          Pending = 1,
+        },
+      },
+      C_IncomingSummon = {
+        IncomingSummonStatus = function()
+          statusCalls = statusCalls + 1
+          return 1
+        end,
+      },
+    }
+    local handlers = LoadHandlers({
+      isRaidGroup = function()
+        return true
+      end,
+      playIncomingSummonSound = function()
+        calls = calls + 1
+      end,
+    }, globals)
+    WithGlobals(globals, function()
+      handlers.INCOMING_SUMMON_CHANGED(nil, "player")
+    end)
+    Assert.Equal(statusCalls, 0, "raid mode should suppress status reads for summon updates")
+    Assert.Equal(calls, 0, "incoming summon status updates must stay silent in raid mode")
+  end)
+
   -- HandleInspectReadyEvent ----------------------------------------------------
 
   test("INSPECT_READY bails out in raid mode", function()

@@ -88,6 +88,7 @@ local function ResolveSettingsOptions(opts)
     onClearRuntimeLog = opts.onClearRuntimeLog,
     onClearQueueDebugLog = opts.onClearQueueDebugLog,
     onLfgFlagsToggle = opts.onLfgFlagsToggle,
+    onLfgGroupBonusesToggle = opts.onLfgGroupBonusesToggle,
     onTooltipFlagsToggle = opts.onTooltipFlagsToggle,
     onMplusForcesToggle = opts.onMplusForcesToggle,
     onMobNameplateChange = opts.onMobNameplateChange,

@@ -218,6 +218,8 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - Locale hearthstone settings strings are localized per supported language
   - Settings hearthstone selector shows English toy names for non-German addon locales
   - Settings hearthstone selector uses client-localized toy names for German addon locale
+  - LI.BuildBonusSuffix localizes class bonuses and keeps German text for deDE only
+  - LI.ApplyGroupBonusTooltipLines matches exact member lines without a German or English section header
 
 ### RULE-REFRESH-STATE-GATES
 - Regelnummer: 13
@@ -359,6 +361,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - KeySync SendRefreshResponse can answer hidden refresh requests
   - KeySync SendRefreshResponse skips while paused or stopped
   - Bootstrap gate keeps hidden lifecycle triggers for key start/end and summon
+  - INCOMING_SUMMON_CHANGED plays incoming-summon sound for pending player summons
+  - INCOMING_SUMMON_CHANGED ignores non-player and non-pending summon updates
+  - INCOMING_SUMMON_CHANGED fails closed when pending summon enum is unavailable
+  - INCOMING_SUMMON_CHANGED suppresses incoming-summon sound in raid mode
   - Event handlers run regen teleport refresh when frame is visible
   - Factory hidden CD ticker skips polling while frame is hidden
   - Factory hidden explicit CD refresh keeps pre-rendered state current
@@ -718,6 +724,9 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - TeleportUI applies visible cooldown frame from normalized remaining time
   - AcceptedInviteNotice does not replay after challenge start
   - AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE recovery after ClearAllState
+  - LI.BuildSearchResultMemberBonuses resolves German Verstärkung only for Evoker
+  - LI.BuildApplicantBonusBadge does not treat Marksmanship Hunter as Bloodlust
+  - LI.BuildSearchResultBonusBadge accepts tuple spec IDs only for their matching class
 
 ### RULE-MAIN-UI-POSITION-LOCK
 - Regelnummer: 55
