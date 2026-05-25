@@ -53,7 +53,7 @@ return function(test, ctx)
   local LoadAddonModules =
     RequireValue(ctx.load_modules, "UI settings descriptions scenario ctx.load_modules should exist")
 
-  test("Settings display checkboxes render inline descriptions and refresh localized text", function()
+  test("Settings display checkboxes render descriptions below options and refresh localized text", function()
     local createFrameStub, createdFrames = BuildCreateFrameStub()
     local db = { showMinimapButton = true, lfgGroupBonusesEnabled = true }
     local labels = {
@@ -109,12 +109,16 @@ return function(test, ctx)
         "Marks relevant class bonuses on groups and applicants.",
         "LFG group-bonus description must use localized text"
       )
-      Assert.Equal(
-        minimapCheck.description._point[2],
-        minimapCheck.label,
-        "description must anchor after the main label"
+      Assert.Equal(minimapCheck.description._point[1], "TOPLEFT", "description must anchor below the option row")
+      Assert.True(
+        minimapCheck.description._point[2] ~= minimapCheck.label,
+        "description must not anchor to the right side of the label"
       )
-      Assert.Equal(minimapCheck.description._wordWrap, false, "inline descriptions must stay on one row")
+      Assert.Equal(minimapCheck.description._wordWrap, true, "descriptions below options must wrap for readability")
+      Assert.True(
+        (tonumber(minimapCheck.description._width) or 0) >= 600,
+        "descriptions below options must use a readable text width"
+      )
 
       labels.SETTINGS_LFG_GROUP_BONUSES_DESC = "Updated class bonus description."
       panel.Refresh()

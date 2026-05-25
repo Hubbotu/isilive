@@ -26,7 +26,6 @@ local SLIDER_HEIGHT = 16
 local SETTINGS_CONTENT_WIDTH = 700
 local SLIDER_LABEL_WIDTH = 150
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
-local CHECKBOX_DESCRIPTION_GAP = 10
 local LANG_BUTTONS_PER_ROW = 5
 
 function SettingsControls.CreateSectionHeader(parent, yOffset, text)
@@ -119,9 +118,9 @@ function SettingsControls.CreateSettingsCheckbox(parent, yOffset, labelText, get
     description = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     local td = Colors.TEXT_DIM or { 0.5, 0.5, 0.6 }
     description:SetTextColor(td[1], td[2], td[3], 1)
-    description:SetPoint("LEFT", label, "RIGHT", CHECKBOX_DESCRIPTION_GAP, 0)
+    description:SetPoint("TOPLEFT", parent, "TOPLEFT", PADDING_X, yOffset - LINE_HEIGHT + 4)
     local descriptionWidth = tonumber(options.descriptionWidth)
-      or math.max(120, CHECKBOX_LABEL_WIDTH - labelWidth - CHECKBOX_DESCRIPTION_GAP)
+      or math.max(120, SETTINGS_CONTENT_WIDTH - (PADDING_X * 2))
     if type(description.SetWidth) == "function" then
       description:SetWidth(descriptionWidth)
     end
@@ -129,7 +128,7 @@ function SettingsControls.CreateSettingsCheckbox(parent, yOffset, labelText, get
       description:SetJustifyH("LEFT")
     end
     if type(description.SetWordWrap) == "function" then
-      description:SetWordWrap(options.descriptionWordWrap == true)
+      description:SetWordWrap(options.descriptionWordWrap ~= false)
     end
     description:SetText(descriptionText)
     check.description = description
@@ -147,6 +146,12 @@ function SettingsControls.CreateSettingsCheckbox(parent, yOffset, labelText, get
     local textHeight = tonumber(label:GetStringHeight()) or 0
     if textHeight > 0 then
       rowHeight = math.max(rowHeight, math.ceil(textHeight) + 8)
+    end
+  end
+  if options.rowHeight == nil and description and type(description.GetStringHeight) == "function" then
+    local descriptionHeight = tonumber(description:GetStringHeight()) or 0
+    if descriptionHeight > 0 then
+      rowHeight = math.max(rowHeight, LINE_HEIGHT + math.ceil(descriptionHeight) + 6)
     end
   end
   return { check = check, label = label, description = description }, yOffset - rowHeight

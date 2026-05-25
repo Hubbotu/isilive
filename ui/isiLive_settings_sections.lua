@@ -25,13 +25,14 @@ local DEFAULT_LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = "compact_main_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL_2_LEGACY = "compact_horizontal_2"
 local DEFAULT_LAYOUT_MODE_LAST_USED = "last_used"
 local DISPLAY_CHECKBOX_LABEL_WIDTH = 260
-local DISPLAY_CHECKBOX_DESCRIPTION_WIDTH = 360
+local DISPLAY_CHECKBOX_DESCRIPTION_WIDTH = 620
 
 local function CheckboxDescriptionOptions(descriptionText)
   return {
     width = DISPLAY_CHECKBOX_LABEL_WIDTH,
     descriptionText = descriptionText,
     descriptionWidth = DISPLAY_CHECKBOX_DESCRIPTION_WIDTH,
+    descriptionWordWrap = true,
   }
 end
 
