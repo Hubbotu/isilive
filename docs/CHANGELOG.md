@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-05-25 - Version 0.9.279 (patch)
+
+Improves Settings readability by moving option descriptions below their
+checkbox labels instead of placing them inline.
+
+### Settings
+
+[ui/isiLive_settings_controls.lua](../ui/isiLive_settings_controls.lua),
+[ui/isiLive_settings_sections.lua](../ui/isiLive_settings_sections.lua),
+[testmodul/isilive_test_scenarios_ui_settings_descriptions.lua](../testmodul/isilive_test_scenarios_ui_settings_descriptions.lua):
+
+- Settings checkbox descriptions now render below the option row with a wider
+  wrapping text region, matching the clearer layout used by section notes.
+- The display-section description test now verifies the below-option anchor,
+  readable width, word wrapping, and locale refresh behavior.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/RELEASE.md](RELEASE.md),
+[docs/USECASES.md](USECASES.md):
+
+- Bumped the TOC and documented baselines to `0.9.279`.
+- Kept the validator baseline at `1882` scenarios.
+
 ## 2026-05-25 - Version 0.9.278 (patch)
 
 Updates the LFG class-bonus data and marker counting so the compact Group
