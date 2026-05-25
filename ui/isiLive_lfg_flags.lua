@@ -193,6 +193,7 @@ local CLASS_BONUSES = {
     { textKey = "LFG_BONUS_PHYSICAL", kind = "physical_damage" },
   },
   PALADIN = {
+    { textKey = "LFG_BONUS_DEVOTION", kind = "utility" },
     { textKey = "LFG_BONUS_BR", kind = "utility" },
   },
   PRIEST = {
@@ -200,7 +201,7 @@ local CLASS_BONUSES = {
     { textKey = "LFG_BONUS_PI", kind = "utility" },
   },
   ROGUE = {
-    { textKey = "LFG_BONUS_ENEMY_DMG", kind = "defensive" },
+    { textKey = "LFG_BONUS_ENEMY_DMG", kind = "utility" },
   },
   SHAMAN = {
     { textKey = "LFG_BONUS_MASTERY", kind = "universal" },
@@ -219,6 +220,9 @@ local SPEC_BONUSES = {
   [253] = {
     { textKey = "LFG_BONUS_BL", kind = "utility" },
   },
+  [254] = {
+    { textKey = "LFG_BONUS_BL", kind = "utility" },
+  },
   [255] = {
     { textKey = "LFG_BONUS_BL", kind = "utility" },
   },
@@ -229,6 +233,7 @@ local SPEC_BONUSES = {
 
 local SPEC_CLASS_TOKENS = {
   [253] = "HUNTER",
+  [254] = "HUNTER",
   [255] = "HUNTER",
   [AUGMENTATION_EVOKER_SPEC_ID] = "EVOKER",
 }
@@ -540,17 +545,25 @@ local function IsMajorApplicantUtility(bonus)
   return bonus.textKey == "LFG_BONUS_BL" or bonus.textKey == "LFG_BONUS_BR"
 end
 
-local function HasRelevantSearchResultBonus(classToken, specID, profile)
+local function AddRelevantSearchResultBonusKeys(classToken, specID, profile, seenKeys)
   local bonuses = BuildBonusList(classToken, specID)
-  if type(bonuses) ~= "table" or next(bonuses) == nil then
-    return false
+  if type(bonuses) ~= "table" or type(seenKeys) ~= "table" then
+    return 0
   end
+  local added = 0
   for _, bonus in ipairs(bonuses) do
-    if type(bonus) == "table" and bonus.kind ~= "utility" and IsBonusRelevantForPlayer(bonus, profile) == true then
-      return true
+    if
+      type(bonus) == "table"
+      and type(bonus.textKey) == "string"
+      and bonus.kind ~= "utility"
+      and not seenKeys[bonus.textKey]
+      and IsBonusRelevantForPlayer(bonus, profile) == true
+    then
+      seenKeys[bonus.textKey] = true
+      added = added + 1
     end
   end
-  return false
+  return added
 end
 
 local function BuildSearchResultBonusBadgeText(count)
@@ -800,14 +813,16 @@ local function BuildSearchResultBonusBadge(resultID)
     resultBonusBadgeCache[cacheKey] = false
     return nil
   end
-  local relevantMemberCount = 0
+  local relevantBonusCount = 0
+  local seenBonusKeys = {}
   for index = 1, memberCount do
     local member = ReadSearchResultMemberInfo(resultID, index)
-    if member and HasRelevantSearchResultBonus(member.classToken, member.specID, profile) then
-      relevantMemberCount = relevantMemberCount + 1
+    if member then
+      relevantBonusCount = relevantBonusCount
+        + AddRelevantSearchResultBonusKeys(member.classToken, member.specID, profile, seenBonusKeys)
     end
   end
-  local badge = BuildSearchResultBonusBadgeText(relevantMemberCount)
+  local badge = BuildSearchResultBonusBadgeText(relevantBonusCount)
   if badge then
     resultBonusBadgeCache[cacheKey] = { badge = badge, color = APPLICANT_BONUS_TEXT_COLOR }
     return badge, APPLICANT_BONUS_TEXT_COLOR

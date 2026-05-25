@@ -24,6 +24,26 @@ local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL = "compact_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_MAIN_HORIZONTAL = "compact_main_horizontal"
 local DEFAULT_LAYOUT_MODE_COMPACT_HORIZONTAL_2_LEGACY = "compact_horizontal_2"
 local DEFAULT_LAYOUT_MODE_LAST_USED = "last_used"
+local DISPLAY_CHECKBOX_LABEL_WIDTH = 260
+local DISPLAY_CHECKBOX_DESCRIPTION_WIDTH = 360
+
+local function CheckboxDescriptionOptions(descriptionText)
+  return {
+    width = DISPLAY_CHECKBOX_LABEL_WIDTH,
+    descriptionText = descriptionText,
+    descriptionWidth = DISPLAY_CHECKBOX_DESCRIPTION_WIDTH,
+  }
+end
+
+local function SetCheckboxDescription(control, text)
+  if
+    type(control) == "table"
+    and type(control.description) == "table"
+    and type(control.description.SetText) == "function"
+  then
+    control.description:SetText(text or "")
+  end
+end
 
 local STATS_BOX_SETTING_LABELS = {
   enUS = {
@@ -519,7 +539,9 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
       if type(config.onMinimapButtonToggle) == "function" then
         config.onMinimapButtonToggle(checked)
       end
-    end
+    end,
+    "SETTINGS_MINIMAP_BUTTON",
+    CheckboxDescriptionOptions(labels.SETTINGS_MINIMAP_BUTTON_DESC or "Shows the isiLive minimap button.")
   )
 
   controls.lfgFlags, yOffset = CreateSettingsCheckbox(
@@ -537,7 +559,8 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
         config.onLfgFlagsToggle(checked)
       end
     end,
-    "SETTINGS_LFG_FLAGS"
+    "SETTINGS_LFG_FLAGS",
+    CheckboxDescriptionOptions(labels.SETTINGS_LFG_FLAGS_DESC or "Shows leader language flags in Group Finder rows.")
   )
 
   controls.lfgGroupBonuses, yOffset = CreateSettingsCheckbox(
@@ -555,7 +578,10 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
         config.onLfgGroupBonusesToggle(checked)
       end
     end,
-    "SETTINGS_LFG_GROUP_BONUSES"
+    "SETTINGS_LFG_GROUP_BONUSES",
+    CheckboxDescriptionOptions(
+      labels.SETTINGS_LFG_GROUP_BONUSES_DESC or "Marks relevant class bonuses on groups and applicants."
+    )
   )
 
   controls.tooltipFlags, yOffset = CreateSettingsCheckbox(
@@ -573,7 +599,8 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
         config.onTooltipFlagsToggle(checked)
       end
     end,
-    "SETTINGS_TOOLTIP_FLAGS"
+    "SETTINGS_TOOLTIP_FLAGS",
+    CheckboxDescriptionOptions(labels.SETTINGS_TOOLTIP_FLAGS_DESC or "Shows language flags in player tooltips.")
   )
 
   controls.inviteHint, yOffset = CreateSettingsCheckbox(
@@ -588,7 +615,10 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
       local db = config.getDB()
       db.inviteHintEnabled = checked
     end,
-    "SETTINGS_INVITE_HINT_ENABLED"
+    "SETTINGS_INVITE_HINT_ENABLED",
+    CheckboxDescriptionOptions(
+      labels.SETTINGS_INVITE_HINT_ENABLED_DESC or "Shows dungeon and group details when an LFG invite arrives."
+    )
   )
 
   controls.acceptedInviteNotice, yOffset = CreateSettingsCheckbox(
@@ -603,7 +633,10 @@ function SettingsSections.BuildDisplaySection(canvas, yOffset, labels, config, c
       local db = config.getDB()
       db.acceptedInviteNoticeEnabled = checked
     end,
-    "SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED"
+    "SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED",
+    CheckboxDescriptionOptions(
+      labels.SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED_DESC or "Opens a compact reminder after accepting an invite."
+    )
   )
 
   return yOffset
@@ -697,6 +730,10 @@ function SettingsSections.RefreshDisplayControls(controls, labels, db, config)
   end
   if controls.minimapBtn then
     controls.minimapBtn.label:SetText(labels.SETTINGS_MINIMAP_BUTTON or "Minimap Button")
+    SetCheckboxDescription(
+      controls.minimapBtn,
+      labels.SETTINGS_MINIMAP_BUTTON_DESC or "Shows the isiLive minimap button."
+    )
     controls.minimapBtn.check:SetChecked(db.showMinimapButton == true)
   end
   if controls.nameMaxChars then
@@ -709,23 +746,43 @@ function SettingsSections.RefreshDisplayControls(controls, labels, db, config)
   end
   if controls.lfgFlags then
     controls.lfgFlags.label:SetText(labels.SETTINGS_LFG_FLAGS or "Group Finder: Language Flags")
+    SetCheckboxDescription(
+      controls.lfgFlags,
+      labels.SETTINGS_LFG_FLAGS_DESC or "Shows leader language flags in Group Finder rows."
+    )
     controls.lfgFlags.check:SetChecked(db.lfgFlagsEnabled ~= false)
   end
   if controls.lfgGroupBonuses then
     controls.lfgGroupBonuses.label:SetText(labels.SETTINGS_LFG_GROUP_BONUSES or "Group Finder: Show class bonuses")
+    SetCheckboxDescription(
+      controls.lfgGroupBonuses,
+      labels.SETTINGS_LFG_GROUP_BONUSES_DESC or "Marks relevant class bonuses on groups and applicants."
+    )
     controls.lfgGroupBonuses.check:SetChecked(db.lfgGroupBonusesEnabled ~= false)
   end
   if controls.tooltipFlags then
     controls.tooltipFlags.label:SetText(labels.SETTINGS_TOOLTIP_FLAGS or "Tooltip: Language Flags")
+    SetCheckboxDescription(
+      controls.tooltipFlags,
+      labels.SETTINGS_TOOLTIP_FLAGS_DESC or "Shows language flags in player tooltips."
+    )
     controls.tooltipFlags.check:SetChecked(db.tooltipFlagsEnabled ~= false)
   end
   if controls.inviteHint then
     controls.inviteHint.label:SetText(labels.SETTINGS_INVITE_HINT_ENABLED or "LFG invite hint")
+    SetCheckboxDescription(
+      controls.inviteHint,
+      labels.SETTINGS_INVITE_HINT_ENABLED_DESC or "Shows dungeon and group details when an LFG invite arrives."
+    )
     controls.inviteHint.check:SetChecked(db.inviteHintEnabled ~= false)
   end
   if controls.acceptedInviteNotice then
     controls.acceptedInviteNotice.label:SetText(
       labels.SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED or "Accepted-invite notice"
+    )
+    SetCheckboxDescription(
+      controls.acceptedInviteNotice,
+      labels.SETTINGS_ACCEPTED_INVITE_NOTICE_ENABLED_DESC or "Opens a compact reminder after accepting an invite."
     )
     controls.acceptedInviteNotice.check:SetChecked(db.acceptedInviteNoticeEnabled ~= false)
   end

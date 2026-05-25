@@ -850,6 +850,8 @@ return function(test, ctx)
       local addon = LoadBonusModules(LoadAddonModules)
       local badge = addon._LFGFlagsInternal.BuildApplicantBonusBadge("HUNTER", 253, { dealsPhysicalDamage = true })
       Assert.Equal(badge, "++", "Beast Mastery Hunter Bloodlust must produce the major utility badge")
+      badge = addon._LFGFlagsInternal.BuildApplicantBonusBadge("HUNTER", 254, { dealsPhysicalDamage = true })
+      Assert.Equal(badge, "++", "Marksmanship Hunter Bloodlust must produce the major utility badge")
       badge = addon._LFGFlagsInternal.BuildApplicantBonusBadge("HUNTER", 255, { dealsPhysicalDamage = true })
       Assert.Equal(badge, "++", "Survival Hunter Bloodlust must produce the major utility badge")
       badge = addon._LFGFlagsInternal.BuildApplicantBonusBadge("DRUID", nil, { dealsMagicDamage = true })
@@ -857,11 +859,18 @@ return function(test, ctx)
     end)
   end)
 
-  test("LI.BuildApplicantBonusBadge does not treat Marksmanship Hunter as Bloodlust", function()
+  test("LI.BuildApplicantBonusBadge treats Devotion Aura and Atrophic Poison as utility", function()
     WithGlobals(BonusGlobals(), function()
       local addon = LoadBonusModules(LoadAddonModules)
-      local badge = addon._LFGFlagsInternal.BuildApplicantBonusBadge("HUNTER", 254, { dealsPhysicalDamage = true })
-      Assert.Equal(badge, "+", "Marksmanship Hunter must keep Hunter's Mark but not the Bloodlust major badge")
+      local LI = addon._LFGFlagsInternal
+      Assert.Nil(
+        LI.BuildApplicantBonusMarkerBadge("PALADIN", 70, { usesAttackPower = true }),
+        "Devotion Aura must not create applicant bonus markers"
+      )
+      Assert.Nil(
+        LI.BuildApplicantBonusMarkerBadge("ROGUE", 259, { dealsPhysicalDamage = true }),
+        "Atrophic Poison must not create applicant bonus markers"
+      )
     end)
   end)
 
@@ -940,6 +949,33 @@ return function(test, ctx)
     end)
   end)
 
+  test("LI.BuildSearchResultBonusBadge counts each non-stacking bonus only once", function()
+    local members = {
+      { classFilename = "SHAMAN", specID = 262, className = "Shaman", specName = "Elemental" },
+      { classFilename = "SHAMAN", specID = 263, className = "Shaman", specName = "Enhancement" },
+      { classFilename = "PALADIN", specID = 70, className = "Paladin", specName = "Retribution" },
+      { classFilename = "ROGUE", specID = 259, className = "Rogue", specName = "Assassination" },
+    }
+    local globals = BonusGlobals({
+      C_LFGList = {
+        GetSearchResultInfo = function()
+          return { numMembers = #members }
+        end,
+        GetSearchResultPlayerInfo = function(_, memberIndex)
+          return members[memberIndex]
+        end,
+      },
+    })
+    WithGlobals(globals, function()
+      local addon = LoadBonusModules(LoadAddonModules)
+      Assert.Equal(
+        addon._LFGFlagsInternal.BuildSearchResultBonusBadge(17),
+        BONUS_MARKUP,
+        "duplicate Shaman mastery must count once while Devotion Aura and Atrophic Poison stay utility-only"
+      )
+    end)
+  end)
+
   test("LI.BuildSearchResultMemberBonuses resolves German Verstärkung only for Evoker", function()
     local currentClass = "SHAMAN"
     local globals = BonusGlobals({
@@ -1013,7 +1049,7 @@ return function(test, ctx)
       local shamanSuffix = StripColors(members[1].suffix)
       Assert.True(shamanSuffix:find("Mastery", 1, true) ~= nil, "shaman tuple result must keep mastery")
       Assert.True(
-        shamanSuffix:find("5%% dmg", 1, false) == nil,
+        shamanSuffix:find("Dmg taken", 1, true) == nil,
         "shaman tuple result must not inherit Hunter's Mark from numeric tuple noise"
       )
 

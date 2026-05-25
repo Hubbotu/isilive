@@ -88,6 +88,7 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
 65. Die eigenstaendige Spieler-Stats-Box zeigt den Primärstat klassen- beziehungsweise spezialisierungsgenau, zeigt nur direkt aus Blizzard-Live-APIs gelesene Werte, haelt ihre Werte-Spalte auch bei drei- und vierstelligen Zahlen stabil, haelt ihre Prozent-Spalte breit genug fuer `(999.99%)`, ist rahmenlos, standardmaessig aus, ueber Settings einschaltbar und gegen Positions-Drag sperrbar, und speichert ihre Position getrennt von der Main-UI.
 66. Alle frei verschiebbaren isiLive-Fenster muessen an den WoW-Sichtbereich geklemmt sein, sodass ihre Raender beim Ziehen nicht ausserhalb des WoW-Fensters verschwinden.
 67. Das ESC-Addons-Panel darf Shortcut-Buttons fuer Addons anzeigen, die installiert und auf dem aktuellen Charakter aktiviert sind; beim Klick muss ein noch nicht geladenes externes Ziel-Addon verifiziert geladen werden, bevor dessen registrierter Slash-Alias ausgefuehrt wird. Der isiLive-eigene Shortcut darf stattdessen direkt die isiLive-Settings oeffnen und darf keinen Self-Load versuchen.
+68. Die LFG-Klassenbonus-Herzchen zaehlen nur relevante, nicht stapelnde Gruppenboni; Utility-Effekte wie PI, BL, BR, Devotion Aura und Atrophic Poison erzeugen keine Herzchen.
 
 ## Regelbloecke
 
@@ -725,9 +726,10 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - AcceptedInviteNotice does not replay after challenge start
   - AcceptedInviteNotice does not replay via GROUP_ROSTER_UPDATE recovery after ClearAllState
   - LI.BuildSearchResultMemberBonuses resolves German Verstärkung only for Evoker
-  - LI.BuildApplicantBonusBadge does not treat Marksmanship Hunter as Bloodlust
+  - LI.BuildApplicantBonusBadge treats Devotion Aura and Atrophic Poison as utility
   - LI.BuildSearchResultBonusBadge accepts tuple spec IDs only for their matching class
   - LI.BuildSearchResultBonusBadge counts relevant non-utility bonuses as markers
+  - LI.BuildSearchResultBonusBadge counts each non-stacking bonus only once
   - LI.UpdateButton renders search-result bonus markers as one right-aligned stack below the badge area
   - LI.ApplyApplicantBonusToMemberFrame writes applicant bonus markers next to the role badge and clears them
   - LI.BuildApplicantBonusMarkerBadge ignores applicant utility bonuses
@@ -892,3 +894,13 @@ Diese Datei ist die verbindliche Quelle fuer Usecase- und Runtime-Regeln, die im
   - UI third game-menu addon shortcut does not fall back to chat edit when handler fails
   - Commands settings opens the settings panel
   - UI third game-menu addon panel stays hidden when no supported addon is enabled
+
+### RULE-LFG-KLASSENBONUS-HERZCHEN-NICHT-STAPELND
+- Regelnummer: 68
+- Status: aktiv
+- Zusammenfassung: Die LFG-Klassenbonus-Herzchen duerfen nur relevante nicht-Utility-Gruppenboni zaehlen, die fuer den eingeloggten Spieler wirksam sind. Gleiche nicht stapelnde Buffs zaehlen pro Suchergebnis nur einmal, auch wenn mehrere Gruppenmitglieder denselben Buff liefern. Utility-Effekte wie PI, BL, BR, Devotion Aura und Atrophic Poison duerfen in Tooltips sichtbar bleiben, erzeugen aber keine Herzchen.
+- Erforderliche Tests:
+  - LI.BuildApplicantBonusBadge treats Devotion Aura and Atrophic Poison as utility
+  - LI.BuildSearchResultBonusBadge counts relevant non-utility bonuses as markers
+  - LI.BuildSearchResultBonusBadge counts each non-stacking bonus only once
+  - LI.BuildApplicantBonusMarkerBadge ignores applicant utility bonuses

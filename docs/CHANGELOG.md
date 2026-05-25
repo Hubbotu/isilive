@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-05-25 - Version 0.9.278 (patch)
+
+Updates the LFG class-bonus data and marker counting so the compact Group
+Finder signal reflects current non-stacking group buffs.
+
+### LFG Group Bonus Indicators
+
+[ui/isiLive_lfg_flags.lua](../ui/isiLive_lfg_flags.lua),
+[locale/isiLive_texts.lua](../locale/isiLive_texts.lua),
+[testmodul/isilive_test_scenarios_lfg_flags_branches.lua](../testmodul/isilive_test_scenarios_lfg_flags_branches.lua),
+[docs/RULES_LOGIC.md](RULES_LOGIC.md),
+[docs/USECASES.md](USECASES.md):
+
+- Updated Hunter's Mark to the current `+3% Dmg taken` label and Arcane
+  Intellect to `+3% Int`, with German text for the German addon locale and
+  English prepared for all other locales.
+- Treats Devotion Aura and Atrophic Poison like PI, Bloodlust, and Battle Res:
+  they may appear in tooltip details but do not create compact green markers.
+- Counts compact search-result markers by unique relevant non-stacking bonus,
+  so duplicate providers of the same buff add only one marker.
+- Added deterministic coverage for utility-only Paladin/Rogue handling,
+  Marksmanship Hunter Bloodlust, and duplicate Shaman mastery providers.
+
+### Release Metadata
+
+[isiLive.toc](../isiLive.toc),
+[README.md](../README.md),
+[CHANGELOG_RELEASE.md](../CHANGELOG_RELEASE.md),
+[docs/ARCHITECTURE.md](ARCHITECTURE.md),
+[docs/RELEASE.md](RELEASE.md):
+
+- Bumped the TOC and documented baselines to `0.9.278`.
+- Updated the validator baseline to `1882` scenarios.
+
 ## 2026-05-25 - Version 0.9.277 (patch)
 
 Stabilizes the LFG group-bonus marker placement for Blizzard's default

@@ -26,6 +26,7 @@ local SLIDER_HEIGHT = 16
 local SETTINGS_CONTENT_WIDTH = 700
 local SLIDER_LABEL_WIDTH = 150
 local CHECKBOX_LABEL_WIDTH = SETTINGS_CONTENT_WIDTH - (PADDING_X * 2) - 28
+local CHECKBOX_DESCRIPTION_GAP = 10
 local LANG_BUTTONS_PER_ROW = 5
 
 function SettingsControls.CreateSectionHeader(parent, yOffset, text)
@@ -112,6 +113,27 @@ function SettingsControls.CreateSettingsCheckbox(parent, yOffset, labelText, get
   end
   label:SetText(labelText or "")
   check.label = label
+  local description = nil
+  local descriptionText = type(options.descriptionText) == "string" and options.descriptionText or nil
+  if descriptionText and descriptionText ~= "" then
+    description = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    local td = Colors.TEXT_DIM or { 0.5, 0.5, 0.6 }
+    description:SetTextColor(td[1], td[2], td[3], 1)
+    description:SetPoint("LEFT", label, "RIGHT", CHECKBOX_DESCRIPTION_GAP, 0)
+    local descriptionWidth = tonumber(options.descriptionWidth)
+      or math.max(120, CHECKBOX_LABEL_WIDTH - labelWidth - CHECKBOX_DESCRIPTION_GAP)
+    if type(description.SetWidth) == "function" then
+      description:SetWidth(descriptionWidth)
+    end
+    if type(description.SetJustifyH) == "function" then
+      description:SetJustifyH("LEFT")
+    end
+    if type(description.SetWordWrap) == "function" then
+      description:SetWordWrap(options.descriptionWordWrap == true)
+    end
+    description:SetText(descriptionText)
+    check.description = description
+  end
   if type(getter) == "function" then
     check:SetChecked(getter())
   end
@@ -127,7 +149,7 @@ function SettingsControls.CreateSettingsCheckbox(parent, yOffset, labelText, get
       rowHeight = math.max(rowHeight, math.ceil(textHeight) + 8)
     end
   end
-  return { check = check, label = label }, yOffset - rowHeight
+  return { check = check, label = label, description = description }, yOffset - rowHeight
 end
 
 function SettingsControls.CreateSettingsSlider(

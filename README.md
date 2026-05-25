@@ -4,7 +4,7 @@
 
 - **For:** M+ players in pre-made groups and LFG runs
 - **WoW version:** `12.0+` (Midnight) only
-- **Current version:** `0.9.277`
+- **Current version:** `0.9.278`
 - **Active season:** `midnight_s1` — 8 dungeons (Wing, MT, NPX, MC, AA, POS, SOT, SR)
 
 ---
@@ -24,7 +24,7 @@ When you join a group, isiLive opens a single window with everything you want to
 - Default-on **forces overlay on every enemy nameplate** during a key — shows what each individual mob contributes plus the verified remaining count needed to finish enemy forces
 - Forces info on the **mouseover tooltip** for any mob in a key
 - Optional independent **player stats box** with live primary/secondary stats, short English labels, and separate opacity/font/lock controls
-- Optional **Group Finder class-bonus hints** for applicant and search-result rows, shown only when the listed class/spec offers a relevant non-utility group bonus for your current character
+- Optional **Group Finder class-bonus hints** for applicant and search-result rows, shown only when the listed class/spec offers a relevant non-stacking group bonus for your current character
 
 Everything syncs automatically between group members who run isiLive — no manual import, no `/say` spam.
 
@@ -199,7 +199,8 @@ Optional Group Finder hints help you scan applicant and search-result rows for u
 - Search results show compact green bonus markers inside the Blizzard row, independent of third-party class-badge addons
 - Applicant rows show the same marker next to the role badge when the applicant offers a relevant non-utility group bonus
 - Search-result tooltips add localized bonus text per listed class/spec
-- Battle Res, Bloodlust, PI, and other utility notes can appear in tooltips, but they do not count toward the compact green marker score
+- Duplicate non-stacking buffs count once per search result, so two players with the same class buff do not create extra markers
+- Battle Res, Bloodlust, PI, Devotion Aura, Atrophic Poison, and other utility notes can appear in tooltips, but they do not count toward the compact green marker score
 - The setting lives under **Display -> Group Finder: Show class bonuses**
 
 ### Ghost rows after wipes / reloads

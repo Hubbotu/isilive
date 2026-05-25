@@ -1,6 +1,6 @@
 # isiLive Anwendungsfaelle
 
-Versionsbasis: `0.9.277`
+Versionsbasis: `0.9.278`
 Zuletzt aktualisiert: `2026-05-25`
 
 ## Akteure
@@ -230,11 +230,12 @@ Ziel: Der Spieler soll in der Blizzard-Gruppensuche schnell erkennen, ob eine Gr
 1. Trigger: Eine LFG-Suchergebniszeile, ein Suchergebnis-Tooltip oder eine Bewerberzeile wird aktualisiert.
 2. Verarbeitung: Das Addon liest nur die von Blizzard bereitgestellten Klassen-/Spezialisierungsdaten fuer die sichtbare Zeile beziehungsweise den sichtbaren Tooltip. Nicht aufloesbare Klassen oder Spezialisierungen bleiben unresolved.
 3. Verarbeitung: Die Relevanz wird gegen das live aufgeloeste Spielerprofil bewertet. Staerke-, Beweglichkeits- und Intelligenzboni, physischer und magischer Schadensbonus sowie Ausdauer-, Meisterschafts-, Versa- und Schadensreduktionsboni zaehlen nur, wenn sie fuer den lokalen Charakter relevant sind.
-4. Regel: Battle Res, Bloodlust, Power Infusion, Hunter's Mark, Schamanen-Speed-Utility und aehnliche Utility-Hinweise duerfen in Tooltip-Details erscheinen, zaehlen aber nicht als kompakte grüne Suchergebnis-Marker.
+4. Regel: Battle Res, Bloodlust, Power Infusion, Devotion Aura, Atrophic Poison und aehnliche Utility-Hinweise duerfen in Tooltip-Details erscheinen, zaehlen aber nicht als kompakte gruene Suchergebnis-Marker.
 5. Anzeige: Suchergebniszeilen zeigen bis zu vier gruene Herzmarker rechtsbuendig innerhalb der Blizzard-Zeile und unabhaengig davon, ob ein Drittanbieter-Addon zusaetzliche Klassenbadges zeichnet.
-6. Anzeige: Bewerberzeilen zeigen die Marker neben dem Rollenbadge. Suchergebnis-Tooltips ergaenzen passende Mitgliedszeilen mit lokalisierten Bonusdetails; deutsches Addon-Locale nutzt deutsche Begriffe, alle anderen vorbereiteten Locales nutzen englische Texte.
-7. Ausnahme: Zeilen mit `Beförderung angeboten` beziehungsweise dessen lokalisierter Spielstil-Anzeige zeigen keine kompakten Suchergebnis-Marker.
-8. Erfolgskriterium: Relevante nicht-Utility-Boni sind sichtbar, irrelevante oder unbekannte Boni bleiben ausgeblendet, und fehlende Drittanbieter-Badges entfernen die Marker nicht aus der Blizzard-Default-Anzeige.
+6. Anzeige: Gleiche nicht stapelnde Boni zaehlen pro Suchergebnis nur einmal, auch wenn mehrere Gruppenmitglieder denselben Buff liefern.
+7. Anzeige: Bewerberzeilen zeigen die Marker neben dem Rollenbadge. Suchergebnis-Tooltips ergaenzen passende Mitgliedszeilen mit lokalisierten Bonusdetails; deutsches Addon-Locale nutzt deutsche Begriffe, alle anderen vorbereiteten Locales nutzen englische Texte.
+8. Ausnahme: Zeilen mit `Beförderung angeboten` beziehungsweise dessen lokalisierter Spielstil-Anzeige zeigen keine kompakten Suchergebnis-Marker.
+9. Erfolgskriterium: Relevante nicht-Utility-Boni sind sichtbar, irrelevante oder unbekannte Boni bleiben ausgeblendet, doppelte Buffquellen erhoehen die Markerzahl nicht, und fehlende Drittanbieter-Badges entfernen die Marker nicht aus der Blizzard-Default-Anzeige.
 
 ## UC-17 Mob-Tooltip mit Forces-Anteil im Mythic+
 
@@ -339,7 +340,7 @@ Ziel: Eine optionale, eigenstaendige Spieler-Stats-Box zeigt live gelesene Prim�
 
 Das Runtime-Verhalten in diesem Dokument wird von `tools/validate_usecases.lua` validiert.
 Aktive Regelvertraege aus `RULES_LOGIC.md` werden von `tools/validate_rules_logic.lua` validiert und ebenfalls waehrend `tools/validate_usecases.lua` erzwungen.
-Aktuelle Validator-Baseline: `1880` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
+Aktuelle Validator-Baseline: `1882` Szenarien ueber die in `tools/usecase_scenarios.lua` registrierten Module.
 
 1. UC-01 und UC-02: strikte Queue-Target-Aufloesung und Queue-Highlight-Verhalten ohne spekulativen Fallback.
 2. UC-03: Exact-Map-Suppression und Umgang mit Shared-Portcast-Mehrdeutigkeit.
@@ -353,7 +354,7 @@ Aktuelle Validator-Baseline: `1880` Szenarien ueber die in `tools/usecase_scenar
 10. Taint-Hardening: verschobene Secure-Attribute-Writes, verschobene `Esc`-Shortcut-Secure-Button-Refreshes, insecure Teleport-Grid-Aktionen und combat-sicheres Collapse-Handling.
 11. UC-13 und UC-14: Game-Menu-Tooling-/Travel-/Mounts-/Addons-Strips, Ruhestein-Auswahl, VIP-Gast-Sound-Schalter, Lokalisierung inklusive ruRU-Font-Override, Close-then-Open-Verhalten, verschobener Secure-Reload-Button-Refresh, sichere Mount-Macro-Shortcuts, Direct-Opener-Fallback-Auswahl, Settings-Canvas-State-Mirroring, Background-Opacity-Verhalten, Live-BRes-/Bloodlust-/M+-Timer-Rendering, M+-Killtracker-Live-Refresh und gesyncte Interrupt-Cooldown-Anzeige.
 12. UC-15: LFG-Detektion ohne Name-Fallbacks, locale-aware Chat-Hinweise, pending-invite Race-Hardening, konkrete lokale LFG-Map-Prioritaet und Highlight-Dispatch.
-13. UC-24: Gruppensuche-Klassenbonus-Hinweise ohne Guessing, mit Spielerprofil-Relevanz, Utility-Ausschluss fuer kompakte Marker und Blizzard-Default-kompatibler Suchergebnisposition.
+13. UC-24: Gruppensuche-Klassenbonus-Hinweise ohne Guessing, mit Spielerprofil-Relevanz, Utility-Ausschluss fuer kompakte Marker, nicht-stapelnder Buffzaehlung und Blizzard-Default-kompatibler Suchergebnisposition.
 13. UC-16: BR-/Lust-Self-Cast-Filter gegen 12.0-Secret-Value-Spam, 3s-`sourceGUID|spellID`-Dedup, Toggle-Gating, ChatThrottleLib-Routing via `BRLUST`-Addon-Message, Receiver-Dispatch in lokalisierten Template-Zeilen und Drop-On-Unknown-Kind.
 14. UC-17: Mob-Tooltip-Forces-Rendering nur bei aktiver Challenge-Map-ID mit passendem NPC-Dataset, Per-Tooltip-Dedup gegen `TooltipDataProcessor`-Rerender und `SetEnabled(false)`-Gate.
 
